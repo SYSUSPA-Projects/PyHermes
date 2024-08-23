@@ -1,0 +1,19 @@
+{
+	"enable_default_param": true, // do not change this
+	"Convols": {
+		"J": 9,
+		"window_type": "sphere",
+		"fin": {
+			"path": "./data.bin",
+			"format": "generic"
+		},
+		"fout_dir": "",
+		"SampRate": 1024,
+		"SimBoxL": 1000,
+		"wavelet_mode": "db2",
+		"wavelet_level": 10,
+		"Radius": 5,
+		"bandwidth": 1,
+		"threads": 5
+	}
+}

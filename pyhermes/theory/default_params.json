@@ -1,0 +1,28 @@
+{
+	"enable_default_param": true, // do not change this
+	"Counting": {
+		"n_tasks": 1000000,
+		"deltac_in_path": "",
+		"fout_dir": ""
+	},
+	"Corr_2PCF": {
+		"deltac_in_path": "",
+		"fout_dir": "",
+		"threads": 5,
+		"R1": 1.0,
+		"R2": 150.0,
+		"xi_num": 150
+	},
+	"Corr_3PCF": {
+		"deltac_in_path": "",
+		"fin": {
+			"path": "./data.bin",
+			"format": "generic"
+		},
+		"fout_dir": "",
+		"NStheta": 20,
+		"R1": 20.0,
+		"R2": 40.0,
+		"rot_num": 10000
+	}
+}
