@@ -38,6 +38,9 @@ setup(
     ],
     python_requires='>=3.6',
     include_package_data=True,
+    package_data={
+        'pyhermes': ['*.json', 'base/*.json', 'theory/*.json'], 
+    },
     license="MIT",
     keywords="cosmology nbody large-structure statistics correlation-function", 
 )
