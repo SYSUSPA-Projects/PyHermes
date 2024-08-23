@@ -1,8 +1,9 @@
 rich
-json5
+pywt
+numba
 numpy
 scipy
-numba
+json5
 mpi4py
-PyWavelets
+requests
 termcolor==1.1.0
