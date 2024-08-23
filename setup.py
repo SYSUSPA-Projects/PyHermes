@@ -1,4 +1,15 @@
+import re
+import ast
+
 from setuptools import setup, find_packages
+
+
+
+# Extract version from __init__.py
+_version_re = re.compile(r'__version__\s+=\s+(.*)')
+with open('pyhermes/__init__.py', 'rb') as f:
+    version = str(ast.literal_eval(_version_re.search(
+        f.read().decode('utf-8')).group(1)))
 
 # Read the contents of your README file
 from pathlib import Path
@@ -11,7 +22,7 @@ with open("requirements.txt") as f:
 
 setup(
     name="pyhermes",
-    version="0.0.7",  
+    version=version,  
     description="Hermes - A python package towards an ultimate high-performance algorithm for cosmic statistics of large data sets",
     long_description=long_description,  
     long_description_content_type="text/markdown",
