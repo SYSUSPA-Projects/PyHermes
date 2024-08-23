@@ -1,0 +1,433 @@
+import math
+import warnings
+
+import pywt
+import numpy as np
+from numba import int16
+from numba import jit, njit, prange
+from numba.core.errors import NumbaExperimentalFeatureWarning
+
+from pyhermes.utils import func_util
+from pyhermes.param.logbase import setup_logger 
+from pyhermes.utils.func_util import get_fname_info
+
+
+def do_wavelet(mode="db2", level=10):
+    wavelet = pywt.Wavelet(mode)
+    _phi, _, _ = wavelet.wavefun(level=level)
+    phi_data = _phi[:-1]
+    return phi_data
+
+# Suppress NumbaExperimentalFeatureWarning
+warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
+
+# ---------------------------------------------------------------
+# ------------- ↓ Numerical function for convols ↓ --------------
+# ---------------------------------------------------------------
+
+### ↓ Window functions ↓ ###
+
+@njit
+def window_function_shell_numba(R, ki, kj, kk):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0:
+        return 1
+    # Use np.where to handle the k == 0 case
+    Phase = 2 * np.pi * k * R
+    result = np.sin(Phase)/Phase 
+    return result
+
+@njit
+def window_function_sphere_numba(R, ki, kj, kk):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0:
+        # return 4 * np.pi * R**3 / 3
+        return 1
+    # Use np.where to handle the k == 0 case
+    Phase = 2 * np.pi * k * R
+    # result = (np.sin(Phase) - Phase * np.cos(Phase)) / (2 * np.pi**2 * k**3)
+    result = 3 * (np.sin(Phase) - Phase * np.cos(Phase)) / Phase ** 3
+    return result
+
+@njit 
+def window_function_gauss_numba(R, ki, kj, kk):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    # Use np.where to handle the k == 0 case
+    Phase = 2 * np.pi * k * R
+    result = np.exp(-Phase**2/2)
+    return result
+
+### ↑ Window functions ↑ ###
+
+def set_window_function(w_type, verbose=True):
+    w_type_dict = {
+        "shell": window_function_shell_numba,
+        "sphere": window_function_sphere_numba,
+        "gaussian": window_function_gauss_numba,
+    }
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    if w_type in w_type_dict:
+        verbose and logger.info(f"Using window function: {w_type}")
+        read_function = w_type_dict[w_type]
+        return read_function
+    else:
+        supported_w_type = ", ".join(w_type_dict.keys())
+        logger.error(f"Unsupported input window function type: {w_type}")
+        logger.error(f"Supported types: {supported_w_type}")
+        logger.error(f"Please see the document for details")
+        func_util.safe_exit(1)
+
+@njit(parallel=True)
+def calculate_window_array_numba(L, bandwidth, DeltaXi, rescaleR, PowerPhi, window_function_numba):
+    # if window_type == 0:
+    #     window_function_numba = window_function_shell_numba
+    # elif window_type == 1:
+    #     window_function_numba = window_function_sphere_numba
+    # elif window_type == 2:
+    #     window_function_numba = window_function_gauss_numba
+    WindowArray = np.zeros((L+1, L+1, L+1))
+    for i in prange(L + 1):
+        for j in prange(L + 1):
+            for k in prange(L + 1):
+                temp = 0.0
+                for ii in prange(bandwidth):
+                    for jj in prange(bandwidth):
+                        for kk in prange(bandwidth):
+                            temp += (
+                                PowerPhi[ii * L + i]
+                                * PowerPhi[jj * L + j]
+                                * PowerPhi[kk * L + k]
+                                * window_function_numba(
+                                    rescaleR,
+                                    (ii * L + i) * DeltaXi,
+                                    (jj * L + j) * DeltaXi,
+                                    (kk * L + k) * DeltaXi
+                                )
+                            )
+                WindowArray[i, j, k] = temp
+    return WindowArray
+
+@njit(parallel=True)
+def calculate_w_numba(WindowArray):
+    L = WindowArray.shape[0] - 1
+    w = np.zeros((L, L, L // 2 + 1))
+    for x in prange(L):
+        for y in prange(L):
+            for z in prange(L // 2 + 1):
+                w[x, y, z] = (
+                    WindowArray[x, y, z]
+                    + WindowArray[L - x, y, z]
+                    + WindowArray[x, L - y, z]
+                    + WindowArray[x, y, L - z]
+                    + WindowArray[L - x, L - y, z]
+                    + WindowArray[L - x, y, L - z]
+                    + WindowArray[x, L - y, L - z]
+                    + WindowArray[L - x, L - y, L - z]
+                )
+    return w
+@jit(nopython=True)
+def scaling_function_numba(p, phi_data, SampRate=1024, J=8, SimBoxL=1000):
+    L = 1 << J
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart
+    ScaleFactor = L / SimBoxL
+    step = np.arange(PhiSupport) * SampRate
+    scale_p =  p[:,:3] * ScaleFactor
+    p_coarse = np.floor(scale_p).astype(np.int16)
+    p_finer = ((scale_p - p_coarse) * SampRate).astype(np.int16)
+    total = p.shape[0]
+    s = np.zeros((L, L, L))
+    s_temp_test = np.zeros((PhiSupport, PhiSupport, PhiSupport))
+    for num in range(total):
+        pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
+        pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
+        for i in range(PhiSupport):
+            for j in range(PhiSupport):
+                for k in range(PhiSupport):
+                    s_temp_test[i, j, k] = phi_data[pp_finer0 + step[i]] * phi_data[pp_finer1 + step[j]] * phi_data[pp_finer2 + step[k]]
+        for i in range(PhiSupport):
+            for j in range(PhiSupport):
+                for k in range(PhiSupport):
+                    s[pp_coarse0-i, pp_coarse1 -j, pp_coarse2-k] += s_temp_test[i, j, k]
+    return s
+
+@jit(nopython=True)
+def int_data(data, ScaleFactor):
+    data_int = np.zeros(data.shape[0], dtype=np.int16)
+    for i in range(data.shape[0]):
+        data_int[i] = np.floor(data[i, 0]*ScaleFactor)
+    return data_int
+
+## bit opereator in numba
+@jit(nopython=True)
+def bit(array, J, size_bit):
+    num = array.shape[0]
+    result = np.zeros(num, dtype=np.int16)
+    for i in range(num):
+        result[i] = array[i] >> (J - size_bit)
+    return result
+
+@jit(nopython=True)
+def scaling_function_numba_part(part, p, phi_data, size, core_width, SampRate=1024, J=8, SimBoxL=1000):
+    L = 1 << J
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart 
+    ScaleFactor = L / SimBoxL
+    step = np.arange(PhiSupport) * SampRate
+    core_width = L // size
+    scale_p =  p[:,:3] * ScaleFactor
+    p_coarse = scale_p.astype(np.int16)
+    p_finer = (scale_p - p_coarse) * SampRate
+    total = p.shape[0]
+    expand_x = L // size + 2 * (PhiSupport - 1)
+    s = np.zeros((expand_x, L, L))
+    for num in range(total):
+        s_temp_test = np.zeros((PhiSupport, PhiSupport, PhiSupport))
+        for i in range(PhiSupport):
+            for j in range(PhiSupport):
+                for k in range(PhiSupport):
+                    s_temp_test[i, j, k] += phi_data[int(p_finer[num, 0]) + step[i]] * phi_data[int(p_finer[num, 1]) + step[j]] * phi_data[int(p_finer[num, 2]) + step[k]]
+        for i in range(PhiSupport):
+            for j in range(PhiSupport):
+                for k in range(PhiSupport):
+                    s[p_coarse[num, 0] - i - part * core_width + 2, p_coarse[num, 1] - j, p_coarse[num, 2] - k] += s_temp_test[i, j, k]
+    return s
+
+# @njit
+# def partition_data_each(origin_data, shrink_data, part):
+#     dm_part = origin_data[shrink_data == part]
+#     return dm_part
+
+# @njit
+# def partition_data(origin_data, shrink_data, size):
+#     shrink_list = []
+#     for i in range(size):
+#         dm_part = origin_data[shrink_data == i]
+#         shrink_list.append(dm_part)
+#     return shrink_list
+
+def partition_data_single(origin_data, shrink_data, part):
+    dm_part = origin_data[shrink_data == part]
+    return dm_part
+
+# ----------------------------------------------------------------
+# ------------- ↓ Numerical function for counting ↓ --------------
+# ----------------------------------------------------------------
+
+jit(nopython=True)
+def result_interpret4(convol3d, p_coarse, p_finer, phi_data, J, SampRate=1024):
+    L = 1 << J
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart
+    step = np.arange(PhiSupport)*SampRate
+    total = p_coarse.shape[0]
+    total_sum = 0
+    for num in range(total):
+        pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
+        pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
+        res = 0
+        for i in range(PhiSupport):
+            x1 = (pp_coarse0 - i) & (L - 1)
+            phi1 = phi_data[int(pp_finer0) + step[i]]
+            for j in range(PhiSupport):
+                y1 = (pp_coarse1 - j) & (L - 1)
+                res2 = 0
+                for k in range(PhiSupport):
+                    res2 += convol3d[x1, y1, ((pp_coarse2 - k) & (L - 1))] * phi_data[int(pp_finer2) + step[k]]
+                res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
+        total_sum += res
+    return total_sum
+
+@jit(nopython=True)
+def result_interpret5(convol3d, size, phi_data, J, SampRate=1024):
+    L = 1 << J
+    total = 0
+    for _ in range(size):
+        scale_p = np.random.rand(3) * L
+        p_coarse = np.floor(scale_p).astype(np.int32)
+        p_finer = (scale_p - p_coarse) * SampRate
+        total += result_interpret6(convol3d, p_coarse, p_finer,phi_data, J, SampRate)
+    return total
+
+@jit(nopython=True)
+def result_interpret6(convol3d, p_coarse, p_finer, phi_data, J, SampRate=1024):
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart
+    step = np.arange(PhiSupport)*SampRate
+    pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse
+    pp_finer0, pp_finer1, pp_finer2 = p_finer
+    res = 0
+    for i in range(PhiSupport):
+        x1 = pp_coarse0 - i
+        phi1 = phi_data[int(pp_finer0) + step[i]]
+        for j in range(PhiSupport):
+            y1 = pp_coarse1 - j
+            res2 = 0
+            for k in range(PhiSupport):
+                res2 += convol3d[x1, y1, pp_coarse2 - k] * phi_data[int(pp_finer2) + step[k]]
+            res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
+    return res
+
+@jit(nopython=True)
+def result_interpret2(convol3d, size, phi_data, J, SampRate=1024):
+    L = 1 << J
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart
+    step = np.arange(PhiSupport)*SampRate
+    scale_p = np.random.rand(size,3) * L 
+    p_coarse = np.floor(scale_p).astype(np.int32)
+    p_finer = (scale_p - p_coarse) * SampRate
+    total = size
+    result = np.zeros(total)
+    for num in range(total):
+        pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
+        pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
+        res = 0
+        for i in range(PhiSupport):
+            x1 = (pp_coarse0 - i) & (L - 1)
+            phi1 = phi_data[int(pp_finer0) + step[i]]
+            for j in range(PhiSupport):
+                y1 = (pp_coarse1 - j) & (L - 1)
+                res2 = 0
+                for k in range(PhiSupport):
+                    res2 += convol3d[x1, y1, ((pp_coarse2 - k) & (L - 1))] * phi_data[int(pp_finer2) + step[k]]
+                res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
+        result[num] = res
+    return result
+
+def result_interpret3(convol3d, p_input,phi_data,J, SampRate=1024):
+    scale_p = p_input
+    p_coarse = np.floor(scale_p).astype(np.int32)
+    p_finer = (scale_p - p_coarse) * SampRate
+    return result_interpret4(convol3d, p_coarse, p_finer,phi_data, J, SampRate)
+
+# ------------------------------------------------------------
+# ------------- ↓ Numerical function for 2pcf ↓ --------------
+# ------------------------------------------------------------
+
+
+
+
+# ------------------------------------------------------------
+# ------------- ↓ Numerical function for 3pcf ↓ --------------
+# ------------------------------------------------------------
+
+@njit
+def generate_points_device(R1, R2, theta):
+    phi = 2 * math.pi *  np.random.uniform(0, 1)
+    costheta =  np.random.uniform(0, 1) - 1
+    sintheta = math.sqrt(1 - costheta ** 2)
+    dx1 = sintheta * math.cos(phi)
+    dy1 = sintheta * math.sin(phi)
+    dz1 = costheta
+    x2 = R1 * dx1
+    y2 = R1 * dy1
+    z2 = R1 * dz1
+    if abs(dx1) > 1e-10 or abs(dy1) > 1e-10:
+        ox1, oy1, oz1 = -dy1, dx1, 0
+    else:  
+        ox1, oy1, oz1 = 0, -dz1, dy1
+    norm = math.sqrt(ox1**2 + oy1**2 + oz1**2)
+    ox1 /= norm
+    oy1 /= norm
+    oz1 /= norm
+    ox2 = dy1 * oz1 - dz1 * oy1
+    oy2 = dz1 * ox1 - dx1 * oz1
+    oz2 = dx1 * oy1 - dy1 * ox1
+    alpha = 2 * math.pi *  np.random.uniform(0, 1)
+    cos_alpha = math.cos(alpha)
+    sin_alpha = math.sin(alpha)
+    dx2 = math.cos(theta) * dx1 + math.sin(theta) * (cos_alpha * ox1 + sin_alpha * ox2)
+    dy2 = math.cos(theta) * dy1 + math.sin(theta) * (cos_alpha * oy1 + sin_alpha * oy2)
+    dz2 = math.cos(theta) * dz1 + math.sin(theta) * (cos_alpha * oz1 + sin_alpha * oz2)
+    x3 = R2 * dx2
+    y3 = R2 * dy2
+    z3 = R2 * dz2
+    return x2, y2, z2, x3, y3, z3
+
+@njit
+def result_3pcf_cpu_location(data_array, phidata, step, part_data, random_data, Nrotation, R1, R2, theta):
+    L = 1 << 8
+    SimBoxL = 1000
+    ScaleFactor =  L / SimBoxL
+    GridSize = L - 1
+    PhiStart = 0
+    PhiEnd = 3
+    PhiSupport = PhiEnd - PhiStart
+    particle_num = part_data.shape[0]
+    results  = np.zeros(particle_num)
+    for idx in range(particle_num):
+        res = 0
+        scalepx = part_data[idx, 0] * ScaleFactor
+        scalepy = part_data[idx, 1] * ScaleFactor
+        scalepz = part_data[idx, 2] * ScaleFactor          
+        scalepx0 = random_data[idx, 0] * ScaleFactor
+        scalepy0 = random_data[idx, 1] * ScaleFactor
+        scalepz0 = random_data[idx, 2] * ScaleFactor  
+        for loop in range(Nrotation):
+            x2, y2, z2, x3, y3, z3 = generate_points_device(R1, R2, theta)
+            third_value = 0
+            second_value = 0
+            inputx = scalepx  + x2
+            inputy = scalepy  + y2
+            inputz = scalepz  + z2 
+            pp_coarse0 = int16(math.floor(inputx))
+            pp_coarse1 = int16(math.floor(inputy))
+            pp_coarse2 = int16(math.floor(inputz))
+            pp_finer0 = int16((inputx - pp_coarse0) * 1024)
+            pp_finer1 = int16((inputy - pp_coarse1) * 1024)
+            pp_finer2 = int16((inputz - pp_coarse2) * 1024)
+            for i in range(PhiSupport):
+                for j in range(PhiSupport):
+                    for k in range(PhiSupport):
+                        second_value += data_array[(pp_coarse0 - i) & GridSize,(pp_coarse1 - j) & GridSize,(pp_coarse2 - k) & GridSize] * phidata[pp_finer0+step[i]] * phidata[pp_finer1+step[j]] * phidata[pp_finer2+step[k]]
+            inputx = scalepx + x3
+            inputy = scalepy + y3
+            inputz = scalepz + z3
+            pp_coarse0 = int16(math.floor(inputx))
+            pp_coarse1 = int16(math.floor(inputy))
+            pp_coarse2 = int16(math.floor(inputz))
+            pp_finer0 = int16((inputx - pp_coarse0) * 1024)
+            pp_finer1 = int16((inputy - pp_coarse1) * 1024)
+            pp_finer2 = int16((inputz - pp_coarse2) * 1024)
+            for i in range(PhiSupport):
+                for j in range(PhiSupport):
+                    for k in range(PhiSupport):
+                        third_value += data_array[(pp_coarse0 - i) & GridSize,(pp_coarse1 - j) & GridSize,(pp_coarse2 - k) & GridSize] * phidata[pp_finer0+step[i]] * phidata[pp_finer1+step[j]] * phidata[pp_finer2+step[k]]
+            third_value0 = 0
+            second_value0 = 0
+            inputx0 = scalepx0 + x2
+            inputy0 = scalepy0 + y2
+            inputz0 = scalepz0 + z2
+            pp_coarse0 = int16(math.floor(inputx0))
+            pp_coarse1 = int16(math.floor(inputy0))
+            pp_coarse2 = int16(math.floor(inputz0))
+            pp_finer0 = int16((inputx0 - pp_coarse0) * 1024)
+            pp_finer1 = int16((inputy0 - pp_coarse1) * 1024)
+            pp_finer2 = int16((inputz0 - pp_coarse2) * 1024)
+            for i in range(PhiSupport):
+                for j in range(PhiSupport):
+                    for k in range(PhiSupport):
+                        second_value0 += data_array[(pp_coarse0 - i) & GridSize,(pp_coarse1 - j) & GridSize,(pp_coarse2 - k) & GridSize] * phidata[pp_finer0+step[i]] * phidata[pp_finer1+step[j]] * phidata[pp_finer2+step[k]]
+            inputx0 = scalepx0 + x3
+            inputy0 = scalepy0 + y3
+            inputz0 = scalepz0 + z3
+            pp_coarse0 = int16(math.floor(inputx0))
+            pp_coarse1 = int16(math.floor(inputy0))
+            pp_coarse2 = int16(math.floor(inputz0))
+            pp_finer0 = int16((inputx0 - pp_coarse0) * 1024)
+            pp_finer1 = int16((inputy0 - pp_coarse1) * 1024)
+            pp_finer2 = int16((inputz0 - pp_coarse2) * 1024)
+            for i in range(PhiSupport):
+                for j in range(PhiSupport):
+                    for k in range(PhiSupport):
+                        third_value0 += data_array[(pp_coarse0 - i) & GridSize,(pp_coarse1 - j) & GridSize,(pp_coarse2 - k) & GridSize] * phidata[pp_finer0+step[i]] * phidata[pp_finer1+step[j]] * phidata[pp_finer2+step[k]]
+            res += second_value * third_value - second_value0 * third_value0
+        results[idx] = res
+    return results

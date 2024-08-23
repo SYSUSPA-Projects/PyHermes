@@ -1,0 +1,193 @@
+import os
+import sys
+import inspect
+import argparse
+import importlib
+
+import json5
+from mpi4py import MPI
+
+from pyhermes.utils import func_util
+from pyhermes.param.logbase import setup_logger 
+import pyhermes.pipeline.custom_exceptions as ce
+
+
+
+def print_flush(msg):
+    print(msg)
+    sys.stdout.flush()
+
+# Common user interface
+def read_param(config_path=None):
+    '''
+    read_param: Common user interface to handle parameters.
+    arguments:
+        config_path = <YOUR/CONFIG/PATH> , if you set jupyer = True, you need to specify the config file path.
+    '''
+    if not config_path:
+        parser = JsonBase.get_parser()
+        args = parser.parse_args()
+        config_path = args.config
+    param_base = JsonBase(config_file_path=config_path)
+    param_user = param_base.read_config()
+    return param_user
+
+
+
+class JsonBase(object):
+    '''
+    The class to read parameters in json(5) format. 
+    Include: 
+        read default parameters (read the json file at <module>/default_params.json)
+        read user parameters (with specified path)
+        update default parameters (update default value by user parameters)
+    '''
+
+    
+    def __init__(self, config_file_path=None):
+        self.default_params = {}
+        self.logger = setup_logger(__name__, self.__class__.__name__)
+        self.config_file_path = config_file_path
+        self.comm = MPI.COMM_WORLD
+        self.rank = self.comm.Get_rank()
+
+    @classmethod
+    def get_parser(cls):
+        parser = argparse.ArgumentParser(
+            description=
+                """
+                Welcome to pyhermes
+                this is the version 0.1
+                feel free to ask if you have any question
+                sysu@sysu.com
+                """
+        )
+        parser.add_argument("-c", 
+                            "--config", 
+                            type=str, 
+                            default="",
+                            help="path for the parameter file",
+                            metavar=""
+                            )
+        return parser
+
+    def _recursive_update(self, default_dict, new_dict, parent_key='', section=None):
+        # If a specific section is provided, update only that section
+        if section:
+            # Check if the section exists in both, one, or none of the dictionaries
+            section_in_default = section in default_dict
+            section_in_new = section in new_dict
+            if section_in_default and section_in_new:
+                # If section is in both dictionaries, update it recursively
+                self._recursive_update(default_dict[section], new_dict[section], parent_key=section)
+                return
+            elif section_in_default:
+                self.logger.error(f"Section <{section}> found only in default parameters, but not user-input.")
+                return
+            elif section_in_new:
+                default_dict[section] = new_dict[section]
+                self.logger.error(f"Section <{section}> found only in user-input parameters, but not default.")
+                return
+            else:
+                # If section is in neither dictionary, log error and exit
+                self.logger.error(f"Section <{section}> found in neither dictionary. This should not have happened, pipeline stopped!")
+                func_util.safe_exit(1)
+        for key, value in new_dict.items():
+            full_key = f'{parent_key}.{key}' if parent_key else key
+            if key not in default_dict:
+                if isinstance(value, dict):
+                    # Add new level
+                    self.logger.warning(f"Adding non-default level: '{full_key}'")
+                    default_dict[key] = {}  # Init new level
+                    self._recursive_update(default_dict[key], value, full_key)
+                else:
+                    # Add new key
+                    self.logger.warning(f"Adding non-default key: '{full_key}'")
+                    default_dict[key] = value
+            elif isinstance(value, dict) and isinstance(default_dict[key], dict):
+                # Recursively to due the whole dict structure
+                self._recursive_update(default_dict[key], value, full_key)
+            else:
+                if not isinstance(value, type(default_dict[key])):
+                    self.logger.warning(f"Type mismatch for key: '{full_key}' !!!")
+                else:
+                    if default_dict[key] != value:
+                        old_value = 'empty' if default_dict[key] == '' or default_dict[key] == [] else default_dict[key]
+                        self.logger.info(f"Default '{full_key}' from '{old_value}' to '{value}'")
+                default_dict[key] = value
+    
+    def recursive_update(self, default_dict, new_dict, parent_key='', section=None):
+        return self._recursive_update(default_dict, new_dict, parent_key=parent_key, section=section)
+
+    def _read_config(self, config_fname):
+        try:
+            with open(config_fname) as f:
+                config = json5.load(f)
+        except FileNotFoundError:
+            self.logger.error(f"Configuration file not found: '{config_fname}'. This should not have happened, pipeline stopped!")
+            func_util.safe_exit(1)
+        except Exception as e:
+            self.logger.error(f"Reading configure file error: {e}. This should not have happened, pipeline stopped!")
+            func_util.safe_exit(1)
+        return config
+    
+    def _get_dir_from_path(self, fpath):
+        dir_path = os.path.dirname(fpath)
+        dir_name = os.path.basename(dir_path)
+        return dir_path, dir_name
+
+    def _find_class_dir(self, class_task):
+        # Get module name of the task
+        module_name = class_task.__module__
+        # Dynamic import module using importlib
+        module = importlib.import_module(module_name)
+        # Get module_path using inspect
+        module_path = inspect.getfile(module)
+        # Get module_dir
+        module_dir, _ = self._get_dir_from_path(fpath=module_path)
+        return module_dir
+
+    def _read_default(self, default_fname):
+        _ , dir_name = self._get_dir_from_path(fpath=default_fname)
+        self.logger.info(f"Set default parameters of module <{dir_name}> ...")
+        _default_params = self._read_config(config_fname=default_fname)
+        # judge whether key 'enable_default_param' exist
+        if "enable_default_param" not in _default_params:
+            self.logger.warning(f"No 'enable_default_param' found in {default_fname}, skipping parameter loading for module <{dir_name}>!")
+            return
+        # judge whether the module should have parameter
+        if _default_params.get("enable_default_param") is not True:
+            self.logger.warning(f"Key 'enable_default_param' not set to 'True' in {default_fname}, skipping parameter loading for module <{dir_name}>!")
+            return
+        # to check whether the key is already existed
+        for key in _default_params.keys():
+            if key == "enable_default_param":
+                continue
+            # if key in JsonBase.default_params:
+            if key in self.default_params:
+                self.logger.error(f"Key '{key}' already exists in default parameters, did you add it again? This should not have happened, pipeline stopped!")
+                func_util.safe_exit(1)
+        # JsonBase.default_params.update(_default_params)
+        self.default_params.update(_default_params)
+    
+    def read_default(self, class_task):
+        module_dir=self._find_class_dir(class_task)
+        default_param_path=os.path.join(module_dir, "default_params.json")
+        self._read_default(default_fname=default_param_path)
+
+    def read_config(self):
+        if self.rank == 0:
+            if self.config_file_path:
+                self.logger.info(f"Reading configure file: '{self.config_file_path}'")
+                user_params = self._read_config(self.config_file_path)
+                return user_params
+            else:
+                self.logger.error(f"No configure file specified in pipeline")
+                parser = self.get_parser()
+                print("")
+                print("----------------------------------------------------------------------")
+                parser.print_help()
+                print("----------------------------------------------------------------------")
+                print("")
+                self.logger.error(f"Please set configure file path with '-c' then try again")
+                func_util.safe_exit(1)

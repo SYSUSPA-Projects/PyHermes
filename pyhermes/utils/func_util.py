@@ -1,0 +1,54 @@
+import inspect
+
+
+
+def get_fname_info():
+    # Get the frame object for the caller of this function
+    frame = inspect.currentframe().f_back
+    # Get the name of the function that called this function
+    function_name = frame.f_code.co_name
+    # Get the name of the module where the calling function is located
+    module_name = frame.f_globals["__name__"]
+    return module_name, function_name
+
+def in_jupyter_notebook():
+    """
+    Check if the current environment is Jupyter Notebook.
+    """
+    try:
+        # Jupyter Notebook will have an IPython kernel
+        from IPython import get_ipython
+        if 'IPKernelApp' in get_ipython().config:
+            return True
+    except:
+        pass
+    return False
+
+def safe_exit(exit_code=1):
+    """
+    A unified exit function that determines whether to use MPI_Abort or sys.exit
+    based on the execution environment. In Jupyter Notebook, it avoids using
+    MPI_Abort to prevent kernel crashes.
+    Parameters:
+    - exit_code (int): The exit code, default is 1.
+    """
+    if in_jupyter_notebook():
+        # If running in Jupyter Notebook, use sys.exit to avoid kernel crash
+        print("Detected Jupyter Notebook environment, using sys.exit()")
+        import sys
+        sys.exit(exit_code)
+    else:
+        try:
+            from mpi4py import MPI
+            # If mpi4py is available, assume an MPI environment and abort
+            comm = MPI.COMM_WORLD
+            comm.Abort(exit_code)
+        except ImportError:
+            # If mpi4py is not available, fall back to sys.exit
+            import sys
+            sys.exit(exit_code)
+        except Exception as e:
+            # Handle any errors during MPI abort, fallback to sys.exit
+            print(f"Error while trying to abort MPI: {e}")
+            import sys
+            sys.exit(exit_code)
