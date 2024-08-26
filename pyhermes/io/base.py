@@ -1,6 +1,5 @@
-from mpi4py import MPI
-
 from pyhermes.utils import func_util
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.io import handle_PATHorURL
 from pyhermes.param.logbase import setup_logger 
 
