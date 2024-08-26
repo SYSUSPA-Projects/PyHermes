@@ -9,7 +9,7 @@ except ImportError:
     # This implementation mimics basic MPI functionality and ensures compatibility
     # with mpi4py-like code. Users can write code that works seamlessly both with
     # and without mpi4py, with reduced functionality when mpi4py is not installed.
-    class MPI:
+    class FakeMPI:
 
         def __init__(self):
             self.logger = setup_logger(__name__, self.__class__.__name__)
@@ -61,3 +61,7 @@ except ImportError:
         Recv   = recv
         Bcast  = bcast
         Gather = gather
+
+    class MPI:
+
+        COMM_WORLD = FakeMPI()
