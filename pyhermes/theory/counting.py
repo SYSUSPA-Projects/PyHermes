@@ -77,7 +77,7 @@ class Counting(pipeline.TaskBase):
                 _data_all = np.empty(self.n_tasks, dtype=np.float64)
             else:
                 _data_all = None
-            rank == 0 and self.logger.info("Gathering data from all rank ... ")
+            rank == 0 and self.logger.info("Gathering data from all ranks ... ")
             comm.Gather(self.counting.data, _data_all, root=0)
             if rank == 0:
                 self.counting.data = _data_all

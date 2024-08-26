@@ -3,7 +3,6 @@ numba
 numpy
 scipy
 json5
-mpi4py
 requests
 PyWavelets
 termcolor==1.1.0

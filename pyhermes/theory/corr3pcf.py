@@ -3,13 +3,13 @@ import time
 import pickle
 
 import numpy as np
-from mpi4py import MPI
 
 from pyhermes.io import Corr3PCFData
 from pyhermes.io import ColvolsData
 from pyhermes.io import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.pipeline import pipeline as pipeline
 
 
@@ -142,23 +142,55 @@ class Corr_3PCF(pipeline.TaskBase):
             R1_scale = self.R1 * self.ScaleFactor
             R2_scale = self.R2 * self.ScaleFactor
             theta_values = np.linspace(0, np.pi, self.NStheta + 1, endpoint=True)
+            if rank == 0:
+                arr_complete = np.zeros(size, dtype=int)
+                total_tasks = (self.NStheta + 1) * size
+                report_interval = total_tasks // 10
+                next_report_threshold = 0
+                requests = [comm.irecv(source=r, tag=r) for r in range(size)]
+                count_all = False
+            local_completed = 0
+            local_report_interval = max(1, (self.NStheta + 1) // 10)
             for theta in theta_values[:-1]:
                 result = math_util.result_3pcf_cpu_location(self.corr_3pcf.deltac, self.phi_data, self.step, p_dm_local, ran_local, self.rot_num, R1_scale, R2_scale, theta)
                 result_sum = np.sum(result)
                 result_sum = comm.reduce(result_sum, op=MPI.SUM, root=0)
+                local_completed += 1
+                if local_completed % local_report_interval == 0:
+                    comm.isend(local_completed, dest=0, tag=rank)
                 if rank == 0:
                     rho = self.orgDsize / self.L**3
                     _Q = result_sum / self.orgDsize / self.rot_num / rho**2
-                    self.logger.info(f" theta = {theta:8.4f}, Q = {_Q:8.4f}")
+                    # self.logger.info(f" theta = {theta:8.4f}, Q = {_Q:8.4f}")
                     self.corr_3pcf.Q.append(_Q)
                     self.corr_3pcf.theta.append(theta)
+                    for r, req in enumerate(requests):
+                        status = req.test()
+                        # Check whether the data is received
+                        if status[0]: 
+                            # Renew the completed task num
+                            arr_complete[r] = status[1] 
+                            # Reset the request flag
+                            requests[r] = comm.irecv(source=r, tag=r) 
+                    global_completed = np.sum(arr_complete)
+                    # Show status
+                    if global_completed >= next_report_threshold:
+                        progress = (global_completed / total_tasks) * 100
+                        self.logger.info(f" Progress: {progress:6.2f}%")
+                        # Renew next report checkpoint
+                        next_report_threshold += report_interval
+                        if global_completed == total_tasks:
+                            count_all = True
             if rank == 0:
+                if not count_all:
+                    progress = 100.
+                    self.logger.info(f" Progress: {progress:6.2f}%")
                 end_time = time.perf_counter()
                 self.logger.info('Finished in {:.1f} sec'.format((end_time - start_time_ini)))
                 self.logger.info(f"The time for 3PCF: {end_time - start_time_ini:.4f} sec")
                 if self.fout_dir is not None and self.fout_dir != "":
                     self.corr_3pcf.saveflag = True
-                    _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1{str(self.R1)}_R2{str(self.R2)}_rotN{str(self.rot_num)}.txt")
+                    _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
                     self.corr_3pcf.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")

@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 import pickle
 
@@ -9,6 +10,7 @@ from pyhermes.io import Corr2PCFData
 from pyhermes.io import ColvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.pipeline import pipeline as pipeline
 
 
@@ -79,38 +81,86 @@ class Corr_2PCF(pipeline.TaskBase):
             # Broadcast deltac to all rank
             comm.Bcast(self.corr_2pcf.deltac, root=0)
             comm.Barrier()
+            # Init Global 2pcf results
+            self.corr_2pcf.xi = []
+            self.corr_2pcf.r = []
             if rank == 0:
-                self.corr_2pcf.xi = []
-                self.corr_2pcf.r = []
                 self.logger.info("Start to calculate 2PCF ...")
                 time_start = time.perf_counter()
+            # Generate r_arr at rank0
+            if rank == 0:
                 r_arr = np.linspace(self.R1, self.R2, self.xi_num)
-                for radius in r_arr:
-                    rescaleR = radius * self.L / self.SimBoxL
-                    _w_func = math_util.set_window_function(self.window_type, verbose=False)
-                    window_array_shell = math_util.calculate_window_array_numba(
-                        L                     = self.L,
-                        bandwidth             = self.bandwidth,
-                        DeltaXi               = self.DeltaXi,
-                        rescaleR              = rescaleR,
-                        PowerPhi              = self.PowerPhi,
-                        window_function_numba = _w_func
-                        )
-                    w_shell = math_util.calculate_w_numba(window_array_shell)
-                    # time_start = time.perf_counter()
-                    s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
-                    # time_end = time.perf_counter()
-                    # self.logger.info(f"The time for convolution: {time_end - time_start:.4f} sec")
-                    inner_sum = np.sum(s_sphere_shell * self.corr_2pcf.deltac) * self.L**3 / self.orgDsize **2 - 1
-                    self.corr_2pcf.xi.append(inner_sum)
-                    self.corr_2pcf.r.append(radius)
-                    self.logger.info(f" R = {radius:6.2f}, Xi = {inner_sum:.6e}")
+                r_sub_arrs = np.array_split(r_arr, size)
+                # Global process status
+                arr_complete = np.zeros(size, dtype=int)
+                total_tasks = len(r_arr)
+                report_interval = total_tasks // 10
+                next_report_threshold = 0
+                requests = [comm.irecv(source=r, tag=r) for r in range(size)]
+                count_all = False
+            else:
+                r_sub_arrs = None
+            # Scatter to all ranks
+            r_sub_arr = comm.scatter(r_sub_arrs, root=0)
+            # Local process status
+            local_completed = 0
+            local_report_interval = max(1, len(r_sub_arr) // 10)
+            # Init local 2pcf results
+            local_xi = []
+            local_r = []
+            for i, radius in enumerate(r_sub_arr):
+                rescaleR = radius * self.L / self.SimBoxL
+                _w_func = math_util.set_window_function(self.window_type, verbose=False)
+                window_array_shell = math_util.calculate_window_array_numba(
+                    L                     = self.L,
+                    bandwidth             = self.bandwidth,
+                    DeltaXi               = self.DeltaXi,
+                    rescaleR              = rescaleR,
+                    PowerPhi              = self.PowerPhi,
+                    window_function_numba = _w_func
+                )
+                w_shell = math_util.calculate_w_numba(window_array_shell)
+                s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
+                inner_sum = np.sum(s_sphere_shell * self.corr_2pcf.deltac) * self.L**3 / self.orgDsize **2 - 1
+                local_xi.append(inner_sum)
+                local_r.append(radius)
+                local_completed += 1
+                if local_completed % local_report_interval == 0:
+                    comm.isend(local_completed, dest=0, tag=rank)
+                if rank == 0:
+                    for r, req in enumerate(requests):
+                        status = req.test()
+                        # Check whether the data is received
+                        if status[0]: 
+                            # Renew the completed task num
+                            arr_complete[r] = status[1] 
+                            # Reset the request flag
+                            requests[r] = comm.irecv(source=r, tag=r) 
+                    global_completed = np.sum(arr_complete)
+                    # Show status
+                    if global_completed >= next_report_threshold:
+                        progress = (global_completed / total_tasks) * 100
+                        self.logger.info(f" Progress: {progress:6.2f}%")
+                        # Renew next report checkpoint
+                        next_report_threshold += report_interval
+                        if global_completed == total_tasks:
+                            count_all = True
+            comm.Barrier()
+            # Gathering to rank0
+            gathered_xi = comm.gather(local_xi, root=0)
+            gathered_r = comm.gather(local_r, root=0)
+            if rank == 0:
+                self.corr_2pcf.xi = [item for sublist in gathered_xi for item in sublist]
+                self.corr_2pcf.r = [item for sublist in gathered_r for item in sublist]
+                if not count_all:
+                    progress = 100.
+                    self.logger.info(f" Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
                 if self.fout_dir is not None and self.fout_dir != "":
                     self.corr_2pcf.saveflag = True
-                    _fout_path = os.path.join(self.fout_dir, f"corr2pcf_r{str(self.Radius)}.txt")
-                    self.corr_2pcf.save(_fout_path)
+                    _fout_path = os.path.join(self.fout_dir, f"corr2pcf_r{str(self.Radius)}_xinum{self.xi_num}.txt")
+                    self.corr_2pcf.save(_fout_path) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
