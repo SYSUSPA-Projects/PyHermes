@@ -1,0 +1,10 @@
+{
+	"Corr_2PCF": {
+		"deltac_in_path": "./convols_L512_r5_pywt.npy",
+		"fout_dir": "./",
+		"threads": 20,
+		"R1": 1.0,
+		"R2": 150.0,
+		"xi_num": 20
+	}
+}
