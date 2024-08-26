@@ -1,5 +1,6 @@
 import math
 import warnings
+import inspect
 
 import pywt
 import numpy as np
@@ -28,7 +29,7 @@ warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
 ### ↓ Window functions ↓ ###
 
 @njit
-def window_function_shell_numba(R, ki, kj, kk):
+def window_function_shell_numba(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         return 1
@@ -38,7 +39,7 @@ def window_function_shell_numba(R, ki, kj, kk):
     return result
 
 @njit
-def window_function_sphere_numba(R, ki, kj, kk):
+def window_function_sphere_numba(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         # return 4 * np.pi * R**3 / 3
@@ -50,12 +51,56 @@ def window_function_sphere_numba(R, ki, kj, kk):
     return result
 
 @njit 
-def window_function_gauss_numba(R, ki, kj, kk):
+def window_function_gauss_numba(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     # Use np.where to handle the k == 0 case
     Phase = 2 * np.pi * k * R
     result = np.exp(-Phase**2/2)
     return result
+
+@njit
+def window_function_gauss_shell(ki, kj, kk, R1, R2):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0:
+        return 1
+    Phase1 = 2 * np.pi * k * R1
+    Phase2 = 2 * np.pi * k * R2
+    result = (R2*R2*np.cos(Phase1) + R1 * R1 * np.sin(Phase1) / Phase1) / ( R1 * R1 + R2 * R2) * np.exp(-Phase2**2/2)
+    return result
+
+@njit 
+def window_function_Tshell(ki, kj, kk, R1, R2):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0:
+        return 1
+    Phase1 = 2 * np.pi * k * R1
+    Phase2 = 2 * np.pi * k * R2
+
+    result = 3 * (np.sin(Phase2) - Phase2 * np.cos(Phase2) - np.sin(Phase1) + Phase1 * np.cos(Phase1)) / (Phase2 ** 3 - Phase1 ** 3)
+    return result
+
+@njit
+def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    Phase = 2 * np.pi * k * R
+    norm = 2**(7/4)/np.sqrt(15) * (2 * np.pi) **(3/4) * R ** (3/2)
+    result = norm * Phase **2 * np.exp(-Phase**2/2)
+    return result
+
+def window_function_cylinder(ki, kj, kk, R, h):
+    k1 = np.sqrt(ki**2 + kj**2)
+    
+    if kk == 0:
+        part1 = 1
+    else:
+        part1 = np.sin(2 * np.pi * kk * h / 2) / (2 * np.pi * kk * h / 2)
+    
+    if k1 == 0:
+        sum_val = 1
+    else:
+        sum_val = 2 * jn(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
+    
+    return (sum_val * part1) * np.pi * h * R**2
 
 ### ↑ Window functions ↑ ###
 
@@ -64,6 +109,10 @@ def set_window_function(w_type, verbose=True):
         "shell": window_function_shell_numba,
         "sphere": window_function_sphere_numba,
         "gaussian": window_function_gauss_numba,
+        "gaussian_shell": window_function_gauss_shell,
+        "Tshell": window_function_Tshell,
+        "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet,
+        "cylinder": window_function_cylinder
     }
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
@@ -79,34 +128,84 @@ def set_window_function(w_type, verbose=True):
         func_util.safe_exit(1)
 
 @njit(parallel=True)
-def calculate_window_array_numba(L, bandwidth, DeltaXi, rescaleR, PowerPhi, window_function_numba):
-    # if window_type == 0:
-    #     window_function_numba = window_function_shell_numba
-    # elif window_type == 1:
-    #     window_function_numba = window_function_sphere_numba
-    # elif window_type == 2:
-    #     window_function_numba = window_function_gauss_numba
+def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
     WindowArray = np.zeros((L+1, L+1, L+1))
+
     for i in prange(L + 1):
-        for j in prange(L + 1):
-            for k in prange(L + 1):
+        for j in range(L + 1):
+            for k in range(L + 1):
                 temp = 0.0
-                for ii in prange(bandwidth):
-                    for jj in prange(bandwidth):
-                        for kk in prange(bandwidth):
+                for ii in range(bandwidth):
+                    for jj in range(bandwidth):
+                        for kk in range(bandwidth):
                             temp += (
                                 PowerPhi[ii * L + i]
                                 * PowerPhi[jj * L + j]
                                 * PowerPhi[kk * L + k]
                                 * window_function_numba(
-                                    rescaleR,
                                     (ii * L + i) * DeltaXi,
                                     (jj * L + j) * DeltaXi,
-                                    (kk * L + k) * DeltaXi
+                                    (kk * L + k) * DeltaXi,
+                                    *args
                                 )
                             )
                 WindowArray[i, j, k] = temp
     return WindowArray
+
+# @njit(parallel=True)
+# def calculate_window_array_numba(L, bandwidth, DeltaXi, rescaleR, PowerPhi, window_function_numba):
+    # WindowArray = np.zeros((L+1, L+1, L+1))
+    # for i in prange(L + 1):
+        # for j in prange(L + 1):
+            # for k in prange(L + 1):
+                # temp = 0.0
+                # for ii in prange(bandwidth):
+                    # for jj in prange(bandwidth):
+                        # for kk in prange(bandwidth):
+                            # temp += (
+                                # PowerPhi[ii * L + i]
+                                # * PowerPhi[jj * L + j]
+                                # * PowerPhi[kk * L + k]
+                                # * window_function_numba(
+                                    # rescaleR,
+                                    # (ii * L + i) * DeltaXi,
+                                    # (jj * L + j) * DeltaXi,
+                                    # (kk * L + k) * DeltaXi
+                                # )
+                            # )
+                # WindowArray[i, j, k] = temp
+    # return WindowArray
+
+def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args, **kwargs):
+    """
+    Helper function to dynamically call calculate_window_array_numba with the appropriate window function and parameters,
+    handling both positional and keyword arguments.
+    """
+    # window_function = globals()[window_type]
+    sig = inspect.signature(window_function_numba)
+    params = sig.parameters  # Parameters of the window function
+    expected_args = list(params.keys())[3:]  # Exclude 'R', 'ki', 'kj', 'kk' which are handled separately
+
+    # If kwargs are provided, disregard args and validate kwargs
+    if kwargs:
+        args = []  # Clear any positional arguments if kwargs are provided
+        provided_args = kwargs.keys()
+        missing_args = [arg for arg in expected_args if arg not in provided_args]
+        if missing_args:
+            raise ValueError(f"Missing keyword arguments: {missing_args}")
+    else:
+        # If args are provided without kwargs
+        if len(args) > 0 and len(args) != len(expected_args):
+            raise ValueError(f"Expected {len(expected_args)} arguments, got {len(args)}")
+
+        # Map positional args to their respective keyword based on order
+        kwargs = dict(zip(expected_args, args))
+
+    # Construct args from kwargs in the order expected by the window function
+    ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
+
+    # Call the core function with dynamically built arguments list
+    return calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
 
 @njit(parallel=True)
 def calculate_w_numba(WindowArray):
