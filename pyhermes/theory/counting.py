@@ -42,8 +42,17 @@ class Counting(pipeline.TaskBase):
             if rank == 0:
                 time_run_1 = time.perf_counter()
             self.format_params_input()
-            _local_n_tasks = self.n_tasks // size
             self.counting = CountingData()
+            # Naïve optimization scheme for average-MPI
+            base_tasks = self.n_tasks // size
+            extra_tasks = self.n_tasks % size
+            if extra_tasks > 0:
+                rank == 0 and self.logger.info("Naïve optimization scheme for average-MPI is adopted")
+                total_padded_tasks = (base_tasks + 1) * size 
+            else:
+                total_padded_tasks = self.n_tasks
+            # _local_n_tasks = self.n_tasks // size
+            _local_n_tasks = total_padded_tasks // size
             # The deltac now only loaded to rank0
             params_serialized = None
             if rank == 0:
@@ -74,13 +83,14 @@ class Counting(pipeline.TaskBase):
             end_time1 = time.perf_counter()
             self.counting.data = math_util.result_interpret2(self.counting.deltac, _local_n_tasks, self.phi_data, self.J, self.SampRate)
             if rank == 0:
-                _data_all = np.empty(self.n_tasks, dtype=np.float64)
+                # _data_all = np.empty(self.n_tasks, dtype=np.float64)
+                _data_all = np.empty(total_padded_tasks, dtype=np.float64)
             else:
                 _data_all = None
             rank == 0 and self.logger.info("Gathering data from all ranks ... ")
             comm.Gather(self.counting.data, _data_all, root=0)
             if rank == 0:
-                self.counting.data = _data_all
+                self.counting.data = _data_all[:self.n_tasks]
             end_time2 = time.perf_counter()
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")
             if self.fout_dir is not None and self.fout_dir != "":

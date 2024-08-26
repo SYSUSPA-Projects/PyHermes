@@ -101,7 +101,6 @@ except ImportError:
             else:
                 return None  # Other ranks would normally receive their portion of the data
         
-
         # Ensure compatibility with mpi4py method naming conventions
         Send    = send
         Recv    = recv

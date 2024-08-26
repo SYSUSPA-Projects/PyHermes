@@ -94,7 +94,6 @@ class Convols(pipeline.TaskBase):
             # !NOTICE: the MPI-rank num to calculate scaling coefficient should be
             # !          a power of two
             self.comm.Gather(_s_part, self.all_s, root=0)
-            # print('testt')
             if self.rank == 0:
                 _dict_inht_vonDeltac = {
                     "fin_path"     : self.fin_path,
