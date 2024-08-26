@@ -1,0 +1,46 @@
+# Corr_3PCF output from PyHermes v0.0.8, TIME: 2024.08.26-19:11:17
+# Parameters from input :
+#  R1              = 20.0
+#  R2              = 40.0
+#  rot_num         = 10000
+#  NStheta         = 20
+#  fin_path        = https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin
+#  fin_size        = 406793
+#  fin_format      = generic
+#  fout_dir        = ./
+#  deltac_in_path  = ./convols_L512_r5_pywt.npy
+# Parameters from DeltaC:
+#  J               = 9
+#  Radius          = 5
+#  SimBoxL         = 1000
+#  SampRate        = 1024
+#  bandwidth       = 1
+#  fin_path        = https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin
+#  fin_size        = 406793
+#  fin_format      = generic
+#  Window type     = shell
+#  wavelet_mode    = db2
+#  wavelet_level   = 10
+
+---------------------------
+theta[rad]  , Q
+0.000000e+00, 8.950780e-04
+1.570796e-01, 1.144380e-03
+3.141593e-01, 1.125610e-03
+4.712389e-01, 7.189671e-04
+6.283185e-01, 8.373170e-04
+7.853982e-01, 1.365221e-03
+9.424778e-01, 1.512658e-03
+1.099557e+00, 1.835205e-03
+1.256637e+00, 1.892516e-03
+1.413717e+00, 1.424229e-03
+1.570796e+00, 1.530448e-03
+1.727876e+00, 1.312994e-03
+1.884956e+00, 1.341957e-03
+2.042035e+00, 7.263225e-04
+2.199115e+00, 9.956893e-04
+2.356194e+00, 1.142956e-03
+2.513274e+00, 1.645266e-03
+2.670354e+00, 1.518685e-03
+2.827433e+00, 1.721501e-03
+2.984513e+00, 1.987790e-03
