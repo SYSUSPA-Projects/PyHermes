@@ -88,7 +88,7 @@ except ImportError:
             if self.Get_rank() == root:
                 if recvbuf is not None:
                     if isinstance(recvbuf, np.ndarray):  # If recvbuf is a NumPy array
-                        recvbuf = sendbuf  # Assign sendbuf directly to the first element
+                        recvbuf[:] = sendbuf  # Assign sendbuf directly to the first element
                     else:
                         recvbuf[:] = [sendbuf]  # If it's a list, wrap sendbuf in a list and assign
                 return [sendbuf]  # Return gathered data as a list
