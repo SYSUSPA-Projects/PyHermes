@@ -1,0 +1,18 @@
+{
+	"Convols": {
+		"J": 9,
+		"fin": {
+			"path": "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin",
+			"format": "generic"
+		},
+		"fout_dir": "./",
+		"SampRate": 1024,
+		"SimBoxL": 1000,
+		"window_type": "shell",
+		"wavelet_mode": "db2",
+		"wavelet_level": 10,
+		"Radius": 5,
+		"bandwidth": 1,
+		"threads": 2
+	}
+}
