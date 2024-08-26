@@ -1,0 +1,10 @@
+## ignore the generated file
+**/*.npy
+**/*.bin
+
+## remove the python cache to avoid conflicts
+**/__pycache__/
+
+## ignore the generated file when install 
+pyhermes.egg-info/
+build/
