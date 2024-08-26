@@ -1,10 +1,10 @@
 import pickle
 
-from mpi4py import MPI
-
 from pyhermes.utils import func_util
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger
 from pyhermes.param.parambase import JsonBase
+
 
 
 class TaskBase(object):
@@ -46,6 +46,7 @@ class TaskBase(object):
             _params_task_user[_task_name]=_params_task_default[_task_name]
             _task_params = _params_task_user[_task_name]
             params_serialized = pickle.dumps(_task_params)
+            print("")
             self.logger.info(f"The task will run on {self.size} MPI ranks")
         # Setup parameters
         params_serialized = self.comm.bcast(params_serialized, root=0)
