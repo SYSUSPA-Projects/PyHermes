@@ -80,7 +80,7 @@ class Corr_3PCF(pipeline.TaskBase):
             self.PhiSupport = _PhiEnd - _PhiStart 
             self.step = np.arange(self.PhiSupport) * self.SampRate
             if rank == 0:
-                if not p_dm:
+                if p_dm is None:
                     if self.fin_path == self.corr_3pcf.dict_inht_vonDeltac['fin_path']:
                         pass
                         if self.fin_format == self.corr_3pcf.dict_inht_vonDeltac['fin_format']:
@@ -92,6 +92,10 @@ class Corr_3PCF(pipeline.TaskBase):
                         self.logger.warning(f"Input particle file path '{self.fin_path}' mismatch the Convols DeltaC particle file path '{self.corr_3pcf.dict_inht_vonDeltac['fin_path']}'")
                         self.logger.warning("Is this discrepancy expected?")
                     p_dm, _ = read_particle_data(self.fin_path, self.fin_format)
+                else:
+                    self.logger.info("Loading Particle data from argument 'p_dm'")
+                    self.task_params['fin']['path'] = 'load from argument'
+                    self.task_params['fin']['format'] = 'load from argument'
                 self.task_params['orgDsize_3pcf'] = p_dm.shape[0]
                 if p_dm.shape[1] != 3:
                     self.logger.error("Wrong shape of input particle catalog data! The shape should be (*,3)")
