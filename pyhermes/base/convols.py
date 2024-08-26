@@ -120,13 +120,13 @@ class Convols(pipeline.TaskBase):
                 _rescaleR = self.Radius * self.L / self.SimBoxL
                 _PowerPhi = self.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth)
                 _w_func = math_util.set_window_function(self.window_type)
-                _window_array = math_util.calculate_window_array_numba(
+                _window_array = math_util.call_calculate_window_array(
                     L                     = self.L,
                     bandwidth             = self.bandwidth,
                     DeltaXi               = _DeltaXi,
-                    rescaleR              = _rescaleR,
                     PowerPhi              = _PowerPhi,
-                    window_function_numba = _w_func
+                    window_function_numba = _w_func,
+                    R                     = _rescaleR
                     )
                 _w = math_util.calculate_w_numba(_window_array)
                 # Do FFT to get convol result
