@@ -1,5 +1,7 @@
 import time
 
+import numpy as np
+
 from pyhermes.param.logbase import setup_logger
 
 
@@ -9,8 +11,10 @@ try:
 except ImportError:
     # Fake MPI wrapper ↓ is used when mpi4py is not available
     # This implementation mimics basic MPI functionality and ensures compatibility
-    # with mpi4py-like code. Users can write code that works seamlessly both with
-    # and without mpi4py, with reduced functionality when mpi4py is not installed.
+    #  with mpi4py-like code. Users can write code that works seamlessly both with
+    #  and without mpi4py, with reduced functionality when mpi4py is not installed.
+    # Any question, feel free to get in touch with us :)
+    #                                                   dingdluan@gmail, 2024.8.26
     class FakeRequest:
 
         def __init__(self, comm, source, tag):
@@ -83,7 +87,10 @@ except ImportError:
             # In a single-core environment, gather just assigns the sendbuf to the recvbuf if root
             if self.Get_rank() == root:
                 if recvbuf is not None:
-                    recvbuf[:] = [sendbuf]  # Wrap sendbuf in a list and assign to recvbuf
+                    if isinstance(recvbuf, np.ndarray):  # If recvbuf is a NumPy array
+                        recvbuf = sendbuf  # Assign sendbuf directly to the first element
+                    else:
+                        recvbuf[:] = [sendbuf]  # If it's a list, wrap sendbuf in a list and assign
                 return [sendbuf]  # Return gathered data as a list
             else:
                 return None  # Other ranks would normally send their part
@@ -94,8 +101,6 @@ except ImportError:
             else:
                 return None  # Other ranks would normally receive their portion of the data
         
-        def SUM(self):
-            return None
 
         # Ensure compatibility with mpi4py method naming conventions
         Send    = send
@@ -108,3 +113,6 @@ except ImportError:
     class MPI:
 
         COMM_WORLD = FakeMPI()
+
+        def SUM(self):
+            return None

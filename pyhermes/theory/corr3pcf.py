@@ -86,16 +86,20 @@ class Corr_3PCF(pipeline.TaskBase):
                         if self.fin_format == self.corr_3pcf.dict_inht_vonDeltac['fin_format']:
                             pass
                         else:
-                            self.logger.warning(f"Input particle format '{self.fin_format}' mismatch the Convols DeltaC format '{self.corr_3pcf.dict_inht_vonDeltac['fin_format']}'. Is this discrepancy expected?")
+                            self.logger.warning(f"Input particle format '{self.fin_format}' mismatch the Convols DeltaC format '{self.corr_3pcf.dict_inht_vonDeltac['fin_format']}'")
+                            self.logger.warning("Is this discrepancy expected?")
                     else:
-                        self.logger.warning(f"Input particle file path '{self.fin_path}' mismatch the Convols DeltaC particle file path '{self.corr_3pcf.dict_inht_vonDeltac['fin_path']}'. Is this discrepancy expected?")
+                        self.logger.warning(f"Input particle file path '{self.fin_path}' mismatch the Convols DeltaC particle file path '{self.corr_3pcf.dict_inht_vonDeltac['fin_path']}'")
+                        self.logger.warning("Is this discrepancy expected?")
                     p_dm, _ = read_particle_data(self.fin_path, self.fin_format)
                 self.task_params['orgDsize_3pcf'] = p_dm.shape[0]
                 if p_dm.shape[1] != 3:
                     self.logger.error("Wrong shape of input particle catalog data! The shape should be (*,3)")
                     func_util.safe_exit(1)
                 elif p_dm.shape[0] != self.orgDsize:
-                    self.logger.error(f"Input particle size {p_dm.shape[0]} mismatch detected in Convols DeltaC calculation size {self.orgDsize}, do you use the same particle data? This should not have happend, program stopped!")
+                    self.logger.error(f"Input particle size {p_dm.shape[0]} mismatch detected in Convols DeltaC calculation size {self.orgDsize}")
+                    self.logger.error("Do you use the same particle data?")
+                    self.logger.error("This should not have happend, program stopped!")
                     func_util.safe_exit(1)
                 random_data = np.random.rand(self.orgDsize, 3) * self.SimBoxL
                 rows_per_rank = self.orgDsize // size
