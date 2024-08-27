@@ -32,7 +32,6 @@ class Corr3PCFData(ColvolsData):
         self.Q = np.asarray(self.Q, dtype=np.float64)
         version = pyhermes.__version__
         current_time = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-        header = "theta[rad], Q"
         header = (
             f"# Corr_3PCF output from PyHermes v{version}, TIME: {current_time}\n"
             "# Parameters from input :\n"
@@ -53,10 +52,9 @@ class Corr3PCFData(ColvolsData):
             f"#  fin_path        = {self.task_params['fin_path']}\n"
             f"#  fin_size        = {self.task_params['orgDsize']}\n"
             f"#  fin_format      = {self.task_params['fin_format']}\n"
-            # f"#  Window type     = {self.task_params['window_type']}\n"
-            f"#  Window info   = {self.task_params['window']}\n"
             f"#  wavelet_mode    = {self.task_params['wavelet_mode']}\n"
             f"#  wavelet_level   = {self.task_params['wavelet_level']}\n"
+            f"#  Window_Info     = {self.task_params['window']}\n"
             "\n"
             "---------------------------\n"
             "theta[rad]  , Q"
