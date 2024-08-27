@@ -193,6 +193,9 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
     missing_args = [arg for arg in expected_args if arg not in provided_args]
     if missing_args:
         # raise ValueError(f"Missing keyword arguments: {missing_args}")
+        source_code = inspect.getsource(window_function_numba)
+        # logger.error(black.format_str(source_code, mode=black.Mode()))
+        logger.error("\n" + source_code)
         logger.error(f"Missing keyword arguments: {missing_args}")
         logger.error(f"Please see the document for details")
         func_util.safe_exit(1)
