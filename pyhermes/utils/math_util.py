@@ -75,7 +75,6 @@ def window_function_Tshell(ki, kj, kk, R1, R2):
         return 1
     Phase1 = 2 * np.pi * k * R1
     Phase2 = 2 * np.pi * k * R2
-
     result = 3 * (np.sin(Phase2) - Phase2 * np.cos(Phase2) - np.sin(Phase1) + Phase1 * np.cos(Phase1)) / (Phase2 ** 3 - Phase1 ** 3)
     return result
 
@@ -89,7 +88,6 @@ def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
 
 def window_function_cylinder(ki, kj, kk, R, h):
     k1 = np.sqrt(ki**2 + kj**2)
-    
     if kk == 0:
         part1 = 1
     else:
@@ -99,7 +97,6 @@ def window_function_cylinder(ki, kj, kk, R, h):
         sum_val = 1
     else:
         sum_val = 2 * jn(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
-    
     return (sum_val * part1) * np.pi * h * R**2
 
 ### ↑ Window functions ↑ ###
@@ -130,7 +127,6 @@ def set_window_function(w_type, verbose=True):
 @njit(parallel=True)
 def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
     WindowArray = np.zeros((L+1, L+1, L+1))
-
     for i in prange(L + 1):
         for j in range(L + 1):
             for k in range(L + 1):
@@ -152,30 +148,6 @@ def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_functio
                 WindowArray[i, j, k] = temp
     return WindowArray
 
-# @njit(parallel=True)
-# def calculate_window_array_numba(L, bandwidth, DeltaXi, rescaleR, PowerPhi, window_function_numba):
-    # WindowArray = np.zeros((L+1, L+1, L+1))
-    # for i in prange(L + 1):
-        # for j in prange(L + 1):
-            # for k in prange(L + 1):
-                # temp = 0.0
-                # for ii in prange(bandwidth):
-                    # for jj in prange(bandwidth):
-                        # for kk in prange(bandwidth):
-                            # temp += (
-                                # PowerPhi[ii * L + i]
-                                # * PowerPhi[jj * L + j]
-                                # * PowerPhi[kk * L + k]
-                                # * window_function_numba(
-                                    # rescaleR,
-                                    # (ii * L + i) * DeltaXi,
-                                    # (jj * L + j) * DeltaXi,
-                                    # (kk * L + k) * DeltaXi
-                                # )
-                            # )
-                # WindowArray[i, j, k] = temp
-    # return WindowArray
-
 def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, **kwargs):
     """
     Helper function to dynamically call calculate_window_array_numba with the appropriate window function and parameters,
@@ -187,7 +159,6 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
     sig = inspect.signature(window_function_numba)
     params = sig.parameters  # Parameters of the window function
     expected_args = list(params.keys())[3:]  # Exclude 'ki', 'kj', 'kk' which are handled separately
-
     # If kwargs are provided, disregard args and validate kwargs
     provided_args = kwargs.keys()
     missing_args = [arg for arg in expected_args if arg not in provided_args]
@@ -199,10 +170,8 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
         logger.error(f"Missing keyword arguments: {missing_args}")
         logger.error(f"Please see the document for details")
         func_util.safe_exit(1)
-
     # Construct args from kwargs in the order expected by the window function
     ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
-
     # Call the core function with dynamically built arguments list
     return calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
 
@@ -224,6 +193,7 @@ def calculate_w_numba(WindowArray):
                     + WindowArray[L - x, L - y, L - z]
                 )
     return w
+
 @jit(nopython=True)
 def scaling_function_numba(p, phi_data, SampRate=1024, J=8, SimBoxL=1000):
     L = 1 << J

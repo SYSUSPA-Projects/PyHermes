@@ -29,9 +29,10 @@ class Counting(pipeline.TaskBase):
         self.J              = self.task_params['J']
         self.SampRate       = int(self.task_params['SampRate'])
         self.SimBoxL         = self.task_params['SimBoxL']
-        self.Radius         = self.task_params['Radius']
         self.wavelet_mode   = self.task_params['wavelet_mode']
         self.wavelet_level  = self.task_params['wavelet_level']
+        self.window_type   = self.task_params['window']['type']
+        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.L              = 1 << self.J
 
     def run(self, deltac=None):
@@ -94,7 +95,8 @@ class Counting(pipeline.TaskBase):
             end_time2 = time.perf_counter()
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")
             if self.fout_dir is not None and self.fout_dir != "":
-                _fout_path = os.path.join(self.fout_dir, f"counting_N{str(self.n_tasks)}_r{str(self.Radius)}.npy")
+                _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                _fout_path = os.path.join(self.fout_dir, f"counting_L{str(self.L)}_{_result_string}_N{str(self.n_tasks)}.npy")
                 self.counting.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
