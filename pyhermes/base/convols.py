@@ -24,11 +24,11 @@ class Convols(pipeline.TaskBase):
         self.fin_path      = self.task_params['fin']['path']
         self.fin_format    = self.task_params['fin']['format']
         self.fout_dir      = self.task_params['fout_dir']
-        self.window_type   = self.task_params['window']['type']
         self.SampRate      = int(self.task_params['SampRate'])
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
+        self.window_type   = self.task_params['window']['type']
         self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
         self.threads       = int(self.task_params['threads'])
@@ -99,10 +99,9 @@ class Convols(pipeline.TaskBase):
                     "fin_path"     : self.fin_path,
                     "fin_format"   : self.fin_format,
                     "orgDsize"     : _orgDsize,
-                    "window_type"  : self.window_type,
                     "J"            : self.J,
                     "SampRate"     : self.SampRate,
-                    "window_args"  : self.window_args,
+                    "window"  : self.task_params['window'],
                     "SimBoxL"      : self.SimBoxL,
                     "bandwidth"    : self.bandwidth,
                     "wavelet_mode" : self.wavelet_mode,
@@ -118,9 +117,6 @@ class Convols(pipeline.TaskBase):
                 # Handle window function
                 _DeltaXi = 1./(self.L)
                 _rescale_win_args = {key : value * self.L / self.SimBoxL for key, value in self.window_args.items()}
-                # self.Radius = self.window_args["R"]
-                _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                # _rescale_win_args = self.Radius * self.L / self.SimBoxL
                 _PowerPhi = self.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth)
                 _w_func = math_util.set_window_function(self.window_type)
                 _window_array = math_util.call_calculate_window_array(
@@ -140,6 +136,7 @@ class Convols(pipeline.TaskBase):
                 self.logger.info(f"The time for FFT: {time_end - time_start:.4f} sec")
                 if self.fout_dir is not None and self.fout_dir != "":
                     # Output the deltac
+                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
                     _fout_path = os.path.join(self.fout_dir, f"convols_L{str(self.L)}_{_result_string}_pywt.npy")
                     self.deltac.save(_fout_path)
         except Exception as e:

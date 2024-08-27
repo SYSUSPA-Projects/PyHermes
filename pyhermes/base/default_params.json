@@ -7,6 +7,9 @@
 			"path": "./data.bin",
 			"format": "generic"
 		},
+		"window": {
+			"type": "shell"
+		},
 		"fout_dir": "",
 		"SampRate": 1024,
 		"SimBoxL": 1000,

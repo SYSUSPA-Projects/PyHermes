@@ -10,7 +10,6 @@ from pyhermes.io import Corr2PCFData
 from pyhermes.io import ColvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
-from pyhermes.utils.mpi_util import MPI
 from pyhermes.pipeline import pipeline as pipeline
 
 
@@ -37,9 +36,9 @@ class Corr_2PCF(pipeline.TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.Radius        = self.task_params['Radius']
+        self.window_type   = self.task_params['window']['type']
+        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
-        self.window_type   = self.task_params['window_type']
         self.orgDsize      = self.task_params['orgDsize']
         self.L             = 1 << self.J
         self.DeltaXi       = 1. / self.L
@@ -110,15 +109,15 @@ class Corr_2PCF(pipeline.TaskBase):
             local_r = []
             for i, radius in enumerate(r_sub_arr):
                 rescaleR = radius * self.L / self.SimBoxL
-                _w_func = math_util.set_window_function(self.window_type, verbose=False)
-                window_array_shell = math_util.calculate_window_array_numba(
+                _w_func = math_util.set_window_function('shell', verbose=False)
+                window_array_shell = math_util.call_calculate_window_array(
                     L                     = self.L,
                     bandwidth             = self.bandwidth,
                     DeltaXi               = self.DeltaXi,
-                    rescaleR              = rescaleR,
                     PowerPhi              = self.PowerPhi,
-                    window_function_numba = _w_func
-                )
+                    window_function_numba = _w_func,
+                    R                     = rescaleR
+                    )
                 w_shell = math_util.calculate_w_numba(window_array_shell)
                 s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
                 inner_sum = np.sum(s_sphere_shell * self.corr_2pcf.deltac) * self.L**3 / self.orgDsize **2 - 1
@@ -159,7 +158,8 @@ class Corr_2PCF(pipeline.TaskBase):
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
                 if self.fout_dir is not None and self.fout_dir != "":
                     self.corr_2pcf.saveflag = True
-                    _fout_path = os.path.join(self.fout_dir, f"corr2pcf_r{str(self.Radius)}_xinum{self.xi_num}.txt")
+                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                    _fout_path = os.path.join(self.fout_dir, f"corr2pcf_L{str(self.L)}_{_result_string}_xinum{self.xi_num}.txt")
                     self.corr_2pcf.save(_fout_path) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")

@@ -38,9 +38,9 @@ class Corr_3PCF(pipeline.TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.Radius        = self.task_params['Radius']
+        self.window_type   = self.task_params['window']['type']
+        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
-        self.window_type   = self.task_params['window_type']
         self.orgDsize      = self.task_params['orgDsize']
         self.L             = 1 << self.J
         self.ScaleFactor   = self.L / self.SimBoxL
@@ -198,7 +198,9 @@ class Corr_3PCF(pipeline.TaskBase):
                 self.logger.info(f"The time for 3PCF: {end_time - start_time_ini:.4f} sec")
                 if self.fout_dir is not None and self.fout_dir != "":
                     self.corr_3pcf.saveflag = True
-                    _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
+                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                    # _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
+                    _fout_path = os.path.join(self.fout_dir, f"corr3pcf_L{str(self.L)}_{_result_string}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
                     self.corr_3pcf.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
