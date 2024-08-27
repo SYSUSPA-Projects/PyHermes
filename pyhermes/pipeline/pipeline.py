@@ -28,7 +28,7 @@ class TaskBase(object):
             _task_name_user_count = len(_task_name_user)
             # Now we only support single task pipeline :)
             if _task_name_user_count > 1:
-                self.logger.error(f"The program only support one task name, but you have provided {_task_name_user_count}.")
+                self.logger.error(f"The program only support 1 task name, but you have provided {_task_name_user_count}.")
                 func_util.safe_exit(1)
             elif _task_name_user_count == 0:
                 self.logger.error("Your input does not contain any task name.")
