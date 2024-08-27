@@ -176,30 +176,26 @@ def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_functio
                 # WindowArray[i, j, k] = temp
     # return WindowArray
 
-def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args, **kwargs):
+def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, **kwargs):
     """
     Helper function to dynamically call calculate_window_array_numba with the appropriate window function and parameters,
     handling both positional and keyword arguments.
     """
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
     # window_function = globals()[window_type]
     sig = inspect.signature(window_function_numba)
     params = sig.parameters  # Parameters of the window function
-    expected_args = list(params.keys())[3:]  # Exclude 'R', 'ki', 'kj', 'kk' which are handled separately
+    expected_args = list(params.keys())[3:]  # Exclude 'ki', 'kj', 'kk' which are handled separately
 
     # If kwargs are provided, disregard args and validate kwargs
-    if kwargs:
-        args = []  # Clear any positional arguments if kwargs are provided
-        provided_args = kwargs.keys()
-        missing_args = [arg for arg in expected_args if arg not in provided_args]
-        if missing_args:
-            raise ValueError(f"Missing keyword arguments: {missing_args}")
-    else:
-        # If args are provided without kwargs
-        if len(args) > 0 and len(args) != len(expected_args):
-            raise ValueError(f"Expected {len(expected_args)} arguments, got {len(args)}")
-
-        # Map positional args to their respective keyword based on order
-        kwargs = dict(zip(expected_args, args))
+    provided_args = kwargs.keys()
+    missing_args = [arg for arg in expected_args if arg not in provided_args]
+    if missing_args:
+        # raise ValueError(f"Missing keyword arguments: {missing_args}")
+        logger.error(f"Missing keyword arguments: {missing_args}")
+        logger.error(f"Please see the document for details")
+        func_util.safe_exit(1)
 
     # Construct args from kwargs in the order expected by the window function
     ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
