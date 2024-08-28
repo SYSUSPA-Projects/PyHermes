@@ -83,7 +83,7 @@ def read_my_gd2(file):
                     out['mass'] = _out_part['mass']
                     masstab_pre = masstab
             else:
-                logger.error("Inconsistent masstab across subsnaps. Please make sure you're using data from the same simulation?")
+                logger.error("Inconsistent masstab across subsnaps. Please make sure you're using data from the same simulation.")
                 func_util.safe_exit(1)
         else:
             if not masstab:
