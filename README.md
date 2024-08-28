@@ -7,10 +7,14 @@ Please see details in [PyHermes Official Docs](https://pyhermes.astroslacker.com
 ## Installation
 
 ### Method1 - from source
-1. Download the source: git clone this repository
+1. Download the source: git clone this repository,
+   ```bash
+      git clone https://github.com/PyHermes/PyHermes.git
+   ```
 2. Install: change your current workdir to PyHermes, then type
    ```bash
-     pip install .
+      cd PyHermes
+      pip install .
    ```
 3. Enjoy!
 
