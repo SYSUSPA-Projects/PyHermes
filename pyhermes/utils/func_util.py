@@ -1,3 +1,4 @@
+import os
 import inspect
 
 
@@ -52,3 +53,35 @@ def safe_exit(exit_code=1):
             print(f"Error while trying to abort MPI: {e}")
             import sys
             sys.exit(exit_code)
+
+def find_subsplit_files(file):
+    """
+    Finds and returns a list of subsplit files (e.g., 'filename.0', 'filename.1', etc.).
+    If no subsplits are found, it returns the original file.
+    """
+    base_path, file_name = os.path.split(file)
+    files = []
+    i = 0
+    if os.path.exists(file):
+        base_name = file_name.split('.')[0]
+        while True:
+            potential_file = os.path.join(base_path, f"{base_name}.{i}")
+            if os.path.exists(potential_file):
+                files.append(potential_file)
+                i += 1
+            else:
+                break
+        if not files:
+            files.append(file)
+    else:
+        base_name = file_name
+        while True:
+            potential_file = os.path.join(base_path, f"{base_name}.{i}")
+            if os.path.exists(potential_file):
+                files.append(potential_file)
+                i += 1
+            else:
+                break
+        if not files:
+            files.append(file)
+    return files
