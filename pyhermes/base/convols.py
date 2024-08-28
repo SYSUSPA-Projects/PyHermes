@@ -39,6 +39,12 @@ class Convols(pipeline.TaskBase):
         try:
             if self.rank == 0:
                 time_run_1 = time.perf_counter()
+            # !NOTICE: the MPI-rank num to calculate scaling coefficient should be
+            # !          a power of two
+            if self.rank == 0:
+                if self.size != 1 and (self.size & (self.size - 1)) != 0:
+                    self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
+                    func_util.safe_exit(1)
             # Retrive parameters to locals
             self.format_params()
             # Do wavelet transform
@@ -91,8 +97,6 @@ class Convols(pipeline.TaskBase):
                 J          = self.J,
                 SimBoxL    = self.SimBoxL
                 )
-            # !NOTICE: the MPI-rank num to calculate scaling coefficient should be
-            # !          a power of two
             self.comm.Gather(_s_part, self.all_s, root=0)
             if self.rank == 0:
                 _dict_inht_vonDeltac = {
