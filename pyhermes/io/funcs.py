@@ -7,7 +7,7 @@ import requests
 import numpy as np
 from rich.progress import Progress, BarColumn, TextColumn, DownloadColumn, TransferSpeedColumn, TimeRemainingColumn
 
-from .my_gd_io import read_my_gd2
+from .my_gd_io import read_my_gd2, read_my_gd2_fof
 from pyhermes.utils import func_util
 from pyhermes.param.logbase import setup_logger 
 from pyhermes.utils.func_util import get_fname_info
@@ -36,6 +36,18 @@ def read_gadget(f_in):
     data_size = data.shape[0]
     return data, data_size
 
+def read_gadget_fof(f_in):
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    logger.info(f'Reading paricle data from ---> {f_in} <---')
+    _data = read_my_gd2_fof(f_in)
+    # Here, _data also contains velocity and mass info
+    #  may be useful when weight is considered in future
+    #                                   dingdluan 20240828
+    data = _data['pos']
+    data_size = data.shape[0]
+    return data, data_size
+
 def read_somethingelse(f_in):
     pass
 
@@ -45,6 +57,7 @@ def read_particle_data(f_in, f_format):
     format_to_function = {
         "generic": read_generic,
         "gadget": read_gadget,
+        "gadget-fof": read_gadget_fof,
         "somethingelse": read_somethingelse,
     }
     _mod_name, _func_name = get_fname_info()

@@ -97,3 +97,105 @@ def read_my_gd2(file):
     if not masstab_pre:
         out['mass'] = np.concatenate(out['mass'], axis=0)
     return out
+
+
+### For Gadget-fof file(s) ###
+
+def extdict_sfields(header, out_dict, selected_fields):
+    for field in selected_fields:
+        out_dict[field] = header[field]
+    return out_dict
+
+def _read_my_gd2_fof_single(filename):
+    header_dtype = np.dtype([
+        ('block1', np.int32),       
+        ('Ngroups', np.int64),        
+        ('Nsubhalos', np.int64),      
+        ('Nids', np.int64),           
+        ('TotNgroups', np.int64),     
+        ('TotNsubhalos', np.int64),   
+        ('TotNids', np.int64),        
+        ('num_files', np.int32),      
+        ('dummy', np.int32),         
+        ('time', np.float64),           
+        ('redshift', np.float64),       
+        ('BoxSize', np.float64),        
+        ('block2', np.int32),        
+    ])
+    _out = {}
+    _sfields = [
+        'Ngroups', 
+        'Nsubhalos', 
+        'Nids', 
+        'TotNgroups', 
+        'TotNsubhalos', 
+        'TotNids', 
+        'num_files', 
+        'time', 
+        'redshift', 
+        'BoxSize'
+    ]
+    with open(filename, 'rb') as f:
+        _header = np.fromfile(f, dtype=header_dtype, count=1)
+        extdict_sfields(_header, _out, _sfields)
+        # Skip GroupLen
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        _ = np.fromfile(f, dtype=np.int32, count=int(_out['Ngroups']))
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        # Read GroupMass
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        _mass = np.fromfile(f, dtype=np.float32, count=int(_out['Ngroups']))
+        _out['mass'] = _mass
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        # Read GroupPos
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        _pos = np.fromfile(f, dtype=np.float32, count=int(_out['Ngroups']*3))
+        _out['pos'] = _pos.reshape(-1,3)
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        # Read GroupVel
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        _vel = np.fromfile(f, dtype=np.float32, count=int(_out['Ngroups']*3))
+        _out['vel'] = _vel.reshape(-1,3)
+        _blksize = np.fromfile(f, dtype=np.int32, count=1)
+        # Skip GroupLenType
+        pass
+        # Skip GroupOffsetType
+        pass
+        # Skip GroupMassType
+        pass
+        # Skip GroupAscale
+        pass
+    return _out
+
+def read_my_gd2_fof(file):
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    files = func_util.find_subsplit_files(file)
+    out = {
+        'TotNgroups': 0,
+        'TotNsubhalos': 0,
+        'TotNids': 0,
+        'num_files': 0,
+        'time': 0.0,
+        'redshift': 0.0,
+        'BoxSize': 0.0,
+        'mass': [],
+        'pos': [],
+        'vel': []
+    }
+    for file in files:
+        _out_part = _read_my_gd2_fof_single(file)
+        out['TotNgroups'] = _out_part['TotNgroups']
+        out['TotNsubhalos'] = _out_part['TotNsubhalos']
+        out['TotNids'] = _out_part['TotNids']
+        out['num_files'] = _out_part['num_files']
+        out['time'] = _out_part['time']
+        out['redshift'] = _out_part['redshift']
+        out['BoxSize'] = _out_part['BoxSize']
+        out['mass'].append(_out_part['mass'])
+        out['pos'].append(_out_part['pos'])
+        out['vel'].append(_out_part['vel'])
+    out['mass'] = np.concatenate(out['mass'], axis=0)
+    out['pos'] = np.concatenate(out['pos'], axis=0)
+    out['vel'] = np.concatenate(out['vel'], axis=0)
+    return out
