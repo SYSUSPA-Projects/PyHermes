@@ -1,7 +1,7 @@
 {
-	"Counting": {
-		"n_tasks": 100,
-    	"deltac_in_path": "./Output_ConvolsData_example.npy",
-		"fout_dir": "./Output_CountingData_example.npy"
-	}
+  "Counting": {
+    "n_tasks": 100,
+    "deltac_in_path": "./Output_ConvolsData_example.npy",
+    "fout_dir": "./Output_CountingData_example.npy"
+  }
 }
