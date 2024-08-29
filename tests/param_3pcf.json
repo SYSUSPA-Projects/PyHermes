@@ -6,7 +6,7 @@
     },
     "deltac_in_path": "./Output_ConvolsData_example.npy",
     "corr2pcf_in_path": "./Output_Corr2PCFData_example.txt",
-    "fout_path": "./",
+    "fout_path": "./Output_Corr3PCFData_example.txt",
     "NStheta": 20,
     "R1": 20.0,
     "R2": 40.0,

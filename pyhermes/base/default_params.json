@@ -17,6 +17,6 @@
 		"wavelet_level": 10,
 		"Radius": 5,
 		"bandwidth": 1,
-		"threads": 5
+		"threads": 1
 	}
 }
