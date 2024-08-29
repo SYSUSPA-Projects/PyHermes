@@ -70,7 +70,7 @@ class Counting(pipeline.TaskBase):
                 self.task_params.update(self.counting.dict_inht_vonDeltac)
                 params_serialized = pickle.dumps(self.task_params)
             # Broadcast parameters (read + from DeltaC) to all ranks
-            comm.Bcast(params_serialized, root=0)
+            params_serialized = comm.bcast(params_serialized, root=0)
             self.task_params = pickle.loads(params_serialized)
             self.format_params_deltac()
             self.counting.task_params = self.task_params
