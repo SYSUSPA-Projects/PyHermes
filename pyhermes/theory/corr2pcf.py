@@ -7,7 +7,7 @@ import numpy as np
 from scipy.fft import rfftn, irfftn
 
 from pyhermes.io import Corr2PCFData
-from pyhermes.io import ColvolsData
+from pyhermes.io import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 from pyhermes.pipeline import pipeline as pipeline
@@ -23,7 +23,7 @@ class Corr_2PCF(pipeline.TaskBase):
     def format_params_input(self):
         # Parameters from json or input
         self.deltac_in_path = self.task_params['deltac_in_path']
-        self.fout_dir       = self.task_params['fout_dir']
+        self.fout_path      = self.task_params['fout_path']
         self.threads        = int(self.task_params['threads'])
         self.R1             = self.task_params['R1']
         self.R2             = self.task_params['R2']
@@ -59,7 +59,7 @@ class Corr_2PCF(pipeline.TaskBase):
                     self.corr_2pcf.load_deltac(f_in=self.deltac_in_path, single=True)
                 else:
                     self.logger.info("Loading DeltaC from argument 'deltac'")
-                    if isinstance(deltac, ColvolsData):
+                    if isinstance(deltac, ConvolsData):
                         self.corr_2pcf.deltac = deltac.data
                         self.corr_2pcf.dict_inht_vonDeltac = deltac.dict_inht_vonDeltac
                     else:
@@ -156,11 +156,14 @@ class Corr_2PCF(pipeline.TaskBase):
                     self.logger.info(f" Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
-                if self.fout_dir is not None and self.fout_dir != "":
-                    self.corr_2pcf.saveflag = True
-                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                    _fout_path = os.path.join(self.fout_dir, f"corr2pcf_L{str(self.L)}_{_result_string}_xinum{self.xi_num}.txt")
-                    self.corr_2pcf.save(_fout_path) 
+                # Output the 2pcf
+                self.corr_2pcf.saveflag = True
+                self.corr_2pcf.save(self.fout_path) 
+                # if self.fout_dir is not None and self.fout_dir != "":
+                #     self.corr_2pcf.saveflag = True
+                #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                #     _fout_path = os.path.join(self.fout_dir, f"corr2pcf_L{str(self.L)}_{_result_string}_xinum{self.xi_num}.txt")
+                #     self.corr_2pcf.save(_fout_path) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)

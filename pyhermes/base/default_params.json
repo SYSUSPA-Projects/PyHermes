@@ -10,7 +10,7 @@
 		"window": {
 			"type": "shell"
 		},
-		"fout_dir": "",
+		"fout_path": "",
 		"SampRate": 1024,
 		"SimBoxL": 1000,
 		"wavelet_mode": "db2",

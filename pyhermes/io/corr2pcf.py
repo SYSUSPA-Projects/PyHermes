@@ -4,11 +4,28 @@ from datetime import datetime
 import numpy as np
 
 import pyhermes
-from .convols import ColvolsData
+from .convols import ConvolsData
 
 
 
-class Corr2PCFData(ColvolsData):
+class Corr2PCFData(ConvolsData):
+
+    def load_corr2pcf(self, f_in, single=True):
+        self.load(f_in, read_2pcf=True, single=single)
+
+    def _load_corr2pcf(self, f_in):
+        with open(f_in, 'r') as f:
+            lines = f.readlines()
+        data_start = None
+        for i, line in enumerate(lines):
+            if line.strip() == "" or line.startswith("#"):
+                continue
+            if line.startswith('---'):  
+                data_start = i + 1
+                break
+        _data = np.loadtxt(f_in, delimiter=",", skiprows=data_start+1)
+        self.r = _data[:, 0]
+        self.xi = _data[:, 1]
 
     def _load_single(self, f_in):
         with open(f_in, 'r') as f:
@@ -39,7 +56,7 @@ class Corr2PCFData(ColvolsData):
             f"#  R2            = {self.task_params['R2']}\n"
             f"#  xi_num        = {int(self.task_params['xi_num'])}\n"
             f"#  threads       = {int(self.task_params['threads'])}\n"
-            f"#  fout_dir      = {self.task_params['fout_dir']}\n"
+            f"#  fout_path     = {self.task_params['fout_path']}\n"
             f"#  deltac_in_pat = {self.task_params['deltac_in_path']}\n"
             "# Parameters from DeltaC:\n"
             f"#  J             = {self.task_params['J']}\n"

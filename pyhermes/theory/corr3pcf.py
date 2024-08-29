@@ -4,8 +4,9 @@ import pickle
 
 import numpy as np
 
+from pyhermes.io import ConvolsData
+from pyhermes.io import Corr2PCFData
 from pyhermes.io import Corr3PCFData
-from pyhermes.io import ColvolsData
 from pyhermes.io import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
@@ -22,14 +23,15 @@ class Corr_3PCF(pipeline.TaskBase):
 
     def format_params_input(self):
         # Parameters from json or input
-        self.fout_dir       = self.task_params['fout_dir']
-        self.deltac_in_path = self.task_params['deltac_in_path']
-        self.fin_path       = self.task_params['fin']['path']
-        self.fin_format     = self.task_params['fin']['format']
-        self.NStheta        = int(self.task_params['NStheta'])
-        self.R1             = self.task_params['R1']
-        self.R2             = self.task_params['R2']
-        self.rot_num        = int(self.task_params['rot_num'])
+        self.fout_path        = self.task_params['fout_path']
+        self.deltac_in_path   = self.task_params['deltac_in_path']
+        self.corr2pcf_in_path = self.task_params['corr2pcf_in_path']
+        self.fin_path         = self.task_params['fin']['path']
+        self.fin_format       = self.task_params['fin']['format']
+        self.NStheta          = int(self.task_params['NStheta'])
+        self.R1               = self.task_params['R1']
+        self.R2               = self.task_params['R2']
+        self.rot_num          = int(self.task_params['rot_num'])
 
     def format_params_deltac(self):
         # Parameters inherited from DeltaC
@@ -45,7 +47,7 @@ class Corr_3PCF(pipeline.TaskBase):
         self.L             = 1 << self.J
         self.ScaleFactor   = self.L / self.SimBoxL
 
-    def run(self, deltac=None, p_dm=None):
+    def run(self, deltac=None, p_dm=None, corr2pcf=None):
         try:
             comm = self.comm
             rank = self.rank
@@ -54,14 +56,28 @@ class Corr_3PCF(pipeline.TaskBase):
                 time_run_1 = time.perf_counter()
             self.format_params_input()
             self.corr_3pcf = Corr3PCFData()
-            # The deltac and particle only loaded to rank0
+            # The corr2pcf, deltac and particle only loaded to rank0
+            if rank == 0 :
+                if not corr2pcf:
+                    self.corr_3pcf.load_corr2pcf(f_in=self.corr2pcf_in_path, single=True)
+                else:
+                    rank == 0 and self.logger.info("Loading Corr2pcf from argument 'corr2pcf'")
+                    if isinstance(corr2pcf, Corr2PCFData):
+                        self.corr_3pcf.r = corr2pcf.r
+                        self.corr_3pcf.xi = corr2pcf.xi
+                    else:
+                        rank == 0 and self.logger.error("Unexpected input: 'corr2pcf' is not an instance of 'Corr2PCFData'. This should not have happened, program stopped!")
+                        func_util.safe_exit(1)
+                self.logger.info('Hi tristan, now you already have the corr2pcf info!')
+            # TODO: ↑ Up to now, we have the info of 2pcf, which can be used to 
+            #           calculate the 'real' 3pcf, i.e., Q 
             params_serialized = None
             if rank == 0:
                 if not deltac:
                     self.corr_3pcf.load_deltac(f_in=self.deltac_in_path, single=True)
                 else:
                     rank == 0 and self.logger.info("Loading DeltaC from argument 'deltac'")
-                    if isinstance(deltac, ColvolsData):
+                    if isinstance(deltac, ConvolsData):
                         self.corr_3pcf.deltac = deltac.data
                         self.corr_3pcf.dict_inht_vonDeltac = deltac.dict_inht_vonDeltac
                     else:
@@ -196,12 +212,15 @@ class Corr_3PCF(pipeline.TaskBase):
                 end_time = time.perf_counter()
                 self.logger.info('Finished in {:.1f} sec'.format((end_time - start_time_ini)))
                 self.logger.info(f"The time for 3PCF: {end_time - start_time_ini:.4f} sec")
-                if self.fout_dir is not None and self.fout_dir != "":
-                    self.corr_3pcf.saveflag = True
-                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                    # _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
-                    _fout_path = os.path.join(self.fout_dir, f"corr3pcf_L{str(self.L)}_{_result_string}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
-                    self.corr_3pcf.save(_fout_path)
+                # Output the 3pcf
+                self.corr_3pcf.saveflag = True
+                self.corr_3pcf.save(self.fout_path)
+                # if self.fout_dir is not None and self.fout_dir != "":
+                #     self.corr_3pcf.saveflag = True
+                #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                #     # _fout_path = os.path.join(self.fout_dir, f"corr3pcf_r{str(self.Radius)}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
+                #     _fout_path = os.path.join(self.fout_dir, f"corr3pcf_L{str(self.L)}_{_result_string}_R1.{str(self.R1)}_R2.{str(self.R2)}_rotN{str(self.rot_num)}.txt")
+                #     self.corr_3pcf.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)

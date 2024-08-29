@@ -5,7 +5,7 @@ import concurrent.futures
 import numpy as np
 from scipy.fft import rfftn, irfftn
 
-from pyhermes.io import ColvolsData
+from pyhermes.io import ConvolsData
 from pyhermes.io import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
@@ -23,7 +23,7 @@ class Convols(pipeline.TaskBase):
         self.J             = self.task_params['J']
         self.fin_path      = self.task_params['fin']['path']
         self.fin_format    = self.task_params['fin']['format']
-        self.fout_dir      = self.task_params['fout_dir']
+        self.fout_path     = self.task_params['fout_path']
         self.SampRate      = int(self.task_params['SampRate'])
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
@@ -35,12 +35,12 @@ class Convols(pipeline.TaskBase):
         self.L             = 1 << self.J
 
     def run(self, return_pData_rank0=False): 
-        self.deltac = ColvolsData()
+        self.deltac = ConvolsData()
         try:
             if self.rank == 0:
                 time_run_1 = time.perf_counter()
-            # !NOTICE: the MPI-rank num to calculate scaling coefficient should be
-            # !          a power of two
+            # !NOTICE: the MPI-rank num to calculate scaling coefficient
+            # !          should be a power of two
             if self.rank == 0:
                 if self.size != 1 and (self.size & (self.size - 1)) != 0:
                     self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
@@ -105,7 +105,7 @@ class Convols(pipeline.TaskBase):
                     "orgDsize"     : _orgDsize,
                     "J"            : self.J,
                     "SampRate"     : self.SampRate,
-                    "window"  : self.task_params['window'],
+                    "window"       : self.task_params['window'],
                     "SimBoxL"      : self.SimBoxL,
                     "bandwidth"    : self.bandwidth,
                     "wavelet_mode" : self.wavelet_mode,
@@ -138,11 +138,13 @@ class Convols(pipeline.TaskBase):
                 self.deltac.data = self.specialized_convolution_3d(_deltas, _w, threads=self.threads)
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for FFT: {time_end - time_start:.4f} sec")
-                if self.fout_dir is not None and self.fout_dir != "":
-                    # Output the deltac
-                    _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                    _fout_path = os.path.join(self.fout_dir, f"convols_L{str(self.L)}_{_result_string}_pywt.npy")
-                    self.deltac.save(_fout_path)
+                # Output the deltac
+                self.deltac.save(self.fout_path)
+                # if self.fout_dir is not None and self.fout_dir != "":
+                #     # Output the deltac
+                #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+                #     _fout_path = os.path.join(self.fout_dir, f"convols_L{str(self.L)}_{_result_string}_pywt.npy")
+                #     self.deltac.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)

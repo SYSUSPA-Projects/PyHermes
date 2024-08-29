@@ -5,7 +5,7 @@ import pickle
 import numpy as np
 
 from pyhermes.io import CountingData
-from pyhermes.io import ColvolsData
+from pyhermes.io import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 from pyhermes.pipeline import pipeline as pipeline
@@ -22,18 +22,18 @@ class Counting(pipeline.TaskBase):
         # Parameters from json or input
         self.n_tasks        = int(self.task_params['n_tasks'])
         self.deltac_in_path = self.task_params['deltac_in_path']
-        self.fout_dir       = self.task_params['fout_dir']
+        self.fout_path      = self.task_params['fout_path']
 
     def format_params_deltac(self):
         # Parameters inherited from DeltaC
-        self.J              = self.task_params['J']
-        self.SampRate       = int(self.task_params['SampRate'])
-        self.SimBoxL         = self.task_params['SimBoxL']
-        self.wavelet_mode   = self.task_params['wavelet_mode']
-        self.wavelet_level  = self.task_params['wavelet_level']
+        self.J             = self.task_params['J']
+        self.SampRate      = int(self.task_params['SampRate'])
+        self.SimBoxL       = self.task_params['SimBoxL']
+        self.wavelet_mode  = self.task_params['wavelet_mode']
+        self.wavelet_level = self.task_params['wavelet_level']
         self.window_type   = self.task_params['window']['type']
         self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
-        self.L              = 1 << self.J
+        self.L             = 1 << self.J
 
     def run(self, deltac=None):
         try:
@@ -61,7 +61,7 @@ class Counting(pipeline.TaskBase):
                     self.counting.load_deltac(f_in=self.deltac_in_path, single=True)
                 else:
                     rank == 0 and self.logger.info("Loading DeltaC from argument 'deltac'")
-                    if isinstance(deltac, ColvolsData):
+                    if isinstance(deltac, ConvolsData):
                         self.counting.deltac = deltac.data
                         self.counting.dict_inht_vonDeltac = deltac.dict_inht_vonDeltac
                     else:
@@ -94,10 +94,12 @@ class Counting(pipeline.TaskBase):
                 self.counting.data = _data_all[:self.n_tasks]
             end_time2 = time.perf_counter()
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")
-            if self.fout_dir is not None and self.fout_dir != "":
-                _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                _fout_path = os.path.join(self.fout_dir, f"counting_L{str(self.L)}_{_result_string}_N{str(self.n_tasks)}.npy")
-                self.counting.save(_fout_path)
+            # Output the couting
+            self.counting.save(self.fout_path)
+            # if self.fout_dir is not None and self.fout_dir != "":
+            #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
+            #     _fout_path = os.path.join(self.fout_dir, f"counting_L{str(self.L)}_{_result_string}_N{str(self.n_tasks)}.npy")
+            #     self.counting.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
