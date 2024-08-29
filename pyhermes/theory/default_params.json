@@ -8,7 +8,7 @@
 	"Corr_2PCF": {
 		"deltac_in_path": "",
 		"fout_path": "",
-		"threads": 5,
+		"threads": 1,
 		"R1": 1.0,
 		"R2": 150.0,
 		"xi_num": 150
