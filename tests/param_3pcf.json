@@ -4,7 +4,7 @@
 			"path": "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin",
 			"format": "generic"
 		},
-    	"deltac_in_path": "./Output_ConvolsData_example.npy",
+    		"deltac_in_path": "./Output_ConvolsData_example.npy",
 		"corr2pcf_in_path": "./Output_Corr2PCFData_example.txt",
 		"fout_path": "./",
 		"NStheta": 20,
