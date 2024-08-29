@@ -69,12 +69,14 @@ class Corr_3PCF(pipeline.TaskBase):
                         rank == 0 and self.logger.error("Unexpected input: 'corr2pcf' is not an instance of 'Corr2PCFData'. This should not have happened, program stopped!")
                         func_util.safe_exit(1)
                 xi_size = self.corr_3pcf.xi.shape[0]
-            comm.Bcast(xi_size, root=0)
+            else:
+                xi_size = None
+            xi_size = comm.bcast(xi_size, root=0)
             if rank != 0 :
                 self.corr_3pcf.r = np.empty((xi_size), dtype=np.float64)
                 self.corr_3pcf.xi = np.empty((xi_size), dtype=np.float64)
-            comm.Bcast(self.corr_3pcf.r, root=0)
-            comm.Bcast(self.corr_3pcf.xi, root=0)
+            self.corr_3pcf.r = comm.bcast(self.corr_3pcf.r, root=0)
+            self.corr_3pcf.xi = comm.bcast(self.corr_3pcf.xi, root=0)
             rank ==0 and self.logger.info('Hi tristan, now you already have the corr2pcf info!')
             # TODO: ↑ Up to now, we have the info of 2pcf, which can be used to 
             #           calculate the 'real' 3pcf, i.e., Q 
@@ -93,7 +95,7 @@ class Corr_3PCF(pipeline.TaskBase):
                 self.task_params.update(self.corr_3pcf.dict_inht_vonDeltac)
                 params_serialized = pickle.dumps(self.task_params)
             # Broadcast parameters (read + from DeltaC) to all ranks
-            comm.Bcast(params_serialized, root=0)
+            params_serialized = comm.bcast(params_serialized, root=0)
             self.task_params = pickle.loads(params_serialized)
             self.format_params_deltac()
             self.corr_3pcf.task_params = self.task_params
@@ -138,8 +140,8 @@ class Corr_3PCF(pipeline.TaskBase):
                 rows_per_rank = None
                 remainder = None
             # Broadcast n_rows, rows_per_rank, remainder
-            comm.Bcast(rows_per_rank, root=0)
-            comm.Bcast(remainder, root=0)
+            rows_per_rank = comm.bcast(rows_per_rank, root=0)
+            remainder = comm.bcast(remainder, root=0)
             if rank == 0:
                 for i in range(1, size):
                     if i < remainder:
