@@ -1,7 +1,7 @@
 {
 	"Corr_2PCF": {
-		"deltac_in_path": "./convols_L512_R_5.0_pywt.npy",
-		"fout_dir": "./",
+    	"deltac_in_path": "./Output_ConvolsData_example.npy",
+		"fout_path": "./Output_Corr2PCFData_example.txt",
 		"threads": 20,
 		"R1": 1.0,
 		"R2": 150.0,

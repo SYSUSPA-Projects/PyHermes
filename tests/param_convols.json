@@ -5,7 +5,7 @@
       "path": "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin",
       "format": "generic"
     },
-    "fout_dir": "./",
+    "fout_path": "./Output_ConvolsData_example.npy",
     "SampRate": 1024,
     "SimBoxL": 1000,
     "window": {

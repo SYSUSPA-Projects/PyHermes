@@ -25,18 +25,21 @@ class TaskBase(object):
             _params_task_default=json_base_instance.default_params
             _params_task_user = param_task
             _task_name_user = list(_params_task_user.keys())
-            _task_name_user_count = len(_task_name_user)
-            # Now we only support single task pipeline :)
-            if _task_name_user_count > 1:
-                self.logger.error(f"The program only support 1 task name, but you have provided {_task_name_user_count}.")
-                func_util.safe_exit(1)
-            elif _task_name_user_count == 0:
-                self.logger.error("Your input does not contain any task name.")
-                func_util.safe_exit(1)
-            _task_name_user = _task_name_user[0]
+            # _task_name_user_count = len(_task_name_user)
+            # # Now we only support single task pipeline :)
+            # if _task_name_user_count > 1:
+            #     self.logger.error(f"The program only support 1 task name, but you have provided {_task_name_user_count}.")
+            #     func_util.safe_exit(1)
+            # elif _task_name_user_count == 0:
+            #     self.logger.error("Your input does not contain any task name.")
+            #     func_util.safe_exit(1)
+            # _task_name_user = _task_name_user[0]
+            # if _task_name != _task_name_user:
+            #     self.logger.error(f"Mismatch of task name, expected '{_task_name}', but received '{_task_name_user}'.")
+            #     func_util.safe_exit(1)
             _task_name = self.task_name
-            if _task_name != _task_name_user:
-                self.logger.error(f"Mismatch of task name, expected '{_task_name}', but received '{_task_name_user}'.")
+            if _task_name not in _task_name_user:
+                self.logger.error(f"Mismatch of task name, expected <{_task_name}>, but it was not found in the provided task(s) <{_task_name_user}>")
                 func_util.safe_exit(1)
             json_base_instance.recursive_update(
                 default_dict=_params_task_default,

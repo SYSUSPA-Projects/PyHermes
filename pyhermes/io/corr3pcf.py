@@ -4,11 +4,11 @@ from datetime import datetime
 import numpy as np
 
 import pyhermes
-from .convols import ColvolsData
+from .corr2pcf import Corr2PCFData
 
 
 
-class Corr3PCFData(ColvolsData):
+class Corr3PCFData(Corr2PCFData):
 
     def _load_single(self, f_in):
         with open(f_in, 'r') as f:
@@ -35,26 +35,27 @@ class Corr3PCFData(ColvolsData):
         header = (
             f"# Corr_3PCF output from PyHermes v{version}, TIME: {current_time}\n"
             "# Parameters from input :\n"
-            f"#  R1              = {self.task_params['R1']}\n"
-            f"#  R2              = {self.task_params['R2']}\n"
-            f"#  rot_num         = {int(self.task_params['rot_num'])}\n"
-            f"#  NStheta         = {int(self.task_params['NStheta'])}\n"
-            f"#  fin_path        = {self.task_params['fin']['path']}\n"
-            f"#  fin_size        = {self.task_params['orgDsize_3pcf']}\n"
-            f"#  fin_format      = {self.task_params['fin']['format']}\n"
-            f"#  fout_dir        = {self.task_params['fout_dir']}\n"
-            f"#  deltac_in_path  = {self.task_params['deltac_in_path']}\n"
+            f"#  R1                = {self.task_params['R1']}\n"
+            f"#  R2                = {self.task_params['R2']}\n"
+            f"#  rot_num           = {int(self.task_params['rot_num'])}\n"
+            f"#  NStheta           = {int(self.task_params['NStheta'])}\n"
+            f"#  fin_path          = {self.task_params['fin']['path']}\n"
+            f"#  fin_size          = {self.task_params['orgDsize_3pcf']}\n"
+            f"#  fin_format        = {self.task_params['fin']['format']}\n"
+            f"#  fout_path         = {self.task_params['fout_path']}\n"
+            f"#  deltac_in_path    = {self.task_params['deltac_in_path']}\n"
+            f"#  corr2pcf_in_path  = {self.task_params['corr2pcf_in_path']}\n"
             "# Parameters from DeltaC:\n"
-            f"#  J               = {self.task_params['J']}\n"
-            f"#  SimBoxL         = {self.task_params['SimBoxL']}\n"
-            f"#  SampRate        = {int(self.task_params['SampRate'])}\n"
-            f"#  bandwidth       = {self.task_params['bandwidth']}\n"
-            f"#  fin_path        = {self.task_params['fin_path']}\n"
-            f"#  fin_size        = {self.task_params['orgDsize']}\n"
-            f"#  fin_format      = {self.task_params['fin_format']}\n"
-            f"#  wavelet_mode    = {self.task_params['wavelet_mode']}\n"
-            f"#  wavelet_level   = {self.task_params['wavelet_level']}\n"
-            f"#  Window_Info     = {self.task_params['window']}\n"
+            f"#  J                 = {self.task_params['J']}\n"
+            f"#  SimBoxL           = {self.task_params['SimBoxL']}\n"
+            f"#  SampRate          = {int(self.task_params['SampRate'])}\n"
+            f"#  bandwidth         = {self.task_params['bandwidth']}\n"
+            f"#  fin_path          = {self.task_params['fin_path']}\n"
+            f"#  fin_size          = {self.task_params['orgDsize']}\n"
+            f"#  fin_format        = {self.task_params['fin_format']}\n"
+            f"#  wavelet_mode      = {self.task_params['wavelet_mode']}\n"
+            f"#  wavelet_level     = {self.task_params['wavelet_level']}\n"
+            f"#  Window_Info       = {self.task_params['window']}\n"
             "\n"
             "---------------------------\n"
             "theta[rad]  , Q"

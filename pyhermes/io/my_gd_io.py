@@ -107,6 +107,8 @@ def extdict_sfields(header, out_dict, selected_fields):
     return out_dict
 
 def _read_my_gd2_fof_single(filename):
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
     header_dtype = np.dtype([
         ('block1', np.int32),       
         ('Ngroups', np.int64),        
@@ -138,6 +140,9 @@ def _read_my_gd2_fof_single(filename):
     with open(filename, 'rb') as f:
         _header = np.fromfile(f, dtype=header_dtype, count=1)
         extdict_sfields(_header, _out, _sfields)
+        if _out['Nsubhalos'] != 0:
+            logger.error("Currently, the <gadget-fof> reader supports only FoF, i.e., Gadget compiled using the 'FOF' Config flag but without 'SUBFIND'.")
+            func_util.safe_exit(1)
         # Skip GroupLen
         _blksize = np.fromfile(f, dtype=np.int32, count=1)
         _ = np.fromfile(f, dtype=np.int32, count=int(_out['Ngroups']))
@@ -168,8 +173,6 @@ def _read_my_gd2_fof_single(filename):
     return _out
 
 def read_my_gd2_fof(file):
-    _mod_name, _func_name = get_fname_info()
-    logger = setup_logger(_mod_name, _func_name)
     files = func_util.find_subsplit_files(file)
     out = {
         'TotNgroups': 0,

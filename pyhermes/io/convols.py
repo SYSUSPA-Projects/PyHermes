@@ -7,10 +7,10 @@ from pyhermes.utils import func_util
 
 
 
-class ColvolsData(HermesData):
+class ConvolsData(HermesData):
 
     def load_deltac(self, f_in, single=True):
-        super().load(f_in, read_deltac=True, single=single)
+        self.load(f_in, read_deltac=True, single=single)
 
     def _load_deltac(self, f_in):
         with open(f_in, 'rb') as f:

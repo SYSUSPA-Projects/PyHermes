@@ -3,11 +3,11 @@
 	"Counting": {
 		"n_tasks": 1000000,
 		"deltac_in_path": "",
-		"fout_dir": ""
+		"fout_path": ""
 	},
 	"Corr_2PCF": {
 		"deltac_in_path": "",
-		"fout_dir": "",
+		"fout_path": "",
 		"threads": 5,
 		"R1": 1.0,
 		"R2": 150.0,
@@ -15,11 +15,12 @@
 	},
 	"Corr_3PCF": {
 		"deltac_in_path": "",
+		"corr2pcf_in_path": "",
 		"fin": {
 			"path": "./data.bin",
 			"format": "generic"
 		},
-		"fout_dir": "",
+		"fout_path": "",
 		"NStheta": 20,
 		"R1": 20.0,
 		"R2": 40.0,

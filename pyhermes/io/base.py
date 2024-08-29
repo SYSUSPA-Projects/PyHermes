@@ -1,7 +1,7 @@
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.io import handle_PATHorURL
 from pyhermes.param.logbase import setup_logger 
+from pyhermes.io import handle_PATHorURL, check_fout
 
 
 
@@ -19,19 +19,24 @@ class HermesData(object):
         self.saveflag             = False
         self.task_params          = None
 
-    def load(self, f_in, read_deltac=False, single=True):
+    def load(self, f_in, read_deltac=False, read_2pcf=False, single=True):
         try:
             if single:
                 if self.rank == 0:
                     f_in = handle_PATHorURL(f_in)
                     if read_deltac:
-                        deltac_str = 'DeltaC '
-                        self.logger.info(f'Reading {deltac_str}data from ---> {f_in} <---')
+                        extra_str = 'DeltaC '
+                        self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_deltac(f_in)
                         self.logger.info(f'DeltaC: Shape{self.deltac.shape}, Min = {self.deltac.min():.4f}, Max = {self.deltac.max():.4f}, Mean = {self.deltac.mean():.4f}')
+                    elif read_2pcf:
+                        extra_str = '2PCF '
+                        self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
+                        self._load_corr2pcf(f_in)
+                        # self.logger.info(f'DeltaC: Shape{self.deltac.shape}, Min = {self.deltac.min():.4f}, Max = {self.deltac.max():.4f}, Mean = {self.deltac.mean():.4f}')
                     else:
-                        deltac_str = ''
-                        self.logger.info(f'Reading {deltac_str}data from ---> {f_in} <---')
+                        extra_str = ''
+                        self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         # self.logger.info(f'Data: Shape{self.data.shape}, Min = {self.data.min():.4f}, Max = {self.data.max():.4f}, Mean = {self.data.mean():.4f}')
                         self._load_single(f_in)
             else:
@@ -49,8 +54,10 @@ class HermesData(object):
                     self.logger.error('Please ensure that the data has been loaded or calculated before attempting to save.')
                     func_util.safe_exit(1)
                 else:
-                    self.logger.info(f'Writing data to ---> {f_out} <---')
-                    self._save_single(f_out)
+                    f_out = check_fout(self, f_out)
+                    if f_out:
+                        self.logger.info(f'Writing data to ---> {f_out} <---')
+                        self._save_single(f_out)
         else:
             # TODO, MPI multi save
             pass
