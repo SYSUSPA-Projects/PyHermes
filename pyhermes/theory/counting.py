@@ -70,7 +70,7 @@ class Counting(pipeline.TaskBase):
                 self.task_params.update(self.counting.dict_inht_vonDeltac)
                 params_serialized = pickle.dumps(self.task_params)
             # Broadcast parameters (read + from DeltaC) to all ranks
-            params_serialized = self.comm.bcast(params_serialized, root=0)
+            comm.Bcast(params_serialized, root=0)
             self.task_params = pickle.loads(params_serialized)
             self.format_params_deltac()
             self.counting.task_params = self.task_params
@@ -96,16 +96,13 @@ class Counting(pipeline.TaskBase):
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")
             # Output the couting
             self.counting.save(self.fout_path)
-            # if self.fout_dir is not None and self.fout_dir != "":
-            #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-            #     _fout_path = os.path.join(self.fout_dir, f"counting_L{str(self.L)}_{_result_string}_N{str(self.n_tasks)}.npy")
-            #     self.counting.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-        if rank == 0:
+        if self.rank == 0:
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
+        # The data(s) below ⬇ are only valid on rank 0
         return self.counting
                 

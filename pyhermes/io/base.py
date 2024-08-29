@@ -8,16 +8,18 @@ from pyhermes.io import handle_PATHorURL, check_fout
 class HermesData(object):
 
     def __init__(self):
-        self.comm                 = MPI.COMM_WORLD
-        self.rank                 = self.comm.Get_rank()
-        self.logger               = setup_logger(__name__, self.__class__.__name__)
-        self.data                 = None
-        self.deltac               = None
-        self.dict_inht_vonDeltac  = {}
-        self.xi                   = None
-        self.r                    = None
-        self.saveflag             = False
-        self.task_params          = None
+        self.comm                = MPI.COMM_WORLD
+        self.rank                = self.comm.Get_rank()
+        self.logger              = setup_logger(__name__, self.__class__.__name__)
+        self.data                = None
+        self.deltac              = None
+        self.dict_inht_vonDeltac = {}
+        self.r                   = None
+        self.xi                  = None
+        self.theta               = None
+        self.q                   = None
+        self.saveflag            = False
+        self.task_params         = None
 
     def load(self, f_in, read_deltac=False, read_2pcf=False, single=True):
         try:

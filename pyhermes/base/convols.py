@@ -34,14 +34,18 @@ class Convols(pipeline.TaskBase):
         self.threads       = int(self.task_params['threads'])
         self.L             = 1 << self.J
 
-    def run(self, return_pData_rank0=False): 
-        self.deltac = ConvolsData()
+    def run(self, return_pData=False): 
         try:
-            if self.rank == 0:
+            comm = self.comm
+            rank = self.rank
+            size = comm.Get_size()
+            self.deltac = ConvolsData()
+            p_dm = None
+            if rank == 0:
                 time_run_1 = time.perf_counter()
             # !NOTICE: the MPI-rank num to calculate scaling coefficient
             # !          should be a power of two
-            if self.rank == 0:
+            if rank == 0:
                 if self.size != 1 and (self.size & (self.size - 1)) != 0:
                     self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                     func_util.safe_exit(1)
@@ -53,7 +57,7 @@ class Convols(pipeline.TaskBase):
             _PhiEnd = self.phi_data.shape[0] // self.SampRate
             self.PhiSupport = _PhiEnd - _PhiStart 
             self.core_width = self.L // self.size
-            if self.rank == 0 :
+            if rank == 0 :
                 # Read particle data, the origin data size only store in rank 0
                 # _data_in, _orgDsize = read_tristan(self.fin_path)
                 p_dm, _orgDsize = read_particle_data(self.fin_path, self.fin_format)
@@ -76,19 +80,19 @@ class Convols(pipeline.TaskBase):
                 self.orgDsize = 0
                 self.all_s = None
                 shrink_list = None
-            if self.rank == 0:
+            if rank == 0:
                 for i in range(1, self.size):
-                    self.comm.send(shrink_list[i].shape, dest=i)
-                    self.comm.Send(shrink_list[i], dest=i)
+                    comm.send(shrink_list[i].shape, dest=i)
+                    comm.Send(shrink_list[i], dest=i)
             else:
-                shape = self.comm.recv(source=0)
+                shape = comm.recv(source=0)
                 data_sub_part = np.empty(shape, dtype=np.float32)
-                self.comm.Recv(data_sub_part, source=0)
-            self.comm.Barrier()
-            self.rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
+                comm.Recv(data_sub_part, source=0)
+            comm.Barrier()
+            rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
             time_start = time.perf_counter()
             _s_part = math_util.scaling_function_numba_part(
-                part       = self.rank,
+                part       = rank,
                 p          = data_sub_part,
                 phi_data   = self.phi_data,
                 size       = self.size,
@@ -97,8 +101,8 @@ class Convols(pipeline.TaskBase):
                 J          = self.J,
                 SimBoxL    = self.SimBoxL
                 )
-            self.comm.Gather(_s_part, self.all_s, root=0)
-            if self.rank == 0:
+            comm.Gather(_s_part, self.all_s, root=0)
+            if rank == 0:
                 _dict_inht_vonDeltac = {
                     "fin_path"     : self.fin_path,
                     "fin_format"   : self.fin_format,
@@ -140,24 +144,17 @@ class Convols(pipeline.TaskBase):
                 self.logger.info(f"The time for FFT: {time_end - time_start:.4f} sec")
                 # Output the deltac
                 self.deltac.save(self.fout_path)
-                # if self.fout_dir is not None and self.fout_dir != "":
-                #     # Output the deltac
-                #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                #     _fout_path = os.path.join(self.fout_dir, f"convols_L{str(self.L)}_{_result_string}_pywt.npy")
-                #     self.deltac.save(_fout_path)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-        self.comm.Barrier()
+        comm.Barrier()
         if self.rank == 0:
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
-        if return_pData_rank0:
-            if self.rank ==0:
-                return self.deltac, p_dm
-            else:
-                return self.deltac, None
+        # The data(s) below ⬇ are only valid on rank 0
+        if return_pData:
+            return self.deltac, p_dm
         else:
             return self.deltac
 

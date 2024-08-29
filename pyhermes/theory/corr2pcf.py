@@ -68,9 +68,9 @@ class Corr_2PCF(pipeline.TaskBase):
                 self.task_params.update(self.corr_2pcf.dict_inht_vonDeltac)
                 params_serialized = pickle.dumps(self.task_params)
             # Broadcast parameters (read + from DeltaC) to all ranks
-            params_serialized = self.comm.bcast(params_serialized, root=0)
+            comm.Bcast(params_serialized, root=0)
             self.task_params = pickle.loads(params_serialized)
-            self.comm.Barrier()
+            comm.Barrier()
             self.format_params_deltac()
             self.corr_2pcf.task_params = self.task_params
             self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
@@ -159,18 +159,14 @@ class Corr_2PCF(pipeline.TaskBase):
                 # Output the 2pcf
                 self.corr_2pcf.saveflag = True
                 self.corr_2pcf.save(self.fout_path) 
-                # if self.fout_dir is not None and self.fout_dir != "":
-                #     self.corr_2pcf.saveflag = True
-                #     _result_string = "_".join(f"{key}_{value}" for key, value in self.window_args.items())
-                #     _fout_path = os.path.join(self.fout_dir, f"corr2pcf_L{str(self.L)}_{_result_string}_xinum{self.xi_num}.txt")
-                #     self.corr_2pcf.save(_fout_path) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-        if rank == 0:
+        if self.rank == 0:
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
+        # The data(s) below ⬇ are only valid on rank 0
         return self.corr_2pcf
 
     def spectrum_vectorized(self, v, k0, k1, N_k):
