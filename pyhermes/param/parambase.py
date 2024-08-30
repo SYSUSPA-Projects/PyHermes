@@ -102,7 +102,12 @@ class JsonBase(object):
                     self._recursive_update(default_dict[key], value, full_key)
                 else:
                     # Add new key
-                    self.logger.warning(f"Adding non-default key: '{full_key}'")
+                    if parent_key != 'Convols.window':
+                        # Skip warning for window_args
+                        self.logger.warning(f"Adding non-default key: '{full_key}'")
+                    else:
+                        # ↓ Use special info instead of warning ↑
+                        self.logger.info(f"Adding customizable window arg: '{full_key}' as '{value}'")
                     default_dict[key] = value
             elif isinstance(value, dict) and isinstance(default_dict[key], dict):
                 # Recursively to due the whole dict structure
