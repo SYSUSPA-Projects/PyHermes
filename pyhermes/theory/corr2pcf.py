@@ -62,6 +62,7 @@ class Corr_2PCF(pipeline.TaskBase):
                     if isinstance(deltac, ConvolsData):
                         self.corr_2pcf.deltac = deltac.data
                         self.corr_2pcf.dict_inht_vonDeltac = deltac.dict_inht_vonDeltac
+                        self.task_params['deltac_in_path'] = 'load from argument'
                     else:
                         rank == 0 and self.logger.error("Unexpected input: 'deltac' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
                         func_util.safe_exit(1)
