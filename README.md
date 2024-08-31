@@ -11,6 +11,7 @@ Please see details in [PyHermes Official Docs](https://pyhermes.astroslacker.com
 
 ### Method2 - from pypi
 Users need to install mpi4py mannually.
+Visit [mpi4py](https://pypi.org/project/mpi4py/) for installation details.
 
 <font color='orange'>TODO</font>
 
