@@ -3,7 +3,7 @@ import pickle
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger
-from pyhermes.param.parambase import JsonBase
+from pyhermes.param.parambase import ParamBase
 
 
 
@@ -18,18 +18,18 @@ class TaskBase(object):
         self.logger = setup_logger(__name__, self.__class__.__name__)
         params_serialized = None
         if self.rank == 0:
-            # Create an instance of JsonBase
-            json_base_instance = JsonBase()
+            # Create an instance of ParamBase
+            param_base_instance = ParamBase()
             # Read task default paramters
-            json_base_instance.read_default(self.__class__)
-            _params_task_default=json_base_instance.default_params
+            param_base_instance.read_default(self.__class__)
+            _params_task_default=param_base_instance.default_params
             _params_task_user = param_task
             _task_name_user = list(_params_task_user.keys())
             _task_name = self.task_name
             if _task_name not in _task_name_user:
                 self.logger.error(f"Mismatch of task name, expected <{_task_name}>, but it was not found in the provided task(s) <{_task_name_user}>")
                 func_util.safe_exit(1)
-            json_base_instance.recursive_update(
+            param_base_instance.recursive_update(
                 default_dict=_params_task_default,
                 new_dict=_params_task_user,
                 section=_task_name

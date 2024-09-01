@@ -4,6 +4,7 @@ import inspect
 import argparse
 import importlib
 
+import yaml
 import json5
 
 from pyhermes.utils import func_util
@@ -25,24 +26,22 @@ def read_param(config_path=None):
         config_path = <YOUR/CONFIG/PATH> , if you set jupyer = True, you need to specify the config file path.
     '''
     if not config_path:
-        parser = JsonBase.get_parser()
+        parser = ParamBase.get_parser()
         args = parser.parse_args()
         config_path = args.config
-    param_base = JsonBase(config_file_path=config_path)
+    param_base = ParamBase(config_file_path=config_path)
     param_user = param_base.read_config()
     return param_user
 
 
-
-class JsonBase(object):
+class ParamBase(object):
     '''
-    The class to read parameters in json(5) format. 
+    The class to read parameters in yaml or json(5) format. 
     Include: 
         read default parameters (read the json file at <module>/default_params.json)
         read user parameters (with specified path)
         update default parameters (update default value by user parameters)
     '''
-
     
     def __init__(self, config_file_path=None):
         self.default_params = {}
@@ -70,6 +69,43 @@ class JsonBase(object):
                             metavar=""
                             )
         return parser
+    
+    def _detect_paramfile_type(self, file_path):
+        try:
+            with open(file_path, 'r') as file:
+                content = file.read()
+                try:
+                    json5.loads(content)
+                    self.logger.info('Input parameter file format is JSON(5)')
+                    return 'json'
+                # except json5.JSONDecodeError:
+                except ValueError:
+                    pass  # not json
+                try:
+                    yaml.safe_load(content)
+                    self.logger.info('Input parameter file format is YAML')
+                    return 'yaml'
+                except yaml.YAMLError:
+                    pass  # not YAML
+                raise ValueError("Unsupported file type or invalid parameter file format")
+        except FileNotFoundError:
+            self.logger.error(f"Parameter file not found: '{file_path}'. This should not have happened, pipeline stopped!")
+            func_util.safe_exit(1)
+        except Exception as e:
+            self.logger.error(f"Cannot determine file type: {e}")
+            self.logger.error("Support parameter file formats: <JSON> and <YAML>")
+            self.logger.error(f"Please see the document for details")
+            func_util.safe_exit(1)
+    
+    def read_paramfile(self, file_path):
+        file_type = self._detect_paramfile_type(file_path)
+        with open(file_path, 'r') as file:
+            content = file.read()
+            if file_type == 'json':
+                param_dict = json5.loads(content)
+            elif file_type == 'yaml':
+                param_dict = yaml.safe_load(content)
+        return param_dict
 
     def _recursive_update(self, default_dict, new_dict, parent_key='', section=None):
         # If a specific section is provided, update only that section
@@ -124,12 +160,12 @@ class JsonBase(object):
     def recursive_update(self, default_dict, new_dict, parent_key='', section=None):
         return self._recursive_update(default_dict, new_dict, parent_key=parent_key, section=section)
 
-    def _read_config(self, config_fname):
+    def _read_config_jsonPre(self, config_fname):
         try:
             with open(config_fname) as f:
                 config = json5.load(f)
         except FileNotFoundError:
-            self.logger.error(f"Configuration file not found: '{config_fname}'. This should not have happened, pipeline stopped!")
+            self.logger.error(f"Parameter file not found: '{config_fname}'. This should not have happened, pipeline stopped!")
             func_util.safe_exit(1)
         except Exception as e:
             self.logger.error(f"Reading configure file error: {e}. This should not have happened, pipeline stopped!")
@@ -155,7 +191,7 @@ class JsonBase(object):
     def _read_default(self, default_fname):
         _ , dir_name = self._get_dir_from_path(fpath=default_fname)
         self.logger.info(f"Set default parameters of module <{dir_name}> ...")
-        _default_params = self._read_config(config_fname=default_fname)
+        _default_params = self._read_config_jsonPre(config_fname=default_fname)
         # judge whether key 'enable_default_param' exist
         if "enable_default_param" not in _default_params:
             self.logger.warning(f"No 'enable_default_param' found in {default_fname}, skipping parameter loading for module <{dir_name}>!")
@@ -168,11 +204,11 @@ class JsonBase(object):
         for key in _default_params.keys():
             if key == "enable_default_param":
                 continue
-            # if key in JsonBase.default_params:
+            # if key in ParamBase.default_params:
             if key in self.default_params:
                 self.logger.error(f"Key '{key}' already exists in default parameters, did you add it again? This should not have happened, pipeline stopped!")
                 func_util.safe_exit(1)
-        # JsonBase.default_params.update(_default_params)
+        # ParamBase.default_params.update(_default_params)
         self.default_params.update(_default_params)
     
     def read_default(self, class_task):
@@ -184,7 +220,8 @@ class JsonBase(object):
         if self.rank == 0:
             if self.config_file_path:
                 self.logger.info(f"Reading configure file: '{self.config_file_path}'")
-                user_params = self._read_config(self.config_file_path)
+                # user_params = self._read_config_jsonPre(self.config_file_path)
+                user_params = self.read_paramfile(self.config_file_path)
                 return user_params
             else:
                 self.logger.error(f"No configure file specified in pipeline")
