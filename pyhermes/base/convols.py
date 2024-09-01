@@ -38,17 +38,20 @@ class Convols(pipeline.TaskBase):
         try:
             comm = self.comm
             rank = self.rank
-            size = comm.Get_size()
             self.deltac = ConvolsData()
+            _system_cpu = 2 ** int(np.log2(os.cpu_count()))
+            size = comm.Get_size() if _system_cpu >= comm.Get_size() else _system_cpu
             p_dm = None
             if rank == 0:
                 time_run_1 = time.perf_counter()
             # !NOTICE: the MPI-rank num to calculate scaling coefficient
             # !          should be a power of two
-            if rank == 0:
                 if self.size != 1 and (self.size & (self.size - 1)) != 0:
                     self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                     func_util.safe_exit(1)
+                elif self.size > _system_cpu:
+                    self.logger.warning(f"MPI rank number {self.size} is larger than the system CPU number(2^) {_system_cpu}. Using the system CPU number of {_system_cpu} instead.")
+            self.size = size
             # Retrive parameters to locals
             self.format_params()
             # Do wavelet transform
@@ -61,47 +64,60 @@ class Convols(pipeline.TaskBase):
                 # Read particle data, the origin data size only store in rank 0
                 # _data_in, _orgDsize = read_tristan(self.fin_path)
                 p_dm, _orgDsize = read_particle_data(self.fin_path, self.fin_format)
+                _ScaleFactor = self.L / self.SimBoxL
                 if p_dm.shape[1] != 3:
                     self.logger.error("Wrong shape of input particle catalog data! The shape should be (*,3)")
                     func_util.safe_exit(1)
                 # self.deltac.orgData = p_dm
-                self.logger.info("Start partition ... ")
-                _ScaleFactor = self.L / self.SimBoxL
-                p_dm_in = math_util.int_data(p_dm, _ScaleFactor)
-                _shrink_p_dm_in = math_util.bit(p_dm_in, self.J, int(np.log2(self.size)))
-                time_start = time.perf_counter()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=self.size) as executor: 
-                    shrink_list = list(executor.map(lambda num: math_util.partition_data_single(p_dm, _shrink_p_dm_in, num), range(self.size)))
-                time_end = time.perf_counter()
-                self.logger.info(f"The time for partition data: {time_end - time_start:.4f} sec")
-                data_sub_part = shrink_list[0]
-                self.all_s  = np.zeros((self.size, self.L // self.size + 2 * (self.PhiSupport - 1), self.L, self.L))
-            else:
+                if size == 1:
+                    self.logger.info("Single process mode")
+                    time_start = time.perf_counter()
+                    _deltas = math_util.scaling_function_numba(
+                        p          = p_dm,
+                        phi_data   = self.phi_data,
+                        SampRate   = self.SampRate,
+                        J          = self.J,
+                        SimBoxL    = self.SimBoxL
+                        )
+                else:
+                    self.logger.info("Multi-process mode")
+                    self.logger.info("Start partition ... ")
+                    p_dm_in = math_util.int_data(p_dm, _ScaleFactor)
+                    _shrink_p_dm_in = math_util.bit(p_dm_in, self.J, int(np.log2(self.size)))
+                    time_start = time.perf_counter()
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=self.size) as executor: 
+                        shrink_list = list(executor.map(lambda num: math_util.partition_data_single(p_dm, _shrink_p_dm_in, num), range(self.size)))
+                    time_end = time.perf_counter()
+                    self.logger.info(f"The time for partition data: {time_end - time_start:.4f} sec")
+                    data_sub_part = shrink_list[0]
+                    self.all_s  = np.zeros((self.size, self.L // self.size + 2 * (self.PhiSupport - 1), self.L, self.L))
+                    for i in range(1, self.size):
+                        comm.send(shrink_list[i].shape, dest=i)
+                        comm.Send(shrink_list[i], dest=i)
+            elif rank > 0:
                 self.orgDsize = 0
                 self.all_s = None
                 shrink_list = None
-            if rank == 0:
-                for i in range(1, self.size):
-                    comm.send(shrink_list[i].shape, dest=i)
-                    comm.Send(shrink_list[i], dest=i)
-            else:
                 shape = comm.recv(source=0)
                 data_sub_part = np.empty(shape, dtype=np.float32)
                 comm.Recv(data_sub_part, source=0)
-            comm.Barrier()
-            rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
-            time_start = time.perf_counter()
-            _s_part = math_util.scaling_function_numba_part(
-                part       = rank,
-                p          = data_sub_part,
-                phi_data   = self.phi_data,
-                size       = self.size,
-                core_width = self.core_width,
-                SampRate   = self.SampRate,
-                J          = self.J,
-                SimBoxL    = self.SimBoxL
-                )
-            comm.Gather(_s_part, self.all_s, root=0)
+            if size > 1:
+                comm.Barrier()
+                rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
+                time_start = time.perf_counter()
+                _s_part = math_util.scaling_function_numba_part(
+                    part       = rank,
+                    p          = data_sub_part,
+                    phi_data   = self.phi_data,
+                    size       = self.size,
+                    core_width = self.core_width,
+                    SampRate   = self.SampRate,
+                    J          = self.J,
+                    SimBoxL    = self.SimBoxL
+                    )
+                comm.Gather(_s_part, self.all_s, root=0)
+                if rank == 0:
+                    _deltas = self.sew_up(self.all_s, self.size, self.L)
             if rank == 0:
                 _dict_inht_vonDeltac = {
                     "fin_path"     : self.fin_path,
@@ -116,10 +132,7 @@ class Convols(pipeline.TaskBase):
                     "wavelet_level": self.wavelet_level,
                 }
                 self.deltac.dict_inht_vonDeltac.update(_dict_inht_vonDeltac)
-                if self.size > 1:
-                    _deltas = self.sew_up(self.all_s, self.size, self.L)
-                else:
-                    _deltas = self.all_s[0, 2:-2, :, :]
+                    # _deltas = self.all_s[0, 2:-2, :, :]
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
                 # Handle window function
