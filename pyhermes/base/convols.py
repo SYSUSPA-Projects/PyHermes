@@ -117,7 +117,7 @@ class Convols(pipeline.TaskBase):
                     )
                 comm.Gather(_s_part, self.all_s, root=0)
                 if rank == 0:
-                    _deltas = self.sew_up(self.all_s, self.size, self.L)
+                    _deltas = self.sew_up(self.all_s, self.size, self.L,self.PhiSupport)
             if rank == 0:
                 _dict_inht_vonDeltac = {
                     "fin_path"     : self.fin_path,
@@ -204,14 +204,15 @@ class Convols(pipeline.TaskBase):
         result_convol3d = irfftn(sc, workers = threads)
         return result_convol3d
     
-    def sew_up(self, all_s, size, L):
+    def sew_up(self, all_s, size, L, PhiSupport):
         sew_s = np.zeros((L, L, L))
+        sew_width = PhiSupport - 1
         for part in range(1, size - 1):
             # print(sew_s[-2+part*self.core_width:(part+1)*self.core_width+2].shape)
             # print(all_s[part].shape)
-            sew_s[-2+part*self.core_width:(part+1)*self.core_width+2] += all_s[part]
-        sew_s[-2:] += all_s[0][:2]
-        sew_s[:self.core_width+2] += all_s[0][2:self.core_width+2+2]
-        sew_s[-(self.core_width+2):] += all_s[-1][:self.core_width+2]
-        sew_s[:2] += all_s[-1][-2:]
+            sew_s[-sew_width+part*self.core_width:(part+1)*self.core_width+sew_width] += all_s[part]
+        sew_s[-sew_width:] += all_s[0][:sew_width]
+        sew_s[:self.core_width+sew_width] += all_s[0][sew_width:self.core_width+sew_width+sew_width]
+        sew_s[-(self.core_width+sew_width):] += all_s[-1][:self.core_width+sew_width]
+        sew_s[:sew_width] += all_s[-1][-sew_width:]
         return sew_s
