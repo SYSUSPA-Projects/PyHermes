@@ -1,4 +1,5 @@
 import os
+import pickle
 
 import numpy as np
 
@@ -14,7 +15,10 @@ class ConvolsData(HermesData):
 
     def _load_deltac(self, f_in):
         with open(f_in, 'rb') as f:
-            dataset = np.load(f, allow_pickle=True).item()
+            # Read the entire .npy file as bytes
+            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
+            # Convert the bytes back into the original dataset using pickle
+            dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
             if 'data' not in dataset:
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
@@ -22,10 +26,13 @@ class ConvolsData(HermesData):
             # Assign the dictionary from the file to self.dict_inht_vonDeltac
             self.dict_inht_vonDeltac = {key: value for key, value in dataset.items() if key != 'data'}
             self.deltac = dataset['data']
-
+    
     def _load_single(self, f_in):
         with open(f_in, 'rb') as f:
-            dataset = np.load(f, allow_pickle=True).item()
+            # Read the entire .npy file as bytes
+            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
+            # Convert the bytes back into the original dataset using pickle
+            dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
             if 'data' not in dataset:
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
@@ -51,5 +58,7 @@ class ConvolsData(HermesData):
             'data': self.data  # Include the actual data
         }
         # Save the dataset to the specified file
+        #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
+        _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
-            np.save(f, dataset)
+            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
