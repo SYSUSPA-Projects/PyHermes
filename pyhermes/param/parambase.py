@@ -54,7 +54,7 @@ class ParamBase(object):
     @classmethod
     def get_parser(cls):
         _version = pyhermes.__version__
-        _desc = f"Welcome to PyHermes V{_version}\nFeel free to ask if you have any questions.\nContact: dingdluan@gmail.com"
+        _desc = f"Welcome to PyHermes V{_version} \nCheck the document for more details: https://pyhermes.astroslacker.com\nFeel free to ask if you have any questions.\nContact: \n  dingdluan@gmail.com\n  juwj@mail2.sysu.edu.cn"
         parser = argparse.ArgumentParser(
             description=_desc,
             formatter_class=argparse.RawTextHelpFormatter
