@@ -7,6 +7,7 @@ import importlib
 import yaml
 import json5
 
+import pyhermes
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
@@ -52,15 +53,12 @@ class ParamBase(object):
 
     @classmethod
     def get_parser(cls):
+        _version = pyhermes.__version__
+        _desc = f"Welcome to PyHermes V{_version}\nFeel free to ask if you have any questions.\nContact: dingdluan@gmail.com"
         parser = argparse.ArgumentParser(
-            description=
-                """
-                Welcome to pyhermes
-                this is the version 0.1
-                feel free to ask if you have any question
-                sysu@sysu.com
-                """
-        )
+            description=_desc,
+            formatter_class=argparse.RawTextHelpFormatter
+            )
         parser.add_argument("-c", 
                             "--config", 
                             type=str, 
