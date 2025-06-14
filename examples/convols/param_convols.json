@@ -13,6 +13,7 @@
 		"wavelet_level": 10,
 		"Radius": 5,
 		"bandwidth": 1,
-		"threads": 2
+		"threads": 2,
+		"particle_pos": null
 	}
 }
