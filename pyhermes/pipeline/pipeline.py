@@ -17,6 +17,7 @@ class TaskBase(object):
         # Set new style logging, added by dingding, 20231113
         self.logger = setup_logger(__name__, self.__class__.__name__)
         params_serialized = None
+        # Here we handle the input & default params in rank 0
         if self.rank == 0:
             # Create an instance of ParamBase
             param_base_instance = ParamBase()
@@ -29,6 +30,7 @@ class TaskBase(object):
             if _task_name not in _task_name_user:
                 self.logger.error(f"Mismatch of task name, expected <{_task_name}>, but it was not found in the provided task(s) <{_task_name_user}>")
                 func_util.safe_exit(1)
+            # Update params to users input
             param_base_instance.recursive_update(
                 default_dict=_params_task_default,
                 new_dict=_params_task_user,

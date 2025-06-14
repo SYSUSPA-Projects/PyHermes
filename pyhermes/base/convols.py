@@ -61,9 +61,17 @@ class Convols(pipeline.TaskBase):
             self.PhiSupport = _PhiEnd - _PhiStart 
             self.core_width = self.L // self.size
             if rank == 0 :
-                # Read particle data, the origin data size only store in rank 0
-                # _data_in, _orgDsize = read_tristan(self.fin_path)
-                p_dm, _orgDsize = read_particle_data(self.fin_path, self.fin_format)
+                # Here we expose the p_dm data(in) interface for better illustion in paper, Figure 8.
+                if self.task_params['particle_pos'] != None:
+                    p_dm = self.task_params['particle_pos']
+                    if isinstance(p_dm, np.ndarray) and p_dm.ndim == 2 and p_dm.shape[1] == 3:
+                        _orgDsize = p_dm.shape[0]
+                    else:
+                        self.logger.error("Wrong input of particle data! 'particle_pos' must be a 2D array of shape (N, 3), but got", type(p_dm), "with shape", getattr(p_dm, 'shape', None))
+                        func_util.safe_exit(1)
+                else:
+                    # Read particle data, the origin data size only store in rank 0
+                    p_dm, _orgDsize = read_particle_data(self.fin_path, self.fin_format)
                 _ScaleFactor = self.L / self.SimBoxL
                 if p_dm.shape[1] != 3:
                     self.logger.error("Wrong shape of input particle catalog data! The shape should be (*,3)")
@@ -132,7 +140,6 @@ class Convols(pipeline.TaskBase):
                     "wavelet_level": self.wavelet_level,
                 }
                 self.deltac.dict_inht_vonDeltac.update(_dict_inht_vonDeltac)
-                    # _deltas = self.all_s[0, 2:-2, :, :]
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
                 # Handle window function
