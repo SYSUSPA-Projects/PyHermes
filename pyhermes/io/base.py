@@ -3,6 +3,7 @@ import pickle
 import numpy as np
 
 from pyhermes.utils import func_util
+from pyhermes.utils import math_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
 from pyhermes.io import handle_PATHorURL, check_fout
@@ -25,6 +26,8 @@ class HermesData(object):
         self.q                   = None
         self.saveflag            = False
         self.task_params         = None
+        # Set numba threads
+        math_util.configure(threads=self.threads)
 
     def load(self, f_in, read_deltac=False, read_2pcf=False, single=True):
         try:
@@ -50,23 +53,6 @@ class HermesData(object):
         except Exception as e:
             self.logger.error(f"An error occurred while loading the file '{f_in}': {e}")
             func_util.safe_exit(1)
-
-    # def save(self, f_out, single=True):
-    #     if single:
-    #         if self.rank == 0:
-    #             # TODO:不应该在这里判断，应该deltac自己判断
-    #             if self.data is None and not self.saveflag:  
-    #                 self.logger.error('No data available to save!')
-    #                 self.logger.error('Please ensure that the data has been loaded or calculated before attempting to save.')
-    #                 func_util.safe_exit(1)
-    #             else:
-    #                 f_out = check_fout(self, f_out)
-    #                 if f_out:
-    #                     self.logger.info(f'Writing data to ---> {f_out} <---')
-    #                     self._save_single(f_out)
-    #     else:
-    #         # TODO, MPI multi save
-    #         pass
 
     def save(self, f_out, single=True):
         if single:

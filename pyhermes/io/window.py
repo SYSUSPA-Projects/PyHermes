@@ -4,7 +4,7 @@ from datetime import datetime
 
 import numpy as np
 
-from pyhermes.io import ConvolsData
+from .convols import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 

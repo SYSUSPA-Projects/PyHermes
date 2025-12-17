@@ -4,7 +4,7 @@ from datetime import datetime
 import numpy as np
 
 import pyhermes
-from .corr2pcf import HermesData
+from .base import HermesData
 
 
 

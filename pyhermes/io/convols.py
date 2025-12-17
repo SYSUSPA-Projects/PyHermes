@@ -36,39 +36,44 @@ class ConvolsData(HermesData):
         expected = (nx, ny, nz // 2 + 1)
         if b.shape != expected:
             if self.rank == 0:
-                self.logger.error(f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}.")
+                self.logger.error(
+                    f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}. "
+                    "In this API, the convolution window is expected on the right-hand side "
+                    "(signal @ window). "
+                    "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
         return math_util.specialized_convolution_3d(a, b, threads=self.threads)
 
-    def _conv_numpy(self, other):
-        a = self.as_array()
-        b = np.array(other)
-        if a.ndim != 3 or b.ndim != 3:
-            if self.rank == 0:
-                self.logger.error(
-                    f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
-                )
-            func_util.safe_exit(1)
-        nx, ny, nz = a.shape
-        expected = (nx, ny, nz // 2 + 1)
-        if b.shape != expected:
-            if self.rank == 0:
-                self.logger.error(f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}.")
-            func_util.safe_exit(1)
-        return math_util.specialized_convolution_3d(a, b, threads=self.threads)
+    # def _conv_numpy(self, other):
+    #     a = self.as_array()
+    #     b = np.array(other)
+    #     if a.ndim != 3 or b.ndim != 3:
+    #         if self.rank == 0:
+    #             self.logger.error(
+    #                 f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
+    #             )
+    #         func_util.safe_exit(1)
+    #     nx, ny, nz = a.shape
+    #     expected = (nx, ny, nz // 2 + 1)
+    #     if b.shape != expected:
+    #         if self.rank == 0:
+    #             self.logger.error(f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}.")
+    #         func_util.safe_exit(1)
+    #     return math_util.specialized_convolution_3d(a, b, threads=self.threads)
 
     def __matmul__(self, other):
         if isinstance(other, ConvolsData):
             return self._conv(other)
-        if isinstance(other, np.ndarray):
-            return self._conv_numpy(other)
+        # Numpy will NOT automatically pass to our __rmatmul__, so abort here.
+        # if isinstance(other, np.ndarray):
+        #     return self._conv_numpy(other)
         return NotImplemented
 
     def __rmatmul__(self, other):
         if isinstance(other, ConvolsData):
             return other._conv(self)  
-        if isinstance(other, np.ndarray):
-            return self._conv_numpy(other)
+        # if isinstance(other, np.ndarray):
+        #     return self._conv_numpy(other)
         return NotImplemented
 
     def as_array(self):

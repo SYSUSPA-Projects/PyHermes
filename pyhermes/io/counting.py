@@ -2,11 +2,11 @@ import os
 
 import numpy as np
 
-from .convols import ConvolsData
+from .base import HermesData
 
 
 
-class CountingData(ConvolsData):
+class CountingData(HermesData):
 
     def _load_single(self, f_in):
         with open(f_in, 'rb') as f:
