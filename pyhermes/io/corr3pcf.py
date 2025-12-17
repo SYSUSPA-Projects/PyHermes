@@ -4,11 +4,11 @@ from datetime import datetime
 import numpy as np
 
 import pyhermes
-from .corr2pcf import Corr2PCFData
+from .corr2pcf import HermesData
 
 
 
-class Corr3PCFData(Corr2PCFData):
+class Corr3PCFData(HermesData):
 
     def _load_single(self, f_in):
         with open(f_in, 'r') as f:

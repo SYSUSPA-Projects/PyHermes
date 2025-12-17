@@ -1,20 +1,18 @@
-import os
-import sys
 import time
 import pickle
 
 import numpy as np
-from scipy.fft import rfftn, irfftn
 
 from pyhermes.io import Corr2PCFData
 from pyhermes.io import ConvolsData
+from pyhermes.base import WindowFunc
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
-from pyhermes.pipeline import pipeline as pipeline
+from pyhermes.pipeline import TaskBase
 
 
 
-class Corr_2PCF(pipeline.TaskBase):
+class Corr_2PCF(TaskBase):
 
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)
@@ -36,8 +34,8 @@ class Corr_2PCF(pipeline.TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.window_type   = self.task_params['window']['type']
-        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
+        # self.window_type   = self.task_params['window']['type']
+        # self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
         self.orgDsize      = self.task_params['orgDsize']
         self.L             = 1 << self.J
@@ -75,7 +73,7 @@ class Corr_2PCF(pipeline.TaskBase):
             self.format_params_deltac()
             self.corr_2pcf.task_params = self.task_params
             self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
-            self.PowerPhi = self.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth)
+            self.PowerPhi = math_util.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
             if rank != 0 :
                 self.corr_2pcf.deltac = np.empty((self.L, self.L, self.L), dtype=np.float64)
             # Broadcast deltac to all rank
@@ -110,17 +108,27 @@ class Corr_2PCF(pipeline.TaskBase):
             local_r = []
             for i, radius in enumerate(r_sub_arr):
                 rescaleR = radius * self.L / self.SimBoxL
-                _w_func = math_util.set_window_function('shell', verbose=False)
-                window_array_shell = math_util.call_calculate_window_array(
-                    L                     = self.L,
-                    bandwidth             = self.bandwidth,
-                    DeltaXi               = self.DeltaXi,
-                    PowerPhi              = self.PowerPhi,
-                    window_function_numba = _w_func,
-                    R                     = rescaleR
-                    )
-                w_shell = math_util.calculate_w_numba(window_array_shell)
-                s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
+                win_params = dict(L=self.L,
+                                    bandwidth=self.bandwidth,
+                                    DeltaXi=self.DeltaXi,
+                                    PowerPhi=self.PowerPhi,
+                                    type='shell', R=rescaleR)
+                window_func = WindowFunc(win_params=win_params, threads=self.threads)
+                # _w_func = math_util.set_window_function('shell', verbose=False)
+                # window_array_shell = math_util.call_calculate_window_array(
+                #     L                     = self.L,
+                #     bandwidth             = self.bandwidth,
+                #     DeltaXi               = self.DeltaXi,
+                #     PowerPhi              = self.PowerPhi,
+                #     window_function_numba = _w_func,
+                #     R                     = rescaleR
+                #     )
+                # w_shell = math_util.calculate_w_numba(window_array_shell)
+                # s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
+                # s_sphere_shell = window_func @ self.corr_2pcf.deltac
+                deltac = ConvolsData()
+                deltac.deltac = self.corr_2pcf.deltac
+                s_sphere_shell = deltac @ window_func
                 inner_sum = np.sum(s_sphere_shell * self.corr_2pcf.deltac) * self.L**3 / self.orgDsize **2 - 1
                 local_xi.append(inner_sum)
                 local_r.append(radius)
@@ -163,42 +171,10 @@ class Corr_2PCF(pipeline.TaskBase):
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
+        print('Caonima')
         if self.rank == 0:
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
         # The data(s) below ⬇ are only valid on rank 0
         return self.corr_2pcf
-
-    def spectrum_vectorized(self, v, k0, k1, N_k):
-        N_x = v.shape[0]
-        x0 = 0
-        x1 = v.shape[0]/self.SampRate
-        Delta_x = (x1 - x0) / N_x
-        Delta_k = (k1 - k0) / N_k
-        x = np.arange(N_x) * Delta_x
-        k = np.arange(N_k + 1) * Delta_k
-        # Create 2D grids for x and k
-        x_grid, k_grid = np.meshgrid(x, k)
-        # Calculate the real and imaginary parts of the spectrum
-        s_real = np.sum(v * Delta_x * np.cos(-2 * np.pi * k_grid * x_grid), axis=1)
-        s_imag = np.sum(v * Delta_x * np.sin(-2 * np.pi * k_grid * x_grid), axis=1)
-        # Interleave the real and imaginary parts
-        s = np.empty((N_k + 1) * 2, dtype=np.double)
-        s[::2] = s_real
-        s[1::2] = s_imag
-        return s
-
-    def power_spectrum(self, v, k0, k1, N_k):
-        s = self.spectrum_vectorized(v, k0, k1, N_k)
-        p = np.zeros(N_k + 1, dtype=np.double)
-        for i in range(N_k + 1):
-            p[i] = s[2*i] ** 2 + s[2*i+1] ** 2
-        return p
-
-    def specialized_convolution_3d(self, s, w, threads):
-        # Run FFt in multi-thread manner
-        sc = rfftn(s, workers= threads)
-        sc *= w
-        result_convol3d = irfftn(sc, workers = threads)
-        return result_convol3d

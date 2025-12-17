@@ -2,14 +2,16 @@ import inspect
 import math
 import warnings
 
-import numpy as np
 import pywt
+import numpy as np
+from scipy.fft import rfftn, irfftn
 from numba import cuda, int16, jit, njit, prange
 from numba.core.errors import NumbaExperimentalFeatureWarning
 
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
+
 
 
 def cal_gamma(phi_data, PhiSupport, SampRate):
@@ -21,11 +23,9 @@ def cal_gamma(phi_data, PhiSupport, SampRate):
             Gamma[l1, l2] = np.sum(phi_data * rolled_phi1 * rolled_phi2) / SampRate
     return Gamma
 
-
 @cuda.jit
 def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
     lx, ly, lz = cuda.grid(3)
-
     if lx < L and ly < L and lz < L:
         sum_over_l1 = 0
         for l1x in range(PhiSupport):
@@ -52,7 +52,6 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
 
         result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
 
-
 def cal_coefficients(data, l):
     sum_res = 0
     for m in range(1, l + 1):
@@ -60,13 +59,11 @@ def cal_coefficients(data, l):
     sum_res += data[0]
     return sum_res
 
-
 def do_wavelet(mode="db2", level=10):
     wavelet = pywt.Wavelet(mode)
     _phi, _, _ = wavelet.wavefun(level=level)
     phi_data = _phi[:-1]
     return phi_data
-
 
 # Suppress NumbaExperimentalFeatureWarning
 warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
@@ -76,8 +73,6 @@ warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
 # ---------------------------------------------------------------
 
 ### ↓ Window functions ↓ ###
-
-
 @njit
 def window_function_shell_numba(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
@@ -87,7 +82,6 @@ def window_function_shell_numba(ki, kj, kk, R):
     Phase = 2 * np.pi * k * R
     result = np.sin(Phase) / Phase
     return result
-
 
 @njit
 def window_function_sphere_numba(ki, kj, kk, R):
@@ -101,7 +95,6 @@ def window_function_sphere_numba(ki, kj, kk, R):
     result = 3 * (np.sin(Phase) - Phase * np.cos(Phase)) / Phase**3
     return result
 
-
 @njit
 def window_function_gauss_numba(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
@@ -109,7 +102,6 @@ def window_function_gauss_numba(ki, kj, kk, R):
     Phase = 2 * np.pi * k * R
     result = np.exp(-(Phase**2) / 2)
     return result
-
 
 @njit
 def window_function_gauss_shell(ki, kj, kk, R1, R2):
@@ -122,7 +114,6 @@ def window_function_gauss_shell(ki, kj, kk, R1, R2):
         (R2 * R2 * np.cos(Phase1) + R1 * R1 * np.sin(Phase1) / Phase1) / (R1 * R1 + R2 * R2) * np.exp(-(Phase2**2) / 2)
     )
     return result
-
 
 @njit
 def window_function_Tshell(ki, kj, kk, R1, R2):
@@ -138,7 +129,6 @@ def window_function_Tshell(ki, kj, kk, R1, R2):
     )
     return result
 
-
 @njit
 def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
@@ -146,7 +136,6 @@ def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
     norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
     result = norm * Phase**2 * np.exp(-(Phase**2) / 2)
     return result
-
 
 def window_function_cylinder(ki, kj, kk, R, h):
     k1 = np.sqrt(ki**2 + kj**2)
@@ -160,10 +149,7 @@ def window_function_cylinder(ki, kj, kk, R, h):
     else:
         sum_val = 2 * jn(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
     return (sum_val * part1) * np.pi * h * R**2
-
-
 ### ↑ Window functions ↑ ###
-
 
 def set_window_function(w_type, verbose=True):
     w_type_dict = {
@@ -188,7 +174,6 @@ def set_window_function(w_type, verbose=True):
         logger.error(f"Please see the document for details")
         func_util.safe_exit(1)
 
-
 @njit(parallel=True)
 def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
     WindowArray = np.zeros((L + 1, L + 1, L + 1))
@@ -209,7 +194,6 @@ def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_functio
                             )
                 WindowArray[i, j, k] = temp
     return WindowArray
-
 
 def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, **kwargs):
     """
@@ -238,7 +222,6 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
     # Call the core function with dynamically built arguments list
     return calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
 
-
 @njit(parallel=True)
 def calculate_w_numba(WindowArray):
     L = WindowArray.shape[0] - 1
@@ -257,7 +240,6 @@ def calculate_w_numba(WindowArray):
                     + WindowArray[L - x, L - y, L - z]
                 )
     return w
-
 
 @jit(nopython=True)
 def scaling_function_numba(p, phi_data, SampRate=1024, J=8, SimBoxL=1000):
@@ -288,14 +270,12 @@ def scaling_function_numba(p, phi_data, SampRate=1024, J=8, SimBoxL=1000):
                     s[pp_coarse0 - i, pp_coarse1 - j, pp_coarse2 - k] += s_temp_test[i, j, k]
     return s
 
-
 @jit(nopython=True)
 def int_data(data, ScaleFactor):
     data_int = np.zeros(data.shape[0], dtype=np.int16)
     for i in range(data.shape[0]):
         data_int[i] = np.floor(data[i, 0] * ScaleFactor)
     return data_int
-
 
 ## bit opereator in numba
 @jit(nopython=True)
@@ -305,7 +285,6 @@ def bit(array, J, size_bit):
     for i in range(num):
         result[i] = array[i] >> (J - size_bit)
     return result
-
 
 @jit(nopython=True)
 def scaling_function_numba_part(part, p, phi_data, size, core_width, SampRate=1024, J=8, SimBoxL=1000):
@@ -340,25 +319,42 @@ def scaling_function_numba_part(part, p, phi_data, size, core_width, SampRate=10
                     ] += s_temp_test[i, j, k]
     return s
 
-
-# @njit
-# def partition_data_each(origin_data, shrink_data, part):
-#     dm_part = origin_data[shrink_data == part]
-#     return dm_part
-
-# @njit
-# def partition_data(origin_data, shrink_data, size):
-#     shrink_list = []
-#     for i in range(size):
-#         dm_part = origin_data[shrink_data == i]
-#         shrink_list.append(dm_part)
-#     return shrink_list
-
-
 def partition_data_single(origin_data, shrink_data, part):
     dm_part = origin_data[shrink_data == part]
     return dm_part
 
+def specialized_convolution_3d(s, w, threads):
+    # Run FFt in multi-thread manner
+    sc = rfftn(s, workers= threads)
+    sc *= w
+    result_convol3d = irfftn(sc, workers = threads)
+    return result_convol3d
+
+def power_spectrum(v, k0, k1, N_k, SampRate):
+    s = spectrum_vectorized(v, k0, k1, N_k, SampRate)
+    p = np.zeros(N_k + 1, dtype=np.double)
+    for i in range(N_k + 1):
+        p[i] = s[2*i] ** 2 + s[2*i+1] ** 2
+    return p
+
+def spectrum_vectorized(v, k0, k1, N_k, SampRate):
+    N_x = v.shape[0]
+    x0 = 0
+    x1 = v.shape[0] / SampRate
+    Delta_x = (x1 - x0) / N_x
+    Delta_k = (k1 - k0) / N_k
+    x = np.arange(N_x) * Delta_x
+    k = np.arange(N_k + 1) * Delta_k
+    # Create 2D grids for x and k
+    x_grid, k_grid = np.meshgrid(x, k)
+    # Calculate the real and imaginary parts of the spectrum
+    s_real = np.sum(v * Delta_x * np.cos(-2 * np.pi * k_grid * x_grid), axis=1)
+    s_imag = np.sum(v * Delta_x * np.sin(-2 * np.pi * k_grid * x_grid), axis=1)
+    # Interleave the real and imaginary parts
+    s = np.empty((N_k + 1) * 2, dtype=np.double)
+    s[::2] = s_real
+    s[1::2] = s_imag
+    return s
 
 # ----------------------------------------------------------------
 # ------------- ↓ Numerical function for counting ↓ --------------

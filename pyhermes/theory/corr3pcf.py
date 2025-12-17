@@ -11,11 +11,11 @@ from pyhermes.io import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.pipeline import pipeline as pipeline
+from pyhermes.pipeline import TaskBase
 
 
 
-class Corr_3PCF(pipeline.TaskBase):
+class Corr_3PCF(TaskBase):
 
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)
@@ -40,8 +40,8 @@ class Corr_3PCF(pipeline.TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.window_type   = self.task_params['window']['type']
-        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
+        # self.window_type   = self.task_params['window']['type']
+        # self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
         self.orgDsize      = self.task_params['orgDsize']
         self.L             = 1 << self.J
