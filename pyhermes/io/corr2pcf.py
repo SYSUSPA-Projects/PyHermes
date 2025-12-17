@@ -4,7 +4,7 @@ from datetime import datetime
 import numpy as np
 
 import pyhermes
-from .convols import HermesData
+from .base import HermesData
 
 
 
@@ -57,6 +57,7 @@ class Corr2PCFData(HermesData):
             f"#  xi_num         = {int(self.task_params['xi_num'])}\n"
             f"#  threads        = {int(self.task_params['threads'])}\n"
             f"#  fout_path      = {self.task_params['fout_path']}\n"
+            f"#  Window_Info    = {self.task_params['window']}\n"
             f"#  deltac_in_path = {self.task_params['deltac_in_path']}\n"
             "# Parameters from DeltaC:\n"
             f"#  J              = {self.task_params['J']}\n"
@@ -65,10 +66,10 @@ class Corr2PCFData(HermesData):
             f"#  bandwidth      = {self.task_params['bandwidth']}\n"
             f"#  fin_size       = {self.task_params['orgDsize']}\n"
             f"#  fin_path       = {self.task_params['fin_path']}\n"
+            f"#  fin_weight_key = {self.task_params['fin_weight_key']}\n"
             f"#  fin_format     = {self.task_params['fin_format']}\n"
             f"#  wavelet_mode   = {self.task_params['wavelet_mode']}\n"
             f"#  wavelet_level  = {self.task_params['wavelet_level']}\n"
-            f"#  Window_Info    = {self.task_params['window']}\n"
             "\n"
             "---------------------------\n"
             "r[h-1 Mpc]  , xi"

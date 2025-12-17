@@ -1,5 +1,6 @@
 from .funcs import *
 from .base import HermesData
+from .window import WindowFunc
 from .convols import ConvolsData
 from .counting import CountingData
 from .corr2pcf import Corr2PCFData

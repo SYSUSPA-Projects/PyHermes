@@ -17,37 +17,50 @@ from pyhermes.utils.func_util import get_fname_info
 
 ### ↓ Particle reading functions ↓ ###
 
-def read_generic(f_in):
+def read_generic_pos_only(f_in):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f'Reading paricle data from ---> {f_in} <---')
-    data = np.fromfile(f_in, dtype=np.float32).reshape(-1,3)
-    data_size = data.shape[0]
-    return data, data_size
+    data_dict_all = {}
+    _pos = np.fromfile(f_in, dtype=np.float32).reshape(-1,3)
+    _size = _pos.shape[0]
+    data_dict_all['pos'] = _pos
+    data_dict_all['size'] = _size
+    return data_dict_all
+
+def read_generic_pos_weight(f_in):
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    logger.info(f'Reading paricle data from ---> {f_in} <---')
+    data_dict_all = {}
+    _all = np.fromfile(f_in, dtype=np.float32).reshape(-1,4)
+    _pos = _all[:,:3]
+    _wei = _all[:,3]
+    _size = _pos.shape[0]
+    data_dict_all['pos'] = _pos
+    data_dict_all['size'] = _size
+    data_dict_all['weight'] = _wei
+    return data_dict_all
 
 def read_gadget(f_in):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f'Reading paricle data from ---> {f_in} <---')
-    _data = read_my_gd2(f_in)
+    data_dict_all = read_my_gd2(f_in)
     # Here, _data also contains velocity and mass info
     #  may be useful when weight is considered in future
     #                                   dingdluan 20240828
-    data = _data['pos']
-    data_size = data.shape[0]
-    return data, data_size
+    return data_dict_all
 
 def read_gadget_fof(f_in):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f'Reading paricle data from ---> {f_in} <---')
-    _data = read_my_gd2_fof(f_in)
+    data_dict_all = read_my_gd2_fof(f_in)
     # Here, _data also contains velocity and mass info
     #  may be useful when weight is considered in future
     #                                   dingdluan 20240828
-    data = _data['pos']
-    data_size = data.shape[0]
-    return data, data_size
+    return data_dict_all
 
 def read_somethingelse(f_in):
     pass
@@ -56,7 +69,8 @@ def read_somethingelse(f_in):
 
 def read_particle_data(f_in, f_format):
     format_to_function = {
-        "generic": read_generic,
+        "generic_pos": read_generic_pos_only,
+        "generic_pos_weight": read_generic_pos_weight,
         "gadget": read_gadget,
         "gadget-fof": read_gadget_fof,
         "somethingelse": read_somethingelse,
@@ -135,10 +149,11 @@ def check_fout(instance, fout_path):
         logger.info("No <fout_path> specified, skipping disk output.")
         return False
     ext_dict = {
-        'ConvolsData' : 'npy',
-        'CountingData' : 'npy',
-        'Corr2PCFData' : 'txt',
-        'Corr3PCFData' : 'txt',
+        'ConvolsData' : 'pkl',
+        'WindowFunc'  : 'pkl',
+        'CountingData': 'npy',
+        'Corr2PCFData': 'txt',
+        'Corr3PCFData': 'txt',
     }
     isFolder = False
     if fout_path.endswith('/') or fout_path.endswith('\\'):

@@ -14,6 +14,22 @@ from pyhermes.utils.func_util import get_fname_info
 
 
 
+_NUMBA_CONFIGURED = False
+_NUMBA_THREADS = None  
+
+def configure(threads=1):
+    """
+    Configure Numba threads ONCE for this process.
+    Call this before any @njit(parallel=True) function runs.
+    """
+    global _NUMBA_CONFIGURED, _NUMBA_THREADS
+    if _NUMBA_CONFIGURED:
+        return
+    from numba import set_num_threads, get_num_threads
+    set_num_threads(max(1, int(threads)))
+    _NUMBA_THREADS = int(get_num_threads())
+    _NUMBA_CONFIGURED = True
+
 def cal_gamma(phi_data, PhiSupport, SampRate):
     Gamma = np.zeros((PhiSupport, PhiSupport))
     for l1 in range(PhiSupport):
@@ -34,7 +50,6 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
                 index_l1y = (ly - l1y) % L
                 for l1z in range(PhiSupport):
                     index_l1z = (lz - l1z) % L
-
                     sum_over_l2 = 0
                     for l2x in range(PhiSupport):
                         index_l2x = (lx - l2x) % L
@@ -47,9 +62,7 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
                                 res_z += Gamma[l1z, l2z] * data_R2[index_l2x, index_l2y, index_l2z]
                             res_y += Gamma[l1y, l2y] * res_z
                         sum_over_l2 += Gamma[l1x, l2x] * res_y
-
                     sum_over_l1 += data_R1[index_l1x, index_l1y, index_l1z] * sum_over_l2
-
         result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
 
 def cal_coefficients(data, l):
@@ -242,81 +255,74 @@ def calculate_w_numba(WindowArray):
     return w
 
 @jit(nopython=True)
-def scaling_function_numba(p, phi_data, SampRate=1024, J=8, SimBoxL=1000):
+def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
     L = 1 << J
-    PhiStart = 0
-    PhiEnd = phi_data.shape[0] // SampRate
-    PhiSupport = PhiEnd - PhiStart
+    PhiSupport = phi_data.shape[0] // SampRate
     ScaleFactor = L / SimBoxL
-    step = np.arange(PhiSupport) * SampRate
-    scale_p = p[:, :3] * ScaleFactor
-    p_coarse = np.floor(scale_p).astype(np.int16)
-    p_finer = ((scale_p - p_coarse) * SampRate).astype(np.int16)
+    step = np.arange(PhiSupport, dtype=np.int32) * SampRate
+    scale_p  = p[:, :3] * ScaleFactor
+    p_coarse = np.floor(scale_p).astype(np.int32)
+    p_finer  = ((scale_p - p_coarse) * SampRate).astype(np.int32)
     total = p.shape[0]
-    s = np.zeros((L, L, L))
-    s_temp_test = np.zeros((PhiSupport, PhiSupport, PhiSupport))
+    s = np.zeros((L, L, L), dtype=np.float64)
+    w = w.astype(np.float64)
     for num in range(total):
-        pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
-        pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
+        ww = w[num]  # <-- weight for this particle
+        cx, cy, cz = p_coarse[num, 0], p_coarse[num, 1], p_coarse[num, 2]
+        fx, fy, fz = p_finer[num, 0],  p_finer[num, 1],  p_finer[num, 2]
         for i in range(PhiSupport):
+            phix = ww * phi_data[fx + step[i]]  
             for j in range(PhiSupport):
+                phixy = phix * phi_data[fy + step[j]]
                 for k in range(PhiSupport):
-                    s_temp_test[i, j, k] = (
-                        phi_data[pp_finer0 + step[i]] * phi_data[pp_finer1 + step[j]] * phi_data[pp_finer2 + step[k]]
-                    )
-        for i in range(PhiSupport):
-            for j in range(PhiSupport):
-                for k in range(PhiSupport):
-                    s[pp_coarse0 - i, pp_coarse1 - j, pp_coarse2 - k] += s_temp_test[i, j, k]
+                    s[cx - i, cy - j, cz - k] += phixy * phi_data[fz + step[k]]
     return s
 
 @jit(nopython=True)
 def int_data(data, ScaleFactor):
-    data_int = np.zeros(data.shape[0], dtype=np.int16)
-    for i in range(data.shape[0]):
-        data_int[i] = np.floor(data[i, 0] * ScaleFactor)
-    return data_int
+    num = data.shape[0]
+    out = np.empty(num, dtype=np.int32)
+    for i in range(num):
+        out[i] = int(np.floor(data[i, 0] * ScaleFactor))
+    return out
 
 ## bit opereator in numba
 @jit(nopython=True)
 def bit(array, J, size_bit):
     num = array.shape[0]
-    result = np.zeros(num, dtype=np.int16)
+    result = np.empty(num, dtype=np.int32)
+    shift = J - size_bit
     for i in range(num):
-        result[i] = array[i] >> (J - size_bit)
+        result[i] = array[i] >> shift
     return result
 
 @jit(nopython=True)
-def scaling_function_numba_part(part, p, phi_data, size, core_width, SampRate=1024, J=8, SimBoxL=1000):
+def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024, J=8, SimBoxL=1000.0):
     L = 1 << J
-    PhiStart = 0
-    PhiEnd = phi_data.shape[0] // SampRate
-    PhiSupport = PhiEnd - PhiStart
+    PhiSupport = phi_data.shape[0] // SampRate
+    sew_width  = PhiSupport - 1
     ScaleFactor = L / SimBoxL
-    step = np.arange(PhiSupport) * SampRate
-    core_width = L // size
-    scale_p = p[:, :3] * ScaleFactor
-    p_coarse = scale_p.astype(np.int16)
-    p_finer = (scale_p - p_coarse) * SampRate
+    step = np.arange(PhiSupport, dtype=np.int32) * SampRate
+    scale_p  = p[:, :3] * ScaleFactor
+    p_coarse = np.floor(scale_p).astype(np.int32)
+    p_finer  = ((scale_p - p_coarse) * SampRate).astype(np.int32)
     total = p.shape[0]
-    expand_x = L // size + 2 * (PhiSupport - 1)
-    s = np.zeros((expand_x, L, L))
+    expand_x = core_width + 2 * sew_width
+    s = np.zeros((expand_x, L, L), dtype=np.float64)
+    w = w.astype(np.float64)
+    base = part * core_width
     for num in range(total):
-        s_temp_test = np.zeros((PhiSupport, PhiSupport, PhiSupport))
+        ww = w[num]  # <-- weight for this particle
+        cx, cy, cz = p_coarse[num, 0], p_coarse[num, 1], p_coarse[num, 2]
+        fx, fy, fz = p_finer[num, 0],  p_finer[num, 1],  p_finer[num, 2]
         for i in range(PhiSupport):
+            phix = ww * phi_data[fx + step[i]]   
+            x_local = (cx - i) - base + sew_width
             for j in range(PhiSupport):
+                phixy = phix * phi_data[fy + step[j]]
+                y = cy - j
                 for k in range(PhiSupport):
-                    s_temp_test[i, j, k] += (
-                        phi_data[int(p_finer[num, 0]) + step[i]]
-                        * phi_data[int(p_finer[num, 1]) + step[j]]
-                        * phi_data[int(p_finer[num, 2]) + step[k]]
-                    )
-        for i in range(PhiSupport):
-            for j in range(PhiSupport):
-                for k in range(PhiSupport):
-                    s[
-                        p_coarse[num, 0] - i - part * core_width + 2, p_coarse[num, 1] - j, p_coarse[num, 2] - k
-                    ] += s_temp_test[i, j, k]
+                    s[x_local, y, cz - k] += phixy * phi_data[fz + step[k]]
     return s
 
 def partition_data_single(origin_data, shrink_data, part):

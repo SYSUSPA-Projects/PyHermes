@@ -92,8 +92,9 @@ def read_my_gd2(file):
             else:
                 out['mass'] = _out_part['mass']
                 masstab_pre = masstab
-    out['pos'] = np.concatenate(out['pos'], axis=0)
-    out['vel'] = np.concatenate(out['vel'], axis=0)
+    out['pos']   = np.concatenate(out['pos'], axis=0)
+    out['vel']   = np.concatenate(out['vel'], axis=0)
+    out['size']  = out['pos'].shape[0]
     if not masstab_pre:
         out['mass'] = np.concatenate(out['mass'], axis=0)
     return out
@@ -198,7 +199,8 @@ def read_my_gd2_fof(file):
         out['mass'].append(_out_part['mass'])
         out['pos'].append(_out_part['pos'])
         out['vel'].append(_out_part['vel'])
-    out['mass'] = np.concatenate(out['mass'], axis=0)
-    out['pos'] = np.concatenate(out['pos'], axis=0)
-    out['vel'] = np.concatenate(out['vel'], axis=0)
+    out['mass']  = np.concatenate(out['mass'], axis=0)
+    out['pos']   = np.concatenate(out['pos'], axis=0)
+    out['vel']   = np.concatenate(out['vel'], axis=0)
+    out['size']  = out['pos'].shape[0]
     return out

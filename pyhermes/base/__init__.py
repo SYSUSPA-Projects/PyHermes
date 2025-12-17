@@ -1,1 +1,1 @@
-from .window import WindowFunc
+from ..io.window import WindowFunc

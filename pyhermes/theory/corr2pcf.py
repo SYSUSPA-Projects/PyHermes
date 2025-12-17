@@ -3,9 +3,9 @@ import pickle
 
 import numpy as np
 
-from pyhermes.io import Corr2PCFData
+from pyhermes.io import WindowFunc
 from pyhermes.io import ConvolsData
-from pyhermes.base import WindowFunc
+from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 from pyhermes.pipeline import TaskBase
@@ -171,7 +171,6 @@ class Corr_2PCF(TaskBase):
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-        print('Caonima')
         if self.rank == 0:
             time_run_2 = time.perf_counter()
             print("")
