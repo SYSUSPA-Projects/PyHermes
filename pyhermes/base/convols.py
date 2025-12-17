@@ -3,17 +3,16 @@ import time
 import concurrent.futures
 
 import numpy as np
-from scipy.fft import rfftn, irfftn
 
 from pyhermes.io import ConvolsData
 from pyhermes.io import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
-from pyhermes.pipeline import pipeline as pipeline
+from pyhermes.pipeline import TaskBase
 
 
 
-class Convols(pipeline.TaskBase):
+class Convols(TaskBase):
 
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)
@@ -28,8 +27,8 @@ class Convols(pipeline.TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.window_type   = self.task_params['window']['type']
-        self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
+        # self.window_type   = self.task_params['window']['type']
+        # self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
         self.threads       = int(self.task_params['threads'])
         self.L             = 1 << self.J
@@ -38,7 +37,6 @@ class Convols(pipeline.TaskBase):
         try:
             comm = self.comm
             rank = self.rank
-            self.deltac = ConvolsData()
             _system_cpu = 2 ** int(np.log2(os.cpu_count()))
             size = comm.Get_size() if _system_cpu >= comm.Get_size() else _system_cpu
             p_dm = None
@@ -54,6 +52,8 @@ class Convols(pipeline.TaskBase):
             self.size = size
             # Retrive parameters to locals
             self.format_params()
+            # Init deltac instance
+            self.deltac = ConvolsData(threads=self.threads)
             # Do wavelet transform
             self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
             _PhiStart = 0
@@ -133,7 +133,7 @@ class Convols(pipeline.TaskBase):
                     "orgDsize"     : _orgDsize,
                     "J"            : self.J,
                     "SampRate"     : self.SampRate,
-                    "window"       : self.task_params['window'],
+                    # "window"       : self.task_params['window'],
                     "SimBoxL"      : self.SimBoxL,
                     "bandwidth"    : self.bandwidth,
                     "wavelet_mode" : self.wavelet_mode,
@@ -142,26 +142,8 @@ class Convols(pipeline.TaskBase):
                 self.deltac.dict_inht_vonDeltac.update(_dict_inht_vonDeltac)
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
-                # Handle window function
-                _DeltaXi = 1./(self.L)
-                _rescale_win_args = {key : value * self.L / self.SimBoxL for key, value in self.window_args.items()}
-                _PowerPhi = self.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth)
-                _w_func = math_util.set_window_function(self.window_type)
-                _window_array = math_util.call_calculate_window_array(
-                    L                     = self.L,
-                    bandwidth             = self.bandwidth,
-                    DeltaXi               = _DeltaXi,
-                    PowerPhi              = _PowerPhi,
-                    window_function_numba = _w_func,
-                    **_rescale_win_args
-                    )
-                _w = math_util.calculate_w_numba(_window_array)
-                # Do FFT to get convol result
-                self.logger.info('Start to calculte FFT')
-                time_start = time.perf_counter()
-                self.deltac.data = self.specialized_convolution_3d(_deltas, _w, threads=self.threads)
-                time_end = time.perf_counter()
-                self.logger.info(f"The time for FFT: {time_end - time_start:.4f} sec")
+                # Here we dont conv any window, just keep the orig deltac
+                self.deltac.deltac = _deltas
                 # Output the deltac
                 self.deltac.save(self.fout_path)
         except Exception as e:
@@ -178,45 +160,10 @@ class Convols(pipeline.TaskBase):
         else:
             return self.deltac
 
-    def spectrum_vectorized(self, v, k0, k1, N_k):
-        N_x = v.shape[0]
-        x0 = 0
-        x1 = v.shape[0]/self.SampRate
-        Delta_x = (x1 - x0) / N_x
-        Delta_k = (k1 - k0) / N_k
-        x = np.arange(N_x) * Delta_x
-        k = np.arange(N_k + 1) * Delta_k
-        # Create 2D grids for x and k
-        x_grid, k_grid = np.meshgrid(x, k)
-        # Calculate the real and imaginary parts of the spectrum
-        s_real = np.sum(v * Delta_x * np.cos(-2 * np.pi * k_grid * x_grid), axis=1)
-        s_imag = np.sum(v * Delta_x * np.sin(-2 * np.pi * k_grid * x_grid), axis=1)
-        # Interleave the real and imaginary parts
-        s = np.empty((N_k + 1) * 2, dtype=np.double)
-        s[::2] = s_real
-        s[1::2] = s_imag
-        return s
-
-    def power_spectrum(self, v, k0, k1, N_k):
-        s = self.spectrum_vectorized(v, k0, k1, N_k)
-        p = np.zeros(N_k + 1, dtype=np.double)
-        for i in range(N_k + 1):
-            p[i] = s[2*i] ** 2 + s[2*i+1] ** 2
-        return p
-
-    def specialized_convolution_3d(self, s, w, threads):
-        # Run FFt in multi-thread manner
-        sc = rfftn(s, workers= threads)
-        sc *= w
-        result_convol3d = irfftn(sc, workers = threads)
-        return result_convol3d
-    
     def sew_up(self, all_s, size, L, PhiSupport):
         sew_s = np.zeros((L, L, L))
         sew_width = PhiSupport - 1
         for part in range(1, size - 1):
-            # print(sew_s[-2+part*self.core_width:(part+1)*self.core_width+2].shape)
-            # print(all_s[part].shape)
             sew_s[-sew_width+part*self.core_width:(part+1)*self.core_width+sew_width] += all_s[part]
         sew_s[-sew_width:] += all_s[0][:sew_width]
         sew_s[:self.core_width+sew_width] += all_s[0][sew_width:self.core_width+sew_width+sew_width]

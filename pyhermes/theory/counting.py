@@ -8,11 +8,11 @@ from pyhermes.io import CountingData
 from pyhermes.io import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
-from pyhermes.pipeline import pipeline as pipeline
+from pyhermes.pipeline import TaskBase
 
 
 
-class Counting(pipeline.TaskBase):
+class Counting(TaskBase):
 
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)

@@ -1,3 +1,7 @@
+import pickle
+
+import numpy as np
+
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
@@ -7,10 +11,11 @@ from pyhermes.io import handle_PATHorURL, check_fout
 
 class HermesData(object):
 
-    def __init__(self):
+    def __init__(self, *args, threads=1, **kwargs):
         self.comm                = MPI.COMM_WORLD
         self.rank                = self.comm.Get_rank()
         self.logger              = setup_logger(__name__, self.__class__.__name__)
+        self.threads             = max(1, int(threads))
         self.data                = None
         self.deltac              = None
         self.dict_inht_vonDeltac = {}
@@ -35,11 +40,9 @@ class HermesData(object):
                         extra_str = '2PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr2pcf(f_in)
-                        # self.logger.info(f'DeltaC: Shape{self.deltac.shape}, Min = {self.deltac.min():.4f}, Max = {self.deltac.max():.4f}, Mean = {self.deltac.mean():.4f}')
                     else:
                         extra_str = ''
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
-                        # self.logger.info(f'Data: Shape{self.data.shape}, Min = {self.data.min():.4f}, Max = {self.data.max():.4f}, Mean = {self.data.mean():.4f}')
                         self._load_single(f_in)
             else:
                 # TODO, MPI multi read
@@ -48,24 +51,52 @@ class HermesData(object):
             self.logger.error(f"An error occurred while loading the file '{f_in}': {e}")
             func_util.safe_exit(1)
 
+    # def save(self, f_out, single=True):
+    #     if single:
+    #         if self.rank == 0:
+    #             # TODO:不应该在这里判断，应该deltac自己判断
+    #             if self.data is None and not self.saveflag:  
+    #                 self.logger.error('No data available to save!')
+    #                 self.logger.error('Please ensure that the data has been loaded or calculated before attempting to save.')
+    #                 func_util.safe_exit(1)
+    #             else:
+    #                 f_out = check_fout(self, f_out)
+    #                 if f_out:
+    #                     self.logger.info(f'Writing data to ---> {f_out} <---')
+    #                     self._save_single(f_out)
+    #     else:
+    #         # TODO, MPI multi save
+    #         pass
+
     def save(self, f_out, single=True):
         if single:
             if self.rank == 0:
-                if self.data is None and not self.saveflag:  
-                    self.logger.error('No data available to save!')
-                    self.logger.error('Please ensure that the data has been loaded or calculated before attempting to save.')
-                    func_util.safe_exit(1)
-                else:
-                    f_out = check_fout(self, f_out)
-                    if f_out:
-                        self.logger.info(f'Writing data to ---> {f_out} <---')
-                        self._save_single(f_out)
+                f_out = check_fout(self, f_out)
+                if f_out:
+                    self.logger.info(f'Writing data to ---> {f_out} <---')
+                    self._save_single(f_out)
         else:
             # TODO, MPI multi save
             pass
 
+    def load_deltac(self, f_in, single=True):
+        self.load(f_in, read_deltac=True, single=single)
+
+    def _load_deltac(self, f_in):
+        with open(f_in, 'rb') as f:
+            # Read the entire .npy file as bytes
+            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
+            # Convert the bytes back into the original dataset using pickle
+            dataset = pickle.loads(serialized_data.tobytes())
+            # Check if the 'data' key is present in the dataset
+            if 'deltac' not in dataset:
+                self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
+                func_util.safe_exit(1)
+            # Assign the dictionary from the file to self.dict_inht_vonDeltac
+            self.dict_inht_vonDeltac = {key: value for key, value in dataset.items() if key != 'deltac'}
+            self.deltac = dataset['deltac']
+
     def _load_single(self, f_in):
-        # Here we need to return the loaded data, _data
         pass
 
     def _save_single(self, f_out):

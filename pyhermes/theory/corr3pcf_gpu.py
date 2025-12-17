@@ -7,11 +7,11 @@ import pywt
 from numba import cuda
 
 from pyhermes.io import ConvolsData, Corr2PCFData, Corr3PCFData, read_particle_data
-from pyhermes.pipeline import pipeline as pipeline
+from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util, math_util
 
 
-class Corr_3PCF_GPU(pipeline.TaskBase):
+class Corr_3PCF_GPU(TaskBase):
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)

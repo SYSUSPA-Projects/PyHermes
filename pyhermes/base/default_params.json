@@ -2,13 +2,9 @@
 	"enable_default_param": true, // do not change this
 	"Convols": {
 		"J": 9,
-		"window_type": "sphere",
 		"fin": {
 			"path": "./data.bin",
 			"format": "generic"
-		},
-		"window": {
-			"type": "shell"
 		},
 		"fout_path": "",
 		"SampRate": 1024,
