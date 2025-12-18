@@ -39,8 +39,8 @@ class Convols(TaskBase):
             p_wei = None
             if rank == 0:
                 time_run_1 = time.perf_counter()
-            # !NOTICE: the MPI-rank num to calculate scaling coefficient
-            # !          should be a power of two
+                # !NOTICE: the MPI-rank num to calculate scaling coefficient
+                # !          should be a power of two
                 if self.size != 1 and (self.size & (self.size - 1)) != 0:
                     self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                     func_util.safe_exit(1)
@@ -66,6 +66,9 @@ class Convols(TaskBase):
                         func_util.safe_exit(1)
                     _orgDsize = p_pos.shape[0]
                     # weight check
+                    if np.isscalar(p_wei):
+                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {_orgDsize}.")
+                        p_wei = np.full(_orgDsize, p_wei, dtype=np.float32)
                     if not isinstance(p_wei, np.ndarray):
                         self.logger.error(f"Wrong input of particle data! 'particle_weight' must be a numpy array, but got type={type(p_wei)}.")
                         func_util.safe_exit(1)
@@ -97,6 +100,9 @@ class Convols(TaskBase):
                             p_wei = np.ones(_orgDsize, dtype=np.float32)
                             self.fin_wei_key = 'no_weight'
                     # weight check
+                    if np.isscalar(p_wei):
+                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {_orgDsize}.")
+                        p_wei = np.full(_orgDsize, p_wei, dtype=np.float32)
                     if not isinstance(p_wei, np.ndarray):
                         self.logger.error(f"Wrong input of particle data! 'weight' must be a numpy array, but got type={type(p_wei)}.")
                         func_util.safe_exit(1)
@@ -135,14 +141,11 @@ class Convols(TaskBase):
                 self.orgDsize = 0
                 self.all_s = None
                 shrink_list = None
-                print('cao0')
                 shape_pos, n_wei = comm.recv(source=0)
                 p_pos_sub = np.empty(shape_pos, dtype=np.float32)
                 p_wei_sub = np.empty(n_wei, dtype=np.float32)
-                print('cao1')
                 comm.Recv(p_pos_sub, source=0)
                 comm.Recv(p_wei_sub, source=0)
-                print('cao2')
             if self.size > 1:
                 comm.Barrier()
                 rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")

@@ -34,8 +34,6 @@ class Corr_2PCF(TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        # self.window_type   = self.task_params['window']['type']
-        # self.window_args   = {key : float(value) for key, value in self.task_params['window'].items() if key != 'type'}
         self.bandwidth     = self.task_params['bandwidth']
         self.orgDsize      = self.task_params['orgDsize']
         self.L             = 1 << self.J
