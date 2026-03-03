@@ -17,9 +17,8 @@ class HermesData(object):
         self.rank                = self.comm.Get_rank()
         self.logger              = setup_logger(__name__, self.__class__.__name__)
         self.threads             = max(1, int(threads))
-        self.data                = None
-        self.deltac              = None
-        self.dict_inht_vonDeltac = {}
+        self.nx                  = None
+        self.epsilon             = None
         self.r                   = None
         self.xi                  = None
         self.theta               = None
@@ -29,20 +28,27 @@ class HermesData(object):
         # Set numba threads
         math_util.configure(threads=self.threads)
 
-    def load(self, f_in, read_deltac=False, read_2pcf=False, single=True):
+    def load(self, f_in, read_convols=False, read_counting=False, read_2pcf=False, single=True):
         try:
             if single:
                 if self.rank == 0:
                     f_in = handle_PATHorURL(f_in)
-                    if read_deltac:
-                        extra_str = 'DeltaC '
+                    if read_convols:
+                        extra_str = 'Convols '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
-                        self._load_deltac(f_in)
-                        self.logger.info(f'DeltaC: Shape{self.deltac.shape}, Min = {self.deltac.min():.4f}, Max = {self.deltac.max():.4f}, Mean = {self.deltac.mean():.4f}')
+                        self._load_convols(f_in)
+                        self.logger.info(f'epsilon: Shape{self.epsilon.shape}, Min = {self.epsilon.min():.4g}, Max = {self.epsilon.max():.4g}, Mean = {self.epsilon.mean():.4g}, Sum = {self.epsilon.sum():.4g}')
+                    elif read_counting:
+                        extra_str = 'Counting '
+                        self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
+                        self._load_counting(f_in)
+                        self.logger.info(f'nx: Shape{self.nx.shape}, Min = {self.nx.min():.4g}, Max = {self.nx.max():.4g}, Mean = {self.nx.mean():.4g}')
                     elif read_2pcf:
                         extra_str = '2PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr2pcf(f_in)
+                        self.logger.info(f'r: Num = {self.r.shape[0]}, Min = {self.r.min():.4g}, Max = {self.r.max():.4g}')
+                        self.logger.info(f'xi: Mean = {self.xi.mean():.4g}, Min = {self.xi.min():.4g}, Max = {self.xi.max():.4g}')
                     else:
                         extra_str = ''
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
@@ -54,33 +60,30 @@ class HermesData(object):
             self.logger.error(f"An error occurred while loading the file '{f_in}': {e}")
             func_util.safe_exit(1)
 
-    def save(self, f_out, single=True):
+    def save(self, f_out, save_convols=False, save_counting=False, save_2pcf=False, single=True, overwrite=False):
         if single:
             if self.rank == 0:
-                f_out = check_fout(self, f_out)
+                f_out = check_fout(self, f_out, overwrite)
                 if f_out:
-                    self.logger.info(f'Writing data to ---> {f_out} <---')
-                    self._save_single(f_out)
+                    if save_convols:
+                        extra_str = 'Convols '
+                        self.logger.info(f'Writing {extra_str}data to ---> {f_out} <---')
+                        self._save_convols(f_out)
+                    elif save_counting:
+                        extra_str = 'Counting '
+                        self.logger.info(f'Writing {extra_str}data to ---> {f_out} <---')
+                        self._save_counting(f_out)
+                    elif save_2pcf:
+                        extra_str = '2PCF '
+                        self.logger.info(f'Writing {extra_str}data to ---> {f_out} <---')
+                        self._save_corr2pcf(f_out)
+                    else:
+                        extra_str = ''
+                        self.logger.info(f'Writing data to ---> {f_out} <---')
+                        self._save_single(f_out)
         else:
             # TODO, MPI multi save
             pass
-
-    def load_deltac(self, f_in, single=True):
-        self.load(f_in, read_deltac=True, single=single)
-
-    def _load_deltac(self, f_in):
-        with open(f_in, 'rb') as f:
-            # Read the entire .npy file as bytes
-            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-            # Convert the bytes back into the original dataset using pickle
-            dataset = pickle.loads(serialized_data.tobytes())
-            # Check if the 'data' key is present in the dataset
-            if 'deltac' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
-                func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.dict_inht_vonDeltac
-            self.dict_inht_vonDeltac = {key: value for key, value in dataset.items() if key != 'deltac'}
-            self.deltac = dataset['deltac']
 
     def _load_single(self, f_in):
         pass
