@@ -31,7 +31,7 @@ class Convols(TaskBase):
         self.threads       = int(self.task_params['threads'])
         self.L             = 1 << self.J
 
-    def run(self, return_pData=False): 
+    def run(self, return_pData=False, overwrite=False): 
         try:
             comm = self.comm
             rank = self.rank
@@ -46,8 +46,8 @@ class Convols(TaskBase):
                     func_util.safe_exit(1)
             # Retrive parameters to locals
             self.format_params()
-            # Init deltac instance
-            self.deltac = ConvolsData(threads=self.threads)
+            # Init convols_data instance
+            self.convols_data = ConvolsData(threads=self.threads)
             # Do wavelet transform
             self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
             _PhiStart = 0
@@ -56,7 +56,8 @@ class Convols(TaskBase):
             self.core_width = self.L // self.size
             if rank == 0 :
                 # Here we expose the p_pos, wei data(in) interface for better illustion in paper, Figure 8.
-                if self.task_params['particle_pos'] != None and self.task_params['particle_weight'] != None:
+                # if self.task_params['particle_pos'] != None and self.task_params['particle_weight'] != None:
+                if self.task_params['particle_pos'] is not None and self.task_params['particle_weight'] is not None:
                     p_pos = self.task_params['particle_pos']
                     p_wei = self.task_params['particle_weight']
                     self.fin_wei_key = 'weight comes from custom input array'
@@ -64,25 +65,25 @@ class Convols(TaskBase):
                     if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
                         self.logger.error(f"Wrong input of particle data! 'particle_pos' must be a 2D array of shape (N, 3), but got type={type(p_pos)} with shape={getattr(p_pos, 'shape', None)}.")
                         func_util.safe_exit(1)
-                    _orgDsize = p_pos.shape[0]
+                    self.N_particles = p_pos.shape[0]
                     # weight check
                     if np.isscalar(p_wei):
-                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {_orgDsize}.")
-                        p_wei = np.full(_orgDsize, p_wei, dtype=np.float32)
+                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {self.N_particles}.")
+                        p_wei = np.full(self.N_particles, p_wei, dtype=np.float32)
                     if not isinstance(p_wei, np.ndarray):
                         self.logger.error(f"Wrong input of particle data! 'particle_weight' must be a numpy array, but got type={type(p_wei)}.")
                         func_util.safe_exit(1)
-                    if not (p_wei.ndim == 1 and p_wei.shape[0] == _orgDsize):
-                        self.logger.error(f"Wrong input of particle data! 'particle_weight' must have shape (N,), but got shape={getattr(p_wei, 'shape', None)} while N={_orgDsize}.")
+                    if not (p_wei.ndim == 1 and p_wei.shape[0] == self.N_particles):
+                        self.logger.error(f"Wrong input of particle data! 'particle_weight' must have shape (N,), but got shape={getattr(p_wei, 'shape', None)} while N={self.N_particles}.")
                         func_util.safe_exit(1)
                 else:
                     p_dict_all = read_particle_data(self.fin_path, self.fin_format)
-                    p_pos, _orgDsize = p_dict_all['pos'], p_dict_all['size']
+                    p_pos, self.N_particles = p_dict_all['pos'], p_dict_all['size']
                     if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
                         self.logger.error(f"Wrong input of particle file data! 'pos' must be a 2D array of shape (N, 3), but got type={type(p_pos)} with shape={getattr(p_pos, 'shape', None)}.")
                         func_util.safe_exit(1)
                     if self.fin_format == 'generic_pos':
-                        p_wei = np.ones(_orgDsize, dtype=np.float32)
+                        p_wei = np.ones(self.N_particles, dtype=np.float32)
                         self.fin_wei_key = 'no_weight'
                     elif self.fin_format == 'generic_pos_weight':
                         p_wei = p_dict_all['weight']
@@ -90,30 +91,31 @@ class Convols(TaskBase):
                     else:
                         _key = self.fin_wei_key
                         if _key is None or _key == 'no_weight':
-                            p_wei = np.ones(_orgDsize, dtype=np.float32)
+                            p_wei = np.ones(self.N_particles, dtype=np.float32)
                             self.fin_wei_key = 'no_weight'
                         elif _key in p_dict_all:
                             p_wei = p_dict_all[_key]
                             self.fin_wei_key = [_key]
                         else:
                             self.logger.warning(f"Weight key '{_key}' not found in particle data. Calculating without weight. Available keys: {list(p_dict_all.keys())}. Use weight_key='no_weight' if no weighting is desired.")
-                            p_wei = np.ones(_orgDsize, dtype=np.float32)
+                            p_wei = np.ones(self.N_particles, dtype=np.float32)
                             self.fin_wei_key = 'no_weight'
                     # weight check
                     if np.isscalar(p_wei):
-                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {_orgDsize}.")
-                        p_wei = np.full(_orgDsize, p_wei, dtype=np.float32)
+                        self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {self.N_particles}.")
+                        p_wei = np.full(self.N_particles, p_wei, dtype=np.float32)
                     if not isinstance(p_wei, np.ndarray):
                         self.logger.error(f"Wrong input of particle data! 'weight' must be a numpy array, but got type={type(p_wei)}.")
                         func_util.safe_exit(1)
-                    if not (p_wei.ndim == 1 and p_wei.shape[0] == _orgDsize):
-                        self.logger.error(f"Wrong input of particle weight! 'weight' must be a 1D array of shape (N,), but got shape={getattr(p_wei, 'shape', None)} while N={_orgDsize}.")
+                    if not (p_wei.ndim == 1 and p_wei.shape[0] == self.N_particles):
+                        self.logger.error(f"Wrong input of particle weight! 'weight' must be a 1D array of shape (N,), but got shape={getattr(p_wei, 'shape', None)} while N={self.N_particles}.")
                         func_util.safe_exit(1)
-                _ScaleFactor = self.L / self.SimBoxL
+                self.ScaleFactor = self.L / self.SimBoxL
+                self.NormFactor = 1 / self.N_particles
                 if self.size == 1:
                     self.logger.info("Single process mode")
                     time_start = time.perf_counter()
-                    _deltas = math_util.scaling_function_numba(
+                    _epsilon = math_util.scaling_function_numba(
                         p          = p_pos,
                         w          = p_wei,
                         phi_data   = self.phi_data,
@@ -124,7 +126,7 @@ class Convols(TaskBase):
                 else:
                     self.logger.info("Multi-process mode")
                     self.logger.info("Start partition ... ")
-                    p_pos_in = math_util.int_data(p_pos, _ScaleFactor)
+                    p_pos_in = math_util.int_data(p_pos, self.ScaleFactor)
                     _shrink_p_pos_in = math_util.bit(p_pos_in, self.J, int(np.log2(self.size)))
                     time_start = time.perf_counter()
                     with concurrent.futures.ThreadPoolExecutor(max_workers=self.size_local) as executor:
@@ -138,7 +140,7 @@ class Convols(TaskBase):
                         comm.Send(shrink_list[i][0], dest=i)
                         comm.Send(shrink_list[i][1], dest=i)
             elif rank > 0:
-                self.orgDsize = 0
+                self.N_particles = 0
                 self.all_s = None
                 shrink_list = None
                 shape_pos, n_wei = comm.recv(source=0)
@@ -162,27 +164,36 @@ class Convols(TaskBase):
                     )
                 comm.Gather(_s_part, self.all_s, root=0)
                 if rank == 0:
-                    _deltas = self.sew_up(self.all_s, self.size, self.L,self.PhiSupport)
+                    _epsilon = self.sew_up(self.all_s, self.size, self.L,self.PhiSupport)
             if rank == 0:
-                _dict_inht_vonDeltac = {
+                _convols_info = {
                     "fin_path"      : self.fin_path,
                     "fin_format"    : self.fin_format,
                     "fin_weight_key": self.fin_wei_key,
-                    "orgDsize"      : _orgDsize,
+                    "N_particles"   : self.N_particles,
                     "J"             : self.J,
                     "SampRate"      : self.SampRate,
                     "SimBoxL"       : self.SimBoxL,
                     "bandwidth"     : self.bandwidth,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
+                    "L"             : self.L,
+                    "V"             : self.L ** 3,
+                    "ScaleFactor"   : self.ScaleFactor,
+                    "NormFactor"    : self.NormFactor,
+                    "PhiSupport"    : self.PhiSupport,
+                    "phi_data"      : self.phi_data
                 }
-                self.deltac.dict_inht_vonDeltac.update(_dict_inht_vonDeltac)
+                self.convols_data.convols_info = dict(_convols_info)
+                self.convols_data.format_convols_params()
+                # for key, value in _convols_info.items():
+                #     setattr(self.convols_data, key, value)
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
-                # Here we dont conv any window, just keep the orig deltac
-                self.deltac.deltac = _deltas
-                # Output the deltac
-                self.deltac.save(self.fout_path)
+                # Here we dont conv any window, just keep the orig convols_data
+                self.convols_data.epsilon = _epsilon * self.NormFactor
+                # Output the convols_data
+                self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
@@ -193,9 +204,9 @@ class Convols(TaskBase):
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
         # The data(s) below ⬇ are only valid on rank 0
         if return_pData:
-            return self.deltac, p_pos
+            return self.convols_data, p_pos
         else:
-            return self.deltac
+            return self.convols_data
 
     def sew_up(self, all_s, size, L, PhiSupport):
         sew_s = np.zeros((L, L, L))

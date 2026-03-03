@@ -362,6 +362,61 @@ def spectrum_vectorized(v, k0, k1, N_k, SampRate):
     s[1::2] = s_imag
     return s
 
+def random_points_box(N, SimBoxL, ndim=3, rng=None, seed=None):
+    if rng is None:
+        rng = np.random.default_rng(seed=seed)
+    return rng.uniform(0.0, SimBoxL, size=(N, ndim))
+
+@jit(nopython=True)
+def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
+    step = np.arange(PhiSupport) * SampRate
+    scale_pos = pos * ScaleFactor
+    pos_coarse = np.floor(scale_pos).astype(np.int32)
+    pos_finer = ((scale_pos - pos_coarse) * SampRate).astype(np.int32)
+    total = scale_pos.shape[0]
+    phi_local = np.zeros((total, PhiSupport, PhiSupport, PhiSupport), dtype=np.float64)
+    for num in range(total):
+        fx, fy, fz = pos_finer[num]
+        for i in range(PhiSupport):
+            phix = phi_data[fx + step[i]]
+            for j in range(PhiSupport):
+                phixy = phix * phi_data[fy + step[j]]
+                for k in range(PhiSupport):
+                    phi_local[num, -i, -j, -k] = phixy * phi_data[fz + step[k]]
+    return pos_coarse, phi_local
+
+@jit(nopython=True)
+def n_at_pos(pos, epsilon, phi_data, L, ScaleFactor, SampRate):
+    """
+    normalize, dimensionless n(x)
+    """
+    PhiStart = 0
+    PhiEnd = phi_data.shape[0] // SampRate
+    PhiSupport = PhiEnd - PhiStart
+    step = np.arange(PhiSupport) * SampRate
+    scale_pos = pos * ScaleFactor
+    pos_coarse = np.floor(scale_pos).astype(np.int32)
+    pos_finer = ((scale_pos - pos_coarse) * SampRate).astype(np.int32)
+    total = scale_pos.shape[0]
+    result = np.zeros(total)
+    for num in range(total):
+        xc, yc, zc = pos_coarse[num]
+        xf, yf, zf = pos_finer[num]
+        res = 0
+        for i in range(PhiSupport):
+            xi = (xc - i) & (L - 1)
+            phix = phi_data[xf + step[i]]
+            for j in range(PhiSupport):
+                yi = (yc - j) & (L - 1)
+                phiy = phi_data[yf + step[j]]
+                for k in range(PhiSupport):
+                    zi = (zc - k) & (L - 1)
+                    phiz = phi_data[zf + step[k]]
+                    res += epsilon[xi, yi, zi] * phix * phiy * phiz
+        result[num] = res
+    return result
+
+
 # ----------------------------------------------------------------
 # ------------- ↓ Numerical function for counting ↓ --------------
 # ----------------------------------------------------------------

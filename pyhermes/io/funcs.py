@@ -142,7 +142,7 @@ def dl_rich_pbar(url, output_path=None):
 def timenow():
     return datetime.datetime.now().strftime('%Y%m%d%H%M')
 
-def check_fout(instance, fout_path):
+def check_fout(instance, fout_path, overwrite=False):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     if fout_path is None or fout_path == "":
@@ -151,8 +151,10 @@ def check_fout(instance, fout_path):
     ext_dict = {
         'ConvolsData' : 'pkl',
         'WindowFunc'  : 'pkl',
-        'CountingData': 'npy',
-        'Corr2PCFData': 'txt',
+        # 'CountingData': 'npy',
+        'CountingData': 'pkl',
+        # 'Corr2PCFData': 'txt',
+        'Corr2PCFData': 'pkl',
         'Corr3PCFData': 'txt',
     }
     isFolder = False
@@ -162,14 +164,20 @@ def check_fout(instance, fout_path):
         if os.path.isdir(fout_path):
             isFolder = True
         elif os.path.isfile(fout_path):
-            logger.warning(f"Output file '{fout_path}' already exists! Generating a new file name.")
-            base, ext = os.path.splitext(fout_path)
-            counter = 1
-            new_fout_path = f"{base}_{counter}{ext}"
-            while os.path.exists(new_fout_path):
-                counter += 1
+            if overwrite:
+                logger.warning(
+                    f"Output file '{fout_path}' already exists and will be overwritten (overwrite=True)."
+                )
+                # keep fout_path unchanged
+            else:
+                logger.warning(f"Output file '{fout_path}' already exists! Generating a new file name.")
+                base, ext = os.path.splitext(fout_path)
+                counter = 1
                 new_fout_path = f"{base}_{counter}{ext}"
-            fout_path = new_fout_path
+                while os.path.exists(new_fout_path):
+                    counter += 1
+                    new_fout_path = f"{base}_{counter}{ext}"
+                fout_path = new_fout_path
     if not isFolder:
         parent_dir = os.path.dirname(fout_path)
         if parent_dir and not os.path.exists(parent_dir):
