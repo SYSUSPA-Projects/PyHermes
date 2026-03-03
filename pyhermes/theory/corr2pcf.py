@@ -18,68 +18,73 @@ class Corr_2PCF(TaskBase):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
 
-    def format_params_input(self):
+    def format_params(self):
         # Parameters from json or input
-        self.deltac_in_path = self.task_params['deltac_in_path']
+        self.convols_data_path = self.task_params['convols_data_path']
         self.fout_path      = self.task_params['fout_path']
-        self.threads        = int(self.task_params['threads'])
+        # self.threads        = int(self.task_params['threads'])
+        win_params = self.task_params.get('window', None)
+        self.win_params = win_params if win_params['type'] else None
         self.R1             = self.task_params['R1']
         self.R2             = self.task_params['R2']
         self.xi_num         = int(self.task_params['xi_num'])
 
-    def format_params_deltac(self):
-        # Parameters inherited from DeltaC
-        self.J             = self.task_params['J']
-        self.SampRate      = int(self.task_params['SampRate'])
-        self.SimBoxL       = self.task_params['SimBoxL']
-        self.wavelet_mode  = self.task_params['wavelet_mode']
-        self.wavelet_level = self.task_params['wavelet_level']
-        self.bandwidth     = self.task_params['bandwidth']
-        self.orgDsize      = self.task_params['orgDsize']
-        self.L             = 1 << self.J
-        self.DeltaXi       = 1. / self.L
-
-    def run(self, deltac=None):
+    def run(self, convols_data=None, overwrite=False):
         try:
             comm = self.comm
             rank = self.rank
             size = comm.Get_size()
             if rank == 0:
                 time_run_1 = time.perf_counter()
-            self.format_params_input()
-            self.corr_2pcf = Corr2PCFData()
-            # The deltac now only loaded to rank0
-            params_serialized = None
+            self.format_params()
+            self.corr2pcf_data = Corr2PCFData()
+
+            # The convols data now only loaded to rank0
+            convols_info_serialized = None
             if rank == 0:
-                if not deltac:
-                    self.corr_2pcf.load_deltac(f_in=self.deltac_in_path, single=True)
-                else:
-                    self.logger.info("Loading DeltaC from argument 'deltac'")
-                    if isinstance(deltac, ConvolsData):
-                        self.corr_2pcf.deltac = deltac.data
-                        self.corr_2pcf.dict_inht_vonDeltac = deltac.dict_inht_vonDeltac
-                        self.task_params['deltac_in_path'] = 'load from argument'
+                if not convols_data:
+                    if self.convols_data_path:
+                        self.convols_data = ConvolsData(data_path=self.convols_data_path)
                     else:
-                        rank == 0 and self.logger.error("Unexpected input: 'deltac' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
+                        self.logger.error(
+                            "No input 'convols_data' provided and 'convols_data_path' is not set. "
+                            "Please either pass a ConvolsData instance to run(convols_data=...) "
+                            "or specify 'convols_data_path' in task_params."
+                        )
                         func_util.safe_exit(1)
-                self.task_params.update(self.corr_2pcf.dict_inht_vonDeltac)
-                params_serialized = pickle.dumps(self.task_params)
-            # Broadcast parameters (read + from DeltaC) to all ranks
-            params_serialized = comm.bcast(params_serialized, root=0)
-            self.task_params = pickle.loads(params_serialized)
+                else:
+                    self.logger.info("Loading convols data from argument 'convols_data'")
+                    if isinstance(convols_data, ConvolsData):
+                        self.convols_data = convols_data
+                        self.convols_data.convols_info['convols_data_paht'] = 'load from argument'
+                        self.task_params['convols_data_path'] = 'load from argument'
+                    else:
+                        self.logger.error("Unexpected input: 'convols_data' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
+                        func_util.safe_exit(1)
+                if self.win_params:
+                    self.window = WindowFunc(self.win_params, self.convols_data.convols_info)
+                    self.convols_data = self.convols_data @ self.window
+                _corr2pcf_info = {
+                    **self.task_params,
+                    # "convols_info": self.convols_data.convols_info,
+                }
+                self.corr2pcf_data.corr2pcf_info = dict(_corr2pcf_info)
+                self.corr2pcf_data.convols_info = self.convols_data.convols_info
+                convols_info_serialized = pickle.dumps(self.convols_data.convols_info)
+            # Broadcast parameters (read + from convols data) to all ranks
+            convols_info_serialized = comm.bcast(convols_info_serialized, root=0)
+            if rank == 0:
+                self.convols_data.epsilon = np.ascontiguousarray(self.convols_data.epsilon, dtype=np.float64)
+                _local_convols = self.convols_data
+            else:
+                _local_convols = ConvolsData()
+                _local_convols.convols_info = pickle.loads(convols_info_serialized)
+                _local_convols.format_convols_params()
+                _local_convols.epsilon = np.empty((_local_convols.L, _local_convols.L, _local_convols.L), dtype=np.float64)
+            self.corr2pcf_data.task_params = self.task_params
+            # Broadcast epsilon to all rank
+            comm.Bcast(_local_convols.epsilon, root=0)
             comm.Barrier()
-            self.format_params_deltac()
-            self.corr_2pcf.task_params = self.task_params
-            self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
-            self.PowerPhi = math_util.power_spectrum(self.phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
-            if rank != 0 :
-                self.corr_2pcf.deltac = np.empty((self.L, self.L, self.L), dtype=np.float64)
-            # Broadcast deltac to all rank
-            comm.Bcast(self.corr_2pcf.deltac, root=0)
-            comm.Barrier()
-            # Init Global 2pcf results
-            self.corr_2pcf.xi = []
-            self.corr_2pcf.r = []
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
                 time_start = time.perf_counter()
@@ -104,31 +109,15 @@ class Corr_2PCF(TaskBase):
             # Init local 2pcf results
             local_xi = []
             local_r = []
+            R = 1 / _local_convols.V
+            RR = R ** 2
+            DsubR = _local_convols - R
             for i, radius in enumerate(r_sub_arr):
-                rescaleR = radius * self.L / self.SimBoxL
-                win_params = dict(L=self.L,
-                                    bandwidth=self.bandwidth,
-                                    DeltaXi=self.DeltaXi,
-                                    PowerPhi=self.PowerPhi,
-                                    type='shell', R=rescaleR)
-                window_func = WindowFunc(win_params=win_params, threads=self.threads)
-                # _w_func = math_util.set_window_function('shell', verbose=False)
-                # window_array_shell = math_util.call_calculate_window_array(
-                #     L                     = self.L,
-                #     bandwidth             = self.bandwidth,
-                #     DeltaXi               = self.DeltaXi,
-                #     PowerPhi              = self.PowerPhi,
-                #     window_function_numba = _w_func,
-                #     R                     = rescaleR
-                #     )
-                # w_shell = math_util.calculate_w_numba(window_array_shell)
-                # s_sphere_shell = self.specialized_convolution_3d(self.corr_2pcf.deltac, w_shell, self.threads)
-                # s_sphere_shell = window_func @ self.corr_2pcf.deltac
-                deltac = ConvolsData()
-                deltac.deltac = self.corr_2pcf.deltac
-                s_sphere_shell = deltac @ window_func
-                inner_sum = np.sum(s_sphere_shell * self.corr_2pcf.deltac) * self.L**3 / self.orgDsize **2 - 1
-                local_xi.append(inner_sum)
+                win_params = {"type": "shell", "len_args": {"R": radius}}
+                win_shell = WindowFunc(win_params, _local_convols.convols_info)
+                DsubR_square = DsubR @ win_shell * DsubR
+                _xi = DsubR_square.as_array().mean() / RR
+                local_xi.append(_xi)
                 local_r.append(radius)
                 local_completed += 1
                 if local_completed % local_report_interval == 0:
@@ -156,16 +145,16 @@ class Corr_2PCF(TaskBase):
             gathered_xi = comm.gather(local_xi, root=0)
             gathered_r = comm.gather(local_r, root=0)
             if rank == 0:
-                self.corr_2pcf.xi = [item for sublist in gathered_xi for item in sublist]
-                self.corr_2pcf.r = [item for sublist in gathered_r for item in sublist]
+                self.corr2pcf_data.xi = np.array([item for sublist in gathered_xi for item in sublist])
+                self.corr2pcf_data.r = np.array([item for sublist in gathered_r for item in sublist])
                 if not count_all:
                     progress = 100.
                     self.logger.info(f" Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
                 # Output the 2pcf
-                self.corr_2pcf.saveflag = True
-                self.corr_2pcf.save(self.fout_path) 
+                self.corr2pcf_data.saveflag = True
+                self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
@@ -174,4 +163,4 @@ class Corr_2PCF(TaskBase):
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
         # The data(s) below ⬇ are only valid on rank 0
-        return self.corr_2pcf
+        return self.corr2pcf_data
