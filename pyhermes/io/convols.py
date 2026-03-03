@@ -1,15 +1,53 @@
 import os
 import pickle
+import copy
 
 import numpy as np
 
 from .base import HermesData
+from .funcs import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 
 
 
 class ConvolsData(HermesData):
+    
+    def __init__(self, *args, threads=1, **kwargs):
+        data_path = kwargs.pop("data_path", None)
+        self.convols_info = {}
+        super().__init__(*args, threads=threads, **kwargs)
+        if data_path:
+            self.convols_info['convols_data_path'] = data_path
+            self.load_convols(data_path)
+
+    
+    def _spawn_like(self):
+        """
+        Create a new empty object of the same class,
+        inheriting metadata but NOT copying heavy data arrays.
+        """
+        new = self.__class__(threads=self.threads)
+
+        # --- MPI / logging ---
+        new.comm   = self.comm
+        new.rank   = self.rank
+        new.logger = self.logger
+
+        # --- copy metadata (shallow copy is enough) ---
+        new.convols_info = copy.copy(self.convols_info)
+        new.task_params        = copy.copy(self.task_params)
+
+        # --- clear data containers ---
+        new.nx   = None
+        new.epsilon = None
+        new.r      = None
+        new.xi     = None
+        new.theta  = None
+        new.q      = None
+        new.saveflag = False
+
+        return new
 
     def _conv(self, other):
         if not hasattr(other, "as_array"):
@@ -42,7 +80,29 @@ class ConvolsData(HermesData):
                     "(signal @ window). "
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
-        return math_util.specialized_convolution_3d(a, b, threads=self.threads)
+        # return math_util.specialized_convolution_3d(a, b, threads=self.threads)
+
+        
+        # --- do convolution ---
+        conv = math_util.specialized_convolution_3d(
+            a, b, threads=self.threads
+        )
+
+        # --- spawn new ConvolsData ---
+        new = self._spawn_like()
+
+        # --- set result ---
+        new.epsilon = conv
+
+        # --- optional: record provenance ---
+        windows = self.convols_info.get("convolution_of", [])
+        # windows.append(other.window_params)
+        new.convols_info.update({
+            "convolution_of": windows + [other.window_params]
+        })
+        new.format_convols_params()
+
+        return new
 
     # def _conv_numpy(self, other):
     #     a = self.as_array()
@@ -75,42 +135,249 @@ class ConvolsData(HermesData):
         # if isinstance(other, np.ndarray):
         #     return self._conv_numpy(other)
         return NotImplemented
+    
+    
+    def __mul__(self, other):
+        if isinstance(other, ConvolsData):
+            return self._mul_field(other)
 
-    def as_array(self):
-        return self.deltac
+        if np.isscalar(other):
+            return self._mul_scalar(other)
 
-    def _load_single(self, f_in):
+        return NotImplemented
+
+    def __rmul__(self, other):
+        if np.isscalar(other):
+            return self._mul_scalar(other)
+
+        if isinstance(other, ConvolsData):
+            return other._mul_field(self)
+
+        return NotImplemented
+    # ---------- field × field ----------
+    def _mul_field(self, other):
+        a = self.epsilon
+        b = other.epsilon
+
+        if a is None or b is None:
+            self.logger.error("Cannot multiply: epsilon is None.")
+            func_util.safe_exit(1)
+
+        if a.shape != b.shape:
+            self.logger.error(
+                f"Shape mismatch in multiplication: {a.shape} vs {b.shape}"
+            )
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = a * b
+        new.convols_info['NormFactor'] = self.NormFactor * other.NormFactor
+        new.format_convols_params()
+        return new
+
+    # ---------- field × scalar ----------
+    def _mul_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot multiply by scalar: epsilon is None.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon * scalar
+        new.format_convols_params()
+        return new
+
+    def __sub__(self, other):
+        # Case 1: field - field
+        if isinstance(other, ConvolsData):
+            return self._sub_field(other)
+
+        # Case 2: field - scalar
+        if np.isscalar(other):
+            return self._sub_scalar(other)
+
+        return NotImplemented
+
+    def __rsub__(self, other):
+        # Case: scalar - field
+        if np.isscalar(other):
+            return -1 * self._sub_scalar(other)
+
+        # Case: field - field (only reached if left side failed)
+        if isinstance(other, ConvolsData):
+            return other._sub_field(self)
+
+        return NotImplemented
+
+    def _sub_field(self, other):
+        a = self.epsilon
+        b = other.epsilon
+
+        if a is None or b is None:
+            self.logger.error("Cannot subtract: epsilon is None.")
+            func_util.safe_exit(1)
+
+        if a.shape != b.shape:
+            self.logger.error(
+                f"Shape mismatch in subtraction: {a.shape} vs {b.shape}"
+            )
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = a - b
+        new.format_convols_params()
+        return new
+
+    def _sub_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot subtract scalar: epsilon is None.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon - scalar
+        new.format_convols_params()
+        return new
+    
+    def get_particle_data(self):
+        return read_particle_data(self.fin_path, self.fin_format)['pos']
+    
+    def phi_at_pos(self, pos):
+        return math_util.phi_at_pos(pos, self.phi_data, self.ScaleFactor, self.SampRate, self.PhiSupport)
+    
+    # def n_at_pos(self, pos, epsilon=None, filter=None):
+    #     """
+    #     real n(x)
+    #     """
+    #     if not epsilon:
+    #         if filter:
+    #             epsilon = self._conv(filter).epsilon
+    #         else:
+    #             epsilon = self.epsilon
+    #     n = math_util.n_at_pos(pos, epsilon, self.phi_data, self.L, self.ScaleFactor, self.SampRate)
+    #     return n * self.orgDsize * self.ScaleFactor ** 3
+    
+    def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
+        """
+        Evaluate number density n(x) at positions.
+
+        normalize:
+            True  -> return the normalized/grid-space n (as in math_util.n_at_pos)
+            False -> return scaled output:
+                     if physical: n * N_particles * ScaleFactor**3
+                     else:        n * N_particles
+        physical:
+            Only used when normalize is False.
+        """
+        if epsilon is None:
+            if filter is not None:
+                epsilon = self._conv(filter).epsilon
+            else:
+                epsilon = self.epsilon
+
+        n = math_util.n_at_pos(
+            pos, epsilon, self.phi_data, self.L, self.ScaleFactor, self.SampRate
+        )
+
+        if normalize:
+            return n
+        else:
+            n /= self.NormFactor
+            if physical:
+                return n * (self.ScaleFactor ** 3)
+            else:
+                return n
+
+    def as_array(self, normlize=True):
+        if normlize:
+            return self.epsilon
+        else:
+            return self.epsilon / self.NormFactor
+    
+    #
+    def format_convols_params(self):
+        for key, value in self.convols_info.items():
+            setattr(self, key, value)
+
+    def load_convols(self, f_in, single=True):
+        self.load(f_in, read_convols=True, single=single)
+
+    def save_convols(self, f_out, single=True, overwrite=False):
+        self.save(f_out, save_convols=True, single=single, overwrite=overwrite)
+
+    def _load_convols(self, f_in):
         with open(f_in, 'rb') as f:
             # Read the entire .npy file as bytes
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
-            if 'deltac' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
+            if 'epsilon' not in dataset:
+                self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
                 func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.dict_inht_vonDeltac
-            self.dict_inht_vonDeltac = {key: value for key, value in dataset.items() if key != 'deltac'}
-            self.deltac = dataset['deltac']
+            self.epsilon = dataset['epsilon']
+            # Assign the dictionary from the file to self.convols_info
+            # _convols_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
+            _convols_info = dataset.get('convols_info')
+            if _convols_info:
+                self.convols_info.update(_convols_info)
+            self.format_convols_params()
 
-    def _save_single(self, f_out):
+    def _save_convols(self, f_out):
         # Check and create directory if it doesn't exist
         _dir = os.path.dirname(f_out)
         if not os.path.exists(_dir):
             os.makedirs(_dir)
-        # Check if the dict_inht_vonDeltac is empty
-        if not self.dict_inht_vonDeltac:
-            self.logger.error('The dictionary "dict_inht_vonDeltac" is empty.')
+        # Check if the convols_info is empty
+        if not self.convols_info:
+            self.logger.error('The dictionary "convols_info" is empty.')
             self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         # If all required variables are present, create the dataset
         dataset = {
-            **self.dict_inht_vonDeltac,  # Add all required variables to the dataset
-            'deltac': self.deltac  # Include the actual data
+            'convols_info': self.convols_info,
+            # **self.convols_info,  # Add all required variables to the dataset
+            'epsilon': self.epsilon  # Include the actual data
         }
         # Save the dataset to the specified file
         #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
         _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
             np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+
+    # def _load_single(self, f_in):
+    #     with open(f_in, 'rb') as f:
+    #         # Read the entire .npy file as bytes
+    #         serialized_data = np.lib.format.read_array(f, allow_pickle=True)
+    #         # Convert the bytes back into the original dataset using pickle
+    #         dataset = pickle.loads(serialized_data.tobytes())
+    #         # Check if the 'data' key is present in the dataset
+    #         if 'epsilon' not in dataset:
+    #             self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
+    #             func_util.safe_exit(1)
+    #         # Assign the dictionary from the file to self.convols_info
+    #         self.convols_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
+    #         self.epsilon = dataset['epsilon']
+    #         #
+    #         self.format_convols_params()
+
+    # def _save_single(self, f_out):
+    #     # Check and create directory if it doesn't exist
+    #     _dir = os.path.dirname(f_out)
+    #     if not os.path.exists(_dir):
+    #         os.makedirs(_dir)
+    #     # Check if the convols_info is empty
+    #     if not self.convols_info:
+    #         self.logger.error('The dictionary "convols_info" is empty.')
+    #         self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
+    #         self.logger.error(f"Failed to save the data to the file: '{f_out}'")
+    #         func_util.safe_exit(1)
+    #     # If all required variables are present, create the dataset
+    #     dataset = {
+    #         **self.convols_info,  # Add all required variables to the dataset
+    #         'epsilon': self.epsilon  # Include the actual data
+    #     }
+    #     # Save the dataset to the specified file
+    #     #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
+    #     _serialized_data = pickle.dumps(dataset, protocol=4)
+    #     with open(f_out, 'wb') as f:
+    #         np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
