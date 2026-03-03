@@ -12,27 +12,33 @@ from pyhermes.utils import math_util
 
 class WindowFunc(ConvolsData):
 
-    _REQUIRED_ARGV = ("L", "bandwidth", "DeltaXi", "PowerPhi")
+    # _REQUIRED_ARGV = ("L", "bandwidth", "DeltaXi", "PowerPhi")
+    _REQUIRED_ARGV = ("J", "bandwidth", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
 
-    def __init__(self, win_params, threads):
+    def __init__(self, win_params, convols_params, threads=1):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
-        missing = [k for k in self._REQUIRED_ARGV if k not in win_params]
+        missing = [k for k in self._REQUIRED_ARGV if k not in convols_params]
         if missing:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc missing required keys: {missing}")
             func_util.safe_exit(1)
         self.input_params = dict(win_params)
-        params = dict(win_params)
+        self.input_params.update(convols_params)
         try:
-            self.L = int(params.pop("L"))
-            self.bandwidth = int(params.pop("bandwidth"))
-            self.DeltaXi = float(params.pop("DeltaXi"))
+            self.L = 1 << int(convols_params['J'])
+            self.bandwidth = int(convols_params["bandwidth"])
+            self.SimBoxL = convols_params["SimBoxL"]
+            self.SampRate = int(convols_params["SampRate"])
+            self.DeltaXi = 1 / self.L
+            self.wavelet_mode = convols_params["wavelet_mode"]
+            self.wavelet_level = convols_params["wavelet_level"]
         except Exception as e:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
-        self.PowerPhi = params.pop("PowerPhi")
+        phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.PowerPhi = math_util.power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
         if not isinstance(self.PowerPhi, np.ndarray):
             if self.rank == 0:
                 self.logger.error("WindowFunc requires PowerPhi to be a numpy.ndarray.")
@@ -43,19 +49,29 @@ class WindowFunc(ConvolsData):
             func_util.safe_exit(1)
         # There is NO DEFAULT window!!!
         # Missing `type` will raise an error in math_util.
-        self.window_type = params.pop("type", None)
-        self.window_args   = {key : float(value) for key, value in params.items()}
+        self.window_params = dict(win_params)
+        if "func" in win_params:
+            self.window_func = win_params["func"]
+            self.window_type = "custom"
+        else:
+            assert "type" in win_params
+            self.window_type = win_params['type']
+            self.window_func = math_util.set_window_function(self.window_type, verbose=False)
+        self.len_args = win_params['len_args']
+        self.rescale_len_args = {k: v * self.L / self.SimBoxL for k, v in self.len_args.items()}
+        self.other_args = win_params.get('other_args', {})
+        self.window_args = dict(self.rescale_len_args)
+        self.window_args.update(self.other_args)
         self._window_array = None
         self.w_kernel = None
     
     def _build_window_array(self):
-        _w_func = math_util.set_window_function(self.window_type, verbose=False)
         self._window_array = math_util.call_calculate_window_array(
             L=self.L,
             bandwidth=self.bandwidth,
             DeltaXi=self.DeltaXi,
             PowerPhi=self.PowerPhi,
-            window_function_numba=_w_func,
+            window_function_numba=self.window_func,
             **self.window_args,
         )
 
@@ -78,7 +94,7 @@ class WindowFunc(ConvolsData):
             if 'window_kernal' not in dataset:
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'window_kernal' key.")
                 func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.dict_inht_vonDeltac
+            # Assign the dictionary from the file to self.convols_info
             self.input_params = {key: value for key, value in dataset.items() if key != 'window_kernal'}
             self.w_kernel = dataset['window_kernal']
 
