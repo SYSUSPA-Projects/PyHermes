@@ -8,3 +8,4 @@
 ## ignore the generated file when install 
 pyhermes.egg-info/
 build/
+tests/
