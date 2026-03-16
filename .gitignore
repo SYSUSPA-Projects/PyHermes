@@ -9,4 +9,4 @@
 pyhermes.egg-info/
 build/
 tests/
-.DS_Store/
+.DS_Store
