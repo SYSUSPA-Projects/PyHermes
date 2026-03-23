@@ -243,27 +243,15 @@ class ConvolsData(HermesData):
     def phi_at_pos(self, pos):
         return math_util.phi_at_pos(pos, self.phi_data, self.ScaleFactor, self.SampRate, self.PhiSupport)
     
-    # def n_at_pos(self, pos, epsilon=None, filter=None):
-    #     """
-    #     real n(x)
-    #     """
-    #     if not epsilon:
-    #         if filter:
-    #             epsilon = self._conv(filter).epsilon
-    #         else:
-    #             epsilon = self.epsilon
-    #     n = math_util.n_at_pos(pos, epsilon, self.phi_data, self.L, self.ScaleFactor, self.SampRate)
-    #     return n * self.orgDsize * self.ScaleFactor ** 3
-    
     def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
         """
         Evaluate number density n(x) at positions.
 
         normalize:
-            True  -> return the normalized/grid-space n (as in math_util.n_at_pos)
+            True  -> return the normalized/grid-space nx (as in math_util.n_at_pos_numba)
             False -> return scaled output:
-                     if physical: n * N_particles * ScaleFactor**3
-                     else:        n * N_particles
+                     if physical: nx * N_particles * ScaleFactor**3
+                     else:        nx * N_particles
         physical:
             Only used when normalize is False.
         """
@@ -273,18 +261,21 @@ class ConvolsData(HermesData):
             else:
                 epsilon = self.epsilon
 
-        n = math_util.n_at_pos(
-            pos, epsilon, self.phi_data, self.L, self.ScaleFactor, self.SampRate
+        npos = pos.shape[0]
+        nx = np.empty(npos, dtype=np.float64)
+        pos_scaled = pos * self.ScaleFactor
+        math_util.n_at_pos_numba(
+            nx, pos_scaled, epsilon, self.phi_data, self.L, self.SampRate, self.PhiSupport
         )
 
         if normalize:
-            return n
+            return nx
         else:
-            n /= self.NormFactor
+            nx /= self.NormFactor
             if physical:
-                return n * (self.ScaleFactor ** 3)
+                return nx * (self.ScaleFactor ** 3)
             else:
-                return n
+                return nx
 
     def as_array(self, normlize=True):
         if normlize:
@@ -292,7 +283,6 @@ class ConvolsData(HermesData):
         else:
             return self.epsilon / self.NormFactor
     
-    #
     def format_convols_params(self):
         for key, value in self.convols_info.items():
             setattr(self, key, value)
