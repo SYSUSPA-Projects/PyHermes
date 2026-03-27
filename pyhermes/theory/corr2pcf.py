@@ -7,9 +7,17 @@ from pyhermes.io import WindowFunc
 from pyhermes.io import ConvolsData
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
 from pyhermes.pipeline import TaskBase
 
+
+def calc_DD_mean_r(radius, convols_data1, convols_data2=None):
+    win_params = {"type": "shell", "len_args": {"R": radius}}
+    win_shell = WindowFunc(win_params, convols_data1.convols_info)
+    if convols_data2:
+        res = convols_data1 @ win_shell * convols_data2
+    else:
+        res = convols_data1 @ win_shell * convols_data1
+    return res.as_array().mean()
 
 
 class Corr_2PCF(TaskBase):
@@ -24,12 +32,18 @@ class Corr_2PCF(TaskBase):
         self.fout_path      = self.task_params['fout_path']
         # self.threads        = int(self.task_params['threads'])
         win_params = self.task_params.get('window', None)
-        self.win_params = win_params if win_params['type'] else None
-        self.R1             = self.task_params['R1']
-        self.R2             = self.task_params['R2']
-        self.xi_num         = int(self.task_params['xi_num'])
+        win_params = win_params if win_params['type'] else None
+        for i in range(1, 3):
+            win_params_i = self.task_params.get(f'window{i}', None)
+            win_params_i = win_params_i if win_params_i['type'] else None
+            if (not win_params_i) and win_params:
+                win_params_i = dict(win_params)
+            setattr(self, f'win_params{i}', win_params_i)
+        self.r_min             = self.task_params['r_min']
+        self.r_max             = self.task_params['r_max']
+        self.n_r         = int(self.task_params['n_r'])
 
-    def run(self, convols_data=None, overwrite=False):
+    def run(self, convols_data1=None, convols_data2=None, overwrite=False):
         try:
             comm = self.comm
             rank = self.rank
@@ -40,57 +54,74 @@ class Corr_2PCF(TaskBase):
             self.corr2pcf_data = Corr2PCFData()
 
             # The convols data now only loaded to rank0
-            convols_info_serialized = None
+            convols_info1_serialized = None
+            convols_info2_serialized = None
             if rank == 0:
-                if not convols_data:
-                    if self.convols_data_path:
-                        self.convols_data = ConvolsData(data_path=self.convols_data_path)
-                    else:
+                if self.convols_data_path:
+                    self.convols_data = ConvolsData(data_path=self.convols_data_path)
+                else:
+                    if not (convols_data1 and convols_data2):
                         self.logger.error(
                             "No input 'convols_data' provided and 'convols_data_path' is not set. "
                             "Please either pass a ConvolsData instance to run(convols_data=...) "
                             "or specify 'convols_data_path' in task_params."
                         )
                         func_util.safe_exit(1)
-                else:
-                    self.logger.info("Loading convols data from argument 'convols_data'")
-                    if isinstance(convols_data, ConvolsData):
-                        self.convols_data = convols_data
-                        self.convols_data.convols_info['convols_data_paht'] = 'load from argument'
-                        self.task_params['convols_data_path'] = 'load from argument'
+                for i, cdata in zip([1, 2], [convols_data1, convols_data2]):
+                    if cdata:
+                        self.logger.info(f"Loading convols data from argument 'convols_data{i}'")
+                        if isinstance(cdata, ConvolsData):
+                            setattr(self, f"convols_data{i}", cdata)
+                        else:
+                            self.logger.error(f"Unexpected input: 'convols_data{i}' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
+                            func_util.safe_exit(1)
                     else:
-                        self.logger.error("Unexpected input: 'convols_data' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
-                        func_util.safe_exit(1)
-                if self.win_params:
-                    self.window = WindowFunc(self.win_params, self.convols_data.convols_info)
-                    self.convols_data = self.convols_data @ self.window
+                        if _win_params := getattr(self, f"win_params{i}", None):
+                            _window = WindowFunc(_win_params, self.convols_data.convols_info)
+                            _convols_data = self.convols_data @ _window
+                            setattr(self, f"convols_data{i}", _convols_data)
+                        else:
+                            _convols_data = self.convols_data._spawn_like()
+                            _convols_data.epsilon = self.convols_data.epsilon
+                            _convols_data.format_convols_params()
+                            setattr(self, f"convols_data{i}", self.convols_data)
+                    setattr(self.corr2pcf_data, f"convols_info{i}", _convols_data.convols_info)
                 _corr2pcf_info = {
                     **self.task_params,
-                    # "convols_info": self.convols_data.convols_info,
                 }
                 self.corr2pcf_data.corr2pcf_info = dict(_corr2pcf_info)
-                self.corr2pcf_data.convols_info = self.convols_data.convols_info
-                convols_info_serialized = pickle.dumps(self.convols_data.convols_info)
+                self.corr2pcf_data.convols_info1 = self.convols_data1.convols_info
+                convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
+                self.corr2pcf_data.convols_info2 = self.convols_data2.convols_info
+                convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
             # Broadcast parameters (read + from convols data) to all ranks
-            convols_info_serialized = comm.bcast(convols_info_serialized, root=0)
+            convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
+            convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
             if rank == 0:
-                self.convols_data.epsilon = np.ascontiguousarray(self.convols_data.epsilon, dtype=np.float64)
-                _local_convols = self.convols_data
+                self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
+                _local_convols1 = self.convols_data1
+                self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
+                _local_convols2 = self.convols_data2
             else:
-                _local_convols = ConvolsData()
-                _local_convols.convols_info = pickle.loads(convols_info_serialized)
-                _local_convols.format_convols_params()
-                _local_convols.epsilon = np.empty((_local_convols.L, _local_convols.L, _local_convols.L), dtype=np.float64)
+                _local_convols1 = ConvolsData()
+                _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
+                _local_convols1.format_convols_params()
+                _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
+                _local_convols2 = ConvolsData()
+                _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
+                _local_convols2.format_convols_params()
+                _local_convols2.epsilon = np.empty((_local_convols2.L, _local_convols2.L, _local_convols2.L), dtype=np.float64)
             self.corr2pcf_data.task_params = self.task_params
             # Broadcast epsilon to all rank
-            comm.Bcast(_local_convols.epsilon, root=0)
+            comm.Bcast(_local_convols1.epsilon, root=0)
+            comm.Bcast(_local_convols2.epsilon, root=0)
             comm.Barrier()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
                 time_start = time.perf_counter()
             # Generate r_arr at rank0
             if rank == 0:
-                r_arr = np.linspace(self.R1, self.R2, self.xi_num)
+                r_arr = np.linspace(self.r_min, self.r_max, self.n_r)
                 r_sub_arrs = np.array_split(r_arr, size)
                 # Global process status
                 arr_complete = np.zeros(size, dtype=int)
@@ -109,14 +140,13 @@ class Corr_2PCF(TaskBase):
             # Init local 2pcf results
             local_xi = []
             local_r = []
-            R = 1 / _local_convols.V
+            R = 1 / _local_convols1.V
             RR = R ** 2
-            DsubR = _local_convols - R
+            deltaD1 = _local_convols1 - R
+            deltaD2 = _local_convols2 - R
             for i, radius in enumerate(r_sub_arr):
-                win_params = {"type": "shell", "len_args": {"R": radius}}
-                win_shell = WindowFunc(win_params, _local_convols.convols_info)
-                DsubR_square = DsubR @ win_shell * DsubR
-                _xi = DsubR_square.as_array().mean() / RR
+                deltaDD_mean = calc_DD_mean_r(radius, deltaD1, deltaD2)
+                _xi = deltaDD_mean / RR
                 local_xi.append(_xi)
                 local_r.append(radius)
                 local_completed += 1

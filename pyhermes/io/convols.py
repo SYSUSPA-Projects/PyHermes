@@ -10,18 +10,16 @@ from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 
 
-
 class ConvolsData(HermesData):
-    
     def __init__(self, *args, threads=1, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.convols_info = {}
+        self.epsilon = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
             self.convols_info['convols_data_path'] = data_path
             self.load_convols(data_path)
 
-    
     def _spawn_like(self):
         """
         Create a new empty object of the same class,
@@ -39,12 +37,7 @@ class ConvolsData(HermesData):
         new.task_params        = copy.copy(self.task_params)
 
         # --- clear data containers ---
-        new.nx   = None
         new.epsilon = None
-        new.r      = None
-        new.xi     = None
-        new.theta  = None
-        new.q      = None
         new.saveflag = False
 
         return new
@@ -103,23 +96,6 @@ class ConvolsData(HermesData):
         new.format_convols_params()
 
         return new
-
-    # def _conv_numpy(self, other):
-    #     a = self.as_array()
-    #     b = np.array(other)
-    #     if a.ndim != 3 or b.ndim != 3:
-    #         if self.rank == 0:
-    #             self.logger.error(
-    #                 f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
-    #             )
-    #         func_util.safe_exit(1)
-    #     nx, ny, nz = a.shape
-    #     expected = (nx, ny, nz // 2 + 1)
-    #     if b.shape != expected:
-    #         if self.rank == 0:
-    #             self.logger.error(f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}.")
-    #         func_util.safe_exit(1)
-    #     return math_util.specialized_convolution_3d(a, b, threads=self.threads)
 
     def __matmul__(self, other):
         if isinstance(other, ConvolsData):
@@ -282,7 +258,7 @@ class ConvolsData(HermesData):
             return self.epsilon
         else:
             return self.epsilon / self.NormFactor
-    
+
     def format_convols_params(self):
         for key, value in self.convols_info.items():
             setattr(self, key, value)
@@ -325,7 +301,6 @@ class ConvolsData(HermesData):
         # If all required variables are present, create the dataset
         dataset = {
             'convols_info': self.convols_info,
-            # **self.convols_info,  # Add all required variables to the dataset
             'epsilon': self.epsilon  # Include the actual data
         }
         # Save the dataset to the specified file
@@ -334,40 +309,4 @@ class ConvolsData(HermesData):
         with open(f_out, 'wb') as f:
             np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
 
-    # def _load_single(self, f_in):
-    #     with open(f_in, 'rb') as f:
-    #         # Read the entire .npy file as bytes
-    #         serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-    #         # Convert the bytes back into the original dataset using pickle
-    #         dataset = pickle.loads(serialized_data.tobytes())
-    #         # Check if the 'data' key is present in the dataset
-    #         if 'epsilon' not in dataset:
-    #             self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
-    #             func_util.safe_exit(1)
-    #         # Assign the dictionary from the file to self.convols_info
-    #         self.convols_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
-    #         self.epsilon = dataset['epsilon']
-    #         #
-    #         self.format_convols_params()
-
-    # def _save_single(self, f_out):
-    #     # Check and create directory if it doesn't exist
-    #     _dir = os.path.dirname(f_out)
-    #     if not os.path.exists(_dir):
-    #         os.makedirs(_dir)
-    #     # Check if the convols_info is empty
-    #     if not self.convols_info:
-    #         self.logger.error('The dictionary "convols_info" is empty.')
-    #         self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
-    #         self.logger.error(f"Failed to save the data to the file: '{f_out}'")
-    #         func_util.safe_exit(1)
-    #     # If all required variables are present, create the dataset
-    #     dataset = {
-    #         **self.convols_info,  # Add all required variables to the dataset
-    #         'epsilon': self.epsilon  # Include the actual data
-    #     }
-    #     # Save the dataset to the specified file
-    #     #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
-    #     _serialized_data = pickle.dumps(dataset, protocol=4)
-    #     with open(f_out, 'wb') as f:
-    #         np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+    

@@ -19,22 +19,49 @@
 			"len_args": {},
 			"other_args": {}
 		},
-		// "threads": 1,
-		"R1": 1.0,
-		"R2": 150.0,
-		"xi_num": 150
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"r_min": 1.0,
+		"r_max": 150.0,
+		"n_r": 30
 	},
 	"Corr_3PCF": {
 		"convols_data_path": "",
-		"corr2pcf_in_path": "",
-		"fin": {
-			"path": "./data.bin",
-			"format": "generic"
-		},
 		"fout_path": "",
-		"NStheta": 20,
-		"R1": 20.0,
-		"R2": 40.0,
-		"rot_num": 10000
+		"window": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window3": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"r12": 20.0,
+		"r13": 40.0,
+		"n_theta": 20,
+		"n_rot": 100,
+		"center": "random",
+		"n_rand": 5000000,
+		"base_seed": 42
 	}
 }

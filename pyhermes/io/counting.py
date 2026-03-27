@@ -11,6 +11,7 @@ class CountingData(HermesData):
     def __init__(self, *args, threads=1, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.counting_info = {}
+        self.nx = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
             self.counting_info['counting_data_path'] = data_path

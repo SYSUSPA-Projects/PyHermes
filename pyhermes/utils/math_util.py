@@ -371,39 +371,6 @@ def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
                     phi_local[num, -i, -j, -k] = phixy * phi_data[fz + step[k]]
     return pos_coarse, phi_local
 
-
-# @jit(nopython=True)
-# def n_at_pos(pos, epsilon, phi_data, L, ScaleFactor, SampRate):
-#     """
-#     normalize, dimensionless n(x)
-#     """
-#     PhiStart = 0
-#     PhiEnd = phi_data.shape[0] // SampRate
-#     PhiSupport = PhiEnd - PhiStart
-#     step = np.arange(PhiSupport) * SampRate
-#     scale_pos = pos * ScaleFactor
-#     pos_coarse = np.floor(scale_pos).astype(np.int32)
-#     pos_finer = ((scale_pos - pos_coarse) * SampRate).astype(np.int32)
-#     total = scale_pos.shape[0]
-#     result = np.zeros(total)
-#     for num in range(total):
-#         xc, yc, zc = pos_coarse[num]
-#         xf, yf, zf = pos_finer[num]
-#         res = 0
-#         for i in range(PhiSupport):
-#             xi = (xc - i) & (L - 1)
-#             phix = phi_data[xf + step[i]]
-#             for j in range(PhiSupport):
-#                 yi = (yc - j) & (L - 1)
-#                 phiy = phi_data[yf + step[j]]
-#                 for k in range(PhiSupport):
-#                     zi = (zc - k) & (L - 1)
-#                     phiz = phi_data[zf + step[k]]
-#                     res += epsilon[xi, yi, zi] * phix * phiy * phiz
-#         result[num] = res
-#     return result
-
-
 @njit
 def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupport,
                    dx=0.0, dy=0.0, dz=0.0):
@@ -452,117 +419,10 @@ def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupp
 
         n_output[idx] = acc
 
-
-# @jit(nopython=True)
-# def result_interpret4(convol3d, p_coarse, p_finer, phi_data, J, SampRate=1024):
-#     L = 1 << J
-#     PhiStart = 0
-#     PhiEnd = phi_data.shape[0] // SampRate
-#     PhiSupport = PhiEnd - PhiStart
-#     step = np.arange(PhiSupport) * SampRate
-#     total = p_coarse.shape[0]
-#     total_sum = 0
-#     for num in range(total):
-#         pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
-#         pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
-#         res = 0
-#         for i in range(PhiSupport):
-#             x1 = (pp_coarse0 - i) & (L - 1)
-#             phi1 = phi_data[int(pp_finer0) + step[i]]
-#             for j in range(PhiSupport):
-#                 y1 = (pp_coarse1 - j) & (L - 1)
-#                 res2 = 0
-#                 for k in range(PhiSupport):
-#                     res2 += convol3d[x1, y1, ((pp_coarse2 - k) & (L - 1))] * phi_data[int(pp_finer2) + step[k]]
-#                 res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
-#         total_sum += res
-#     return total_sum
-
-
-# @jit(nopython=True)
-# def result_interpret5(convol3d, size, phi_data, J, SampRate=1024):
-#     L = 1 << J
-#     total = 0
-#     for _ in range(size):
-#         scale_p = np.random.rand(3) * L
-#         p_coarse = np.floor(scale_p).astype(np.int32)
-#         p_finer = (scale_p - p_coarse) * SampRate
-#         total += result_interpret6(convol3d, p_coarse, p_finer, phi_data, J, SampRate)
-#     return total
-
-
-# @jit(nopython=True)
-# def result_interpret6(convol3d, p_coarse, p_finer, phi_data, J, SampRate=1024):
-#     PhiStart = 0
-#     PhiEnd = phi_data.shape[0] // SampRate
-#     PhiSupport = PhiEnd - PhiStart
-#     step = np.arange(PhiSupport) * SampRate
-#     pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse
-#     pp_finer0, pp_finer1, pp_finer2 = p_finer
-#     res = 0
-#     for i in range(PhiSupport):
-#         x1 = pp_coarse0 - i
-#         phi1 = phi_data[int(pp_finer0) + step[i]]
-#         for j in range(PhiSupport):
-#             y1 = pp_coarse1 - j
-#             res2 = 0
-#             for k in range(PhiSupport):
-#                 res2 += convol3d[x1, y1, pp_coarse2 - k] * phi_data[int(pp_finer2) + step[k]]
-#             res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
-#     return res
-
-
-# @jit(nopython=True)
-# def result_interpret2(convol3d, size, phi_data, J, SampRate=1024):
-#     L = 1 << J
-#     PhiStart = 0
-#     PhiEnd = phi_data.shape[0] // SampRate
-#     PhiSupport = PhiEnd - PhiStart
-#     step = np.arange(PhiSupport) * SampRate
-#     scale_p = np.random.rand(size, 3) * L
-#     p_coarse = np.floor(scale_p).astype(np.int32)
-#     p_finer = (scale_p - p_coarse) * SampRate
-#     total = size
-#     result = np.zeros(total)
-#     for num in range(total):
-#         pp_coarse0, pp_coarse1, pp_coarse2 = p_coarse[num]
-#         pp_finer0, pp_finer1, pp_finer2 = p_finer[num]
-#         res = 0
-#         for i in range(PhiSupport):
-#             x1 = (pp_coarse0 - i) & (L - 1)
-#             phi1 = phi_data[int(pp_finer0) + step[i]]
-#             for j in range(PhiSupport):
-#                 y1 = (pp_coarse1 - j) & (L - 1)
-#                 res2 = 0
-#                 for k in range(PhiSupport):
-#                     res2 += convol3d[x1, y1, ((pp_coarse2 - k) & (L - 1))] * phi_data[int(pp_finer2) + step[k]]
-#                 res += res2 * phi1 * phi_data[int(pp_finer1) + step[j]]
-#         result[num] = res
-#     return result
-
-
-# def result_interpret3(convol3d, p_input, phi_data, J, SampRate=1024):
-#     scale_p = p_input
-#     p_coarse = np.floor(scale_p).astype(np.int32)
-#     p_finer = (scale_p - p_coarse) * SampRate
-#     return result_interpret4(convol3d, p_coarse, p_finer, phi_data, J, SampRate)
-
-
 # ------------------------------------------------------------
 # ------------- ↓ Numerical function for 2pcf ↓ --------------
 # ------------------------------------------------------------
 
-
-# def calc_DD_conv(r, field1, field2, field_info, win_type="shell"):
-#     """
-#     Mean of: field1(x) * [field2 convolved with a window at radius r](x).
-
-#     - r is in PHYSICAL units (Mpc/h) because WindowFunc expects that.
-#     - Returns a GRID average (mean over all grid cells).
-#     """
-#     win_params = {"type": win_type, "len_args": {"R": r}}
-#     win = WindowFunc(win_params, field_info)
-#     return (field1 @ win * field2).as_array().mean()
 
 
 # ------------------------------------------------------------
@@ -625,7 +485,7 @@ def calc_DDD_mc_pos_center_fast(
     centers_scaled, n_rot,
     R, epsilon2, epsilon3,
     phi_data, L, SampRate, PhiSupport,
-    seed=-1
+    seed_base_rot=-1, theta_index=-1
 ):
     
     """
@@ -645,14 +505,17 @@ def calc_DDD_mc_pos_center_fast(
       - centers_scaled must be in SCALED (GRID) coordinates [0, L).
       - Returns a scalar DDD (normalized-grid convention).
     """
-    if seed >= 0:
-        np.random.seed(seed)
     npos = centers_scaled.shape[0]
     two_pi = 2.0 * math.pi
     n2 = np.empty(npos, dtype=np.float64)
     n3 = np.empty(npos, dtype=np.float64)
     total_sum = 0.0
-    for _ in range(n_rot):
+    for irot in range(n_rot):
+        if seed_base_rot >= 0:
+            seed_rot = seed_base_rot + irot
+            if theta_index >= 0:
+                seed_rot += theta_index * 1000003
+            np.random.seed(seed_rot)
         a, b, c = np.random.rand(3)
         phi = two_pi * a
         costheta1 = 2.0 * b - 1.0
@@ -673,7 +536,7 @@ def calc_DDD_mc_random_center(
     centers_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
     phi_data, L, SampRate, PhiSupport,
-    seed=-1
+    seed_base_rot=-1, theta_index=-1
 ):
     """
     Method 2 (recommended default; centers = uniform random points)
@@ -692,21 +555,6 @@ def calc_DDD_mc_random_center(
       - centers_scaled must be in SCALED (GRID) coordinates [0, L).
       - Returns a scalar DDD (normalized-grid convention).
     """
-    # """
-    # Monte Carlo estimate of:
-    #   < d1(x) * d2(x+r1) * d3(x+r2) >
-    # averaged over:
-    #   - x sampled uniformly in GRID space (centers_scaled)
-    #   - triangle orientations (n_rot random rotations)
-
-    # All inputs/outputs are in the normalized GRID convention.
-
-    # seed:
-    #   - seed >= 0 : reproducible orientations
-    #   - seed < 0  : continue RNG state (non-reproducible across fresh runs)
-    # """
-    if seed >= 0:
-        np.random.seed(seed)
 
     npos = centers_scaled.shape[0]
     two_pi = 2.0 * math.pi
@@ -719,7 +567,12 @@ def calc_DDD_mc_random_center(
 
     total_sum = 0.0
 
-    for _ in range(n_rot):
+    for irot in range(n_rot):
+        if seed_base_rot >= 0:
+            seed_rot = seed_base_rot + irot
+            if theta_index >= 0:
+                seed_rot += theta_index * 1000003
+            np.random.seed(seed_rot)
         a, b, c = np.random.rand(3)
         phi = two_pi * a
         costheta1 = 2.0 * b - 1.0
@@ -834,146 +687,3 @@ def calc_DDD_RDD_mc_pos_center_legacy(
 #     sum_res += data[0]
 #     return sum_res
 
-
-# @njit
-# def generate_points_device(R1, R2, theta):
-#     phi = 2 * math.pi * np.random.uniform(0, 1)
-#     costheta = np.random.uniform(0, 1) - 1
-#     sintheta = math.sqrt(1 - costheta**2)
-#     dx1 = sintheta * math.cos(phi)
-#     dy1 = sintheta * math.sin(phi)
-#     dz1 = costheta
-#     x2 = R1 * dx1
-#     y2 = R1 * dy1
-#     z2 = R1 * dz1
-#     if abs(dx1) > 1e-10 or abs(dy1) > 1e-10:
-#         ox1, oy1, oz1 = -dy1, dx1, 0
-#     else:
-#         ox1, oy1, oz1 = 0, -dz1, dy1
-#     norm = math.sqrt(ox1**2 + oy1**2 + oz1**2)
-#     ox1 /= norm
-#     oy1 /= norm
-#     oz1 /= norm
-#     ox2 = dy1 * oz1 - dz1 * oy1
-#     oy2 = dz1 * ox1 - dx1 * oz1
-#     oz2 = dx1 * oy1 - dy1 * ox1
-#     alpha = 2 * math.pi * np.random.uniform(0, 1)
-#     cos_alpha = math.cos(alpha)
-#     sin_alpha = math.sin(alpha)
-#     dx2 = math.cos(theta) * dx1 + math.sin(theta) * (cos_alpha * ox1 + sin_alpha * ox2)
-#     dy2 = math.cos(theta) * dy1 + math.sin(theta) * (cos_alpha * oy1 + sin_alpha * oy2)
-#     dz2 = math.cos(theta) * dz1 + math.sin(theta) * (cos_alpha * oz1 + sin_alpha * oz2)
-#     x3 = R2 * dx2
-#     y3 = R2 * dy2
-#     z3 = R2 * dz2
-#     return x2, y2, z2, x3, y3, z3
-
-
-# @njit
-# def result_3pcf_cpu_location(data_array, phidata, step, part_data, random_data, Nrotation, R1, R2, theta):
-#     L = 1 << 8
-#     SimBoxL = 1000
-#     ScaleFactor = L / SimBoxL
-#     GridSize = L - 1
-#     PhiStart = 0
-#     PhiEnd = 3
-#     PhiSupport = PhiEnd - PhiStart
-#     particle_num = part_data.shape[0]
-#     results = np.zeros(particle_num)
-#     for idx in range(particle_num):
-#         res = 0
-#         scalepx = part_data[idx, 0] * ScaleFactor
-#         scalepy = part_data[idx, 1] * ScaleFactor
-#         scalepz = part_data[idx, 2] * ScaleFactor
-#         scalepx0 = random_data[idx, 0] * ScaleFactor
-#         scalepy0 = random_data[idx, 1] * ScaleFactor
-#         scalepz0 = random_data[idx, 2] * ScaleFactor
-#         for loop in range(Nrotation):
-#             x2, y2, z2, x3, y3, z3 = generate_points_device(R1, R2, theta)
-#             third_value = 0
-#             second_value = 0
-#             inputx = scalepx + x2
-#             inputy = scalepy + y2
-#             inputz = scalepz + z2
-#             pp_coarse0 = int16(math.floor(inputx))
-#             pp_coarse1 = int16(math.floor(inputy))
-#             pp_coarse2 = int16(math.floor(inputz))
-#             pp_finer0 = int16((inputx - pp_coarse0) * 1024)
-#             pp_finer1 = int16((inputy - pp_coarse1) * 1024)
-#             pp_finer2 = int16((inputz - pp_coarse2) * 1024)
-#             for i in range(PhiSupport):
-#                 for j in range(PhiSupport):
-#                     for k in range(PhiSupport):
-#                         second_value += (
-#                             data_array[
-#                                 (pp_coarse0 - i) & GridSize, (pp_coarse1 - j) & GridSize, (pp_coarse2 - k) & GridSize
-#                             ]
-#                             * phidata[pp_finer0 + step[i]]
-#                             * phidata[pp_finer1 + step[j]]
-#                             * phidata[pp_finer2 + step[k]]
-#                         )
-#             inputx = scalepx + x3
-#             inputy = scalepy + y3
-#             inputz = scalepz + z3
-#             pp_coarse0 = int16(math.floor(inputx))
-#             pp_coarse1 = int16(math.floor(inputy))
-#             pp_coarse2 = int16(math.floor(inputz))
-#             pp_finer0 = int16((inputx - pp_coarse0) * 1024)
-#             pp_finer1 = int16((inputy - pp_coarse1) * 1024)
-#             pp_finer2 = int16((inputz - pp_coarse2) * 1024)
-#             for i in range(PhiSupport):
-#                 for j in range(PhiSupport):
-#                     for k in range(PhiSupport):
-#                         third_value += (
-#                             data_array[
-#                                 (pp_coarse0 - i) & GridSize, (pp_coarse1 - j) & GridSize, (pp_coarse2 - k) & GridSize
-#                             ]
-#                             * phidata[pp_finer0 + step[i]]
-#                             * phidata[pp_finer1 + step[j]]
-#                             * phidata[pp_finer2 + step[k]]
-#                         )
-#             third_value0 = 0
-#             second_value0 = 0
-#             inputx0 = scalepx0 + x2
-#             inputy0 = scalepy0 + y2
-#             inputz0 = scalepz0 + z2
-#             pp_coarse0 = int16(math.floor(inputx0))
-#             pp_coarse1 = int16(math.floor(inputy0))
-#             pp_coarse2 = int16(math.floor(inputz0))
-#             pp_finer0 = int16((inputx0 - pp_coarse0) * 1024)
-#             pp_finer1 = int16((inputy0 - pp_coarse1) * 1024)
-#             pp_finer2 = int16((inputz0 - pp_coarse2) * 1024)
-#             for i in range(PhiSupport):
-#                 for j in range(PhiSupport):
-#                     for k in range(PhiSupport):
-#                         second_value0 += (
-#                             data_array[
-#                                 (pp_coarse0 - i) & GridSize, (pp_coarse1 - j) & GridSize, (pp_coarse2 - k) & GridSize
-#                             ]
-#                             * phidata[pp_finer0 + step[i]]
-#                             * phidata[pp_finer1 + step[j]]
-#                             * phidata[pp_finer2 + step[k]]
-#                         )
-#             inputx0 = scalepx0 + x3
-#             inputy0 = scalepy0 + y3
-#             inputz0 = scalepz0 + z3
-#             pp_coarse0 = int16(math.floor(inputx0))
-#             pp_coarse1 = int16(math.floor(inputy0))
-#             pp_coarse2 = int16(math.floor(inputz0))
-#             pp_finer0 = int16((inputx0 - pp_coarse0) * 1024)
-#             pp_finer1 = int16((inputy0 - pp_coarse1) * 1024)
-#             pp_finer2 = int16((inputz0 - pp_coarse2) * 1024)
-#             for i in range(PhiSupport):
-#                 for j in range(PhiSupport):
-#                     for k in range(PhiSupport):
-#                         third_value0 += (
-#                             data_array[
-#                                 (pp_coarse0 - i) & GridSize, (pp_coarse1 - j) & GridSize, (pp_coarse2 - k) & GridSize
-#                             ]
-#                             * phidata[pp_finer0 + step[i]]
-#                             * phidata[pp_finer1 + step[j]]
-#                             * phidata[pp_finer2 + step[k]]
-#                         )
-#             res += second_value * third_value - second_value0 * third_value0
-#         results[idx] = res
-#     return results

@@ -1,66 +1,86 @@
 import os
-from datetime import datetime
-
+import pickle
 import numpy as np
 
-import pyhermes
 from .base import HermesData
-
+from pyhermes.utils import func_util
 
 
 class Corr3PCFData(HermesData):
+    def __init__(self, *args, threads=1, **kwargs):
+        data_path = kwargs.pop("data_path", None)
+        self.corr3pcf_info = {}
+        self.theta               = None
+        self.r23                 = None
+        self.xi12                = None
+        self.xi13                = None
+        self.xi23                = None
+        self.zeta                = None
+        self.Q                   = None
+        super().__init__(*args, threads=threads, **kwargs)
+        if data_path:
+            self.corr3pcf_info['corr3pcf_data_path'] = data_path
+            self.load_corr3pcf(data_path)
 
-    def _load_single(self, f_in):
-        with open(f_in, 'r') as f:
-            lines = f.readlines()
-        data_start = None
-        for i, line in enumerate(lines):
-            if line.strip() == "" or line.startswith("#"):
-                continue
-            if line.startswith('---'):  
-                data_start = i + 1
-                break
-        _data = np.loadtxt(f_in, delimiter=",", skiprows=data_start+1)
-        self.theta = _data[:, 0]
-        self.Q = _data[:, 1]
+    def format_corr3pcf_params(self):
+        for key, value in self.corr3pcf_info.items():
+            setattr(self, key, value)
 
-    def _save_single(self, f_out):
+    def load_corr3pcf(self, f_in, single=True):
+        self.load(f_in, read_3pcf=True, single=single)
+
+    def save_corr3pcf(self, f_out, single=True, overwrite=False):
+        self.save(f_out, save_3pcf=True, single=single, overwrite=overwrite)
+
+    def _load_corr3pcf(self, f_in):
+        with open(f_in, 'rb') as f:
+            # Read the entire .npy file as bytes
+            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
+            # Convert the bytes back into the original dataset using pickle
+            dataset = pickle.loads(serialized_data.tobytes())
+            # Check if the 'r' and 'xi' keys are present in the dataset
+            for key in ['theta', 'r23', 'xi12', 'xi13', 'xi23', 'zeta', 'Q']:
+                if key not in dataset:
+                    self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
+                    func_util.safe_exit(1)
+                setattr(self, key, dataset[key])
+            # Assign the dictionary from the file to self.corr3pcf_info
+            for i in range(1, 4):
+                _convols_info = dataset.get(f'convols_info{i}')
+                if _convols_info:
+                    setattr(self, f"convols_info{i}", _convols_info)
+            _corr3pcf_info = dataset.get('corr3pcf_info')
+            if _corr3pcf_info:
+                self.corr3pcf_info.update(_corr3pcf_info)
+            self.format_corr3pcf_params()
+
+    def _save_corr3pcf(self, f_out):
+        # Check and create directory if it doesn't exist
         _dir = os.path.dirname(f_out)
         if not os.path.exists(_dir):
             os.makedirs(_dir)
-        self.theta = np.asarray(self.theta, dtype=np.float64)
-        self.Q = np.asarray(self.Q, dtype=np.float64)
-        version = pyhermes.__version__
-        current_time = datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
-        header = (
-            f"# Corr_3PCF output from PyHermes v{version}, TIME: {current_time}\n"
-            "# Parameters from input :\n"
-            f"#  R1                = {self.task_params['R1']}\n"
-            f"#  R2                = {self.task_params['R2']}\n"
-            f"#  rot_num           = {int(self.task_params['rot_num'])}\n"
-            f"#  NStheta           = {int(self.task_params['NStheta'])}\n"
-            f"#  fin_size          = {self.task_params['orgDsize_3pcf']}\n"
-            f"#  fin_path          = {self.task_params['fin']['path']}\n"
-            f"#  fin_format        = {self.task_params['fin']['format']}\n"
-            f"#  fout_path         = {self.task_params['fout_path']}\n"
-            f"#  deltac_in_path    = {self.task_params['deltac_in_path']}\n"
-            f"#  corr2pcf_in_path  = {self.task_params['corr2pcf_in_path']}\n"
-            "# Parameters from DeltaC:\n"
-            f"#  J                 = {self.task_params['J']}\n"
-            f"#  SimBoxL           = {self.task_params['SimBoxL']}\n"
-            f"#  SampRate          = {int(self.task_params['SampRate'])}\n"
-            f"#  bandwidth         = {self.task_params['bandwidth']}\n"
-            f"#  fin_size          = {self.task_params['orgDsize']}\n"
-            f"#  fin_path          = {self.task_params['fin_path']}\n"
-            f"#  fin_format        = {self.task_params['fin_format']}\n"
-            f"#  wavelet_mode      = {self.task_params['wavelet_mode']}\n"
-            f"#  wavelet_level     = {self.task_params['wavelet_level']}\n"
-            f"#  Window_Info       = {self.task_params['window']}\n"
-            "\n"
-            "---------------------------\n"
-            "theta[rad]  , Q"
-        )
-        data_to_save = np.column_stack((self.theta, self.Q))
-        fmt = '%.6e, %.6e'
-        delimiter = ",   " 
-        np.savetxt(f_out, data_to_save, delimiter=delimiter, header=header, comments='', fmt=fmt)
+        # Check if the corr3pcf_info is empty
+        if not self.corr3pcf_info:
+            self.logger.error('The dictionary "corr3pcf_info" is empty.')
+            self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
+            self.logger.error(f"Failed to save the data to the file: '{f_out}'")
+            func_util.safe_exit(1)
+        # If all required variables are present, create the dataset
+        dataset = {
+            'convols_info1': self.convols_info1,
+            'convols_info2': self.convols_info2,
+            'convols_info3': self.convols_info3,
+            'corr3pcf_info': self.corr3pcf_info,
+            'theta': self.theta,
+            'r23': self.r23,
+            'xi12': self.xi12,
+            'xi13': self.xi13,
+            'xi23': self.xi23,
+            'zeta': self.zeta,
+            'Q': self.Q  # Include the actual data
+        }
+        # Save the dataset to the specified file
+        #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
+        _serialized_data = pickle.dumps(dataset, protocol=4)
+        with open(f_out, 'wb') as f:
+            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))

@@ -151,11 +151,9 @@ def check_fout(instance, fout_path, overwrite=False):
     ext_dict = {
         'ConvolsData' : 'pkl',
         'WindowFunc'  : 'pkl',
-        # 'CountingData': 'npy',
         'CountingData': 'pkl',
-        # 'Corr2PCFData': 'txt',
         'Corr2PCFData': 'pkl',
-        'Corr3PCFData': 'txt',
+        'Corr3PCFData': 'pkl',
     }
     isFolder = False
     if fout_path.endswith('/') or fout_path.endswith('\\'):
