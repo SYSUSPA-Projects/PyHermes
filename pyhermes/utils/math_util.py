@@ -11,7 +11,6 @@ from numba.core.errors import NumbaExperimentalFeatureWarning
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
-# from pyhermes.io import WindowFunc
 
 
 _NUMBA_CONFIGURED = False

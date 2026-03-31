@@ -9,7 +9,8 @@
 			"type": "",
 			"len_args": {},
 			"other_args": {}
-		}
+		},
+		"threads": 1
 	},
 	"Corr_2PCF": {
 		"convols_data_path": "",
@@ -31,7 +32,8 @@
 		},
 		"r_min": 1.0,
 		"r_max": 150.0,
-		"n_r": 30
+		"n_r": 30,
+		"threads": 1
 	},
 	"Corr_3PCF": {
 		"convols_data_path": "",
@@ -62,6 +64,7 @@
 		"n_rot": 100,
 		"center": "random",
 		"n_rand": 5000000,
-		"base_seed": 42
+		"base_seed": 42,
+		"threads": 1
 	}
 }
