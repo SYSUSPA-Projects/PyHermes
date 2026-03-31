@@ -8,7 +8,7 @@ from pyhermes.utils import func_util
 
 
 class CountingData(HermesData):
-    def __init__(self, *args, threads=1, **kwargs):
+    def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.counting_info = {}
         self.nx = None

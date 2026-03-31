@@ -12,15 +12,18 @@ from pyhermes.io import handle_PATHorURL, check_fout
 
 class HermesData(object):
 
-    def __init__(self, *args, threads=1, **kwargs):
+    def __init__(self, *args, threads=None, **kwargs):
         self.comm                = MPI.COMM_WORLD
         self.rank                = self.comm.Get_rank()
         self.logger              = setup_logger(__name__, self.__class__.__name__)
-        self.threads             = max(1, int(threads))
         self.saveflag            = False
         self.task_params         = None
         # Set numba threads
-        math_util.configure(threads=self.threads)
+        if threads:
+            self.threads = max(1, int(threads))
+            math_util.configure(threads=self.threads)
+        else:
+            self.threads = None
 
     def load(self, f_in, read_convols=False, read_counting=False, read_2pcf=False, read_3pcf=False, single=True):
         try:

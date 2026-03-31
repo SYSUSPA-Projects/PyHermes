@@ -11,7 +11,7 @@ from pyhermes.utils import math_util
 
 
 class ConvolsData(HermesData):
-    def __init__(self, *args, threads=1, **kwargs):
+    def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.convols_info = {}
         self.epsilon = None

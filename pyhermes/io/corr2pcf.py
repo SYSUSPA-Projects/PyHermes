@@ -7,7 +7,7 @@ from pyhermes.utils import func_util
 
 
 class Corr2PCFData(HermesData):
-    def __init__(self, *args, threads=1, **kwargs):
+    def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.corr2pcf_info = {}
         self.r = None
