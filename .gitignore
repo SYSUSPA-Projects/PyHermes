@@ -1,6 +1,7 @@
 ## ignore the generated file
 **/*.npy
 **/*.bin
+examples/output/
 
 ## remove the python cache to avoid conflicts
 **/__pycache__/
