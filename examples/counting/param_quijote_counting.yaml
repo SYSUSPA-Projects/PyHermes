@@ -1,0 +1,8 @@
+Counting:
+  N_randoms: 10000000
+  convols_data_path: "../convols/quijote_J8.pkl" 
+  fout_path: "./quijote_J8_counting_sph20.pkl"
+  window:
+    type: sphere
+    len_args:
+      R: 20
