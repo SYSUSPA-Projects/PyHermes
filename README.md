@@ -45,13 +45,7 @@ from pyhermes.base.convols import Convols
 from pyhermes.io import WindowFunc
 
 # Step 1: build the multiresolution coefficient field from particle positions
-task_params = {
-    "Convols": {
-        "fin": {
-            "path": "./quijote10000.bin"
-        }
-    }
-}
+task_params = {'Convols': {'fin': {'path': './quijote10000.bin'}}}
 D = Convols(task_params).run()
 
 # Step 2: construct the fluctuation field delta = D - R
@@ -65,6 +59,8 @@ win_filter = WindowFunc(win_params, D.convols_info)
 deltaD_w = deltaD @ win_filter
 
 # Step 4: measure xi(r) by shell convolution + spatial averaging
+# DD(r) = <n(x)n(x+r)>; n(x+r) = n_r(x) = n(x) @ W_shell(r)
+# xi = (D-R)(D-R)/RR
 r_arr = np.linspace(1, 150, 30)
 xi_arr = np.zeros_like(r_arr)
 
