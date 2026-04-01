@@ -1,0 +1,8 @@
+Counting:
+  N_randoms: 10000000
+  convols_data_path: "./output/quijote_sfc.pkl" 
+  fout_path: "./output/quijote_counting_sph20.pkl"
+  window:
+    type: sphere
+    len_args:
+      R: 20

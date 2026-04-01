@@ -16,7 +16,7 @@ The output `epsilon` field is the starting point for later analyses, including:
 Input / output
 --------------
 The configuration file used here is:
-    ./param_quijote_convols.yaml
+    ./configs/param_convols.yaml
 
 In the current example:
 - input particle catalog:
@@ -24,12 +24,12 @@ In the current example:
 - input format:
     generic_pos
 - output coefficient file:
-    ./quijote_J8.pkl
+    ./output/quijote_sfc.pkl
 
 Usage
 -----
 1. Edit the YAML config file if needed:
-       ./param_quijote_convols.yaml
+       ./configs/param_convols.yaml
 
 2. Run:
        python run_convols.py
@@ -48,13 +48,13 @@ Notes
   If you want to modify parameters directly inside this Python script when using MPI,
   do it only on rank 0.
 
-- The output file (here `quijote_J8.pkl`) can be reused by later PyHermes tasks
+- The output file (here `output/quijote_sfc.pkl`) can be reused by later PyHermes tasks
   such as window convolution, counting/PDF, 2PCF, and 3PCF.
 """
 
 from pyhermes.base.convols import Convols
 from pyhermes.param.parambase import read_param
 
-convols_params = read_param(config_path='./param_quijote_convols.yaml')
+convols_params = read_param(config_path='./configs/param_convols.yaml')
 convols = Convols(param_task=convols_params)
 convols.run(overwrite=True)

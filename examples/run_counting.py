@@ -16,23 +16,23 @@ smoothed field at many random positions. This is typically used for:
 Input / output
 --------------
 The configuration file used here is:
-    ./param_quijote_counting.yaml
+    ./configs/param_counting.yaml
 
 In the current example:
 - number of random points:
     N_randoms = 10000000
 - input coefficient file:
-    ../convols/quijote_J8.pkl
+    ./output/quijote_sfc.pkl
 - output counting file:
-    ./quijote_J8_counting_sph20.pkl
+    ./output/quijote_counting_sph20.pkl
 
 Usage
 -----
 1. Make sure the input coefficient file already exists:
-       ../convols/quijote_J8.pkl
+       ./output/quijote_sfc.pkl
 
 2. Edit the YAML config file if needed:
-       ./param_quijote_counting.yaml
+       ./configs/param_counting.yaml
 
 3. Run:
        python run_counting.py
@@ -58,6 +58,13 @@ Notes
 from pyhermes.theory.counting import Counting
 from pyhermes.param.parambase import read_param
 
-counting_params = read_param(config_path='./param_quijote_counting.yaml')
+counting_params = read_param(config_path='./configs/param_counting.yaml')
+
+# Example: modify parameters only on rank 0 when running with MPI
+# from pyhermes.utils.mpi_util import MPI
+# if MPI.COMM_WORLD.Get_rank() == 0:
+#     counting_params['Counting']['window'] = {}
+#     counting_params['Counting']['fout_path'] = "./output/quijote_counting.pkl"
+
 counting = Counting(param_task=counting_params)
 counting.run(overwrite=True)

@@ -1,7 +1,0 @@
-Corr_2PCF:
-   convols_data_path: "../convols/quijote_J8.pkl" 
-   fout_path: "./quijote_J8_2pcf.pkl"
-   threads: 1
-   r_min: 1.0
-   r_max: 150.0
-   n_r: 30

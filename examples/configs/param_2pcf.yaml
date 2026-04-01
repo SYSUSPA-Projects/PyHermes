@@ -1,0 +1,6 @@
+Corr_2PCF:
+   convols_data_path: "./output/quijote_sfc.pkl" 
+   fout_path: "./output/quijote_2pcf.pkl"
+   r_min: 1.0
+   r_max: 150.0
+   n_r: 30

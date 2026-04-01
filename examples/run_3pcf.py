@@ -11,12 +11,12 @@ It reads the task configuration from a YAML file, builds the corresponding
 Input / output
 --------------
 The configuration file used here is:
-    ./param_quijote_3pcf.yaml
+    ./configs/param_3pcf.yaml
 
 Usage
 -----
 1. Edit the YAML config file if needed:
-       ./param_quijote_3pcf.yaml
+       ./configs/param_3pcf.yaml
 
 2. Run:
        python run_3pcf.py
@@ -38,7 +38,7 @@ Notes
 - The commented block below is an example of this pattern:
       if MPI.COMM_WORLD.Get_rank() == 0:
           corr3pcf_params['Corr_3PCF']['center'] = 'particle'
-          corr3pcf_params['Corr_3PCF']['fout_path'] = "./quijote_J8_3pcf_part.pkl"
+          corr3pcf_params['Corr_3PCF']['fout_path'] = "./output/quijote_3pcf_part.pkl"
 
   This means:
   * only rank 0 changes the parameter dictionary
@@ -52,13 +52,13 @@ Notes
 from pyhermes.theory.corr3pcf import Corr_3PCF
 from pyhermes.param.parambase import read_param
 
-corr3pcf_params = read_param(config_path='./param_quijote_3pcf.yaml')
+corr3pcf_params = read_param(config_path='./configs/param_3pcf.yaml')
 
 # Example: modify parameters only on rank 0 when running with MPI
 # from pyhermes.utils.mpi_util import MPI
 # if MPI.COMM_WORLD.Get_rank() == 0:
 #     corr3pcf_params['Corr_3PCF']['center'] = 'particle'
-#     corr3pcf_params['Corr_3PCF']['fout_path'] = "./quijote_J8_3pcf_part.pkl"
+#     corr3pcf_params['Corr_3PCF']['fout_path'] = "./output/quijote_3pcf_part.pkl"
 
 corr3pcf = Corr_3PCF(param_task=corr3pcf_params)
 corr3pcf.run(overwrite=True)
