@@ -115,7 +115,8 @@ class Counting(TaskBase):
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")            
             # Output the couting
             if rank == 0:
-                self.counting_data.save_counting(self.fout_path, overwrite=overwrite)
+                if self.fout_path:
+                    self.counting_data.save_counting(self.fout_path, overwrite=overwrite)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)

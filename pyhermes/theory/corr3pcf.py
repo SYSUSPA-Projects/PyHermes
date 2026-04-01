@@ -375,8 +375,9 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"The time for 3PCF (pos-parallel): {t_end - t_start:.4f} sec")
 
                 # Save
-                self.corr3pcf_data.saveflag = True
-                self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
+                if self.fout_path:
+                    self.corr3pcf_data.saveflag = True
+                    self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
 

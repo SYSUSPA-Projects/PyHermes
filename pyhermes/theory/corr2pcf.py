@@ -183,8 +183,9 @@ class Corr_2PCF(TaskBase):
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
                 # Output the 2pcf
-                self.corr2pcf_data.saveflag = True
-                self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite) 
+                if self.fout_path:
+                    self.corr2pcf_data.saveflag = True
+                    self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite) 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
