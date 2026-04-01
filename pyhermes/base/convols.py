@@ -193,7 +193,8 @@ class Convols(TaskBase):
                 # Here we dont conv any window, just keep the orig convols_data
                 self.convols_data.epsilon = _epsilon * self.NormFactor
                 # Output the convols_data
-                self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
+                if self.fout_path:
+                    self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
