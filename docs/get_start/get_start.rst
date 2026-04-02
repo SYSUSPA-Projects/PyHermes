@@ -1,15 +1,23 @@
 Getting Started
 ===============
 
-Dingding should provide examples of how to use PyHermes, i.e., a step-by-step guide on convols, counting, 2PCF, and 3PCF
+This section walks through the standard PyHermes workflow:
+
+1. create the multiresolution coefficient field with ``Convols``
+2. sample the field with ``Counting`` if needed
+3. measure the 2PCF with ``Corr_2PCF``
+4. measure the 3PCF with ``Corr_3PCF``
+5. optionally run the full workflow from a single parameter file
+
+The examples in this section match the scripts shipped in the repository under
+``examples/``.
 
 .. toctree::
    :maxdepth: 1
-   :caption: Examples:
+   :caption: Tutorials
    
-   convols/convols.rst
-   counting/counting.rst
-   corr_2pcf/corr_2pcf.rst
-   corr_3pcf/corr_3pcf.rst
-   allinone.rst
-   run_demo_sg.ipynb
+   convols/convols
+   counting/counting
+   corr_2pcf/corr_2pcf
+   corr_3pcf/corr_3pcf
+   allinone

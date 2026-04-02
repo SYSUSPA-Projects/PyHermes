@@ -1,35 +1,74 @@
 Counting
 ========
 
+``Counting`` evaluates the field on many random positions. This is useful for
+sampling local densities, estimating one-point distributions, and generating
+downstream summary statistics after a smoothing step.
 
-Counting should be displayed here.
+Example configuration
+---------------------
 
+The repository includes ``examples/configs/param_counting.yaml``:
 
-Users should prepare the parameter file in the format of ``JSON``. See example below, we create parameter file named `param_counting.json`:
+.. code-block:: yaml
 
+   Counting:
+      N_randoms: 10000000
+      convols_data_path: "./output/quijote_sfc.pkl"
+      fout_path: "./output/quijote_counting_sph20.pkl"
+      window:
+         type: sphere
+         len_args:
+            R: 20
 
+Minimal Python driver
+---------------------
 
-.. code-block:: json
+.. code-block:: python
 
-    {
-    "Counting": {
-        "n_tasks": 100,
-        "deltac_in_path": "./convols_L512_r5_pywt.npy",
-        "fout_dir": "./"
-      }
-    }
+   from pyhermes.theory.counting import Counting
+   from pyhermes.param.parambase import read_param
 
-for the defination of these parameters, please see :ref:.
+   counting_params = read_param(config_path="./configs/param_counting.yaml")
+   counting = Counting(param_task=counting_params)
+   counting.run(overwrite=True)
 
-Then we create python script here, i.g., `run_pyhermes_counting.py`
+Run it
+------
 
+From the ``examples`` directory:
 
-.. code:: python
+.. code-block:: bash
 
-    from pyhermes.theory.counting import Counting
-    from pyhermes.param.parambase import read_param
+   python run_counting.py
 
-    param_input = read_param()
-    Counting(param_task=param_input).run()
+Or with MPI:
 
-then run the command in terminal:
+.. code-block:: bash
+
+   mpirun -np 8 python run_counting.py
+
+Output
+------
+
+The example writes:
+
+.. code-block:: text
+
+   ./output/quijote_counting_sph20.pkl
+
+Key parameters
+--------------
+
+- ``N_randoms``: number of random sampling points
+- ``convols_data_path``: path to the ``Convols`` output file
+- ``fout_path``: output path for counting results
+- ``window.type``: smoothing window type
+- ``window.len_args``: window scale parameters, for example ``R`` for a sphere
+- ``threads``: number of threads per MPI rank
+
+Notes
+-----
+
+``Counting`` requires a previously generated ``Convols`` field. Run
+:doc:`../convols/convols` first if the input file does not yet exist.

@@ -1,21 +1,16 @@
-.. PyHermes documentation master file, created by
-   sphinx-quickstart on Wed Aug 21 10:29:34 2024.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
 PyHermes documentation
 ======================
 
-Add your content using ``reStructuredText`` syntax. See the
-`reStructuredText <https://www.sphinx-doc.org/en/master/usage/restructuredtext/index.html>`_
-documentation for details.
-
+PyHermes is a Python package for high-performance cosmic statistics on large
+particle datasets. The documentation here focuses on the practical workflow:
+install the package, prepare a configuration file, build the multiresolution
+field, and then run counting, 2PCF, or 3PCF analyses.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Guide
 
    intro
    install
-   param/param.rst
-   get_start/get_start.rst
+   get_start/get_start
+   param/param

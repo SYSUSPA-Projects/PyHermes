@@ -3,26 +3,41 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+from importlib.util import find_spec
+
+import pyhermes
+
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'PyHermes'
-copyright = '2024, PyHermes Team'
+copyright = '2026, PyHermes Team'
 author = 'PyHermes Team'
-release = 'https://github.com/pyhermes.git'
+release = pyhermes.__version__
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
 
-extensions = [
+_optional_extensions = [
     'sphinx_copybutton',
     'recommonmark',
     'sphinx_markdown_tables',
     'notfound.extension',
     'versionwarning.extension',
     'nbsphinx',
-    'sphinx-prompt',
+    'sphinx_prompt',
 ]
+
+
+def _extension_available(name):
+    try:
+        return find_spec(name) is not None
+    except ModuleNotFoundError:
+        base_name = name.split('.')[0]
+        return find_spec(base_name) is not None
+
+
+extensions = [ext for ext in _optional_extensions if _extension_available(ext)]
 
 # Sphinx extensions:
 # https://sphinx-extensions.readthedocs.io/en/latest/
