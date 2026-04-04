@@ -662,12 +662,12 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
 
 
 def combine_multipole_m_terms(m_values, l):
-    coeff = m_values[l]
+    coeff = complex(m_values[0])
     for m in range(1, l + 1):
-        coeff += ((-1) ** m) * m_values[l + m]
-        coeff += ((-1) ** (-m)) * np.conj(m_values[l - m])
+        coeff += ((-1) ** m) * complex(m_values[m])
+        coeff += ((-1) ** (-m)) * np.conj(complex(m_values[m]))
     coeff *= (-1) ** l
-    return (4.0 * np.pi) * coeff.real
+    return coeff.real
 
 
 def _cache_file_path(cache_dir, radius, l, m):
@@ -743,19 +743,21 @@ def calc_DDD_multipole(
             cache_multipole_fields=cache_multipole_fields,
             cache_dir=cache_dir,
         )
-        m_values = np.empty(2 * l + 1, dtype=np.complex128)
-        for idx, m in enumerate(range(-l, l + 1)):
-            data_r1_gpu = cuda.to_device(fields_r1[idx])
-            data_r2_gpu = cuda.to_device(fields_r2[idx])
+        m_values = np.empty(l + 1, dtype=np.complex128)
+        for m in range(0, l + 1):
+            idx_r1 = m + l
+            idx_r2 = l if m == 0 else l - m
+            data_r1_gpu = cuda.to_device(fields_r1[idx_r1])
+            data_r2_gpu = cuda.to_device(fields_r2[idx_r2])
             compute_3d_result_gpu[blocks_per_grid, threads_per_block](
                 data_gpu, data_r1_gpu, data_r2_gpu, gamma_gpu, result_gpu, deltaD1.L, deltaD1.PhiSupport
             )
             cuda.synchronize()
             result = result_gpu.copy_to_host()
-            m_values[idx] = np.sum(result)
+            m_values[m] = (4.0 * np.pi) * np.sum(result) / rho3
             del data_r1_gpu
             del data_r2_gpu
-        zeta_l[l] = combine_multipole_m_terms(m_values, l) / rho3
+        zeta_l[l] = combine_multipole_m_terms(m_values, l)
         del fields_r1
         del fields_r2
 
