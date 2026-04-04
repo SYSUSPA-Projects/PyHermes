@@ -16,6 +16,7 @@ PyHermes currently provides task-level entry points for:
 - counting / sampling the field on random points
 - computing the 2-point correlation function
 - computing the 3-point correlation function
+- computing the multipole moments of the 3-point correlation function
 - running in single-process mode by default, with optional MPI acceleration through `mpi4py`
 
 ## Installation
@@ -140,6 +141,7 @@ The [`examples`](./examples) directory contains runnable task-level examples:
 - [`examples/run_counting.py`](./examples/run_counting.py): sample the smoothed field on many random points
 - [`examples/run_2pcf.py`](./examples/run_2pcf.py): compute the 2PCF
 - [`examples/run_3pcf.py`](./examples/run_3pcf.py): compute the 3PCF
+- [`examples/run_3pcf_multipole.py`](./examples/run_3pcf_multipole.py): compute 3PCF multipoles
 - [`examples/quick_start.ipynb`](./examples/quick_start.ipynb): notebook-based quick start
 - [`examples/full_example.ipynb`](./examples/full_example.ipynb): end-to-end notebook example
 
@@ -149,6 +151,7 @@ Example configuration files are stored in [`examples/configs`](./examples/config
 - `param_counting.yaml`
 - `param_2pcf.yaml`
 - `param_3pcf.yaml`
+- `param_3pcf_multipole.yaml`
 
 ## Running the Examples
 
@@ -160,6 +163,7 @@ python run_convols.py
 python run_counting.py
 python run_2pcf.py
 python run_3pcf.py
+python run_3pcf_multipole.py
 ```
 
 To run with MPI:
@@ -169,6 +173,7 @@ mpirun -np 8 python run_convols.py
 mpirun -np 8 python run_counting.py
 mpirun -np 8 python run_2pcf.py
 mpirun -np 8 python run_3pcf.py
+python run_3pcf_multipole.py
 ```
 
 If `mpi4py` is not installed, PyHermes still works in single-process mode.

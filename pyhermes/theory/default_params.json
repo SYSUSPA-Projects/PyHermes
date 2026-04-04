@@ -66,5 +66,37 @@
 		"n_rand": 5000000,
 		"base_seed": 42,
 		"threads": 1
+	},
+	"Corr_3PCF_Multipole": {
+		"convols_data_path": "",
+		"fout_path": "",
+		"window": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"window3": {
+			"type": "",
+			"len_args": {},
+			"other_args": {}
+		},
+		"r1": 20.0,
+		"r2": 40.0,
+		"l_max": 4,
+		"gpu_device_id": 0,
+		"conv_batch_mode": "by_l",
+		"cache_multipole_fields": false,
+		"cache_dir": "",
+		"threads": 1
 	}
 }

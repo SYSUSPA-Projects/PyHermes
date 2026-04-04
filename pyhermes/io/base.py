@@ -25,7 +25,10 @@ class HermesData(object):
         else:
             self.threads = None
 
-    def load(self, f_in, read_convols=False, read_counting=False, read_2pcf=False, read_3pcf=False, single=True):
+    def load(
+        self, f_in, read_convols=False, read_counting=False, read_2pcf=False,
+        read_3pcf=False, read_3pcf_multipole=False, single=True
+    ):
         try:
             if single:
                 if self.rank == 0:
@@ -50,6 +53,10 @@ class HermesData(object):
                         extra_str = '3PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr3pcf(f_in)
+                    elif read_3pcf_multipole:
+                        extra_str = '3PCF Multipole '
+                        self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
+                        self._load_corr3pcf_multipole(f_in)
                     else:
                         extra_str = ''
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
@@ -61,7 +68,10 @@ class HermesData(object):
             self.logger.error(f"An error occurred while loading the file '{f_in}': {e}")
             func_util.safe_exit(1)
 
-    def save(self, f_out, save_convols=False, save_counting=False, save_2pcf=False, save_3pcf=False, single=True, overwrite=False):
+    def save(
+        self, f_out, save_convols=False, save_counting=False, save_2pcf=False,
+        save_3pcf=False, save_3pcf_multipole=False, single=True, overwrite=False
+    ):
         if single:
             if self.rank == 0:
                 f_out = check_fout(self, f_out, overwrite)
@@ -82,6 +92,10 @@ class HermesData(object):
                         extra_str = '3PCF '
                         self.logger.info(f'Writing {extra_str}data to ---> {f_out} <---')
                         self._save_corr3pcf(f_out)
+                    elif save_3pcf_multipole:
+                        extra_str = '3PCF Multipole '
+                        self.logger.info(f'Writing {extra_str}data to ---> {f_out} <---')
+                        self._save_corr3pcf_multipole(f_out)
                     else:
                         extra_str = ''
                         self.logger.info(f'Writing data to ---> {f_out} <---')

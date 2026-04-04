@@ -1,10 +1,12 @@
 import inspect
 import math
 import warnings
+from pathlib import Path
 
 import pywt
 import numpy as np
-from scipy.fft import rfftn, irfftn
+from scipy.fft import rfftn, irfftn, fftn, ifftn
+from scipy.special import spherical_jn, sph_harm
 from numba import cuda, int16, jit, njit, prange
 from numba.core.errors import NumbaExperimentalFeatureWarning
 
@@ -320,6 +322,13 @@ def specialized_convolution_3d(s, w, threads):
     return result_convol3d
 
 
+def specialized_convolution_3d_complex(s, w, threads):
+    sc = fftn(s, workers=threads)
+    sc *= w
+    result_convol3d = ifftn(sc, workers=threads)
+    return result_convol3d
+
+
 def power_spectrum(v, k0, k1, N_k, SampRate):
     s = spectrum_vectorized(v, k0, k1, N_k, SampRate)
     p = np.zeros(N_k + 1, dtype=np.double)
@@ -431,6 +440,326 @@ def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupp
 def third_side(r1, r2, theta):
     """Return r23 from (r1, r2, theta) using the law of cosines."""
     return np.sqrt(r1**2 + r2**2 - 2.0 * r1 * r2 * np.cos(theta))
+
+
+@njit
+def _k_norm(ki, kj, kk):
+    return math.sqrt(ki * ki + kj * kj + kk * kk)
+
+
+@njit
+def _phase_from_kR(ki, kj, kk, R):
+    return 2.0 * math.pi * _k_norm(ki, kj, kk) * R
+
+
+@njit
+def _angles_from_k(ki, kj, kk):
+    k = _k_norm(ki, kj, kk)
+    if k == 0.0:
+        return 0.0, 0.0, 0.0
+
+    mu = kk / k
+    if mu > 1.0:
+        mu = 1.0
+    elif mu < -1.0:
+        mu = -1.0
+
+    theta = math.acos(mu)
+    phi = math.atan2(kj, ki)
+    return k, theta, phi
+
+
+@njit
+def _factorial_small(n):
+    out = 1.0
+    for i in range(2, n + 1):
+        out *= i
+    return out
+
+
+@njit
+def spherical_jn_numba(l, x):
+    if l < 0 or l > 7:
+        return np.nan
+
+    if x == 0.0:
+        if l == 0:
+            return 1.0
+        return 0.0
+
+    sx = math.sin(x)
+    cx = math.cos(x)
+    j0 = sx / x
+    if l == 0:
+        return j0
+
+    j1 = sx / (x * x) - cx / x
+    if l == 1:
+        return j1
+
+    jm1 = j0
+    jcur = j1
+    for ell in range(1, l):
+        jnext = ((2.0 * ell + 1.0) / x) * jcur - jm1
+        jm1 = jcur
+        jcur = jnext
+
+    return jcur
+
+
+@njit
+def assoc_legendre_numba(l, m, x):
+    if l < 0 or l > 7:
+        return np.nan
+    if m < 0 or m > l:
+        return np.nan
+
+    pmm = 1.0
+    if m > 0:
+        somx2 = math.sqrt(max(0.0, 1.0 - x * x))
+        fact = 1.0
+        for _ in range(m):
+            pmm *= -fact * somx2
+            fact += 2.0
+
+    if l == m:
+        return pmm
+
+    pmmp1 = x * (2.0 * m + 1.0) * pmm
+    if l == m + 1:
+        return pmmp1
+
+    pll_minus2 = pmm
+    pll_minus1 = pmmp1
+    pll = 0.0
+    for ell in range(m + 2, l + 1):
+        pll = ((2.0 * ell - 1.0) * x * pll_minus1 - (ell + m - 1.0) * pll_minus2) / (ell - m)
+        pll_minus2 = pll_minus1
+        pll_minus1 = pll
+
+    return pll
+
+
+@njit
+def spherical_harmonic_numba(l, m, ki, kj, kk):
+    if l < 0 or l > 7:
+        return np.nan + 0.0j
+    if abs(m) > l:
+        return 0.0 + 0.0j
+
+    k, theta, phi = _angles_from_k(ki, kj, kk)
+    if k == 0.0:
+        if l == 0 and m == 0:
+            return 1.0 / math.sqrt(4.0 * math.pi) + 0.0j
+        return 0.0 + 0.0j
+
+    x = math.cos(theta)
+    if m >= 0:
+        P = assoc_legendre_numba(l, m, x)
+        norm = math.sqrt(
+            (2.0 * l + 1.0) / (4.0 * math.pi) *
+            _factorial_small(l - m) / _factorial_small(l + m)
+        )
+        phase = complex(math.cos(m * phi), math.sin(m * phi))
+        return norm * P * phase
+
+    mp = -m
+    ypos = spherical_harmonic_numba(l, mp, ki, kj, kk)
+    sign = -1.0 if (mp % 2 == 1) else 1.0
+    return sign * np.conj(ypos)
+
+
+@njit
+def window_function_legendre_numba(ki, kj, kk, R, l, m):
+    if l < 0 or l > 7:
+        return np.nan + 0.0j
+    if abs(m) > l:
+        return 0.0 + 0.0j
+
+    phase = _phase_from_kR(ki, kj, kk, R)
+    jl = spherical_jn_numba(l, phase)
+    ylm = spherical_harmonic_numba(l, m, ki, kj, kk)
+    return jl * ylm
+
+
+def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
+    if use_fast and l <= 7:
+        return window_function_legendre_numba(ki, kj, kk, R, l, m)
+
+    if abs(m) > l:
+        return 0.0 + 0.0j
+
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0.0:
+        if l == 0 and m == 0:
+            return 1.0 / np.sqrt(4.0 * np.pi) + 0.0j
+        return 0.0 + 0.0j
+
+    theta = np.arccos(np.clip(kk / k, -1.0, 1.0))
+    phi = np.arctan2(kj, ki)
+    phase = 2.0 * np.pi * k * R
+    return spherical_jn(l, phase) * sph_harm(m, l, phi, theta)
+
+
+@njit
+def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    window_array = np.zeros((L, L, L), dtype=np.complex128)
+    for i in range(-L, L):
+        ii = i % L
+        pi = PowerPhi[abs(i)]
+        for j in range(-L, L):
+            jj = j % L
+            pij = pi * PowerPhi[abs(j)]
+            for k in range(-L, L):
+                kk = k % L
+                window_array[ii, jj, kk] += (
+                    pij
+                    * PowerPhi[abs(k)]
+                    * window_function_legendre_numba(i * DeltaXi, j * DeltaXi, k * DeltaXi, rescaleR, l, m)
+                )
+    return window_array
+
+
+def calculate_window_array_legendre(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    return calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)
+
+
+def cal_gamma(phi_data, PhiSupport, SampRate):
+    gamma = np.zeros((PhiSupport, PhiSupport))
+    for l1 in range(PhiSupport):
+        for l2 in range(PhiSupport):
+            rolled_phi1 = np.roll(phi_data, l1 * SampRate)
+            rolled_phi2 = np.roll(phi_data, l2 * SampRate)
+            gamma[l1, l2] = np.sum(phi_data * rolled_phi1 * rolled_phi2) / SampRate
+    return gamma
+
+
+@cuda.jit
+def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
+    lx, ly, lz = cuda.grid(3)
+    if lx < L and ly < L and lz < L:
+        sum_over_l1 = 0.0 + 0.0j
+        for l1x in range(PhiSupport):
+            index_l1x = (lx - l1x) % L
+            for l1y in range(PhiSupport):
+                index_l1y = (ly - l1y) % L
+                for l1z in range(PhiSupport):
+                    index_l1z = (lz - l1z) % L
+                    sum_over_l2 = 0.0 + 0.0j
+                    for l2x in range(PhiSupport):
+                        index_l2x = (lx - l2x) % L
+                        res_y = 0.0 + 0.0j
+                        for l2y in range(PhiSupport):
+                            index_l2y = (ly - l2y) % L
+                            res_z = 0.0 + 0.0j
+                            for l2z in range(PhiSupport):
+                                index_l2z = (lz - l2z) % L
+                                res_z += Gamma[l1z, l2z] * data_R2[index_l2x, index_l2y, index_l2z]
+                            res_y += Gamma[l1y, l2y] * res_z
+                        sum_over_l2 += Gamma[l1x, l2x] * res_y
+                    sum_over_l1 += data_R1[index_l1x, index_l1y, index_l1z] * sum_over_l2
+        result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
+
+
+def combine_multipole_m_terms(m_values, l):
+    coeff = m_values[l]
+    for m in range(1, l + 1):
+        coeff += ((-1) ** m) * m_values[l + m]
+        coeff += ((-1) ** (-m)) * np.conj(m_values[l - m])
+    coeff *= (-1) ** l
+    return (4.0 * np.pi) * coeff.real
+
+
+def _cache_file_path(cache_dir, radius, l, m):
+    sign = "m" if m >= 0 else "m_minus"
+    suffix = f"{m}" if m >= 0 else f"{-m}"
+    return Path(cache_dir) / f"R{radius:g}_l{l}_{sign}{suffix}.npy"
+
+
+def _stream_convolution_fields(field, radius, l, threads, cache_multipole_fields=False, cache_dir=""):
+    delta_xi = 1.0 / field.L
+    power_phi = power_spectrum(field.phi_data, 0, field.bandwidth, field.L * field.bandwidth, field.SampRate)
+    rescaleR = radius * field.ScaleFactor
+    m_fields = []
+    for m in range(-l, l + 1):
+        cached = None
+        cache_path = None
+        if cache_multipole_fields and cache_dir:
+            cache_path = _cache_file_path(cache_dir, radius, l, m)
+            if cache_path.exists():
+                cached = np.load(cache_path)
+        if cached is None:
+            window_array = calculate_window_array_legendre(field.L, delta_xi, power_phi, rescaleR, l, m)
+            cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
+            if cache_path is not None:
+                cache_path.parent.mkdir(parents=True, exist_ok=True)
+                np.save(cache_path, cached)
+        m_fields.append(np.ascontiguousarray(cached, dtype=np.complex128))
+    return m_fields
+
+
+def calc_DDD_multipole(
+    deltaD1, deltaD2, deltaD3,
+    r1, r2, l_max,
+    gpu_device_id=0,
+    cache_multipole_fields=False,
+    cache_dir="",
+    threads=1,
+):
+    if not cuda.is_available():
+        raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
+
+    if l_max < 0:
+        raise ValueError("l_max must be non-negative.")
+    if l_max > 7:
+        raise ValueError("The current fast multipole implementation supports l_max <= 7.")
+
+    cuda.select_device(int(gpu_device_id))
+    gamma = np.ascontiguousarray(cal_gamma(deltaD1.phi_data, deltaD1.PhiSupport, deltaD1.SampRate), dtype=np.float64)
+    gamma_gpu = cuda.to_device(gamma)
+    data_gpu = cuda.to_device(np.ascontiguousarray(deltaD1.epsilon, dtype=np.float64))
+    result_gpu = cuda.device_array(deltaD1.epsilon.shape, dtype=np.complex128)
+
+    l_values = np.arange(l_max + 1, dtype=np.int32)
+    zeta_l = np.empty(l_max + 1, dtype=np.float64)
+
+    rho = 1.0 / deltaD1.V
+    rho3 = rho ** 3
+    threads_per_block = (8, 8, 8)
+    blocks_per_grid = (
+        (deltaD1.L + threads_per_block[0] - 1) // threads_per_block[0],
+        (deltaD1.L + threads_per_block[1] - 1) // threads_per_block[1],
+        (deltaD1.L + threads_per_block[2] - 1) // threads_per_block[2],
+    )
+
+    for l in range(l_max + 1):
+        fields_r1 = _stream_convolution_fields(
+            deltaD2, r1, l, threads=threads,
+            cache_multipole_fields=cache_multipole_fields,
+            cache_dir=cache_dir,
+        )
+        fields_r2 = _stream_convolution_fields(
+            deltaD3, r2, l, threads=threads,
+            cache_multipole_fields=cache_multipole_fields,
+            cache_dir=cache_dir,
+        )
+        m_values = np.empty(2 * l + 1, dtype=np.complex128)
+        for idx, m in enumerate(range(-l, l + 1)):
+            data_r1_gpu = cuda.to_device(fields_r1[idx])
+            data_r2_gpu = cuda.to_device(fields_r2[idx])
+            compute_3d_result_gpu[blocks_per_grid, threads_per_block](
+                data_gpu, data_r1_gpu, data_r2_gpu, gamma_gpu, result_gpu, deltaD1.L, deltaD1.PhiSupport
+            )
+            cuda.synchronize()
+            result = result_gpu.copy_to_host()
+            m_values[idx] = np.sum(result)
+            del data_r1_gpu
+            del data_r2_gpu
+        zeta_l[l] = combine_multipole_m_terms(m_values, l) / rho3
+        del fields_r1
+        del fields_r2
+
+    return l_values, zeta_l
 
 
 @njit
@@ -685,4 +1014,3 @@ def calc_DDD_RDD_mc_pos_center_legacy(
 #         sum_res += data[m] * (-1) ** m + np.conjugate(data[m]) * (-1) ** (-m)
 #     sum_res += data[0]
 #     return sum_res
-

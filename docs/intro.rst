@@ -16,6 +16,8 @@ What PyHermes provides
 - A ``Corr_2PCF`` task for two-point correlation measurements over a radial grid.
 - A ``Corr_3PCF`` task for three-point correlation measurements with configurable
   triangle geometry and center sampling.
+- A ``Corr_3PCF_Multipole`` task for multipole measurements of the three-point
+  correlation function at fixed ``(r1, r2)``.
 - Native parameter-file support for both YAML and JSON5.
 - Optional MPI acceleration through ``mpi4py``.
 
@@ -31,6 +33,7 @@ The usual PyHermes workflow is:
    - ``Counting`` for random-point sampling and one-point statistics.
    - ``Corr_2PCF`` for two-point correlation measurements.
    - ``Corr_3PCF`` for three-point correlation measurements.
+   - ``Corr_3PCF_Multipole`` for multipole moments of the 3PCF.
 
 4. Save task outputs as pickle-based PyHermes data products.
 

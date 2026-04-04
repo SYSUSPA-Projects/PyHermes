@@ -51,6 +51,14 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
       n_rand: 1000000
       base_seed: 42
 
+   Corr_3PCF_Multipole:
+      convols_data_path: "./output/quijote_sfc.pkl"
+      fout_path: "./output/quijote_3pcf_multipole.pkl"
+      r1: 20.0
+      r2: 40.0
+      l_max: 4
+      gpu_device_id: 0
+
 Driver script
 -------------
 
@@ -60,6 +68,7 @@ Driver script
    from pyhermes.theory.counting import Counting
    from pyhermes.theory.corr2pcf import Corr_2PCF
    from pyhermes.theory.corr3pcf import Corr_3PCF
+   from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
    from pyhermes.param.parambase import read_param
 
    params = read_param(config_path="./param_multi.yaml")
@@ -76,6 +85,9 @@ Driver script
    corr3pcf = Corr_3PCF(param_task=params)
    corr3pcf.run(overwrite=True)
 
+   corr3pcf_multipole = Corr_3PCF_Multipole(param_task=params)
+   corr3pcf_multipole.run(overwrite=True)
+
 When to use this pattern
 ------------------------
 
@@ -87,4 +99,4 @@ Use the all-in-one style when:
 
 If you prefer simpler, task-specific examples, start with the dedicated pages
 for :doc:`convols/convols`, :doc:`counting/counting`, :doc:`corr_2pcf/corr_2pcf`,
-and :doc:`corr_3pcf/corr_3pcf`.
+ :doc:`corr_3pcf/corr_3pcf`, and :doc:`corr_3pcf_multipole/corr_3pcf_multipole`.
