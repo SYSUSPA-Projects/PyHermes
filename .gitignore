@@ -2,7 +2,7 @@
 **/*.npy
 **/*.bin
 examples/output/
-examples/logs/
+examples/logs/*.log
 
 ## remove the python cache to avoid conflicts
 **/__pycache__/
