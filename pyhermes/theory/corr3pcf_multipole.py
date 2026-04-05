@@ -110,24 +110,29 @@ class Corr_3PCF_Multipole(TaskBase):
                 deltaD2 = self.convols_data2 - R
                 deltaD3 = self.convols_data3 - R
 
-                def _log_l_progress(l, l_max, zeta_l, l_elapsed_sec, completed_m_tasks, total_m_tasks):
+                def _log_l_progress(l, l_max, zeta_l, elapsed_sec, completed_m_tasks, total_m_tasks):
                     progress = (completed_m_tasks / total_m_tasks) * 100.0
                     self.logger.info(
-                        f" l={l:2d}/{l_max:2d} done | zeta_l={zeta_l:.8e} | "
-                        f"l_elapsed={l_elapsed_sec:.2f} sec | progress={progress:6.2f}% "
+                        f" l={l:2d}/{l_max:2d} done | zeta_l={zeta_l:.5e} | "
+                        f"elapsed={elapsed_sec:.2f} sec | progress={progress:6.2f}% "
                         f"({completed_m_tasks}/{total_m_tasks} m-tasks)"
                     )
 
-                def _log_m_progress(l, l_max, m, m_max, value, m_elapsed_sec, completed_m_tasks, total_m_tasks):
+                def _format_complex(value):
+                    real = float(value.real)
+                    imag = float(value.imag)
+                    if abs(imag) < 1e-12 * max(1.0, abs(real)):
+                        return f"{real:.5e}"
+                    return f"({real:.5e}, {imag:.5e})"
+
+                def _log_m_progress(l, l_max, m, m_max, value, elapsed_sec, completed_m_tasks, total_m_tasks):
                     progress = (completed_m_tasks / total_m_tasks) * 100.0
                     msg = (
                         f"   m={m:2d}/{m_max:2d} in l={l:2d}/{l_max:2d} | "
-                        f"value={value.real:.8e}"
+                        f"value={_format_complex(value)}"
                     )
-                    if abs(value.imag) > 0:
-                        msg += f"{value.imag:+.8e}j"
                     msg += (
-                        f" | m_elapsed={m_elapsed_sec:.2f} sec | "
+                        f" | elapsed={elapsed_sec:.2f} sec | "
                         f"progress={progress:6.2f}% ({completed_m_tasks}/{total_m_tasks})"
                     )
                     print(msg, flush=True)

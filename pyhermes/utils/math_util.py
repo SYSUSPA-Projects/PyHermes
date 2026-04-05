@@ -772,7 +772,7 @@ def calc_DDD_multipole(
                     m=m,
                     m_max=l,
                     value=m_values[m],
-                    m_elapsed_sec=time.perf_counter() - t_m_start,
+                    elapsed_sec=time.perf_counter() - t_m_start,
                     completed_m_tasks=completed_m_tasks,
                     total_m_tasks=total_m_tasks,
                 )
@@ -784,7 +784,7 @@ def calc_DDD_multipole(
                 l=l,
                 l_max=l_max,
                 zeta_l=float(zeta_l[l]),
-                l_elapsed_sec=time.perf_counter() - t_l_start,
+                elapsed_sec=time.perf_counter() - t_l_start,
                 completed_m_tasks=completed_m_tasks,
                 total_m_tasks=total_m_tasks,
             )
