@@ -26,7 +26,6 @@ The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
       r2: 40.0
       l_max: 4
       gpu_device_id: 0
-      conv_batch_mode: "by_l"
 
 Minimal Python driver
 ---------------------
@@ -55,7 +54,6 @@ Key parameters
 - ``r1`` and ``r2``: the two side lengths defining the multipole family
 - ``l_max``: maximum multipole order to compute
 - ``gpu_device_id``: CUDA device index used for the summation stage
-- ``conv_batch_mode``: streamed convolution scheduling strategy; currently ``"by_l"``
 - ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
 
 Notes

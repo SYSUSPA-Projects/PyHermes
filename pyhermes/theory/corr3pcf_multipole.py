@@ -32,7 +32,6 @@ class Corr_3PCF_Multipole(TaskBase):
         self.r2 = float(self.task_params["r2"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
-        self.conv_batch_mode = self.task_params["conv_batch_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
         self.threads = int(self.task_params["threads"])
@@ -45,10 +44,6 @@ class Corr_3PCF_Multipole(TaskBase):
                 t0 = time.perf_counter()
 
             self.format_params()
-            if self.conv_batch_mode != "by_l":
-                self.logger.error(f"Unsupported conv_batch_mode='{self.conv_batch_mode}'. Only 'by_l' is implemented.")
-                func_util.safe_exit(1)
-
             self.corr3pcf_multipole_data = Corr3PCFMultipoleData()
             convols_info1_serialized = None
             convols_info2_serialized = None
