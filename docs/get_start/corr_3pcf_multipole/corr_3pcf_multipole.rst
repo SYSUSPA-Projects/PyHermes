@@ -26,6 +26,7 @@ The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
       r2: 40.0
       l_max: 4
       gpu_device_id: 0
+      field_mode: "delta"
 
 Minimal Python driver
 ---------------------
@@ -54,6 +55,7 @@ Key parameters
 - ``r1`` and ``r2``: the two side lengths defining the multipole family
 - ``l_max``: maximum multipole order to compute
 - ``gpu_device_id``: CUDA device index used for the summation stage
+- ``field_mode``: choose ``"raw"`` to save ``ddd_l`` from ``<DDD>`` or ``"delta"`` to save ``delta_ddd_l`` and ``zeta_l``
 - ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
 
 Notes

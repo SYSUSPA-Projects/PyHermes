@@ -94,6 +94,7 @@
 		"r2": 40.0,
 		"l_max": 4,
 		"gpu_device_id": 0,
+		"field_mode": "delta",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
 		"threads": 1

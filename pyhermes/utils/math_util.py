@@ -724,7 +724,7 @@ def calc_DDD_multipole(
     result_gpu = cuda.device_array(deltaD1.epsilon.shape, dtype=np.complex128)
 
     l_values = np.arange(l_max + 1, dtype=np.int32)
-    zeta_l = np.empty(l_max + 1, dtype=np.float64)
+    ddd_l = np.empty(l_max + 1, dtype=np.float64)
     total_m_tasks = (l_max + 1) * (l_max + 2) // 2
     completed_m_tasks = 0
 
@@ -761,7 +761,7 @@ def calc_DDD_multipole(
             )
             cuda.synchronize()
             result = result_gpu.copy_to_host()
-            m_values[m] = (4.0 * np.pi) * np.sum(result) / rho3
+            m_values[m] = (4.0 * np.pi) * np.sum(result)
             del data_r1_gpu
             del data_r2_gpu
             if m_progress_callback is not None:
@@ -776,20 +776,21 @@ def calc_DDD_multipole(
                     completed_m_tasks=completed_m_tasks,
                     total_m_tasks=total_m_tasks,
                 )
-        zeta_l[l] = combine_multipole_m_terms(m_values, l)
+        ddd_l[l] = combine_multipole_m_terms(m_values, l)
         del fields_r1
         del fields_r2
         if progress_callback is not None:
             progress_callback(
                 l=l,
                 l_max=l_max,
-                zeta_l=float(zeta_l[l]),
+                ddd_l=float(ddd_l[l]),
+                zeta_l=float(ddd_l[l] / rho3),
                 elapsed_sec=time.perf_counter() - t_l_start,
                 completed_m_tasks=completed_m_tasks,
                 total_m_tasks=total_m_tasks,
             )
 
-    return l_values, zeta_l
+    return l_values, ddd_l
 
 
 @njit

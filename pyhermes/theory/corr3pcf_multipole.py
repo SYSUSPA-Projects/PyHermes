@@ -32,6 +32,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.r2 = float(self.task_params["r2"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
+        self.field_mode = self.task_params["field_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
         self.threads = int(self.task_params["threads"])
@@ -101,14 +102,26 @@ class Corr_3PCF_Multipole(TaskBase):
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF multipole ...")
                 R = 1.0 / self.convols_data1.V
-                deltaD1 = self.convols_data1 - R
-                deltaD2 = self.convols_data2 - R
-                deltaD3 = self.convols_data3 - R
+                if self.field_mode == "raw":
+                    field1 = self.convols_data1
+                    field2 = self.convols_data2
+                    field3 = self.convols_data3
+                elif self.field_mode == "delta":
+                    field1 = self.convols_data1 - R
+                    field2 = self.convols_data2 - R
+                    field3 = self.convols_data3 - R
+                else:
+                    self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
+                    func_util.safe_exit(1)
 
-                def _log_l_progress(l, l_max, zeta_l, elapsed_sec, completed_m_tasks, total_m_tasks):
+                def _log_l_progress(l, l_max, ddd_l, zeta_l, elapsed_sec, completed_m_tasks, total_m_tasks):
                     progress = (completed_m_tasks / total_m_tasks) * 100.0
+                    if self.field_mode == "raw":
+                        stat_str = f"ddd_l={ddd_l:.5e}"
+                    else:
+                        stat_str = f"delta_ddd_l={ddd_l:.5e} | zeta_l={zeta_l:.5e}"
                     self.logger.info(
-                        f" l={l:2d}/{l_max:2d} done | zeta_l={zeta_l:.5e} | "
+                        f" l={l:2d}/{l_max:2d} done | {stat_str} | "
                         f"elapsed={elapsed_sec:.2f} sec | progress={progress:6.2f}% "
                         f"({completed_m_tasks}/{total_m_tasks} m-tasks)"
                     )
@@ -132,8 +145,8 @@ class Corr_3PCF_Multipole(TaskBase):
                     )
                     print(msg, flush=True)
 
-                l_arr, zeta_l = math_util.calc_DDD_multipole(
-                    deltaD1, deltaD2, deltaD3,
+                l_arr, multipole_l = math_util.calc_DDD_multipole(
+                    field1, field2, field3,
                     self.r1, self.r2, self.l_max,
                     gpu_device_id=self.gpu_device_id,
                     cache_multipole_fields=self.cache_multipole_fields,
@@ -145,7 +158,14 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.corr3pcf_multipole_data.r1 = self.r1
                 self.corr3pcf_multipole_data.r2 = self.r2
                 self.corr3pcf_multipole_data.l = l_arr
-                self.corr3pcf_multipole_data.zeta_l = zeta_l
+                if self.field_mode == "raw":
+                    self.corr3pcf_multipole_data.ddd_l = multipole_l
+                    self.corr3pcf_multipole_data.delta_ddd_l = None
+                    self.corr3pcf_multipole_data.zeta_l = None
+                else:
+                    self.corr3pcf_multipole_data.ddd_l = None
+                    self.corr3pcf_multipole_data.delta_ddd_l = multipole_l
+                    self.corr3pcf_multipole_data.zeta_l = multipole_l / (R ** 3)
 
                 if self.fout_path:
                     self.corr3pcf_multipole_data.saveflag = True

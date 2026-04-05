@@ -14,6 +14,8 @@ class Corr3PCFMultipoleData(HermesData):
         self.r1 = None
         self.r2 = None
         self.l = None
+        self.ddd_l = None
+        self.delta_ddd_l = None
         self.zeta_l = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
@@ -34,11 +36,14 @@ class Corr3PCFMultipoleData(HermesData):
         with open(f_in, "rb") as f:
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             dataset = pickle.loads(serialized_data.tobytes())
-            for key in ["r1", "r2", "l", "zeta_l"]:
+            for key in ["r1", "r2", "l"]:
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
                 setattr(self, key, dataset[key])
+            self.ddd_l = dataset.get("ddd_l")
+            self.delta_ddd_l = dataset.get("delta_ddd_l")
+            self.zeta_l = dataset.get("zeta_l")
             for i in range(1, 4):
                 _convols_info = dataset.get(f"convols_info{i}")
                 if _convols_info:
@@ -65,6 +70,8 @@ class Corr3PCFMultipoleData(HermesData):
             "r1": self.r1,
             "r2": self.r2,
             "l": self.l,
+            "ddd_l": self.ddd_l,
+            "delta_ddd_l": self.delta_ddd_l,
             "zeta_l": self.zeta_l,
         }
         _serialized_data = pickle.dumps(dataset, protocol=4)
