@@ -1,5 +1,6 @@
 import inspect
 import math
+import time
 import warnings
 from pathlib import Path
 
@@ -705,6 +706,8 @@ def calc_DDD_multipole(
     cache_multipole_fields=False,
     cache_dir="",
     threads=1,
+    progress_callback=None,
+    m_progress_callback=None,
 ):
     if not cuda.is_available():
         raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
@@ -733,6 +736,7 @@ def calc_DDD_multipole(
     )
 
     for l in range(l_max + 1):
+        t_l_start = time.perf_counter()
         fields_r1 = _stream_convolution_fields(
             deltaD2, r1, l, threads=threads,
             cache_multipole_fields=cache_multipole_fields,
@@ -745,6 +749,7 @@ def calc_DDD_multipole(
         )
         m_values = np.empty(l + 1, dtype=np.complex128)
         for m in range(0, l + 1):
+            t_m_start = time.perf_counter()
             idx_r1 = m + l
             idx_r2 = l if m == 0 else l - m
             data_r1_gpu = cuda.to_device(fields_r1[idx_r1])
@@ -757,9 +762,25 @@ def calc_DDD_multipole(
             m_values[m] = (4.0 * np.pi) * np.sum(result) / rho3
             del data_r1_gpu
             del data_r2_gpu
+            if m_progress_callback is not None:
+                m_progress_callback(
+                    l=l,
+                    l_max=l_max,
+                    m=m,
+                    m_max=l,
+                    value=m_values[m],
+                    elapsed_sec=time.perf_counter() - t_m_start,
+                )
         zeta_l[l] = combine_multipole_m_terms(m_values, l)
         del fields_r1
         del fields_r2
+        if progress_callback is not None:
+            progress_callback(
+                l=l,
+                l_max=l_max,
+                zeta_l=float(zeta_l[l]),
+                elapsed_sec=time.perf_counter() - t_l_start,
+            )
 
     return l_values, zeta_l
 

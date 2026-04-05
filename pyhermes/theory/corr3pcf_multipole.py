@@ -109,6 +109,22 @@ class Corr_3PCF_Multipole(TaskBase):
                 deltaD1 = self.convols_data1 - R
                 deltaD2 = self.convols_data2 - R
                 deltaD3 = self.convols_data3 - R
+
+                def _log_l_progress(l, l_max, zeta_l, elapsed_sec):
+                    progress = ((l + 1) / (l_max + 1)) * 100.0
+                    self.logger.info(
+                        f" l={l:2d}/{l_max:2d} done | zeta_l={zeta_l:.8e} | "
+                        f"elapsed={elapsed_sec:.2f} sec | progress={progress:6.2f}%"
+                    )
+
+                def _log_m_progress(l, l_max, m, m_max, value, elapsed_sec):
+                    self.logger.info(
+                        f"   m={m:2d}/{m_max:2d} in l={l:2d}/{l_max:2d} | "
+                        f"value={value.real:.8e}"
+                        + (f"{value.imag:+.8e}j" if abs(value.imag) > 0 else "")
+                        + f" | elapsed={elapsed_sec:.2f} sec"
+                    )
+
                 l_arr, zeta_l = math_util.calc_DDD_multipole(
                     deltaD1, deltaD2, deltaD3,
                     self.r1, self.r2, self.l_max,
@@ -116,6 +132,8 @@ class Corr_3PCF_Multipole(TaskBase):
                     cache_multipole_fields=self.cache_multipole_fields,
                     cache_dir=self.cache_dir,
                     threads=self.threads,
+                    progress_callback=_log_l_progress,
+                    m_progress_callback=_log_m_progress,
                 )
                 self.corr3pcf_multipole_data.r1 = self.r1
                 self.corr3pcf_multipole_data.r2 = self.r2
