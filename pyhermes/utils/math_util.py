@@ -725,6 +725,8 @@ def calc_DDD_multipole(
 
     l_values = np.arange(l_max + 1, dtype=np.int32)
     zeta_l = np.empty(l_max + 1, dtype=np.float64)
+    total_m_tasks = (l_max + 1) * (l_max + 2) // 2
+    completed_m_tasks = 0
 
     rho = 1.0 / deltaD1.V
     rho3 = rho ** 3
@@ -763,13 +765,16 @@ def calc_DDD_multipole(
             del data_r1_gpu
             del data_r2_gpu
             if m_progress_callback is not None:
+                completed_m_tasks += 1
                 m_progress_callback(
                     l=l,
                     l_max=l_max,
                     m=m,
                     m_max=l,
                     value=m_values[m],
-                    elapsed_sec=time.perf_counter() - t_m_start,
+                    m_elapsed_sec=time.perf_counter() - t_m_start,
+                    completed_m_tasks=completed_m_tasks,
+                    total_m_tasks=total_m_tasks,
                 )
         zeta_l[l] = combine_multipole_m_terms(m_values, l)
         del fields_r1
@@ -779,7 +784,9 @@ def calc_DDD_multipole(
                 l=l,
                 l_max=l_max,
                 zeta_l=float(zeta_l[l]),
-                elapsed_sec=time.perf_counter() - t_l_start,
+                l_elapsed_sec=time.perf_counter() - t_l_start,
+                completed_m_tasks=completed_m_tasks,
+                total_m_tasks=total_m_tasks,
             )
 
     return l_values, zeta_l
