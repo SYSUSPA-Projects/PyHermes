@@ -17,6 +17,7 @@ The repository includes ``examples/configs/param_2pcf.yaml``:
       r_min: 1.0
       r_max: 150.0
       n_r: 30
+      field_mode: "delta"
 
 Minimal Python driver
 ---------------------
@@ -62,6 +63,7 @@ Key parameters
 - ``r_min``: minimum separation
 - ``r_max``: maximum separation
 - ``n_r``: number of radial bins
+- ``field_mode``: choose ``"delta"`` to compute with ``D-R`` and save ``delta_dd``, or ``"raw"`` to compute with ``D`` and save ``dd``
 - ``threads``: number of threads per MPI rank
 
 Notes

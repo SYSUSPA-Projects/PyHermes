@@ -4,3 +4,4 @@ Corr_2PCF:
    r_min: 1.0
    r_max: 150.0
    n_r: 30
+   field_mode: "delta"

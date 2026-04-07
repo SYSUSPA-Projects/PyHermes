@@ -30,6 +30,7 @@ class Corr_2PCF(TaskBase):
         # Parameters from json or input
         self.convols_data_path = self.task_params['convols_data_path']
         self.fout_path      = self.task_params['fout_path']
+        self.field_mode = self.task_params['field_mode']
         # self.threads        = int(self.task_params['threads'])
         win_params = self.task_params.get('window', None)
         win_params = win_params if win_params['type'] else None
@@ -118,6 +119,10 @@ class Corr_2PCF(TaskBase):
             comm.Barrier()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
+                self.logger.info(
+                    f"field_mode={self.field_mode}, n_r={self.n_r}, "
+                    f"r_min={self.r_min}, r_max={self.r_max}"
+                )
                 time_start = time.perf_counter()
             # Generate r_arr at rank0
             if rank == 0:
@@ -139,14 +144,25 @@ class Corr_2PCF(TaskBase):
             local_report_interval = max(1, len(r_sub_arr) // 10)
             # Init local 2pcf results
             local_xi = []
+            local_dd = []
             local_r = []
             R = 1 / _local_convols1.V
             RR = R ** 2
-            deltaD1 = _local_convols1 - R
-            deltaD2 = _local_convols2 - R
+            if self.field_mode == "delta":
+                field1 = _local_convols1 - R
+                field2 = _local_convols2 - R
+            elif self.field_mode == "raw":
+                field1 = _local_convols1
+                field2 = _local_convols2
+            else:
+                raise ValueError(f"Unknown field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             for i, radius in enumerate(r_sub_arr):
-                deltaDD_mean = calc_DD_mean_r(radius, deltaD1, deltaD2)
-                _xi = deltaDD_mean / RR
+                dd_mean = calc_DD_mean_r(radius, field1, field2)
+                if self.field_mode == "delta":
+                    _xi = dd_mean / RR
+                else:
+                    _xi = dd_mean / RR - 1.0
+                local_dd.append(dd_mean)
                 local_xi.append(_xi)
                 local_r.append(radius)
                 local_completed += 1
@@ -173,10 +189,18 @@ class Corr_2PCF(TaskBase):
             comm.Barrier()
             # Gathering to rank0
             gathered_xi = comm.gather(local_xi, root=0)
+            gathered_dd = comm.gather(local_dd, root=0)
             gathered_r = comm.gather(local_r, root=0)
             if rank == 0:
                 self.corr2pcf_data.xi = np.array([item for sublist in gathered_xi for item in sublist])
+                dd_arr = np.array([item for sublist in gathered_dd for item in sublist])
                 self.corr2pcf_data.r = np.array([item for sublist in gathered_r for item in sublist])
+                if self.field_mode == "delta":
+                    self.corr2pcf_data.dd = None
+                    self.corr2pcf_data.delta_dd = dd_arr
+                else:
+                    self.corr2pcf_data.dd = dd_arr
+                    self.corr2pcf_data.delta_dd = None
                 if not count_all:
                     progress = 100.
                     self.logger.info(f" Progress: {progress:6.2f}%")

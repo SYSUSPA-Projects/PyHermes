@@ -11,6 +11,8 @@ class Corr2PCFData(HermesData):
         data_path = kwargs.pop("data_path", None)
         self.corr2pcf_info = {}
         self.r = None
+        self.dd = None
+        self.delta_dd = None
         self.xi = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
@@ -41,6 +43,8 @@ class Corr2PCFData(HermesData):
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
                 setattr(self, key, dataset[key])
+            self.dd = dataset.get('dd')
+            self.delta_dd = dataset.get('delta_dd')
             # Assign the dictionary from the file to self.corr2pcf_info
             for i in range(1, 3):
                 _convols_info = dataset.get(f'convols_info{i}')
@@ -68,6 +72,8 @@ class Corr2PCFData(HermesData):
             'convols_info2': self.convols_info2,
             'corr2pcf_info': self.corr2pcf_info,
             'r': self.r,
+            'dd': self.dd,
+            'delta_dd': self.delta_dd,
             'xi': self.xi  # Include the actual data
         }
         # Save the dataset to the specified file
@@ -75,4 +81,3 @@ class Corr2PCFData(HermesData):
         _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
             np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
-
