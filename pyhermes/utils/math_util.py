@@ -677,9 +677,26 @@ def _cache_file_path(cache_dir, radius, l, m):
     return Path(cache_dir) / f"R{radius:g}_l{l}_{sign}{suffix}.npy"
 
 
-def _stream_convolution_fields(field, radius, l, threads, cache_multipole_fields=False, cache_dir=""):
-    delta_xi = 1.0 / field.L
-    power_phi = power_spectrum(field.phi_data, 0, field.bandwidth, field.L * field.bandwidth, field.SampRate)
+def _prepare_legendre_convolution_context(field):
+    return {
+        "delta_xi": 1.0 / field.L,
+        "power_phi": power_spectrum(field.phi_data, 0, field.bandwidth, field.L * field.bandwidth, field.SampRate),
+    }
+
+
+def _stream_convolution_fields(
+    field,
+    radius,
+    l,
+    threads,
+    cache_multipole_fields=False,
+    cache_dir="",
+    conv_context=None,
+):
+    if conv_context is None:
+        conv_context = _prepare_legendre_convolution_context(field)
+    delta_xi = conv_context["delta_xi"]
+    power_phi = conv_context["power_phi"]
     rescaleR = radius * field.ScaleFactor
     m_fields = []
     for m in range(-l, l + 1):
@@ -722,11 +739,15 @@ def calc_DDD_multipole(
     gamma_gpu = cuda.to_device(gamma)
     data_gpu = cuda.to_device(np.ascontiguousarray(deltaD1.epsilon, dtype=np.float64))
     result_gpu = cuda.device_array(deltaD1.epsilon.shape, dtype=np.complex128)
+    conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
+    conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)
 
     l_values = np.arange(l_max + 1, dtype=np.int32)
     ddd_l = np.empty(l_max + 1, dtype=np.float64)
     total_m_tasks = (l_max + 1) * (l_max + 2) // 2
     completed_m_tasks = 0
+    total_conv_elapsed = 0.0
+    total_sum_elapsed = 0.0
 
     rho = 1.0 / deltaD1.V
     rho3 = rho ** 3
@@ -739,16 +760,22 @@ def calc_DDD_multipole(
 
     for l in range(l_max + 1):
         t_l_start = time.perf_counter()
+        t_conv_start = time.perf_counter()
         fields_r1 = _stream_convolution_fields(
             deltaD2, r1, l, threads=threads,
             cache_multipole_fields=cache_multipole_fields,
             cache_dir=cache_dir,
+            conv_context=conv_context_r1,
         )
         fields_r2 = _stream_convolution_fields(
             deltaD3, r2, l, threads=threads,
             cache_multipole_fields=cache_multipole_fields,
             cache_dir=cache_dir,
+            conv_context=conv_context_r2,
         )
+        conv_elapsed = time.perf_counter() - t_conv_start
+        total_conv_elapsed += conv_elapsed
+        t_sum_start = time.perf_counter()
         m_values = np.empty(l + 1, dtype=np.complex128)
         for m in range(0, l + 1):
             t_m_start = time.perf_counter()
@@ -777,6 +804,8 @@ def calc_DDD_multipole(
                     total_m_tasks=total_m_tasks,
                 )
         ddd_l[l] = combine_multipole_m_terms(m_values, l)
+        sum_elapsed = time.perf_counter() - t_sum_start
+        total_sum_elapsed += sum_elapsed
         del fields_r1
         del fields_r2
         if progress_callback is not None:
@@ -786,11 +815,17 @@ def calc_DDD_multipole(
                 ddd_l=float(ddd_l[l]),
                 zeta_l=float(ddd_l[l] / rho3),
                 elapsed_sec=time.perf_counter() - t_l_start,
+                conv_elapsed_sec=conv_elapsed,
+                sum_elapsed_sec=sum_elapsed,
                 completed_m_tasks=completed_m_tasks,
                 total_m_tasks=total_m_tasks,
             )
 
-    return l_values, ddd_l
+    timing_info = {
+        "conv_elapsed_sec": total_conv_elapsed,
+        "sum_elapsed_sec": total_sum_elapsed,
+    }
+    return l_values, ddd_l, timing_info
 
 
 @njit

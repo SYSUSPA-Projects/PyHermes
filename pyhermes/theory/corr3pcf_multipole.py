@@ -114,7 +114,17 @@ class Corr_3PCF_Multipole(TaskBase):
                     self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
                     func_util.safe_exit(1)
 
-                def _log_l_progress(l, l_max, ddd_l, zeta_l, elapsed_sec, completed_m_tasks, total_m_tasks):
+                def _log_l_progress(
+                    l,
+                    l_max,
+                    ddd_l,
+                    zeta_l,
+                    elapsed_sec,
+                    conv_elapsed_sec,
+                    sum_elapsed_sec,
+                    completed_m_tasks,
+                    total_m_tasks,
+                ):
                     progress = (completed_m_tasks / total_m_tasks) * 100.0
                     if self.field_mode == "raw":
                         stat_str = f"ddd_l={ddd_l:.5e}"
@@ -122,7 +132,8 @@ class Corr_3PCF_Multipole(TaskBase):
                         stat_str = f"delta_ddd_l={ddd_l:.5e} | zeta_l={zeta_l:.5e}"
                     self.logger.info(
                         f" l={l:2d}/{l_max:2d} done | {stat_str} | "
-                        f"elapsed={elapsed_sec:.2f} sec | progress={progress:6.2f}% "
+                        f"elapsed={elapsed_sec:.2f} sec | conv={conv_elapsed_sec:.2f} sec | "
+                        f"sum={sum_elapsed_sec:.2f} sec | progress={progress:6.2f}% "
                         f"({completed_m_tasks}/{total_m_tasks} m-tasks)"
                     )
 
@@ -145,7 +156,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     )
                     print(msg, flush=True)
 
-                l_arr, multipole_l = math_util.calc_DDD_multipole(
+                l_arr, multipole_l, timing_info = math_util.calc_DDD_multipole(
                     field1, field2, field3,
                     self.r1, self.r2, self.l_max,
                     gpu_device_id=self.gpu_device_id,
@@ -166,6 +177,11 @@ class Corr_3PCF_Multipole(TaskBase):
                     self.corr3pcf_multipole_data.ddd_l = None
                     self.corr3pcf_multipole_data.delta_ddd_l = multipole_l
                     self.corr3pcf_multipole_data.zeta_l = multipole_l / (R ** 3)
+
+                self.logger.info(
+                    f"3PCF multipole timing | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
+                    f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
+                )
 
                 if self.fout_path:
                     self.corr3pcf_multipole_data.saveflag = True
