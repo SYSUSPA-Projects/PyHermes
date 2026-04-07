@@ -12,3 +12,4 @@ pyhermes.egg-info/
 build/
 tests/
 .DS_Store
+.vscode/
