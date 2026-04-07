@@ -100,6 +100,7 @@ class Corr_3PCF(TaskBase):
         self.n_rot = int(self.task_params["n_rot"])
 
         self.center = self.task_params["center"]      # "random" or "particle"
+        self.field_mode = self.task_params["field_mode"]  # "raw" or "delta"
         self.n_rand = int(self.task_params["n_rand"]) # total centers when center="random"
         self.base_seed = int(self.task_params["base_seed"])
 
@@ -205,15 +206,22 @@ class Corr_3PCF(TaskBase):
             base_seed = base_seed if base_seed is not None else self.base_seed
             center = center if center is not None else self.center
             n_rand = n_rand if n_rand is not None else self.n_rand
+            field_mode = self.field_mode
 
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
                 if center == "random":
-                    self.logger.info(f"center={center}, n_rot={self.n_rot}, n_theta={self.n_theta}, n_rand(total)={n_rand}")
+                    self.logger.info(
+                        f"center={center}, field_mode={field_mode}, n_rot={self.n_rot}, "
+                        f"n_theta={self.n_theta}, n_rand(total)={n_rand}"
+                    )
                 elif center == "particle":
                     pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor  # (N,3)
                     Nall = pos_all.shape[0]
-                    self.logger.info(f"center={center}, n_rot={self.n_rot}, n_theta={self.n_theta}, n_particle(total)={Nall}")
+                    self.logger.info(
+                        f"center={center}, field_mode={field_mode}, n_rot={self.n_rot}, "
+                        f"n_theta={self.n_theta}, n_particle(total)={Nall}"
+                    )
                 else:
                     raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
                 
@@ -305,6 +313,16 @@ class Corr_3PCF(TaskBase):
             # -------------------------------
             R = 1.0 / _local_convols1.V
             RRR = R ** 3
+            if field_mode == "raw":
+                field_convols1 = _local_convols1
+                field_convols2 = _local_convols2
+                field_convols3 = _local_convols3
+            elif field_mode == "delta":
+                field_convols1 = _local_convols1 - R
+                field_convols2 = _local_convols2 - R
+                field_convols3 = _local_convols3 - R
+            else:
+                raise ValueError(f"Unknown field_mode='{field_mode}'. Use 'raw' or 'delta'.")
             r12_scaled = self.r12 * _local_convols1.ScaleFactor
             r13_scaled = self.r13 * _local_convols1.ScaleFactor
 
@@ -314,7 +332,7 @@ class Corr_3PCF(TaskBase):
                 local_DDD_mean[it] = calc_DDD_mean_mc(
                     r12_scaled, r13_scaled, th,
                     pos_local, self.n_rot,
-                    _local_convols1, _local_convols2, _local_convols3,
+                    field_convols1, field_convols2, field_convols3,
                     center=center,
                     seed_base_rot=seed_base_rot,
                     theta_index=it,
@@ -349,11 +367,9 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 DDD_mean_global = global_weighted / npos_total
-                zeta_p = DDD_mean_global / RRR - 1.0
 
                 self.corr3pcf_data.theta = theta_arr
                 self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
-                # self.corr3pcf_data.zeta_p = zeta_p  # optional; keep if Corr3PCFData supports it
 
                 # -------------------------------
                 # Compute xi12/xi13/xi23 on rank 0 (as before)
@@ -367,8 +383,22 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.xi12 = xi12
                 self.corr3pcf_data.xi13 = xi13
                 self.corr3pcf_data.xi23 = xi23
+                self.corr3pcf_data.ddd = None
+                self.corr3pcf_data.delta_ddd = None
+                # pdelta_ddd stores <D_1 (D_2-R) (D_3-R)> for particle-centered delta runs.
+                self.corr3pcf_data.pdelta_ddd = None
 
-                self.corr3pcf_data.zeta = zeta_p - xi12 - xi13 - xi23
+                if field_mode == "raw":
+                    zeta_p = DDD_mean_global / RRR - 1.0
+                    self.corr3pcf_data.ddd = DDD_mean_global
+                    self.corr3pcf_data.zeta = zeta_p - xi12 - xi13 - xi23
+                elif center == "random":
+                    self.corr3pcf_data.delta_ddd = DDD_mean_global
+                    self.corr3pcf_data.zeta = DDD_mean_global / RRR
+                else:
+                    self.corr3pcf_data.pdelta_ddd = DDD_mean_global
+                    self.corr3pcf_data.zeta = DDD_mean_global / RRR - xi23
+
                 self.corr3pcf_data.Q = self.corr3pcf_data.zeta / (xi12 * xi23 + xi13 * xi23 + xi12 * xi13)
 
                 t_end = time.perf_counter()

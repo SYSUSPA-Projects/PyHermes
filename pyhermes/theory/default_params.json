@@ -63,6 +63,7 @@
 		"n_theta": 20,
 		"n_rot": 100,
 		"center": "random",
+		"field_mode": "delta",
 		"n_rand": 5000000,
 		"base_seed": 42,
 		"threads": 1

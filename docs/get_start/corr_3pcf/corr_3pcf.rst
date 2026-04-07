@@ -27,6 +27,7 @@ The repository includes ``examples/configs/param_3pcf.yaml``:
       n_theta: 20
       n_rot: 20
       center: "random"
+      field_mode: "delta"
       n_rand: 10000000
       base_seed: 42
 
@@ -75,6 +76,7 @@ Key parameters
 - ``n_theta``: number of angular bins
 - ``n_rot``: number of rotations used in the estimator
 - ``center``: center sampling mode, usually ``random`` or ``particle``
+- ``field_mode``: choose ``"delta"`` to work with ``D-R`` fields or ``"raw"`` to keep the original ``D``-field estimator
 - ``n_rand``: number of random centers when ``center`` is ``random``
 - ``base_seed``: random seed for reproducibility
 - ``window2`` and ``window3``: smoothing windows applied to the two legs
