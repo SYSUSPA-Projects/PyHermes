@@ -34,7 +34,6 @@ class Corr_3PCF_Multipole(TaskBase):
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
         self.field_mode = self.task_params["field_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
-        self.precompute_to_cache_first = bool(self.task_params["precompute_to_cache_first"])
         self.cache_dir = self.task_params["cache_dir"]
         self.threads = int(self.task_params["threads"])
 
@@ -104,8 +103,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.info("Start to calculate 3PCF multipole ...")
                 self.logger.info(
                     f"field_mode={self.field_mode}, l_max={self.l_max}, threads={self.threads}, "
-                    f"cache_multipole_fields={self.cache_multipole_fields}, "
-                    f"precompute_to_cache_first={self.precompute_to_cache_first}"
+                    f"cache_multipole_fields={self.cache_multipole_fields}"
                 )
                 R = 1.0 / self.convols_data1.V
                 if self.field_mode == "raw":
@@ -167,7 +165,6 @@ class Corr_3PCF_Multipole(TaskBase):
                     self.r1, self.r2, self.l_max,
                     gpu_device_id=self.gpu_device_id,
                     cache_multipole_fields=self.cache_multipole_fields,
-                    precompute_to_cache_first=self.precompute_to_cache_first,
                     cache_dir=self.cache_dir,
                     threads=self.threads,
                     progress_callback=_log_l_progress,
@@ -186,8 +183,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     self.corr3pcf_multipole_data.zeta_l = multipole_l / (R ** 3)
 
                 self.logger.info(
-                    f"3PCF multipole timing | precompute={timing_info['precompute_elapsed_sec']:.2f} sec | "
-                    f"convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
+                    f"3PCF multipole timing | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
                     f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
                 )
 

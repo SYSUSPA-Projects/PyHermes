@@ -725,37 +725,11 @@ def _stream_convolution_fields(
     return m_fields
 
 
-def _precompute_convolution_cache_for_radius(
-    field,
-    radius,
-    l_max,
-    threads,
-    cache_dir,
-    conv_context=None,
-):
-    if conv_context is None:
-        conv_context = _prepare_legendre_convolution_context(field)
-    delta_xi = conv_context["delta_xi"]
-    power_phi = conv_context["power_phi"]
-    rescaleR = radius * field.ScaleFactor
-
-    for l in range(l_max + 1):
-        for m in range(-l, l + 1):
-            cache_path = _cache_file_path(cache_dir, radius, l, m)
-            if cache_path.exists():
-                continue
-            window_array = calculate_window_array_legendre(field.L, delta_xi, power_phi, rescaleR, l, m)
-            cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
-            cache_path.parent.mkdir(parents=True, exist_ok=True)
-            np.save(cache_path, cached)
-
-
 def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
     r1, r2, l_max,
     gpu_device_id=0,
     cache_multipole_fields=False,
-    precompute_to_cache_first=False,
     cache_dir="",
     threads=1,
     progress_callback=None,
@@ -781,7 +755,6 @@ def calc_DDD_multipole(
     ddd_l = np.empty(l_max + 1, dtype=np.float64)
     total_m_tasks = (l_max + 1) * (l_max + 2) // 2
     completed_m_tasks = 0
-    precompute_elapsed = 0.0
     total_conv_elapsed = 0.0
     total_sum_elapsed = 0.0
 
@@ -793,30 +766,6 @@ def calc_DDD_multipole(
         (deltaD1.L + threads_per_block[1] - 1) // threads_per_block[1],
         (deltaD1.L + threads_per_block[2] - 1) // threads_per_block[2],
     )
-
-    if precompute_to_cache_first:
-        if not cache_multipole_fields:
-            raise ValueError("precompute_to_cache_first=True requires cache_multipole_fields=True.")
-        if not cache_dir:
-            raise ValueError("precompute_to_cache_first=True requires a non-empty cache_dir.")
-        t_precompute_start = time.perf_counter()
-        _precompute_convolution_cache_for_radius(
-            deltaD2,
-            r1,
-            l_max,
-            threads=threads,
-            cache_dir=cache_dir,
-            conv_context=conv_context_r1,
-        )
-        _precompute_convolution_cache_for_radius(
-            deltaD3,
-            r2,
-            l_max,
-            threads=threads,
-            cache_dir=cache_dir,
-            conv_context=conv_context_r2,
-        )
-        precompute_elapsed = time.perf_counter() - t_precompute_start
 
     for l in range(l_max + 1):
         t_l_start = time.perf_counter()
@@ -882,7 +831,6 @@ def calc_DDD_multipole(
             )
 
     timing_info = {
-        "precompute_elapsed_sec": precompute_elapsed,
         "conv_elapsed_sec": total_conv_elapsed,
         "sum_elapsed_sec": total_sum_elapsed,
     }
