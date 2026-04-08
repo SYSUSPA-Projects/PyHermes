@@ -98,6 +98,7 @@
 		"gpu_device_id": 0,
 		"field_mode": "delta",
 		"cache_multipole_fields": false,
+		"precompute_to_cache_first": false,
 		"cache_dir": "",
 		"threads": 1
 	}
