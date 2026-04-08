@@ -14,6 +14,11 @@ from numba.core.errors import NumbaExperimentalFeatureWarning
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
+from pyhermes.utils.legendre_fast import (
+    calculate_window_array_with_lm_fast,
+    has_fast_window_function,
+    window_function_legendre_fast,
+)
 
 
 _NUMBA_CONFIGURED = False
@@ -584,6 +589,8 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
 
 
 def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
+    if use_fast and has_fast_window_function(l, m):
+        return window_function_legendre_fast(ki, kj, kk, R, l, m)
     if use_fast and l <= 7:
         return window_function_legendre_numba(ki, kj, kk, R, l, m)
 
@@ -622,6 +629,8 @@ def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
 
 
 def calculate_window_array_legendre(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    if has_fast_window_function(l, m):
+        return calculate_window_array_with_lm_fast(L, DeltaXi, PowerPhi, rescaleR, l, m)
     return calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)
 
 
