@@ -770,7 +770,6 @@ def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
     r1, r2, l_max,
     gpu_device_id=0,
-    batch_mode="by_l",
     cache_multipole_fields=False,
     cache_dir="",
     threads=1,
@@ -784,8 +783,6 @@ def calc_DDD_multipole(
         raise ValueError("l_max must be non-negative.")
     if l_max > 7:
         raise ValueError("The current fast multipole implementation supports l_max <= 7.")
-    if batch_mode not in ("by_l", "by_m"):
-        raise ValueError(f"Unsupported batch_mode='{batch_mode}'. Use 'by_l' or 'by_m'.")
 
     cuda.select_device(int(gpu_device_id))
     gamma = np.ascontiguousarray(cal_gamma(deltaD1.phi_data, deltaD1.PhiSupport, deltaD1.SampRate), dtype=np.float64)
@@ -824,54 +821,29 @@ def calc_DDD_multipole(
     for l in range(l_max + 1):
         t_l_start = time.perf_counter()
         conv_elapsed = 0.0
-        t_sum_start = time.perf_counter()
         m_values = np.empty(l + 1, dtype=np.complex128)
-        if batch_mode == "by_l":
-            t_conv_start = time.perf_counter()
-            fields_r1 = _stream_convolution_fields(
+        sum_elapsed = 0.0
+        for m in range(0, l + 1):
+            t_m_start = time.perf_counter()
+            t_conv_m_start = time.perf_counter()
+            field_r1_m = _stream_convolution_fields(
                 deltaD2, r1, l, threads=threads,
-                m_values=range(0, l + 1),
+                m_values=[m],
                 cache_multipole_fields=cache_multipole_fields,
                 cache_dir=cache_dir,
                 conv_context=conv_context_r1,
-            )
-            fields_r2 = _stream_convolution_fields(
+            )[0]
+            field_r2_m = _stream_convolution_fields(
                 deltaD3, r2, l, threads=threads,
-                m_values=range(-l, 1),
+                m_values=[-m],
                 cache_multipole_fields=cache_multipole_fields,
                 cache_dir=cache_dir,
                 conv_context=conv_context_r2,
-            )
-            conv_elapsed = time.perf_counter() - t_conv_start
-            total_conv_elapsed += conv_elapsed
-        else:
-            fields_r1 = None
-            fields_r2 = None
-
-        for m in range(0, l + 1):
-            t_m_start = time.perf_counter()
-            if batch_mode == "by_l":
-                field_r1_m = fields_r1[m]
-                field_r2_m = fields_r2[l - m]
-            else:
-                t_conv_m_start = time.perf_counter()
-                field_r1_m = _stream_convolution_fields(
-                    deltaD2, r1, l, threads=threads,
-                    m_values=[m],
-                    cache_multipole_fields=cache_multipole_fields,
-                    cache_dir=cache_dir,
-                    conv_context=conv_context_r1,
-                )[0]
-                field_r2_m = _stream_convolution_fields(
-                    deltaD3, r2, l, threads=threads,
-                    m_values=[-m],
-                    cache_multipole_fields=cache_multipole_fields,
-                    cache_dir=cache_dir,
-                    conv_context=conv_context_r2,
-                )[0]
-                conv_m_elapsed = time.perf_counter() - t_conv_m_start
-                conv_elapsed += conv_m_elapsed
-                total_conv_elapsed += conv_m_elapsed
+            )[0]
+            conv_m_elapsed = time.perf_counter() - t_conv_m_start
+            conv_elapsed += conv_m_elapsed
+            total_conv_elapsed += conv_m_elapsed
+            t_sum_m_start = time.perf_counter()
             t_h2d_start = time.perf_counter()
             data_r1_gpu = cuda.to_device(field_r1_m)
             data_r2_gpu = cuda.to_device(field_r2_m)
@@ -895,6 +867,7 @@ def calc_DDD_multipole(
             m_values[m] = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / n_result
             del data_r1_gpu
             del data_r2_gpu
+            sum_elapsed += time.perf_counter() - t_sum_m_start
             completed_m_tasks += 1
             if m_progress_callback is not None:
                 t_callback_start = time.perf_counter()
@@ -910,12 +883,7 @@ def calc_DDD_multipole(
                 )
                 total_sum_callback_elapsed += time.perf_counter() - t_callback_start
         ddd_l[l] = combine_multipole_m_terms(m_values, l)
-        sum_elapsed = time.perf_counter() - t_sum_start
         total_sum_elapsed += sum_elapsed
-        if fields_r1 is not None:
-            del fields_r1
-        if fields_r2 is not None:
-            del fields_r2
         if progress_callback is not None:
             progress_callback(
                 l=l,

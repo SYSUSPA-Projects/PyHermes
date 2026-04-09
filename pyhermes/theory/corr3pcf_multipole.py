@@ -33,7 +33,6 @@ class Corr_3PCF_Multipole(TaskBase):
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
         self.field_mode = self.task_params["field_mode"]
-        self.batch_mode = self.task_params["batch_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
@@ -105,7 +104,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.info("Start to calculate 3PCF multipole ...")
                 self.logger.info(
                     f"field_mode={self.field_mode}, l_max={self.l_max}, threads={self.threads}, "
-                    f"batch_mode={self.batch_mode}, cache_multipole_fields={self.cache_multipole_fields}, "
+                    f"cache_multipole_fields={self.cache_multipole_fields}, "
                     f"verbose_m_progress={self.verbose_m_progress}"
                 )
                 R = 1.0 / self.convols_data1.V
@@ -167,7 +166,6 @@ class Corr_3PCF_Multipole(TaskBase):
                     field1, field2, field3,
                     self.r1, self.r2, self.l_max,
                     gpu_device_id=self.gpu_device_id,
-                    batch_mode=self.batch_mode,
                     cache_multipole_fields=self.cache_multipole_fields,
                     cache_dir=self.cache_dir,
                     threads=self.threads,
