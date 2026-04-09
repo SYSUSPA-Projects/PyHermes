@@ -863,7 +863,7 @@ def calc_DDD_multipole(
             partial_real = partial_real_gpu.copy_to_host()
             partial_imag = partial_imag_gpu.copy_to_host()
             total_sum_d2h_elapsed += time.perf_counter() - t_d2h_start
-            m_values[m] = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag))
+            m_values[m] = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / n_result
             del data_r1_gpu
             del data_r2_gpu
             completed_m_tasks += 1

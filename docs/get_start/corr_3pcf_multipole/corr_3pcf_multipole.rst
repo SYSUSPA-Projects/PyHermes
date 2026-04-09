@@ -64,3 +64,11 @@ Notes
 This task computes ``zeta_l(r1, r2) = <(D-R)(D-R)(D-R)>_l / <RRR>`` with
 ``R = 1 / V`` and ``<RRR> = R^3``. The convolution stage runs on CPU while the
 local summation stage requires CUDA.
+
+For the currently supported low-order range ``l <= 7``, the implementation uses
+explicit fast-path Legendre window functions adapted from the validated legacy
+workflow. Only the subset of ``m`` values actually used by the final
+contractions is convolved, and the CUDA summation stage performs a device-side
+reduction before transferring the result back to host memory. In practice this
+combination substantially reduces first-run time compared with the original
+legacy scripts while preserving numerical agreement.
