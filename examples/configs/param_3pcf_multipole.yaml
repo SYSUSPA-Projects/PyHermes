@@ -11,6 +11,7 @@ Corr_3PCF_Multipole:
          R: 5
    r1: 20.0
    r2: 40.0
+   l_min: 0
    l_max: 4
    gpu_device_id: 0
    field_mode: "delta"

@@ -768,7 +768,7 @@ def _stream_convolution_fields(
 
 def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
-    r1, r2, l_max,
+    r1, r2, l_min, l_max,
     gpu_device_id=0,
     cache_multipole_fields=False,
     cache_dir="",
@@ -779,8 +779,12 @@ def calc_DDD_multipole(
     if not cuda.is_available():
         raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
 
+    if l_min < 0:
+        raise ValueError("l_min must be non-negative.")
     if l_max < 0:
         raise ValueError("l_max must be non-negative.")
+    if l_min > l_max:
+        raise ValueError("l_min must be less than or equal to l_max.")
     if l_max > 7:
         raise ValueError("The current fast multipole implementation supports l_max <= 7.")
 
@@ -794,9 +798,9 @@ def calc_DDD_multipole(
     conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
     conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)
 
-    l_values = np.arange(l_max + 1, dtype=np.int32)
-    ddd_l = np.empty(l_max + 1, dtype=np.float64)
-    total_m_tasks = (l_max + 1) * (l_max + 2) // 2
+    l_values = np.arange(l_min, l_max + 1, dtype=np.int32)
+    ddd_l = np.empty(l_values.size, dtype=np.float64)
+    total_m_tasks = sum(l + 1 for l in range(l_min, l_max + 1))
     completed_m_tasks = 0
     total_conv_elapsed = 0.0
     total_sum_elapsed = 0.0
@@ -818,7 +822,7 @@ def calc_DDD_multipole(
     partial_real_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
     partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
 
-    for l in range(l_max + 1):
+    for l_idx, l in enumerate(range(l_min, l_max + 1)):
         t_l_start = time.perf_counter()
         conv_elapsed = 0.0
         m_values = np.empty(l + 1, dtype=np.complex128)
@@ -882,14 +886,14 @@ def calc_DDD_multipole(
                     total_m_tasks=total_m_tasks,
                 )
                 total_sum_callback_elapsed += time.perf_counter() - t_callback_start
-        ddd_l[l] = combine_multipole_m_terms(m_values, l)
+        ddd_l[l_idx] = combine_multipole_m_terms(m_values, l)
         total_sum_elapsed += sum_elapsed
         if progress_callback is not None:
             progress_callback(
                 l=l,
                 l_max=l_max,
-                ddd_l=float(ddd_l[l]),
-                zeta_l=float(ddd_l[l] / rho3),
+                ddd_l=float(ddd_l[l_idx]),
+                zeta_l=float(ddd_l[l_idx] / rho3),
                 elapsed_sec=time.perf_counter() - t_l_start,
                 conv_elapsed_sec=conv_elapsed,
                 sum_elapsed_sec=sum_elapsed,

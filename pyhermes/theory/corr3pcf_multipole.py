@@ -30,6 +30,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
         self.r1 = float(self.task_params["r1"])
         self.r2 = float(self.task_params["r2"])
+        self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
         self.field_mode = self.task_params["field_mode"]
@@ -103,7 +104,7 @@ class Corr_3PCF_Multipole(TaskBase):
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF multipole ...")
                 self.logger.info(
-                    f"field_mode={self.field_mode}, l_max={self.l_max}, threads={self.threads}, "
+                    f"field_mode={self.field_mode}, l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, "
                     f"cache_multipole_fields={self.cache_multipole_fields}, "
                     f"verbose_m_progress={self.verbose_m_progress}"
                 )
@@ -164,7 +165,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
                 l_arr, multipole_l, timing_info = math_util.calc_DDD_multipole(
                     field1, field2, field3,
-                    self.r1, self.r2, self.l_max,
+                    self.r1, self.r2, self.l_min, self.l_max,
                     gpu_device_id=self.gpu_device_id,
                     cache_multipole_fields=self.cache_multipole_fields,
                     cache_dir=self.cache_dir,
