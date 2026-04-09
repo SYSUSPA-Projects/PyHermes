@@ -35,6 +35,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.field_mode = self.task_params["field_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
+        self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
         self.threads = int(self.task_params["threads"])
 
     def run(self, convols_data1=None, convols_data2=None, convols_data3=None, overwrite=False):
@@ -103,7 +104,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.info("Start to calculate 3PCF multipole ...")
                 self.logger.info(
                     f"field_mode={self.field_mode}, l_max={self.l_max}, threads={self.threads}, "
-                    f"cache_multipole_fields={self.cache_multipole_fields}"
+                    f"cache_multipole_fields={self.cache_multipole_fields}, "
+                    f"verbose_m_progress={self.verbose_m_progress}"
                 )
                 R = 1.0 / self.convols_data1.V
                 if self.field_mode == "raw":
@@ -168,7 +170,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     cache_dir=self.cache_dir,
                     threads=self.threads,
                     progress_callback=_log_l_progress,
-                    m_progress_callback=_log_m_progress,
+                    m_progress_callback=_log_m_progress if self.verbose_m_progress else None,
                 )
                 self.corr3pcf_multipole_data.r1 = self.r1
                 self.corr3pcf_multipole_data.r2 = self.r2
@@ -185,6 +187,14 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.info(
                     f"3PCF multipole timing | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
                     f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
+                )
+                self.logger.info(
+                    f"3PCF multipole summation breakdown | "
+                    f"h2d={timing_info['sum_h2d_elapsed_sec']:.2f} sec | "
+                    f"kernel={timing_info['sum_kernel_elapsed_sec']:.2f} sec | "
+                    f"d2h={timing_info['sum_d2h_elapsed_sec']:.2f} sec | "
+                    f"reduce={timing_info['sum_reduce_elapsed_sec']:.2f} sec | "
+                    f"callback={timing_info['sum_callback_elapsed_sec']:.2f} sec"
                 )
 
                 if self.fout_path:

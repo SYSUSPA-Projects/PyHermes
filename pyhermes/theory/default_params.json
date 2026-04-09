@@ -99,6 +99,7 @@
 		"field_mode": "delta",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
+		"verbose_m_progress": true,
 		"threads": 1
 	}
 }

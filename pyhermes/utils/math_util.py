@@ -760,6 +760,11 @@ def calc_DDD_multipole(
     completed_m_tasks = 0
     total_conv_elapsed = 0.0
     total_sum_elapsed = 0.0
+    total_sum_h2d_elapsed = 0.0
+    total_sum_kernel_elapsed = 0.0
+    total_sum_d2h_elapsed = 0.0
+    total_sum_reduce_elapsed = 0.0
+    total_sum_callback_elapsed = 0.0
 
     rho = 1.0 / deltaD1.V
     rho3 = rho ** 3
@@ -795,18 +800,27 @@ def calc_DDD_multipole(
             t_m_start = time.perf_counter()
             idx_r1 = m
             idx_r2 = l - m
+            t_h2d_start = time.perf_counter()
             data_r1_gpu = cuda.to_device(fields_r1[idx_r1])
             data_r2_gpu = cuda.to_device(fields_r2[idx_r2])
+            total_sum_h2d_elapsed += time.perf_counter() - t_h2d_start
+            t_kernel_start = time.perf_counter()
             compute_3d_result_gpu[blocks_per_grid, threads_per_block](
                 data_gpu, data_r1_gpu, data_r2_gpu, gamma_gpu, result_gpu, deltaD1.L, deltaD1.PhiSupport
             )
             cuda.synchronize()
+            total_sum_kernel_elapsed += time.perf_counter() - t_kernel_start
+            t_d2h_start = time.perf_counter()
             result = result_gpu.copy_to_host()
+            total_sum_d2h_elapsed += time.perf_counter() - t_d2h_start
+            t_reduce_start = time.perf_counter()
             m_values[m] = (4.0 * np.pi) * np.sum(result)
+            total_sum_reduce_elapsed += time.perf_counter() - t_reduce_start
             del data_r1_gpu
             del data_r2_gpu
+            completed_m_tasks += 1
             if m_progress_callback is not None:
-                completed_m_tasks += 1
+                t_callback_start = time.perf_counter()
                 m_progress_callback(
                     l=l,
                     l_max=l_max,
@@ -817,6 +831,7 @@ def calc_DDD_multipole(
                     completed_m_tasks=completed_m_tasks,
                     total_m_tasks=total_m_tasks,
                 )
+                total_sum_callback_elapsed += time.perf_counter() - t_callback_start
         ddd_l[l] = combine_multipole_m_terms(m_values, l)
         sum_elapsed = time.perf_counter() - t_sum_start
         total_sum_elapsed += sum_elapsed
@@ -838,6 +853,11 @@ def calc_DDD_multipole(
     timing_info = {
         "conv_elapsed_sec": total_conv_elapsed,
         "sum_elapsed_sec": total_sum_elapsed,
+        "sum_h2d_elapsed_sec": total_sum_h2d_elapsed,
+        "sum_kernel_elapsed_sec": total_sum_kernel_elapsed,
+        "sum_d2h_elapsed_sec": total_sum_d2h_elapsed,
+        "sum_reduce_elapsed_sec": total_sum_reduce_elapsed,
+        "sum_callback_elapsed_sec": total_sum_callback_elapsed,
     }
     return l_values, ddd_l, timing_info
 
