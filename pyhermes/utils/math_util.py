@@ -698,6 +698,7 @@ def _stream_convolution_fields(
     radius,
     l,
     threads,
+    m_values=None,
     cache_multipole_fields=False,
     cache_dir="",
     conv_context=None,
@@ -707,8 +708,10 @@ def _stream_convolution_fields(
     delta_xi = conv_context["delta_xi"]
     power_phi = conv_context["power_phi"]
     rescaleR = radius * field.ScaleFactor
+    if m_values is None:
+        m_values = range(-l, l + 1)
     m_fields = []
-    for m in range(-l, l + 1):
+    for m in m_values:
         cached = None
         cache_path = None
         if cache_multipole_fields and cache_dir:
@@ -772,12 +775,14 @@ def calc_DDD_multipole(
         t_conv_start = time.perf_counter()
         fields_r1 = _stream_convolution_fields(
             deltaD2, r1, l, threads=threads,
+            m_values=range(0, l + 1),
             cache_multipole_fields=cache_multipole_fields,
             cache_dir=cache_dir,
             conv_context=conv_context_r1,
         )
         fields_r2 = _stream_convolution_fields(
             deltaD3, r2, l, threads=threads,
+            m_values=range(-l, 1),
             cache_multipole_fields=cache_multipole_fields,
             cache_dir=cache_dir,
             conv_context=conv_context_r2,
@@ -788,8 +793,8 @@ def calc_DDD_multipole(
         m_values = np.empty(l + 1, dtype=np.complex128)
         for m in range(0, l + 1):
             t_m_start = time.perf_counter()
-            idx_r1 = m + l
-            idx_r2 = l if m == 0 else l - m
+            idx_r1 = m
+            idx_r2 = l - m
             data_r1_gpu = cuda.to_device(fields_r1[idx_r1])
             data_r2_gpu = cuda.to_device(fields_r2[idx_r2])
             compute_3d_result_gpu[blocks_per_grid, threads_per_block](
