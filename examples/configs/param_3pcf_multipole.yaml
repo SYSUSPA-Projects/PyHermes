@@ -14,6 +14,7 @@ Corr_3PCF_Multipole:
    l_max: 4
    gpu_device_id: 0
    field_mode: "delta"
+   batch_mode: "by_l"
    cache_multipole_fields: false
    cache_dir: "./output/cache_3pcf_multipole"
    threads: 1
