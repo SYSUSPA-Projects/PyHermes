@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pywt
 import numpy as np
+import numba
 from scipy.fft import rfftn, irfftn, fftn, ifftn
 from scipy.special import spherical_jn, sph_harm
 from numba import cuda, int16, jit, njit, prange
@@ -671,6 +672,43 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
         result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
 
 
+REDUCE_THREADS = 256
+
+
+@cuda.jit
+def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
+    shared_real = cuda.shared.array(shape=REDUCE_THREADS, dtype=numba.float64)
+    shared_imag = cuda.shared.array(shape=REDUCE_THREADS, dtype=numba.float64)
+
+    tid = cuda.threadIdx.x
+    idx = cuda.grid(1)
+    stride = cuda.gridsize(1)
+
+    local_real = 0.0
+    local_imag = 0.0
+    while idx < n:
+        value = data[idx]
+        local_real += value.real
+        local_imag += value.imag
+        idx += stride
+
+    shared_real[tid] = local_real
+    shared_imag[tid] = local_imag
+    cuda.syncthreads()
+
+    offset = cuda.blockDim.x // 2
+    while offset > 0:
+        if tid < offset:
+            shared_real[tid] += shared_real[tid + offset]
+            shared_imag[tid] += shared_imag[tid + offset]
+        cuda.syncthreads()
+        offset //= 2
+
+    if tid == 0:
+        partial_real[cuda.blockIdx.x] = shared_real[0]
+        partial_imag[cuda.blockIdx.x] = shared_imag[0]
+
+
 def combine_multipole_m_terms(m_values, l):
     coeff = complex(m_values[0])
     for m in range(1, l + 1):
@@ -751,6 +789,8 @@ def calc_DDD_multipole(
     gamma_gpu = cuda.to_device(gamma)
     data_gpu = cuda.to_device(np.ascontiguousarray(deltaD1.epsilon, dtype=np.float64))
     result_gpu = cuda.device_array(deltaD1.epsilon.shape, dtype=np.complex128)
+    n_result = deltaD1.epsilon.size
+    result_gpu_flat = result_gpu.reshape(n_result)
     conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
     conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)
 
@@ -774,6 +814,9 @@ def calc_DDD_multipole(
         (deltaD1.L + threads_per_block[1] - 1) // threads_per_block[1],
         (deltaD1.L + threads_per_block[2] - 1) // threads_per_block[2],
     )
+    reduce_blocks = min(1024, (n_result + REDUCE_THREADS - 1) // REDUCE_THREADS)
+    partial_real_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
+    partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
 
     for l in range(l_max + 1):
         t_l_start = time.perf_counter()
@@ -810,12 +853,17 @@ def calc_DDD_multipole(
             )
             cuda.synchronize()
             total_sum_kernel_elapsed += time.perf_counter() - t_kernel_start
-            t_d2h_start = time.perf_counter()
-            result = result_gpu.copy_to_host()
-            total_sum_d2h_elapsed += time.perf_counter() - t_d2h_start
             t_reduce_start = time.perf_counter()
-            m_values[m] = (4.0 * np.pi) * np.sum(result)
+            reduce_complex_sum_kernel[reduce_blocks, REDUCE_THREADS](
+                result_gpu_flat, partial_real_gpu, partial_imag_gpu, n_result
+            )
+            cuda.synchronize()
             total_sum_reduce_elapsed += time.perf_counter() - t_reduce_start
+            t_d2h_start = time.perf_counter()
+            partial_real = partial_real_gpu.copy_to_host()
+            partial_imag = partial_imag_gpu.copy_to_host()
+            total_sum_d2h_elapsed += time.perf_counter() - t_d2h_start
+            m_values[m] = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag))
             del data_r1_gpu
             del data_r2_gpu
             completed_m_tasks += 1
