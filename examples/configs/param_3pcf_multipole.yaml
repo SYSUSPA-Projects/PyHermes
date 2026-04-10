@@ -15,6 +15,7 @@ Corr_3PCF_Multipole:
    l_max: 4
    gpu_device_id: 0
    field_mode: "delta"
+   execution_mode: "serial"
    cache_multipole_fields: false
    cache_dir: "./output/cache_3pcf_multipole"
    threads: 8

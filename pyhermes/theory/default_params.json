@@ -98,6 +98,7 @@
 		"l_max": 4,
 		"gpu_device_id": 0,
 		"field_mode": "delta",
+		"execution_mode": "serial",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
 		"verbose_m_progress": true,
