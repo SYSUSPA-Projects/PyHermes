@@ -18,4 +18,4 @@ Corr_3PCF_Multipole:
    execution_mode: "serial"
    cache_multipole_fields: false
    cache_dir: "./output/cache_3pcf_multipole"
-   threads: 8
+   threads: 1

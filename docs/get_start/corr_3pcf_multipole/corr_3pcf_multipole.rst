@@ -29,7 +29,7 @@ The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
       gpu_device_id: 0
       field_mode: "delta"
       execution_mode: "serial"
-      threads: 8
+      threads: 1
 
 Minimal Python driver
 ---------------------
@@ -60,7 +60,7 @@ Key parameters
 - ``gpu_device_id``: CUDA device index used for the summation stage
 - ``field_mode``: choose ``"raw"`` to save ``ddd_l`` from ``<DDD>`` or ``"delta"`` to save ``delta_ddd_l`` and ``zeta_l``
 - ``execution_mode``: use ``"serial"`` for the default single-rank workflow or ``"pair_mpi"`` to use two MPI ranks where the two convolution legs for each ``m`` are computed in parallel and rank 0 performs the CUDA summation
-- ``threads``: CPU threads used by the convolution stage; in the current test environment, ``8`` is a good default and increasing to ``16`` did not bring additional speedup
+- ``threads``: CPU threads used by the convolution stage; the current default is ``1``, and recent tests showed little difference between ``1`` and ``8`` for the present implementation
 - ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
 
 Notes
