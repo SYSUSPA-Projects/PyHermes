@@ -28,6 +28,7 @@ The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
       l_max: 4
       gpu_device_id: 0
       field_mode: "delta"
+      threads: 8
 
 Minimal Python driver
 ---------------------
@@ -57,6 +58,7 @@ Key parameters
 - ``l_min`` and ``l_max``: minimum and maximum multipole order to compute
 - ``gpu_device_id``: CUDA device index used for the summation stage
 - ``field_mode``: choose ``"raw"`` to save ``ddd_l`` from ``<DDD>`` or ``"delta"`` to save ``delta_ddd_l`` and ``zeta_l``
+- ``threads``: CPU threads used by the convolution stage; in the current test environment, ``8`` is a good default and increasing to ``16`` did not bring additional speedup
 - ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
 
 Notes

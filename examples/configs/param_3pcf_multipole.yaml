@@ -17,4 +17,4 @@ Corr_3PCF_Multipole:
    field_mode: "delta"
    cache_multipole_fields: false
    cache_dir: "./output/cache_3pcf_multipole"
-   threads: 1
+   threads: 8
