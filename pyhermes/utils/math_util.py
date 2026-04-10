@@ -386,6 +386,7 @@ def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
                     phi_local[num, -i, -j, -k] = phixy * phi_data[fz + step[k]]
     return pos_coarse, phi_local
 
+
 @njit
 def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupport,
                    dx=0.0, dy=0.0, dz=0.0):
@@ -434,19 +435,229 @@ def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupp
 
         n_output[idx] = acc
 
-# ------------------------------------------------------------
-# ------------- ↓ Numerical function for 2pcf ↓ --------------
-# ------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# -------- ↓ Numerical function for 3pcf: zeta(r1, r2, theta)↓ --------------
+# ---------------------------------------------------------------------------
 
-
-
-# ------------------------------------------------------------
-# ------------- ↓ Numerical function for 3pcf ↓ --------------
-# ------------------------------------------------------------
 
 def third_side(r1, r2, theta):
     """Return r23 from (r1, r2, theta) using the law of cosines."""
     return np.sqrt(r1**2 + r2**2 - 2.0 * r1 * r2 * np.cos(theta))
+
+
+@njit
+def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
+    """
+    Generate offsets (x2,y2,z2) and (x3,y3,z3) that form a triangle with:
+      |r1| = R1, |r2| = R2, angle(r1,r2) = theta
+
+    All lengths here are in SCALED (GRID) units.
+    """
+    sintheta1 = math.sqrt(1.0 - costheta1 * costheta1)
+    dx1 = sintheta1 * math.cos(phi)
+    dy1 = sintheta1 * math.sin(phi)
+    dz1 = costheta1
+
+    x2 = R1 * dx1
+    y2 = R1 * dy1
+    z2 = R1 * dz1
+
+    if abs(dx1) > 1e-10 or abs(dy1) > 1e-10:
+        ox1, oy1, oz1 = -dy1, dx1, 0.0
+    else:
+        ox1, oy1, oz1 = 0.0, -dz1, dy1
+
+    norm = math.sqrt(ox1 * ox1 + oy1 * oy1 + oz1 * oz1)
+    ox1 /= norm
+    oy1 /= norm
+    oz1 /= norm
+
+    ox2 = dy1 * oz1 - dz1 * oy1
+    oy2 = dz1 * ox1 - dx1 * oz1
+    oz2 = dx1 * oy1 - dy1 * ox1
+
+    cos_alpha = math.cos(alpha)
+    sin_alpha = math.sin(alpha)
+
+    dx2 = math.cos(theta) * dx1 + math.sin(theta) * (cos_alpha * ox1 + sin_alpha * ox2)
+    dy2 = math.cos(theta) * dy1 + math.sin(theta) * (cos_alpha * oy1 + sin_alpha * oy2)
+    dz2 = math.cos(theta) * dz1 + math.sin(theta) * (cos_alpha * oz1 + sin_alpha * oz2)
+
+    x3 = R2 * dx2
+    y3 = R2 * dy2
+    z3 = R2 * dz2
+
+    return x2, y2, z2, x3, y3, z3
+
+
+@njit
+def calc_DDD_mc_pos_center_fast(
+    R1_scaled, R2_scaled, theta,
+    centers_scaled, n_rot,
+    R, epsilon2, epsilon3,
+    phi_data, L, SampRate, PhiSupport,
+    seed_base_rot=-1, theta_index=-1
+):
+    """
+    Method 1 (fast for small samples; centers = particle positions)
+
+    Estimates DDD = < D1 * D2 * D3 > by:
+      - sampling triangle orientations (n_rot)
+      - evaluating D2(x+r1) and D3(x+r2) on centers_scaled
+      - multiplying by constant R to account for the (implicit) D1 term
+        under the normalized-density convention (R = 1/V_scaled).
+
+    Best use case:
+      - Halo / galaxy catalogs with relatively small N (e.g. ~1e5–1e6),
+        where using real object centers is faster than using many random centers.
+
+    Notes:
+      - centers_scaled must be in SCALED (GRID) coordinates [0, L).
+      - Returns a scalar DDD (normalized-grid convention).
+    """
+    npos = centers_scaled.shape[0]
+    two_pi = 2.0 * math.pi
+    n2 = np.empty(npos, dtype=np.float64)
+    n3 = np.empty(npos, dtype=np.float64)
+    total_sum = 0.0
+    for irot in range(n_rot):
+        if seed_base_rot >= 0:
+            seed_rot = seed_base_rot + irot
+            if theta_index >= 0:
+                seed_rot += theta_index * 1000003
+            np.random.seed(seed_rot)
+        a, b, c = np.random.rand(3)
+        phi = two_pi * a
+        costheta1 = 2.0 * b - 1.0
+        alpha = two_pi * c
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
+        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        s = 0.0
+        for i in range(npos):
+            s += n2[i] * n3[i]
+        total_sum += s
+    return R * total_sum / (n_rot * npos)
+
+
+@njit
+def calc_DDD_mc_random_center(
+    R1_scaled, R2_scaled, theta,
+    centers_scaled, n_rot,
+    epsilon1, epsilon2, epsilon3,
+    phi_data, L, SampRate, PhiSupport,
+    seed_base_rot=-1, theta_index=-1
+):
+    """
+    Method 2 (recommended default; centers = uniform random points)
+
+    Estimates DDD = < D1 * D2 * D3 > by:
+      - sampling triangle orientations (n_rot)
+      - averaging over centers_scaled which must be uniformly distributed
+        in the periodic box (SCALED/GRID coordinates).
+
+    Best use case:
+      - Very large underlying particle sets (e.g. dark matter),
+        where volume-averaged 3PCF is desired and random-center sampling
+        provides the cleanest estimator in a periodic box.
+
+    Notes:
+      - centers_scaled must be in SCALED (GRID) coordinates [0, L).
+      - Returns a scalar DDD (normalized-grid convention).
+    """
+
+    npos = centers_scaled.shape[0]
+    two_pi = 2.0 * math.pi
+
+    n1 = np.empty(npos, dtype=np.float64)
+    n2 = np.empty(npos, dtype=np.float64)
+    n3 = np.empty(npos, dtype=np.float64)
+
+    n_at_pos_numba(n1, centers_scaled, epsilon1, phi_data, L, SampRate, PhiSupport)
+
+    total_sum = 0.0
+
+    for irot in range(n_rot):
+        if seed_base_rot >= 0:
+            seed_rot = seed_base_rot + irot
+            if theta_index >= 0:
+                seed_rot += theta_index * 1000003
+            np.random.seed(seed_rot)
+        a, b, c = np.random.rand(3)
+        phi = two_pi * a
+        costheta1 = 2.0 * b - 1.0
+        alpha = two_pi * c
+
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+
+        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
+        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+
+        s = 0.0
+        for i in range(npos):
+            s += n1[i] * n2[i] * n3[i]
+        total_sum += s
+
+    return total_sum / (n_rot * npos)
+
+
+@njit
+def calc_DDD_RDD_mc_pos_center_legacy(
+    R1_scaled, R2_scaled, theta,
+    pos_scaled, rand_scaled, n_rot,
+    R, epsilon2, epsilon3,
+    phi_data, L, SampRate, PhiSupport,
+    seed=-1
+):
+    """
+    Method 3 (legacy estimator; centers = particle positions + matched random centers)
+
+    Computes the control-variate quantity:
+      DDD_RDD = < D1*D2*D3 > - < R1*D2*D3 >
+    by:
+      - using pos_scaled as object centers
+      - using rand_scaled as uniform random centers (same length as pos_scaled)
+      - evaluating both (D2, D3) on pos_scaled and on rand_scaled each rotation.
+
+    Best use case:
+      - Keep for backward compatibility / cross-checks with older PyHermes workflow.
+
+    Cost:
+      - About ~2x of Method 1 for the same n_rot and sample size,
+        because D2/D3 are evaluated on BOTH pos_scaled and rand_scaled.
+
+    Notes:
+      - pos_scaled and rand_scaled must be in SCALED (GRID) coordinates [0, L).
+      - Returns a scalar DDD_RDD (normalized-grid convention).
+    """
+    if seed >= 0:
+        np.random.seed(seed)
+    npos = pos_scaled.shape[0]
+    two_pi = 2.0 * math.pi
+    n2 = np.empty(npos, dtype=np.float64)
+    n3 = np.empty(npos, dtype=np.float64)
+    n20 = np.empty(npos, dtype=np.float64)
+    n30 = np.empty(npos, dtype=np.float64)
+    total_sum = 0.0
+    for _ in range(n_rot):
+        a, b, c = np.random.rand(3)
+        phi = two_pi * a
+        costheta1 = 2.0 * b - 1.0
+        alpha = two_pi * c
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+        n_at_pos_numba(n2, pos_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
+        n_at_pos_numba(n3, pos_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        n_at_pos_numba(n20, rand_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
+        n_at_pos_numba(n30, rand_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        s = 0.0
+        for i in range(npos):
+            s += n2[i] * n3[i] - n20[i] * n30[i]
+        total_sum += s
+    return R * total_sum / (n_rot * npos)
+
+# ---------------------------------------------------------------------------
+# ------- ↓ Numerical function for 3pcf multipole: zeta_l(r1, r2) ↓ ---------
+# ---------------------------------------------------------------------------
 
 
 @njit
@@ -908,257 +1119,3 @@ def calc_DDD_multipole(
         "sum_callback_elapsed_sec": total_sum_callback_elapsed,
     }
     return l_values, ddd_l, timing_info
-
-
-@njit
-def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
-    """
-    Generate offsets (x2,y2,z2) and (x3,y3,z3) that form a triangle with:
-      |r1| = R1, |r2| = R2, angle(r1,r2) = theta
-
-    All lengths here are in SCALED (GRID) units.
-    """
-    sintheta1 = math.sqrt(1.0 - costheta1 * costheta1)
-    dx1 = sintheta1 * math.cos(phi)
-    dy1 = sintheta1 * math.sin(phi)
-    dz1 = costheta1
-
-    x2 = R1 * dx1
-    y2 = R1 * dy1
-    z2 = R1 * dz1
-
-    if abs(dx1) > 1e-10 or abs(dy1) > 1e-10:
-        ox1, oy1, oz1 = -dy1, dx1, 0.0
-    else:
-        ox1, oy1, oz1 = 0.0, -dz1, dy1
-
-    norm = math.sqrt(ox1 * ox1 + oy1 * oy1 + oz1 * oz1)
-    ox1 /= norm
-    oy1 /= norm
-    oz1 /= norm
-
-    ox2 = dy1 * oz1 - dz1 * oy1
-    oy2 = dz1 * ox1 - dx1 * oz1
-    oz2 = dx1 * oy1 - dy1 * ox1
-
-    cos_alpha = math.cos(alpha)
-    sin_alpha = math.sin(alpha)
-
-    dx2 = math.cos(theta) * dx1 + math.sin(theta) * (cos_alpha * ox1 + sin_alpha * ox2)
-    dy2 = math.cos(theta) * dy1 + math.sin(theta) * (cos_alpha * oy1 + sin_alpha * oy2)
-    dz2 = math.cos(theta) * dz1 + math.sin(theta) * (cos_alpha * oz1 + sin_alpha * oz2)
-
-    x3 = R2 * dx2
-    y3 = R2 * dy2
-    z3 = R2 * dz2
-
-    return x2, y2, z2, x3, y3, z3
-
-
-@njit
-def calc_DDD_mc_pos_center_fast(
-    R1_scaled, R2_scaled, theta,
-    centers_scaled, n_rot,
-    R, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
-    seed_base_rot=-1, theta_index=-1
-):
-    
-    """
-    Method 1 (fast for small samples; centers = particle positions)
-
-    Estimates DDD = < D1 * D2 * D3 > by:
-      - sampling triangle orientations (n_rot)
-      - evaluating D2(x+r1) and D3(x+r2) on centers_scaled
-      - multiplying by constant R to account for the (implicit) D1 term
-        under the normalized-density convention (R = 1/V_scaled).
-
-    Best use case:
-      - Halo / galaxy catalogs with relatively small N (e.g. ~1e5–1e6),
-        where using real object centers is faster than using many random centers.
-
-    Notes:
-      - centers_scaled must be in SCALED (GRID) coordinates [0, L).
-      - Returns a scalar DDD (normalized-grid convention).
-    """
-    npos = centers_scaled.shape[0]
-    two_pi = 2.0 * math.pi
-    n2 = np.empty(npos, dtype=np.float64)
-    n3 = np.empty(npos, dtype=np.float64)
-    total_sum = 0.0
-    for irot in range(n_rot):
-        if seed_base_rot >= 0:
-            seed_rot = seed_base_rot + irot
-            if theta_index >= 0:
-                seed_rot += theta_index * 1000003
-            np.random.seed(seed_rot)
-        a, b, c = np.random.rand(3)
-        phi = two_pi * a
-        costheta1 = 2.0 * b - 1.0
-        alpha = two_pi * c
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
-        s = 0.0
-        for i in range(npos):
-            s += n2[i] * n3[i]
-        total_sum += s
-    return R * total_sum / (n_rot * npos)
-
-
-@njit
-def calc_DDD_mc_random_center(
-    R1_scaled, R2_scaled, theta,
-    centers_scaled, n_rot,
-    epsilon1, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
-    seed_base_rot=-1, theta_index=-1
-):
-    """
-    Method 2 (recommended default; centers = uniform random points)
-
-    Estimates DDD = < D1 * D2 * D3 > by:
-      - sampling triangle orientations (n_rot)
-      - averaging over centers_scaled which must be uniformly distributed
-        in the periodic box (SCALED/GRID coordinates).
-
-    Best use case:
-      - Very large underlying particle sets (e.g. dark matter),
-        where volume-averaged 3PCF is desired and random-center sampling
-        provides the cleanest estimator in a periodic box.
-
-    Notes:
-      - centers_scaled must be in SCALED (GRID) coordinates [0, L).
-      - Returns a scalar DDD (normalized-grid convention).
-    """
-
-    npos = centers_scaled.shape[0]
-    two_pi = 2.0 * math.pi
-
-    n1 = np.empty(npos, dtype=np.float64)
-    n2 = np.empty(npos, dtype=np.float64)
-    n3 = np.empty(npos, dtype=np.float64)
-
-    n_at_pos_numba(n1, centers_scaled, epsilon1, phi_data, L, SampRate, PhiSupport)
-
-    total_sum = 0.0
-
-    for irot in range(n_rot):
-        if seed_base_rot >= 0:
-            seed_rot = seed_base_rot + irot
-            if theta_index >= 0:
-                seed_rot += theta_index * 1000003
-            np.random.seed(seed_rot)
-        a, b, c = np.random.rand(3)
-        phi = two_pi * a
-        costheta1 = 2.0 * b - 1.0
-        alpha = two_pi * c
-
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
-
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
-
-        s = 0.0
-        for i in range(npos):
-            s += n1[i] * n2[i] * n3[i]
-        total_sum += s
-
-    return total_sum / (n_rot * npos)
-
-
-@njit
-def calc_DDD_RDD_mc_pos_center_legacy(
-    R1_scaled, R2_scaled, theta,
-    pos_scaled, rand_scaled, n_rot,
-    R, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
-    seed=-1
-):
-    """
-    Method 3 (legacy estimator; centers = particle positions + matched random centers)
-
-    Computes the control-variate quantity:
-      DDD_RDD = < D1*D2*D3 > - < R1*D2*D3 >
-    by:
-      - using pos_scaled as object centers
-      - using rand_scaled as uniform random centers (same length as pos_scaled)
-      - evaluating both (D2, D3) on pos_scaled and on rand_scaled each rotation.
-
-    Best use case:
-      - Keep for backward compatibility / cross-checks with older PyHermes workflow.
-
-    Cost:
-      - About ~2x of Method 1 for the same n_rot and sample size,
-        because D2/D3 are evaluated on BOTH pos_scaled and rand_scaled.
-
-    Notes:
-      - pos_scaled and rand_scaled must be in SCALED (GRID) coordinates [0, L).
-      - Returns a scalar DDD_RDD (normalized-grid convention).
-    """
-    if seed >= 0:
-        np.random.seed(seed)
-    npos = pos_scaled.shape[0]
-    two_pi = 2.0 * math.pi
-    n2 = np.empty(npos, dtype=np.float64)
-    n3 = np.empty(npos, dtype=np.float64)
-    n20 = np.empty(npos, dtype=np.float64)
-    n30 = np.empty(npos, dtype=np.float64)
-    total_sum = 0.0
-    for _ in range(n_rot):
-        a, b, c = np.random.rand(3)
-        phi = two_pi * a
-        costheta1 = 2.0 * b - 1.0
-        alpha = two_pi * c
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
-        n_at_pos_numba(n2, pos_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, pos_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
-        n_at_pos_numba(n20, rand_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n30, rand_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
-        s = 0.0
-        for i in range(npos):
-            s += n2[i] * n3[i] - n20[i] * n30[i]
-        total_sum += s
-    return R * total_sum / (n_rot * npos)
-
-# def cal_gamma(phi_data, PhiSupport, SampRate):
-#     Gamma = np.zeros((PhiSupport, PhiSupport))
-#     for l1 in range(PhiSupport):
-#         for l2 in range(PhiSupport):
-#             rolled_phi1 = np.roll(phi_data, l1 * SampRate)
-#             rolled_phi2 = np.roll(phi_data, l2 * SampRate)
-#             Gamma[l1, l2] = np.sum(phi_data * rolled_phi1 * rolled_phi2) / SampRate
-#     return Gamma
-
-# @cuda.jit
-# def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
-#     lx, ly, lz = cuda.grid(3)
-#     if lx < L and ly < L and lz < L:
-#         sum_over_l1 = 0
-#         for l1x in range(PhiSupport):
-#             index_l1x = (lx - l1x) % L
-#             for l1y in range(PhiSupport):
-#                 index_l1y = (ly - l1y) % L
-#                 for l1z in range(PhiSupport):
-#                     index_l1z = (lz - l1z) % L
-#                     sum_over_l2 = 0
-#                     for l2x in range(PhiSupport):
-#                         index_l2x = (lx - l2x) % L
-#                         res_y = 0
-#                         for l2y in range(PhiSupport):
-#                             index_l2y = (ly - l2y) % L
-#                             res_z = 0
-#                             for l2z in range(PhiSupport):
-#                                 index_l2z = (lz - l2z) % L
-#                                 res_z += Gamma[l1z, l2z] * data_R2[index_l2x, index_l2y, index_l2z]
-#                             res_y += Gamma[l1y, l2y] * res_z
-#                         sum_over_l2 += Gamma[l1x, l2x] * res_y
-#                     sum_over_l1 += data_R1[index_l1x, index_l1y, index_l1z] * sum_over_l2
-#         result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
-
-# def cal_coefficients(data, l):
-#     sum_res = 0
-#     for m in range(1, l + 1):
-#         sum_res += data[m] * (-1) ** m + np.conjugate(data[m]) * (-1) ** (-m)
-#     sum_res += data[0]
-#     return sum_res
