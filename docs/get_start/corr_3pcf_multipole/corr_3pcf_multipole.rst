@@ -79,3 +79,10 @@ summation stage performs a device-side reduction before transferring the result
 back to host memory. In practice this combination substantially reduces first-run
 time compared with the original legacy scripts while preserving numerical
 agreement.
+
+For the current single-node GPU environment, the recommended high-performance
+workflow is ``execution_mode: "pair_mpi"`` with exactly two MPI ranks and
+``threads: 1``. In this mode the two convolution legs needed for each ``m`` are
+computed in parallel on the CPU side, while rank 0 performs the CUDA summation.
+This mode substantially outperformed the single-rank ``serial`` workflow in the
+current benchmark setup.
