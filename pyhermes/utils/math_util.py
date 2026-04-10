@@ -977,6 +977,88 @@ def _stream_convolution_fields(
     return m_fields
 
 
+def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
+    if not cuda.is_available():
+        raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
+
+    cuda.select_device(int(gpu_device_id))
+    gamma = np.ascontiguousarray(cal_gamma(field1.phi_data, field1.PhiSupport, field1.SampRate), dtype=np.float64)
+    gamma_gpu = cuda.to_device(gamma)
+    data_gpu = cuda.to_device(np.ascontiguousarray(field1.epsilon, dtype=np.float64))
+    result_gpu = cuda.device_array(field1.epsilon.shape, dtype=np.complex128)
+    n_result = field1.epsilon.size
+    result_gpu_flat = result_gpu.reshape(n_result)
+    threads_per_block = (8, 8, 8)
+    blocks_per_grid = (
+        (field1.L + threads_per_block[0] - 1) // threads_per_block[0],
+        (field1.L + threads_per_block[1] - 1) // threads_per_block[1],
+        (field1.L + threads_per_block[2] - 1) // threads_per_block[2],
+    )
+    reduce_blocks = min(1024, (n_result + REDUCE_THREADS - 1) // REDUCE_THREADS)
+    partial_real_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
+    partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
+    return {
+        "gamma_gpu": gamma_gpu,
+        "data_gpu": data_gpu,
+        "result_gpu": result_gpu,
+        "result_gpu_flat": result_gpu_flat,
+        "n_result": n_result,
+        "threads_per_block": threads_per_block,
+        "blocks_per_grid": blocks_per_grid,
+        "reduce_blocks": reduce_blocks,
+        "partial_real_gpu": partial_real_gpu,
+        "partial_imag_gpu": partial_imag_gpu,
+        "L": field1.L,
+        "PhiSupport": field1.PhiSupport,
+    }
+
+
+def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
+    t_h2d_start = time.perf_counter()
+    data_r1_gpu = cuda.to_device(np.ascontiguousarray(field_r1_m, dtype=np.complex128))
+    data_r2_gpu = cuda.to_device(np.ascontiguousarray(field_r2_m, dtype=np.complex128))
+    h2d_elapsed = time.perf_counter() - t_h2d_start
+
+    t_kernel_start = time.perf_counter()
+    compute_3d_result_gpu[gpu_context["blocks_per_grid"], gpu_context["threads_per_block"]](
+        gpu_context["data_gpu"],
+        data_r1_gpu,
+        data_r2_gpu,
+        gpu_context["gamma_gpu"],
+        gpu_context["result_gpu"],
+        gpu_context["L"],
+        gpu_context["PhiSupport"],
+    )
+    cuda.synchronize()
+    kernel_elapsed = time.perf_counter() - t_kernel_start
+
+    t_reduce_start = time.perf_counter()
+    reduce_complex_sum_kernel[gpu_context["reduce_blocks"], REDUCE_THREADS](
+        gpu_context["result_gpu_flat"],
+        gpu_context["partial_real_gpu"],
+        gpu_context["partial_imag_gpu"],
+        gpu_context["n_result"],
+    )
+    cuda.synchronize()
+    reduce_elapsed = time.perf_counter() - t_reduce_start
+
+    t_d2h_start = time.perf_counter()
+    partial_real = gpu_context["partial_real_gpu"].copy_to_host()
+    partial_imag = gpu_context["partial_imag_gpu"].copy_to_host()
+    d2h_elapsed = time.perf_counter() - t_d2h_start
+
+    del data_r1_gpu
+    del data_r2_gpu
+
+    value = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / gpu_context["n_result"]
+    return value, {
+        "h2d_elapsed_sec": h2d_elapsed,
+        "kernel_elapsed_sec": kernel_elapsed,
+        "reduce_elapsed_sec": reduce_elapsed,
+        "d2h_elapsed_sec": d2h_elapsed,
+    }
+
+
 def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
     r1, r2, l_min, l_max,
@@ -987,22 +1069,13 @@ def calc_DDD_multipole(
     progress_callback=None,
     m_progress_callback=None,
 ):
-    if not cuda.is_available():
-        raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
-
     if l_min < 0:
         raise ValueError("l_min must be non-negative.")
     if l_max < 0:
         raise ValueError("l_max must be non-negative.")
     if l_min > l_max:
         raise ValueError("l_min must be less than or equal to l_max.")
-    cuda.select_device(int(gpu_device_id))
-    gamma = np.ascontiguousarray(cal_gamma(deltaD1.phi_data, deltaD1.PhiSupport, deltaD1.SampRate), dtype=np.float64)
-    gamma_gpu = cuda.to_device(gamma)
-    data_gpu = cuda.to_device(np.ascontiguousarray(deltaD1.epsilon, dtype=np.float64))
-    result_gpu = cuda.device_array(deltaD1.epsilon.shape, dtype=np.complex128)
-    n_result = deltaD1.epsilon.size
-    result_gpu_flat = result_gpu.reshape(n_result)
+    gpu_context = _prepare_multipole_gpu_context(deltaD1, gpu_device_id=gpu_device_id)
     conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
     conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)
 
@@ -1020,16 +1093,6 @@ def calc_DDD_multipole(
 
     rho = 1.0 / deltaD1.V
     rho3 = rho ** 3
-    threads_per_block = (8, 8, 8)
-    blocks_per_grid = (
-        (deltaD1.L + threads_per_block[0] - 1) // threads_per_block[0],
-        (deltaD1.L + threads_per_block[1] - 1) // threads_per_block[1],
-        (deltaD1.L + threads_per_block[2] - 1) // threads_per_block[2],
-    )
-    reduce_blocks = min(1024, (n_result + REDUCE_THREADS - 1) // REDUCE_THREADS)
-    partial_real_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
-    partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
-
     for l_idx, l in enumerate(range(l_min, l_max + 1)):
         t_l_start = time.perf_counter()
         conv_elapsed = 0.0
@@ -1056,29 +1119,11 @@ def calc_DDD_multipole(
             conv_elapsed += conv_m_elapsed
             total_conv_elapsed += conv_m_elapsed
             t_sum_m_start = time.perf_counter()
-            t_h2d_start = time.perf_counter()
-            data_r1_gpu = cuda.to_device(field_r1_m)
-            data_r2_gpu = cuda.to_device(field_r2_m)
-            total_sum_h2d_elapsed += time.perf_counter() - t_h2d_start
-            t_kernel_start = time.perf_counter()
-            compute_3d_result_gpu[blocks_per_grid, threads_per_block](
-                data_gpu, data_r1_gpu, data_r2_gpu, gamma_gpu, result_gpu, deltaD1.L, deltaD1.PhiSupport
-            )
-            cuda.synchronize()
-            total_sum_kernel_elapsed += time.perf_counter() - t_kernel_start
-            t_reduce_start = time.perf_counter()
-            reduce_complex_sum_kernel[reduce_blocks, REDUCE_THREADS](
-                result_gpu_flat, partial_real_gpu, partial_imag_gpu, n_result
-            )
-            cuda.synchronize()
-            total_sum_reduce_elapsed += time.perf_counter() - t_reduce_start
-            t_d2h_start = time.perf_counter()
-            partial_real = partial_real_gpu.copy_to_host()
-            partial_imag = partial_imag_gpu.copy_to_host()
-            total_sum_d2h_elapsed += time.perf_counter() - t_d2h_start
-            m_values[m] = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / n_result
-            del data_r1_gpu
-            del data_r2_gpu
+            m_values[m], timing = compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
+            total_sum_h2d_elapsed += timing["h2d_elapsed_sec"]
+            total_sum_kernel_elapsed += timing["kernel_elapsed_sec"]
+            total_sum_reduce_elapsed += timing["reduce_elapsed_sec"]
+            total_sum_d2h_elapsed += timing["d2h_elapsed_sec"]
             sum_elapsed += time.perf_counter() - t_sum_m_start
             completed_m_tasks += 1
             if m_progress_callback is not None:
