@@ -801,10 +801,11 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
 
 
 def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
-    if use_fast and has_fast_window_function(l, m):
-        return window_function_legendre_fast(ki, kj, kk, R, l, m)
-    if use_fast and l <= 7:
-        return window_function_legendre_numba(ki, kj, kk, R, l, m)
+    if use_fast:
+        if has_fast_window_function(l, m):
+            return window_function_legendre_fast(ki, kj, kk, R, l, m)
+        else:
+            return window_function_legendre_numba(ki, kj, kk, R, l, m)
 
     if abs(m) > l:
         return 0.0 + 0.0j
