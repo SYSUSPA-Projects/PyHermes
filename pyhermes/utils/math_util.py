@@ -486,7 +486,7 @@ def _factorial_small(n):
 
 @njit
 def spherical_jn_numba(l, x):
-    if l < 0 or l > 7:
+    if l < 0:
         return np.nan
 
     if x == 0.0:
@@ -516,7 +516,7 @@ def spherical_jn_numba(l, x):
 
 @njit
 def assoc_legendre_numba(l, m, x):
-    if l < 0 or l > 7:
+    if l < 0:
         return np.nan
     if m < 0 or m > l:
         return np.nan
@@ -549,7 +549,7 @@ def assoc_legendre_numba(l, m, x):
 
 @njit
 def spherical_harmonic_numba(l, m, ki, kj, kk):
-    if l < 0 or l > 7:
+    if l < 0:
         return np.nan + 0.0j
     if abs(m) > l:
         return 0.0 + 0.0j
@@ -578,7 +578,7 @@ def spherical_harmonic_numba(l, m, ki, kj, kk):
 
 @njit
 def window_function_legendre_numba(ki, kj, kk, R, l, m):
-    if l < 0 or l > 7:
+    if l < 0:
         return np.nan + 0.0j
     if abs(m) > l:
         return 0.0 + 0.0j
@@ -785,9 +785,6 @@ def calc_DDD_multipole(
         raise ValueError("l_max must be non-negative.")
     if l_min > l_max:
         raise ValueError("l_min must be less than or equal to l_max.")
-    if l_max > 7:
-        raise ValueError("The current fast multipole implementation supports l_max <= 7.")
-
     cuda.select_device(int(gpu_device_id))
     gamma = np.ascontiguousarray(cal_gamma(deltaD1.phi_data, deltaD1.PhiSupport, deltaD1.SampRate), dtype=np.float64)
     gamma_gpu = cuda.to_device(gamma)
