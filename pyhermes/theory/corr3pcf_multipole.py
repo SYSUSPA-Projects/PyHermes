@@ -38,7 +38,6 @@ class Corr_3PCF_Multipole(TaskBase):
         self.execution_mode = self.task_params["execution_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
-        self.profile_timing = bool(self.task_params["profile_timing"])
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
         self.threads = int(self.task_params["threads"])
 
@@ -130,7 +129,7 @@ class Corr_3PCF_Multipole(TaskBase):
             f"execution_mode={self.execution_mode}, field_mode={self.field_mode}, "
             f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, "
             f"cache_multipole_fields={self.cache_multipole_fields}, "
-            f"profile_timing={self.profile_timing}, verbose_m_progress={self.verbose_m_progress}"
+            f"verbose_m_progress={self.verbose_m_progress}"
         )
         R = 1.0 / self.convols_data1.V
         if self.field_mode == "raw":
@@ -153,11 +152,11 @@ class Corr_3PCF_Multipole(TaskBase):
             cache_multipole_fields=self.cache_multipole_fields,
             cache_dir=self.cache_dir,
             threads=self.threads,
-            progress_callback=log_l_progress if self.profile_timing else None,
-            m_progress_callback=log_m_progress if (self.profile_timing and self.verbose_m_progress) else None,
+            progress_callback=log_l_progress if self.verbose_m_progress else None,
+            m_progress_callback=log_m_progress if self.verbose_m_progress else None,
         )
         self._prepare_output([self.convols_data1, self.convols_data2, self.convols_data3], l_arr, multipole_l)
-        if self.profile_timing:
+        if self.verbose_m_progress:
             self.logger.info(
                 f"3PCF multipole timing | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
                 f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
@@ -192,7 +191,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"execution_mode={self.execution_mode}, field_mode={self.field_mode}, "
                 f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, ranks={size}, pairs={n_pairs}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
-                f"profile_timing={self.profile_timing}, verbose_m_progress={self.verbose_m_progress}"
+                f"verbose_m_progress={self.verbose_m_progress}"
             )
 
         rho = 1.0 / local_convols[0].V
@@ -230,10 +229,10 @@ class Corr_3PCF_Multipole(TaskBase):
         total_m_tasks = len(task_list)
         completed_m_tasks = 0
         _, log_m_progress = self._log_helpers()
-        l_wall_starts = ({int(l): None for l in l_arr} if (rank == 0 and self.profile_timing) else None)
-        l_conv_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.profile_timing) else None)
-        l_comm_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.profile_timing) else None)
-        l_sum_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.profile_timing) else None)
+        l_wall_starts = ({int(l): None for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
+        l_conv_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
+        l_comm_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
+        l_sum_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
 
         n_rounds = (len(task_list) + n_pairs - 1) // n_pairs
         for round_idx in range(n_rounds):
@@ -290,7 +289,7 @@ class Corr_3PCF_Multipole(TaskBase):
             total_comm_elapsed += comm_elapsed
 
             round_timings = None
-            if self.profile_timing:
+            if self.verbose_m_progress:
                 local_timing = np.array(
                     [
                         int(pair_idx if pair_idx < active_count else -1),
@@ -304,7 +303,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
             if rank == 0:
                 timing_by_task = {}
-                if self.profile_timing:
+                if self.verbose_m_progress:
                     for item in round_timings:
                         idx_float, side_float, conv_val, comm_val = item
                         idx_task = int(idx_float)
@@ -318,7 +317,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     l_idx, l, m = map(int, round_meta[idx])
                     key = (l_idx, l, m)
                     field_r1_m, field_r2_m = round_fields[key]
-                    if self.profile_timing and l_wall_starts[l] is None:
+                    if self.verbose_m_progress and l_wall_starts[l] is None:
                         l_wall_starts[l] = time.perf_counter()
                     task_timing = timing_by_task.get(idx, {})
                     conv_r1 = task_timing.get(0, (0.0, 0.0))[0]
@@ -336,11 +335,11 @@ class Corr_3PCF_Multipole(TaskBase):
                     m_storage[l][m] = value
                     done_per_l[l] += 1
                     completed_m_tasks += 1
-                    if self.profile_timing:
+                    if self.verbose_m_progress:
                         l_conv_accum[l] += max(conv_r1, conv_r2)
                         l_comm_accum[l] += max(comm_r1, comm_r2)
                         l_sum_accum[l] += sum_elapsed
-                    if self.profile_timing and self.verbose_m_progress:
+                    if self.verbose_m_progress:
                         log_m_progress(
                             l=l, l_max=self.l_max, m=m, m_max=l, value=value,
                             elapsed_sec=max(conv_r1, conv_r2) + max(comm_r1, comm_r2) + sum_elapsed,
@@ -354,7 +353,7 @@ class Corr_3PCF_Multipole(TaskBase):
                             stat_str = f"ddd_l={multipole_l[l_idx]:.5e}"
                         else:
                             stat_str = f"delta_ddd_l={multipole_l[l_idx]:.5e} | zeta_l={zeta_l:.5e}"
-                        if self.profile_timing:
+                        if self.verbose_m_progress:
                             self.logger.info(
                                 f" l={l:2d}/{self.l_max:2d} done | {stat_str} | "
                                 f"elapsed={time.perf_counter() - l_wall_starts[l]:.2f} sec | "
@@ -368,13 +367,13 @@ class Corr_3PCF_Multipole(TaskBase):
                                 f"progress={progress:6.2f}% ({completed_m_tasks}/{total_m_tasks} m-tasks)"
                             )
 
-        conv_sum_all = comm.reduce(total_conv_elapsed, op=MPI.SUM, root=0) if self.profile_timing else None
-        conv_max_rank = comm.reduce(total_conv_elapsed, op=MPI.MAX, root=0) if self.profile_timing else None
-        comm_sum_all = comm.reduce(total_comm_elapsed, op=MPI.SUM, root=0) if self.profile_timing else None
-        comm_max_rank = comm.reduce(total_comm_elapsed, op=MPI.MAX, root=0) if self.profile_timing else None
+        conv_sum_all = comm.reduce(total_conv_elapsed, op=MPI.SUM, root=0) if self.verbose_m_progress else None
+        conv_max_rank = comm.reduce(total_conv_elapsed, op=MPI.MAX, root=0) if self.verbose_m_progress else None
+        comm_sum_all = comm.reduce(total_comm_elapsed, op=MPI.SUM, root=0) if self.verbose_m_progress else None
+        comm_max_rank = comm.reduce(total_comm_elapsed, op=MPI.MAX, root=0) if self.verbose_m_progress else None
         if rank == 0:
             self._prepare_output(local_convols, l_arr, multipole_l)
-            if self.profile_timing:
+            if self.verbose_m_progress:
                 self.logger.info(
                     f"Pair-MPI timing | conv_rank0={total_conv_elapsed:.2f} sec | conv_sum_all={conv_sum_all:.2f} sec | "
                     f"conv_max_rank={conv_max_rank:.2f} sec | comm_sum_all={comm_sum_all:.2f} sec | "

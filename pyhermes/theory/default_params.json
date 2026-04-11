@@ -101,7 +101,6 @@
 		"execution_mode": "serial",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
-		"profile_timing": true,
 		"verbose_m_progress": true,
 		"threads": 1
 	}
