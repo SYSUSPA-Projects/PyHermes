@@ -228,7 +228,7 @@ class Corr_3PCF_Multipole(TaskBase):
         total_m_tasks = len(task_list)
         completed_m_tasks = 0
         _, log_m_progress = self._log_helpers()
-        l_wall_starts = {int(l): time.perf_counter() for l in l_arr} if rank == 0 else None
+        l_wall_starts = {int(l): None for l in l_arr} if rank == 0 else None
         l_conv_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
         l_comm_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
         l_sum_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
@@ -292,6 +292,8 @@ class Corr_3PCF_Multipole(TaskBase):
                     l_idx, l, m = map(int, round_meta[idx])
                     key = (l_idx, l, m)
                     field_r1_m, field_r2_m = round_fields[key]
+                    if l_wall_starts[l] is None:
+                        l_wall_starts[l] = time.perf_counter()
                     t_sum = time.perf_counter()
                     value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
                     sum_elapsed = time.perf_counter() - t_sum
