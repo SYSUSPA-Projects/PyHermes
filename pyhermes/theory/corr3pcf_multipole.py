@@ -359,6 +359,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
             if rank == 0:
                 if self.convols_data_path:
+                    self.logger.info("Initializing multipole input on rank 0: loading base ConvolsData ...")
                     self.convols_data = ConvolsData(data_path=self.convols_data_path)
                 elif not (convols_data1 and convols_data2 and convols_data3):
                     self.logger.error(
@@ -375,6 +376,7 @@ class Corr_3PCF_Multipole(TaskBase):
                             self.logger.error(f"convols_data{i} is not ConvolsData.")
                             func_util.safe_exit(1)
                     else:
+                        self.logger.info(f"Initializing multipole input on rank 0: building field leg {i} ...")
                         setattr(self, f"convols_data{i}", self._spawn_windowed(self.convols_data, getattr(self, f"win_params{i}", None)))
 
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", getattr(self, f"convols_data{i}").convols_info)
@@ -389,11 +391,17 @@ class Corr_3PCF_Multipole(TaskBase):
             convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
 
             if self.execution_mode == "pair_mpi":
+                if rank == 0:
+                    self.logger.info(
+                        f"Initializing multipole input: broadcasting smoothed fields to {comm.Get_size()} MPI ranks ..."
+                    )
                 local_convols = [
                     self._broadcast_convols(rank, comm, self.convols_data1 if rank == 0 else None),
                     self._broadcast_convols(rank, comm, self.convols_data2 if rank == 0 else None),
                     self._broadcast_convols(rank, comm, self.convols_data3 if rank == 0 else None),
                 ]
+                if rank == 0:
+                    self.logger.info("Initializing multipole input: broadcast complete, entering MPI convolution stage ...")
                 self._run_pair_mpi_mode(comm, rank, local_convols)
             else:
                 if rank == 0:
