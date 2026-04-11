@@ -59,7 +59,7 @@ Key parameters
 - ``l_min`` and ``l_max``: minimum and maximum multipole order to compute
 - ``gpu_device_id``: CUDA device index used for the summation stage
 - ``field_mode``: choose ``"raw"`` to save ``ddd_l`` from ``<DDD>`` or ``"delta"`` to save ``delta_ddd_l`` and ``zeta_l``
-- ``execution_mode``: use ``"serial"`` for the default single-rank workflow or ``"pair_mpi"`` to use two MPI ranks where the two convolution legs for each ``m`` are computed in parallel and rank 0 performs the CUDA summation
+- ``execution_mode``: use ``"serial"`` for the default single-rank workflow or ``"pair_mpi"`` for grouped MPI execution; with one rank it falls back to serial, and with MPI it expects an even number of ranks so that the `(r1,+m)` and `(r2,-m)` convolution legs can be processed in parallel batches before rank 0 performs the CUDA summation
 - ``threads``: CPU threads used by the convolution stage; the current default is ``1``, and recent tests showed little difference between ``1`` and ``8`` for the present implementation
 - ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
 
@@ -81,8 +81,8 @@ time compared with the original legacy scripts while preserving numerical
 agreement.
 
 For the current single-node GPU environment, the recommended high-performance
-workflow is ``execution_mode: "pair_mpi"`` with exactly two MPI ranks and
+workflow is ``execution_mode: "pair_mpi"`` with an even number of MPI ranks and
 ``threads: 1``. In this mode the two convolution legs needed for each ``m`` are
-computed in parallel on the CPU side, while rank 0 performs the CUDA summation.
-This mode substantially outperformed the single-rank ``serial`` workflow in the
-current benchmark setup.
+processed in grouped MPI batches on the CPU side, while rank 0 performs the
+CUDA summation. This mode substantially outperformed the single-rank
+``serial`` workflow in the current benchmark setup.

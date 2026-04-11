@@ -170,15 +170,25 @@ class Corr_3PCF_Multipole(TaskBase):
         )
 
     def _run_pair_mpi_mode(self, comm, rank, local_convols):
-        if comm.Get_size() != 2:
-            self.logger.error("execution_mode='pair_mpi' requires exactly 2 MPI ranks.")
+        size = comm.Get_size()
+        if size == 1:
+            if rank == 0:
+                self.logger.warning(
+                    "execution_mode='pair_mpi' requested with a single MPI rank. "
+                    "Falling back to serial execution."
+                )
+                self._run_serial_mode(rank)
+            return
+        if size < 2 or size % 2 != 0:
+            self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
             func_util.safe_exit(1)
+        n_pairs = size // 2
 
         if rank == 0:
             self.logger.info("Start to calculate 3PCF multipole ...")
             self.logger.info(
                 f"execution_mode={self.execution_mode}, field_mode={self.field_mode}, "
-                f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, "
+                f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, ranks={size}, pairs={n_pairs}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}"
             )
@@ -196,82 +206,127 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             func_util.safe_exit(1)
 
-        conv_context_r1 = math_util._prepare_legendre_convolution_context(field2) if rank == 0 else None
-        conv_context_r2 = math_util._prepare_legendre_convolution_context(field3) if rank == 1 else None
+        pair_idx = rank if rank < n_pairs else rank - n_pairs
+        is_r1_rank = rank < n_pairs
+
+        conv_context_r1 = math_util._prepare_legendre_convolution_context(field2) if is_r1_rank else None
+        conv_context_r2 = math_util._prepare_legendre_convolution_context(field3) if not is_r1_rank else None
         gpu_context = math_util._prepare_multipole_gpu_context(field1, gpu_device_id=self.gpu_device_id) if rank == 0 else None
 
+        task_list = []
         l_arr = np.arange(self.l_min, self.l_max + 1, dtype=np.int32)
+        for l_idx, l in enumerate(range(self.l_min, self.l_max + 1)):
+            for m in range(0, l + 1):
+                task_list.append((l_idx, l, m))
         multipole_l = np.empty(l_arr.size, dtype=np.float64) if rank == 0 else None
+        m_storage = {int(l): np.empty(int(l) + 1, dtype=np.complex128) for l in l_arr} if rank == 0 else None
+        done_per_l = {int(l): 0 for l in l_arr} if rank == 0 else None
         total_conv_elapsed = 0.0
         total_sum_elapsed = 0.0
         total_comm_elapsed = 0.0
         total_h2d = total_kernel = total_reduce = total_d2h = 0.0
-        total_m_tasks = sum(l + 1 for l in range(self.l_min, self.l_max + 1))
+        total_m_tasks = len(task_list)
         completed_m_tasks = 0
         _, log_m_progress = self._log_helpers()
+        l_wall_starts = {int(l): time.perf_counter() for l in l_arr} if rank == 0 else None
+        l_conv_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
+        l_comm_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
+        l_sum_accum = {int(l): 0.0 for l in l_arr} if rank == 0 else None
 
-        for l_idx, l in enumerate(range(self.l_min, self.l_max + 1)):
+        n_rounds = (len(task_list) + n_pairs - 1) // n_pairs
+        for round_idx in range(n_rounds):
+            active_tasks = task_list[round_idx * n_pairs : (round_idx + 1) * n_pairs]
+            active_count = len(active_tasks)
+            round_meta = np.full((n_pairs, 3), -1, dtype=np.int32)
+            for idx, (l_idx, l, m) in enumerate(active_tasks):
+                round_meta[idx] = (l_idx, l, m)
+            comm.Bcast(round_meta, root=0)
+
+            t_conv = time.perf_counter()
+            local_field = None
+            local_meta = tuple(round_meta[pair_idx])
+            if pair_idx < active_count:
+                _, l, m = local_meta
+                if is_r1_rank:
+                    local_field = math_util._stream_convolution_fields(
+                        field2, self.r1, int(l), threads=self.threads, m_values=[int(m)], conv_context=conv_context_r1
+                    )[0]
+                else:
+                    local_field = math_util._stream_convolution_fields(
+                        field3, self.r2, int(l), threads=self.threads, m_values=[-int(m)], conv_context=conv_context_r2
+                    )[0]
+            conv_elapsed = time.perf_counter() - t_conv
+            total_conv_elapsed += conv_elapsed
+
+            t_comm = time.perf_counter()
+            if pair_idx < active_count:
+                l_idx, l, m = local_meta
+                tag_base = 200000 + round_idx * 100 + pair_idx
+                if rank == 0:
+                    round_fields = {}
+                    if pair_idx == 0:
+                        round_fields[(int(l_idx), int(l), int(m))] = [local_field, None]
+                    for idx in range(active_count):
+                        recv_l_idx, recv_l, recv_m = map(int, round_meta[idx])
+                        key = (recv_l_idx, recv_l, recv_m)
+                        if idx == 0:
+                            recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
+                            comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs, tag=tag_base + 50)
+                            round_fields[key][1] = recv_r2
+                        else:
+                            recv_r1 = np.empty(local_field.shape, dtype=np.complex128)
+                            recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
+                            comm.Recv([recv_r1, MPI.COMPLEX16], source=idx, tag=200000 + round_idx * 100 + idx)
+                            comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs + idx, tag=200000 + round_idx * 100 + idx + 50)
+                            round_fields[key] = [recv_r1, recv_r2]
+                elif is_r1_rank:
+                    if rank != 0:
+                        comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base)
+                else:
+                    comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base + 50)
+            comm_elapsed = time.perf_counter() - t_comm
+            total_comm_elapsed += comm_elapsed
+
             if rank == 0:
-                t_l = time.perf_counter()
-                m_values = np.empty(l + 1, dtype=np.complex128)
-                l_conv = l_sum = l_comm = 0.0
-            for m in range(0, l + 1):
-                t_m = time.perf_counter()
-                t_conv = time.perf_counter()
-                if rank == 0:
-                    field_r1_m = math_util._stream_convolution_fields(
-                        field2, self.r1, l, threads=self.threads, m_values=[m], conv_context=conv_context_r1
-                    )[0]
-                else:
-                    field_r2_m = math_util._stream_convolution_fields(
-                        field3, self.r2, l, threads=self.threads, m_values=[-m], conv_context=conv_context_r2
-                    )[0]
-                conv_elapsed = time.perf_counter() - t_conv
-                total_conv_elapsed += conv_elapsed
-
-                t_comm = time.perf_counter()
-                if rank == 0:
-                    recv_r2 = np.empty(field_r1_m.shape, dtype=np.complex128)
-                    comm.Recv([recv_r2, MPI.COMPLEX16], source=1, tag=1000 + l * 100 + m)
-                else:
-                    comm.Send([np.ascontiguousarray(field_r2_m, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=1000 + l * 100 + m)
-                    recv_r2 = None
-                comm_elapsed = time.perf_counter() - t_comm
-                total_comm_elapsed += comm_elapsed
-
-                if rank == 0:
+                for idx in range(active_count):
+                    l_idx, l, m = map(int, round_meta[idx])
+                    key = (l_idx, l, m)
+                    field_r1_m, field_r2_m = round_fields[key]
                     t_sum = time.perf_counter()
-                    m_values[m], timing = math_util.compute_multipole_m_summand(field_r1_m, recv_r2, gpu_context)
+                    value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
                     sum_elapsed = time.perf_counter() - t_sum
                     total_sum_elapsed += sum_elapsed
                     total_h2d += timing["h2d_elapsed_sec"]
                     total_kernel += timing["kernel_elapsed_sec"]
                     total_reduce += timing["reduce_elapsed_sec"]
                     total_d2h += timing["d2h_elapsed_sec"]
-                    l_conv += conv_elapsed
-                    l_comm += comm_elapsed
-                    l_sum += sum_elapsed
+                    m_storage[l][m] = value
+                    done_per_l[l] += 1
                     completed_m_tasks += 1
+                    l_conv_accum[l] += conv_elapsed if idx == 0 else 0.0
+                    l_comm_accum[l] += comm_elapsed if idx == 0 else 0.0
+                    l_sum_accum[l] += sum_elapsed
                     if self.verbose_m_progress:
                         log_m_progress(
-                            l=l, l_max=self.l_max, m=m, m_max=l, value=m_values[m],
-                            elapsed_sec=time.perf_counter() - t_m,
+                            l=l, l_max=self.l_max, m=m, m_max=l, value=value,
+                            elapsed_sec=conv_elapsed + sum_elapsed,
                             completed_m_tasks=completed_m_tasks, total_m_tasks=total_m_tasks,
                         )
-            if rank == 0:
-                multipole_l[l_idx] = math_util.combine_multipole_m_terms(m_values, l)
-                zeta_l = multipole_l[l_idx] / (rho ** 3)
-                progress = (completed_m_tasks / total_m_tasks) * 100.0
-                if self.field_mode == "raw":
-                    stat_str = f"ddd_l={multipole_l[l_idx]:.5e}"
-                else:
-                    stat_str = f"delta_ddd_l={multipole_l[l_idx]:.5e} | zeta_l={zeta_l:.5e}"
-                self.logger.info(
-                    f" l={l:2d}/{self.l_max:2d} done | {stat_str} | "
-                    f"elapsed={time.perf_counter() - t_l:.2f} sec | conv={l_conv:.2f} sec | "
-                    f"comm={l_comm:.2f} sec | sum={l_sum:.2f} sec | "
-                    f"progress={progress:6.2f}% ({completed_m_tasks}/{total_m_tasks} m-tasks)"
-                )
+                    if done_per_l[l] == l + 1:
+                        multipole_l[l_idx] = math_util.combine_multipole_m_terms(m_storage[l], l)
+                        zeta_l = multipole_l[l_idx] / (rho ** 3)
+                        progress = (completed_m_tasks / total_m_tasks) * 100.0
+                        if self.field_mode == "raw":
+                            stat_str = f"ddd_l={multipole_l[l_idx]:.5e}"
+                        else:
+                            stat_str = f"delta_ddd_l={multipole_l[l_idx]:.5e} | zeta_l={zeta_l:.5e}"
+                        self.logger.info(
+                            f" l={l:2d}/{self.l_max:2d} done | {stat_str} | "
+                            f"elapsed={time.perf_counter() - l_wall_starts[l]:.2f} sec | "
+                            f"conv={l_conv_accum[l]:.2f} sec | comm={l_comm_accum[l]:.2f} sec | "
+                            f"sum={l_sum_accum[l]:.2f} sec | "
+                            f"progress={progress:6.2f}% ({completed_m_tasks}/{total_m_tasks} m-tasks)"
+                        )
 
         conv_sum_all = comm.reduce(total_conv_elapsed, op=MPI.SUM, root=0)
         conv_max_rank = comm.reduce(total_conv_elapsed, op=MPI.MAX, root=0)
