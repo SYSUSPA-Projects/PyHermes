@@ -287,13 +287,39 @@ class Corr_3PCF_Multipole(TaskBase):
             comm_elapsed = time.perf_counter() - t_comm
             total_comm_elapsed += comm_elapsed
 
+            local_timing = np.array(
+                [
+                    int(pair_idx if pair_idx < active_count else -1),
+                    int(0 if is_r1_rank else 1),
+                    float(conv_elapsed),
+                    float(comm_elapsed),
+                ],
+                dtype=np.float64,
+            )
+            round_timings = comm.gather(local_timing, root=0)
+
             if rank == 0:
+                timing_by_task = {}
+                for item in round_timings:
+                    idx_float, side_float, conv_val, comm_val = item
+                    idx_task = int(idx_float)
+                    if idx_task < 0 or idx_task >= active_count:
+                        continue
+                    side = int(side_float)
+                    if idx_task not in timing_by_task:
+                        timing_by_task[idx_task] = {}
+                    timing_by_task[idx_task][side] = (float(conv_val), float(comm_val))
                 for idx in range(active_count):
                     l_idx, l, m = map(int, round_meta[idx])
                     key = (l_idx, l, m)
                     field_r1_m, field_r2_m = round_fields[key]
                     if l_wall_starts[l] is None:
                         l_wall_starts[l] = time.perf_counter()
+                    task_timing = timing_by_task.get(idx, {})
+                    conv_r1 = task_timing.get(0, (0.0, 0.0))[0]
+                    conv_r2 = task_timing.get(1, (0.0, 0.0))[0]
+                    comm_r1 = task_timing.get(0, (0.0, 0.0))[1]
+                    comm_r2 = task_timing.get(1, (0.0, 0.0))[1]
                     t_sum = time.perf_counter()
                     value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
                     sum_elapsed = time.perf_counter() - t_sum
@@ -305,13 +331,13 @@ class Corr_3PCF_Multipole(TaskBase):
                     m_storage[l][m] = value
                     done_per_l[l] += 1
                     completed_m_tasks += 1
-                    l_conv_accum[l] += conv_elapsed if idx == 0 else 0.0
-                    l_comm_accum[l] += comm_elapsed if idx == 0 else 0.0
+                    l_conv_accum[l] += max(conv_r1, conv_r2)
+                    l_comm_accum[l] += max(comm_r1, comm_r2)
                     l_sum_accum[l] += sum_elapsed
                     if self.verbose_m_progress:
                         log_m_progress(
                             l=l, l_max=self.l_max, m=m, m_max=l, value=value,
-                            elapsed_sec=conv_elapsed + sum_elapsed,
+                            elapsed_sec=max(conv_r1, conv_r2) + max(comm_r1, comm_r2) + sum_elapsed,
                             completed_m_tasks=completed_m_tasks, total_m_tasks=total_m_tasks,
                         )
                     if done_per_l[l] == l + 1:
