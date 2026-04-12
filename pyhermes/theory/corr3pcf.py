@@ -226,6 +226,7 @@ class Corr_3PCF(TaskBase):
                     raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
                 
                 t_start = time.perf_counter()
+                t_ddd_start = t_start
 
                 theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
             else:
@@ -338,7 +339,11 @@ class Corr_3PCF(TaskBase):
                     global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
                     if rank == 0 and global_completed >= next_report_threshold:
                         progress = (global_completed / total_work) * 100.0
-                        self.logger.info(f" Progress: {progress:6.2f}% ({global_completed}/{total_work})")
+                        elapsed = time.perf_counter() - t_ddd_start
+                        self.logger.info(
+                            f" Progress: {progress:6.2f}% ({global_completed}/{total_work}) | "
+                            f"elapsed={elapsed:.2f} sec"
+                        )
                         next_report_threshold += report_interval
 
             # weighted reduce to global mean
@@ -347,6 +352,8 @@ class Corr_3PCF(TaskBase):
             comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
 
             if rank == 0:
+                t_ddd_end = time.perf_counter()
+                self.logger.info(f"DDD main loop time: {t_ddd_end - t_ddd_start:.4f} sec")
                 self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
                 DDD_mean_global = global_weighted / npos_total
 
@@ -358,9 +365,22 @@ class Corr_3PCF(TaskBase):
                 # -------------------------------
                 RR = (1.0 / _local_convols1.V) ** 2
 
+                t_xi12 = time.perf_counter()
                 xi12 = calc_DD_mean_r(self.r12, _local_convols1 - R, _local_convols2 - R) / RR
+                t_xi12 = time.perf_counter() - t_xi12
+
+                t_xi13 = time.perf_counter()
                 xi13 = calc_DD_mean_r(self.r13, _local_convols1 - R, _local_convols3 - R) / RR
+                t_xi13 = time.perf_counter() - t_xi13
+
+                t_xi23 = time.perf_counter()
                 xi23 = np.array([calc_DD_mean_r(r, _local_convols2 - R, _local_convols3 - R) / RR for r in self.corr3pcf_data.r23])
+                t_xi23 = time.perf_counter() - t_xi23
+
+                self.logger.info(
+                    f"Post-processing timing | xi12={t_xi12:.2f} sec | "
+                    f"xi13={t_xi13:.2f} sec | xi23={t_xi23:.2f} sec"
+                )
 
                 self.corr3pcf_data.xi12 = xi12
                 self.corr3pcf_data.xi13 = xi13
@@ -397,7 +417,11 @@ class Corr_3PCF(TaskBase):
             global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
             if rank == 0:
                 progress = (global_completed / total_work) * 100.0
-                self.logger.info(f" Progress: {progress:6.2f}% ({global_completed}/{total_work})")
+                elapsed = time.perf_counter() - t_ddd_start
+                self.logger.info(
+                    f" Progress: {progress:6.2f}% ({global_completed}/{total_work}) | "
+                    f"elapsed={elapsed:.2f} sec"
+                )
 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
