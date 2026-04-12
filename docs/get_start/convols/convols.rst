@@ -44,6 +44,17 @@ Minimal Python driver
    convols = Convols(param_task=convols_params)
    convols.run(overwrite=True)
 
+If you want to modify parameters directly inside the Python driver when using
+MPI, do it only on rank 0. For example:
+
+.. code-block:: python
+
+   from pyhermes.utils.mpi_util import MPI
+
+   if MPI.COMM_WORLD.Get_rank() == 0:
+       convols_params["Convols"]["bandwidth"] = 2
+       convols_params["Convols"]["fout_path"] = "./output/quijote_sfc_bw2.pkl"
+
 Run it
 ------
 

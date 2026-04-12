@@ -31,6 +31,17 @@ Minimal Python driver
    corr2pcf = Corr_2PCF(param_task=corr2pcf_params)
    corr2pcf.run(overwrite=True)
 
+If you want to modify parameters directly inside the Python driver when using
+MPI, do it only on rank 0. For example:
+
+.. code-block:: python
+
+   from pyhermes.utils.mpi_util import MPI
+
+   if MPI.COMM_WORLD.Get_rank() == 0:
+       corr2pcf_params["Corr_2PCF"]["n_r"] = 20
+       corr2pcf_params["Corr_2PCF"]["fout_path"] = "./output/quijote_2pcf_num20.pkl"
+
 Run it
 ------
 

@@ -43,6 +43,17 @@ Minimal Python driver
    corr3pcf = Corr_3PCF(param_task=corr3pcf_params)
    corr3pcf.run(overwrite=True)
 
+If you want to modify parameters directly inside the Python driver when using
+MPI, do it only on rank 0. For example:
+
+.. code-block:: python
+
+   from pyhermes.utils.mpi_util import MPI
+
+   if MPI.COMM_WORLD.Get_rank() == 0:
+       corr3pcf_params["Corr_3PCF"]["center"] = "particle"
+       corr3pcf_params["Corr_3PCF"]["fout_path"] = "./output/quijote_3pcf_part.pkl"
+
 Run it
 ------
 

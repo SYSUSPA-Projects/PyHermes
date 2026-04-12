@@ -43,6 +43,18 @@ Minimal Python driver
    corr3pcf_multipole = Corr_3PCF_Multipole(param_task=params)
    corr3pcf_multipole.run(overwrite=True)
 
+If you want to modify parameters directly inside the Python driver when using
+MPI, do it only on rank 0. For example:
+
+.. code-block:: python
+
+   from pyhermes.utils.mpi_util import MPI
+
+   if MPI.COMM_WORLD.Get_rank() == 0:
+       params["Corr_3PCF_Multipole"]["execution_mode"] = "pair_mpi"
+       params["Corr_3PCF_Multipole"]["l_max"] = 7
+       params["Corr_3PCF_Multipole"]["fout_path"] = "./output/quijote_3pcf_multipole_lmax7.pkl"
+
 Run it
 ------
 
