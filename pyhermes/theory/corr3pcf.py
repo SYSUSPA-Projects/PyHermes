@@ -358,7 +358,9 @@ class Corr_3PCF(TaskBase):
             # Compute xi12/xi13 on rank 0 and xi23 in parallel across ranks
             # -------------------------------
             RR = (1.0 / _local_convols1.V) ** 2
-            delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - R)
+            delta_convols1 = None
+            if rank == 0:
+                delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - R)
             delta_convols2 = field_convols2
             delta_convols3 = field_convols3
 
