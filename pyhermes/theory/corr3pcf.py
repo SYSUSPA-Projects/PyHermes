@@ -60,6 +60,12 @@ def calc_DDD_mean_mc(
     return res
 
 
+def _describe_window_action(win_params):
+    if win_params:
+        return f"applying window type={win_params['type']} args={win_params.get('len_args', {})}"
+    return "no window, reusing base field"
+
+
 class Corr_3PCF(TaskBase):
     """
     3PCF task.
@@ -149,12 +155,14 @@ class Corr_3PCF(TaskBase):
                     if cdata is not None:
                         self.logger.info(f"Loading convols data from argument 'convols_data{i}'")
                         if isinstance(cdata, ConvolsData):
+                            self.logger.info(f"Preparing field leg {i}: provided ConvolsData, no additional window convolution")
                             setattr(self, f"convols_data{i}", cdata)
                         else:
                             self.logger.error(f"convols_data{i} is not ConvolsData.")
                             func_util.safe_exit(1)
                     else:
                         _win_params = getattr(self, f"win_params{i}", None)
+                        self.logger.info(f"Preparing field leg {i}: {_describe_window_action(_win_params)}")
                         if _win_params:
                             _window = WindowFunc(_win_params, self.convols_data.convols_info)
                             _convols_data = self.convols_data @ _window

@@ -9,6 +9,12 @@ from pyhermes.utils import func_util, math_util
 from pyhermes.pipeline import TaskBase
 
 
+def _describe_window_action(win_params):
+    if win_params:
+        return f"applying window type={win_params['type']} args={win_params.get('len_args', {})}"
+    return "no window, reusing base field"
+
+
 class Corr_3PCF_Multipole(TaskBase):
 
     def __init__(self, param_task):
@@ -411,12 +417,19 @@ class Corr_3PCF_Multipole(TaskBase):
                 for i, cdata in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3]):
                     if cdata is not None:
                         if isinstance(cdata, ConvolsData):
+                            self.logger.info(
+                                f"Initializing multipole input on rank 0: preparing field leg {i} | "
+                                "provided ConvolsData, no additional window convolution"
+                            )
                             setattr(self, f"convols_data{i}", cdata)
                         else:
                             self.logger.error(f"convols_data{i} is not ConvolsData.")
                             func_util.safe_exit(1)
                     else:
-                        self.logger.info(f"Initializing multipole input on rank 0: building field leg {i} ...")
+                        self.logger.info(
+                            f"Initializing multipole input on rank 0: preparing field leg {i} | "
+                            f"{_describe_window_action(getattr(self, f'win_params{i}', None))}"
+                        )
                         setattr(self, f"convols_data{i}", self._spawn_windowed(self.convols_data, getattr(self, f"win_params{i}", None)))
 
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", getattr(self, f"convols_data{i}").convols_info)
