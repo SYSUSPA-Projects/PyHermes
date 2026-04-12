@@ -292,18 +292,11 @@ class Corr_3PCF(TaskBase):
             total_work = total_tasks * size
 
             if rank == 0:
-                arr_complete = np.zeros(size, dtype=np.int64)  # done theta count per rank
                 report_interval = max(1, total_work // 10)     # report ~10 times
                 next_report_threshold = report_interval
-                # post non-blocking receives for each rank (including rank0 optionally)
-                requests = [comm.irecv(source=r, tag=1000 + r) for r in range(size)]
-                count_all = False
             else:
-                arr_complete = None
                 report_interval = None
                 next_report_threshold = None
-                requests = None
-                count_all = None
 
             local_completed = 0
             local_report_interval = max(1, total_tasks // 10)  # each rank reports ~10 times
@@ -340,25 +333,13 @@ class Corr_3PCF(TaskBase):
                 # ---- progress update ----
                 local_completed += 1
 
-                # each rank reports occasionally
+                # progress update via collective reduction to avoid unmatched MPI messages
                 if (local_completed % local_report_interval) == 0 or (local_completed == total_tasks):
-                    comm.isend(local_completed, dest=0, tag=1000 + rank)
-
-                # rank0 polls progress
-                if rank == 0:
-                    for r, req in enumerate(requests):
-                        ok, payload = req.test()
-                        if ok:
-                            arr_complete[r] = payload
-                            requests[r] = comm.irecv(source=r, tag=1000 + r)
-
-                    global_completed = int(np.sum(arr_complete))
-                    if global_completed >= next_report_threshold:
+                    global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
+                    if rank == 0 and global_completed >= next_report_threshold:
                         progress = (global_completed / total_work) * 100.0
                         self.logger.info(f" Progress: {progress:6.2f}% ({global_completed}/{total_work})")
                         next_report_threshold += report_interval
-                        if global_completed >= total_work:
-                            count_all = True
 
             # weighted reduce to global mean
             local_weighted = local_DDD_mean * npos_local
@@ -411,13 +392,8 @@ class Corr_3PCF(TaskBase):
 
             comm.Barrier()
 
-            if rank == 0 and not count_all:
-                # final flush
-                for r, req in enumerate(requests):
-                    ok, payload = req.test()
-                    if ok:
-                        arr_complete[r] = payload
-                global_completed = int(np.sum(arr_complete))
+            global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
+            if rank == 0:
                 progress = (global_completed / total_work) * 100.0
                 self.logger.info(f" Progress: {progress:6.2f}% ({global_completed}/{total_work})")
 
