@@ -396,6 +396,11 @@ class Corr_3PCF(TaskBase):
                     f"xi13={t_xi13:.2f} sec | xi23={t_xi23:.2f} sec"
                 )
 
+                if field_mode == "raw":
+                    xi12 -= 1.0
+                    xi13 -= 1.0
+                    xi23 -= 1.0
+
                 self.corr3pcf_data.xi12 = xi12
                 self.corr3pcf_data.xi13 = xi13
                 self.corr3pcf_data.xi23 = xi23
