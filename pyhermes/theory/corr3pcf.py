@@ -230,10 +230,6 @@ class Corr_3PCF(TaskBase):
                     )
                 else:
                     raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
-                
-                t_start = time.perf_counter()
-                t_ddd_start = t_start
-
                 theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
             else:
                 theta_arr = None
@@ -290,6 +286,9 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 self.logger.info(f"Total centers used: {npos_total} (distributed over {size} ranks)")
+                t_start = time.perf_counter()
+                self.logger.info(f"Pre-DDD setup time: {t_start - t0:.4f} sec")
+                t_ddd_start = t_start
 
             # -------------------------------
             # Progress reporting (pos-parallel): track per-rank theta completion
@@ -426,9 +425,6 @@ class Corr_3PCF(TaskBase):
                     self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
-            if rank == 0:
-                elapsed = time.perf_counter() - t_ddd_start
-                self.logger.info(f" DDD progress: 100.00% ({total_tasks}/{total_tasks}) | elapsed={elapsed:.2f} sec")
 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
