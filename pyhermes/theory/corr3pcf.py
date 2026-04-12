@@ -347,6 +347,7 @@ class Corr_3PCF(TaskBase):
             comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
 
             if rank == 0:
+                self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
                 DDD_mean_global = global_weighted / npos_total
 
                 self.corr3pcf_data.theta = theta_arr
@@ -387,6 +388,7 @@ class Corr_3PCF(TaskBase):
 
                 # Save
                 if self.fout_path:
+                    self.logger.info("Saving 3PCF result to output file ...")
                     self.corr3pcf_data.saveflag = True
                     self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
 
