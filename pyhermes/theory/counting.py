@@ -9,12 +9,6 @@ from pyhermes.utils import func_util, math_util
 from pyhermes.pipeline import TaskBase
 
 
-def _describe_window_action(win_params):
-    if win_params:
-        return f"applying window type={win_params['type']} args={win_params.get('len_args', {})}"
-    return "no window, reusing base field"
-
-
 
 class Counting(TaskBase):
 
@@ -71,7 +65,7 @@ class Counting(TaskBase):
                     else:
                         self.logger.error("Unexpected input: 'convols_data' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
                         func_util.safe_exit(1)
-                self.logger.info(f"Preparing counting field: {_describe_window_action(self.win_params)}")
+                self.logger.info(f"Preparing counting field: {func_util.describe_window_action(self.win_params)}")
                 if self.win_params:
                     self.window = WindowFunc(self.win_params, self.convols_data.convols_info)
                     self.convols_data = self.convols_data @ self.window

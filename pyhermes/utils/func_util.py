@@ -85,3 +85,9 @@ def find_subsplit_files(file):
         if not files:
             files.append(file)
     return files
+
+
+def describe_window_action(win_params):
+    if win_params:
+        return f"applying window type={win_params['type']} args={win_params.get('len_args', {})}"
+    return "no window, reusing base field"

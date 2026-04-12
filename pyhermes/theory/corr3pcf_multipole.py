@@ -9,12 +9,6 @@ from pyhermes.utils import func_util, math_util
 from pyhermes.pipeline import TaskBase
 
 
-def _describe_window_action(win_params):
-    if win_params:
-        return f"applying window type={win_params['type']} args={win_params.get('len_args', {})}"
-    return "no window, reusing base field"
-
-
 class Corr_3PCF_Multipole(TaskBase):
 
     def __init__(self, param_task):
@@ -428,7 +422,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         self.logger.info(
                             f"Initializing multipole input on rank 0: preparing field leg {i} | "
-                            f"{_describe_window_action(getattr(self, f'win_params{i}', None))}"
+                            f"{func_util.describe_window_action(getattr(self, f'win_params{i}', None))}"
                         )
                         setattr(self, f"convols_data{i}", self._spawn_windowed(self.convols_data, getattr(self, f"win_params{i}", None)))
 
