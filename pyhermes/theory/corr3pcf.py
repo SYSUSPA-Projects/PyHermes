@@ -12,10 +12,11 @@ from .corr2pcf import calc_DD_mean_r
 
 def calc_DDD_mean_mc(
     r12_scaled, r13_scaled, theta, pos_scaled, n_rot,
-    convols_data1, convols_data2, convols_data3,
+    convols_meta, convols_data2, convols_data3,
     center="random",
     seed_base_rot=-1,
     theta_index=-1,
+    eps1=None,
 ):
     """
     Wrapper around numba kernels:
@@ -25,10 +26,10 @@ def calc_DDD_mean_mc(
     All lengths/positions are SCALED (GRID) units here.
     """
     kwargs_common = {
-        "phi_data": convols_data1.phi_data,
-        "L": convols_data1.L,
-        "SampRate": convols_data1.SampRate,
-        "PhiSupport": convols_data1.PhiSupport,
+        "phi_data": convols_meta.phi_data,
+        "L": convols_meta.L,
+        "SampRate": convols_meta.SampRate,
+        "PhiSupport": convols_meta.PhiSupport,
         "seed_base_rot": seed_base_rot,
         "theta_index": theta_index
     }
@@ -37,7 +38,8 @@ def calc_DDD_mean_mc(
     eps3 = convols_data3.epsilon
 
     if center == "random":
-        eps1 = convols_data1.epsilon
+        if eps1 is None:
+            raise ValueError("eps1 must be provided when center='random'.")
         res = math_util.calc_DDD_mc_random_center(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
@@ -45,7 +47,7 @@ def calc_DDD_mean_mc(
             **kwargs_common,
         )
     elif center == "particle":
-        R = 1.0 / convols_data1.V
+        R = 1.0 / convols_meta.V
         res = math_util.calc_DDD_mc_pos_center_fast(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
@@ -120,6 +122,10 @@ class Corr_3PCF(TaskBase):
 
             self.format_params()
             self.corr3pcf_data = Corr3PCFData()
+            base_seed = base_seed if base_seed is not None else self.base_seed
+            center = center if center is not None else self.center
+            n_rand = n_rand if n_rand is not None else self.n_rand
+            field_mode = self.field_mode
 
             # -------------------------------
             # Load / build convols_data1/2/3 on rank 0, broadcast convols_info, Bcast epsilon
@@ -171,7 +177,8 @@ class Corr_3PCF(TaskBase):
             convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
 
             if rank == 0:
-                self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
+                if center == "random":
+                    self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
                 self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
                 self.convols_data3.epsilon = np.ascontiguousarray(self.convols_data3.epsilon, dtype=np.float64)
                 _local_convols1 = self.convols_data1
@@ -181,7 +188,10 @@ class Corr_3PCF(TaskBase):
                 _local_convols1 = ConvolsData()
                 _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
                 _local_convols1.format_convols_params()
-                _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
+                if center == "random":
+                    _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
+                else:
+                    _local_convols1.epsilon = None
 
                 _local_convols2 = ConvolsData()
                 _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
@@ -195,7 +205,8 @@ class Corr_3PCF(TaskBase):
 
             self.corr3pcf_data.task_params = self.task_params
 
-            comm.Bcast(_local_convols1.epsilon, root=0)
+            if center == "random":
+                comm.Bcast(_local_convols1.epsilon, root=0)
             comm.Bcast(_local_convols2.epsilon, root=0)
             comm.Bcast(_local_convols3.epsilon, root=0)
             comm.Barrier()
@@ -203,11 +214,6 @@ class Corr_3PCF(TaskBase):
             # -------------------------------
             # Prepare theta and seeds (all ranks compute all theta)
             # -------------------------------
-            base_seed = base_seed if base_seed is not None else self.base_seed
-            center = center if center is not None else self.center
-            n_rand = n_rand if n_rand is not None else self.n_rand
-            field_mode = self.field_mode
-
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
                 if center == "random":
@@ -288,19 +294,8 @@ class Corr_3PCF(TaskBase):
             # -------------------------------
             # Progress reporting (pos-parallel): track per-rank theta completion
             # -------------------------------
-            total_tasks = len(theta_arr)  # = n_theta
-            # total amount of work across all ranks
-            total_work = total_tasks * size
-
-            if rank == 0:
-                report_interval = max(1, total_work // 10)     # report ~10 times
-                next_report_threshold = report_interval
-            else:
-                report_interval = None
-                next_report_threshold = None
-
+            total_tasks = len(theta_arr)
             local_completed = 0
-            local_report_interval = max(1, total_tasks // 10)  # each rank reports ~10 times
 
             # -------------------------------
             # Main loop over theta on each rank (local means)
@@ -312,7 +307,7 @@ class Corr_3PCF(TaskBase):
                 field_convols2 = _local_convols2
                 field_convols3 = _local_convols3
             elif field_mode == "delta":
-                field_convols1 = _local_convols1 - R
+                field_convols1 = None if center == "particle" else (_local_convols1 - R)
                 field_convols2 = _local_convols2 - R
                 field_convols3 = _local_convols3 - R
             else:
@@ -323,28 +318,24 @@ class Corr_3PCF(TaskBase):
             local_DDD_mean = np.empty(theta_arr.shape[0], dtype=np.float64)
 
             for it, th in enumerate(theta_arr):
+                theta_start = time.perf_counter()
                 local_DDD_mean[it] = calc_DDD_mean_mc(
                     r12_scaled, r13_scaled, th,
                     pos_local, self.n_rot,
-                    field_convols1, field_convols2, field_convols3,
+                    _local_convols1, field_convols2, field_convols3,
                     center=center,
                     seed_base_rot=seed_base_rot,
                     theta_index=it,
+                    eps1=None if field_convols1 is None else field_convols1.epsilon,
                 )
-                # ---- progress update ----
                 local_completed += 1
-
-                # progress update via collective reduction to avoid unmatched MPI messages
-                if (local_completed % local_report_interval) == 0 or (local_completed == total_tasks):
-                    global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
-                    if rank == 0 and global_completed >= next_report_threshold:
-                        progress = (global_completed / total_work) * 100.0
-                        elapsed = time.perf_counter() - t_ddd_start
-                        self.logger.info(
-                            f" Progress: {progress:6.2f}% ({global_completed}/{total_work}) | "
-                            f"elapsed={elapsed:.2f} sec"
-                        )
-                        next_report_threshold += report_interval
+                if rank == 0:
+                    theta_elapsed = time.perf_counter() - theta_start
+                    self.logger.info(
+                        f" theta[{it + 1:02d}/{total_tasks:02d}] done | "
+                        f"theta={th:.5f} rad | local_DDD_mean={local_DDD_mean[it]:.5e} | "
+                        f"elapsed={theta_elapsed:.2f} sec"
+                    )
 
             # weighted reduce to global mean
             local_weighted = local_DDD_mean * npos_local
@@ -367,9 +358,9 @@ class Corr_3PCF(TaskBase):
             # Compute xi12/xi13 on rank 0 and xi23 in parallel across ranks
             # -------------------------------
             RR = (1.0 / _local_convols1.V) ** 2
-            delta_convols1 = _local_convols1 - R
-            delta_convols2 = _local_convols2 - R
-            delta_convols3 = _local_convols3 - R
+            delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - R)
+            delta_convols2 = field_convols2
+            delta_convols3 = field_convols3
 
             if rank == 0:
                 t_xi12 = time.perf_counter()
@@ -433,15 +424,9 @@ class Corr_3PCF(TaskBase):
                     self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
-
-            global_completed = int(comm.allreduce(local_completed, op=MPI.SUM))
             if rank == 0:
-                progress = (global_completed / total_work) * 100.0
                 elapsed = time.perf_counter() - t_ddd_start
-                self.logger.info(
-                    f" Progress: {progress:6.2f}% ({global_completed}/{total_work}) | "
-                    f"elapsed={elapsed:.2f} sec"
-                )
+                self.logger.info(f" DDD progress: 100.00% ({total_tasks}/{total_tasks}) | elapsed={elapsed:.2f} sec")
 
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
