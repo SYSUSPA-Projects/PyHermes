@@ -356,26 +356,46 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"DDD main loop time: {t_ddd_end - t_ddd_start:.4f} sec")
                 self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
                 DDD_mean_global = global_weighted / npos_total
-
                 self.corr3pcf_data.theta = theta_arr
                 self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
+                r23_chunks = np.array_split(self.corr3pcf_data.r23, size)
+            else:
+                DDD_mean_global = None
+                r23_chunks = None
 
-                # -------------------------------
-                # Compute xi12/xi13/xi23 on rank 0 (as before)
-                # -------------------------------
-                RR = (1.0 / _local_convols1.V) ** 2
+            # -------------------------------
+            # Compute xi12/xi13 on rank 0 and xi23 in parallel across ranks
+            # -------------------------------
+            RR = (1.0 / _local_convols1.V) ** 2
+            delta_convols1 = _local_convols1 - R
+            delta_convols2 = _local_convols2 - R
+            delta_convols3 = _local_convols3 - R
 
+            if rank == 0:
                 t_xi12 = time.perf_counter()
-                xi12 = calc_DD_mean_r(self.r12, _local_convols1 - R, _local_convols2 - R) / RR
+                xi12 = calc_DD_mean_r(self.r12, delta_convols1, delta_convols2) / RR
                 t_xi12 = time.perf_counter() - t_xi12
 
                 t_xi13 = time.perf_counter()
-                xi13 = calc_DD_mean_r(self.r13, _local_convols1 - R, _local_convols3 - R) / RR
+                xi13 = calc_DD_mean_r(self.r13, delta_convols1, delta_convols3) / RR
                 t_xi13 = time.perf_counter() - t_xi13
+            else:
+                xi12 = None
+                xi13 = None
+                t_xi12 = None
+                t_xi13 = None
 
-                t_xi23 = time.perf_counter()
-                xi23 = np.array([calc_DD_mean_r(r, _local_convols2 - R, _local_convols3 - R) / RR for r in self.corr3pcf_data.r23])
-                t_xi23 = time.perf_counter() - t_xi23
+            t_xi23_start = time.perf_counter()
+            r23_local = comm.scatter(r23_chunks, root=0)
+            if len(r23_local) > 0:
+                xi23_local = np.array([calc_DD_mean_r(r, delta_convols2, delta_convols3) / RR for r in r23_local], dtype=np.float64)
+            else:
+                xi23_local = np.empty(0, dtype=np.float64)
+            gathered_xi23 = comm.gather(xi23_local, root=0)
+
+            if rank == 0:
+                xi23 = np.concatenate(gathered_xi23) if gathered_xi23 else np.empty(0, dtype=np.float64)
+                t_xi23 = time.perf_counter() - t_xi23_start
 
                 self.logger.info(
                     f"Post-processing timing | xi12={t_xi12:.2f} sec | "
