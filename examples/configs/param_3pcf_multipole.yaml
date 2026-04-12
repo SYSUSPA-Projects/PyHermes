@@ -1,21 +1,16 @@
 Corr_3PCF_Multipole:
    convols_data_path: "./output/quijote_sfc.pkl"
    fout_path: "./output/quijote_3pcf_multipole.pkl"
-   window2:
-      type: "sphere"
-      len_args:
-         R: 5
-   window3:
+   window:
       type: "sphere"
       len_args:
          R: 5
    r1: 20.0
    r2: 40.0
-   l_min: 0
-   l_max: 4
+   l_max: 7
    gpu_device_id: 0
-   field_mode: "delta"
-   execution_mode: "serial"
-   cache_multipole_fields: false
-   cache_dir: "./output/cache_3pcf_multipole"
-   threads: 1
+   # field_mode: "raw"
+   # execution_mode: "pair_mpi"
+   # cache_multipole_fields: True
+   # cache_dir: "./output/cache_3pcf_multipole"
+   # verbose_m_progress: False
