@@ -73,10 +73,6 @@ class ConvolsData(HermesData):
                     "(signal @ window). "
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
-        # return math_util.specialized_convolution_3d(a, b, threads=self.threads)
-
-        
-        # --- do convolution ---
         conv = math_util.specialized_convolution_3d(
             a, b, threads=self.threads
         )
@@ -100,16 +96,11 @@ class ConvolsData(HermesData):
     def __matmul__(self, other):
         if isinstance(other, ConvolsData):
             return self._conv(other)
-        # Numpy will NOT automatically pass to our __rmatmul__, so abort here.
-        # if isinstance(other, np.ndarray):
-        #     return self._conv_numpy(other)
         return NotImplemented
 
     def __rmatmul__(self, other):
         if isinstance(other, ConvolsData):
             return other._conv(self)  
-        # if isinstance(other, np.ndarray):
-        #     return self._conv_numpy(other)
         return NotImplemented
     
     

@@ -43,7 +43,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _spawn_windowed(self, base_convols, win_params):
         if win_params:
-            window = WindowFunc(win_params, base_convols.convols_info)
+            window = WindowFunc(win_params, base_convols.convols_info, threads=self.threads)
             return base_convols @ window
         cdata = base_convols._spawn_like()
         cdata.epsilon = base_convols.epsilon
@@ -57,7 +57,7 @@ class Corr_3PCF_Multipole(TaskBase):
             local = convols_data
             local.epsilon = np.ascontiguousarray(local.epsilon, dtype=np.float64)
         else:
-            local = ConvolsData()
+            local = ConvolsData(threads=self.threads)
             local.convols_info = pickle.loads(serialized)
             local.format_convols_params()
             local.epsilon = np.empty((local.L, local.L, local.L), dtype=np.float64)
@@ -401,7 +401,7 @@ class Corr_3PCF_Multipole(TaskBase):
             if rank == 0:
                 if self.convols_data_path:
                     self.logger.info("Initializing multipole input on rank 0: loading base ConvolsData ...")
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path)
+                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
                 elif not (convols_data1 and convols_data2 and convols_data3):
                     self.logger.error(
                         "No input 'convols_data' provided and 'convols_data_path' is not set. "
@@ -461,7 +461,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 else:
                     local_convols = []
                     for serialized in [convols_info1_serialized, convols_info2_serialized, convols_info3_serialized]:
-                        cdata = ConvolsData()
+                        cdata = ConvolsData(threads=self.threads)
                         cdata.convols_info = pickle.loads(serialized)
                         cdata.format_convols_params()
                         local_convols.append(cdata)

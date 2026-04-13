@@ -12,7 +12,7 @@ from pyhermes.pipeline import TaskBase
 
 def calc_DD_mean_r(radius, convols_data1, convols_data2=None):
     win_params = {"type": "shell", "len_args": {"R": radius}}
-    win_shell = WindowFunc(win_params, convols_data1.convols_info)
+    win_shell = WindowFunc(win_params, convols_data1.convols_info, threads=convols_data1.threads)
     if convols_data2:
         res = convols_data1 @ win_shell * convols_data2
     else:
@@ -31,7 +31,7 @@ class Corr_2PCF(TaskBase):
         self.convols_data_path = self.task_params['convols_data_path']
         self.fout_path      = self.task_params['fout_path']
         self.field_mode = self.task_params['field_mode']
-        # self.threads        = int(self.task_params['threads'])
+        self.threads = int(self.task_params['threads'])
         win_params = self.task_params.get('window', None)
         win_params = win_params if win_params['type'] else None
         for i in range(1, 3):
@@ -59,7 +59,7 @@ class Corr_2PCF(TaskBase):
             convols_info2_serialized = None
             if rank == 0:
                 if self.convols_data_path:
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path)
+                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
                 else:
                     if not (convols_data1 and convols_data2):
                         self.logger.error(
@@ -81,7 +81,7 @@ class Corr_2PCF(TaskBase):
                         _win_params = getattr(self, f"win_params{i}", None)
                         self.logger.info(f"Preparing field leg {i}: {func_util.describe_window_action(_win_params)}")
                         if _win_params := getattr(self, f"win_params{i}", None):
-                            _window = WindowFunc(_win_params, self.convols_data.convols_info)
+                            _window = WindowFunc(_win_params, self.convols_data.convols_info, threads=self.threads)
                             _convols_data = self.convols_data @ _window
                             setattr(self, f"convols_data{i}", _convols_data)
                         else:
@@ -107,11 +107,11 @@ class Corr_2PCF(TaskBase):
                 self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
                 _local_convols2 = self.convols_data2
             else:
-                _local_convols1 = ConvolsData()
+                _local_convols1 = ConvolsData(threads=self.threads)
                 _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
                 _local_convols1.format_convols_params()
                 _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
-                _local_convols2 = ConvolsData()
+                _local_convols2 = ConvolsData(threads=self.threads)
                 _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
                 _local_convols2.format_convols_params()
                 _local_convols2.epsilon = np.empty((_local_convols2.L, _local_convols2.L, _local_convols2.L), dtype=np.float64)

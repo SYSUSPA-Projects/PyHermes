@@ -21,6 +21,7 @@ class Counting(TaskBase):
         self.N_randoms        = int(self.task_params['N_randoms'])
         self.seed             = int(self.task_params['seed'])
         self.convols_data_path             = self.task_params['convols_data_path']
+        self.threads          = int(self.task_params['threads'])
         win_params = self.task_params.get('window', None)
         self.win_params = win_params if win_params['type'] else None
         self.fout_path      = self.task_params['fout_path']
@@ -48,7 +49,7 @@ class Counting(TaskBase):
             if rank == 0:
                 if not convols_data:
                     if self.convols_data_path:
-                        self.convols_data = ConvolsData(data_path=self.convols_data_path)
+                        self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
                     else:
                         self.logger.error(
                             "No input 'convols_data' provided and 'convols_data_path' is not set. "
@@ -67,7 +68,7 @@ class Counting(TaskBase):
                         func_util.safe_exit(1)
                 self.logger.info(f"Preparing counting field: {func_util.describe_window_action(self.win_params)}")
                 if self.win_params:
-                    self.window = WindowFunc(self.win_params, self.convols_data.convols_info)
+                    self.window = WindowFunc(self.win_params, self.convols_data.convols_info, threads=self.threads)
                     self.convols_data = self.convols_data @ self.window
                 _counting_info = {
                     **self.task_params,
@@ -82,7 +83,7 @@ class Counting(TaskBase):
                 self.convols_data.epsilon = np.ascontiguousarray(self.convols_data.epsilon, dtype=np.float64)
                 _local_convols = self.convols_data
             else:
-                _local_convols = ConvolsData()
+                _local_convols = ConvolsData(threads=self.threads)
                 _local_convols.convols_info = pickle.loads(convols_info_serialized)
                 _local_convols.format_convols_params()
                 _local_convols.epsilon = np.empty((_local_convols.L, _local_convols.L, _local_convols.L), dtype=np.float64)

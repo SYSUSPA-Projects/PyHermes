@@ -82,6 +82,7 @@ class Corr_3PCF(TaskBase):
     def format_params(self):
         self.convols_data_path = self.task_params["convols_data_path"]
         self.fout_path = self.task_params["fout_path"]
+        self.threads = int(self.task_params["threads"])
 
         win_params = self.task_params.get("window", None)
         win_params = win_params if (win_params and win_params.get("type")) else None
@@ -136,7 +137,7 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 if self.convols_data_path:
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path)
+                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
                 else:
                     if not (convols_data1 and convols_data2 and convols_data3):
                         self.logger.error(
@@ -158,7 +159,7 @@ class Corr_3PCF(TaskBase):
                         _win_params = getattr(self, f"win_params{i}", None)
                         self.logger.info(f"Preparing field leg {i}: {func_util.describe_window_action(_win_params)}")
                         if _win_params:
-                            _window = WindowFunc(_win_params, self.convols_data.convols_info)
+                            _window = WindowFunc(_win_params, self.convols_data.convols_info, threads=self.threads)
                             _convols_data = self.convols_data @ _window
                         else:
                             _convols_data = self.convols_data._spawn_like()
@@ -187,7 +188,7 @@ class Corr_3PCF(TaskBase):
                 _local_convols2 = self.convols_data2
                 _local_convols3 = self.convols_data3
             else:
-                _local_convols1 = ConvolsData()
+                _local_convols1 = ConvolsData(threads=self.threads)
                 _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
                 _local_convols1.format_convols_params()
                 if center == "random":
@@ -195,12 +196,12 @@ class Corr_3PCF(TaskBase):
                 else:
                     _local_convols1.epsilon = None
 
-                _local_convols2 = ConvolsData()
+                _local_convols2 = ConvolsData(threads=self.threads)
                 _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
                 _local_convols2.format_convols_params()
                 _local_convols2.epsilon = np.empty((_local_convols2.L, _local_convols2.L, _local_convols2.L), dtype=np.float64)
 
-                _local_convols3 = ConvolsData()
+                _local_convols3 = ConvolsData(threads=self.threads)
                 _local_convols3.convols_info = pickle.loads(convols_info3_serialized)
                 _local_convols3.format_convols_params()
                 _local_convols3.epsilon = np.empty((_local_convols3.L, _local_convols3.L, _local_convols3.L), dtype=np.float64)
