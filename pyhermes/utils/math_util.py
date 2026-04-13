@@ -28,14 +28,16 @@ _NUMBA_THREADS = None
 
 def configure(threads=1):
     """
-    Configure Numba threads ONCE for this process.
-    Call this before any @njit(parallel=True) function runs.
+    Configure Numba threads for this process.
+    Re-applying with the same value is a no-op; changing the value updates
+    the current runtime setting.
     """
     global _NUMBA_CONFIGURED, _NUMBA_THREADS
-    if _NUMBA_CONFIGURED:
+    requested_threads = max(1, int(threads))
+    if _NUMBA_CONFIGURED and _NUMBA_THREADS == requested_threads:
         return
     from numba import set_num_threads, get_num_threads
-    set_num_threads(max(1, int(threads)))
+    set_num_threads(requested_threads)
     _NUMBA_THREADS = int(get_num_threads())
     _NUMBA_CONFIGURED = True
 

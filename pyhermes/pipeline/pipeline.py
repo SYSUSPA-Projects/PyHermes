@@ -46,18 +46,25 @@ class TaskBase(object):
         params_serialized = self.comm.bcast(params_serialized, root=0)
         self.task_params = pickle.loads(params_serialized)
         self.comm.Barrier()
-        # Ready for run
-        threads = self.task_params.get('threads', None)
-        if threads is None:
-            if self.rank == 0:
+        self.threads = self.task_params.get('threads', None)
+
+    def sync_runtime_options(self, context=None, blank_line=False):
+        threads = self.task_params.get('threads', self.threads)
+        self.threads = threads
+        if threads is not None:
+            self.threads = max(1, int(threads))
+            self.task_params['threads'] = self.threads
+            math_util.configure(threads=self.threads)
+        if self.rank == 0:
+            if blank_line:
                 print("")
-                self.logger.info(f"The task will run on {self.size} MPI ranks")
-        else:
-            # Set numba threads
-            math_util.configure(threads=threads)
-            if self.rank == 0:
-                print("")
-                self.logger.info(f"The task will run on {self.size} MPI ranks with {threads} threads per rank")
+            prefix = f"{context}: " if context else ""
+            if self.threads is None:
+                self.logger.info(f"{prefix}running on {self.size} MPI ranks")
+            else:
+                self.logger.info(
+                    f"{prefix}running on {self.size} MPI ranks with {self.threads} threads per rank"
+                )
 
     def run(self):
         try:
@@ -65,9 +72,3 @@ class TaskBase(object):
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-
-    def __del__(self):
-        if self.rank == 0:
-            self.logger.info('Bye.\n\n')
-        self.comm.Barrier()
-

@@ -119,6 +119,7 @@ class Corr_3PCF(TaskBase):
         overwrite=False
     ):
         try:
+            self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
             comm = self.comm
             rank = self.rank
             size = comm.Get_size()

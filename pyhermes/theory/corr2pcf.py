@@ -1,5 +1,6 @@
 import time
 import pickle
+import copy
 
 import numpy as np
 
@@ -25,13 +26,21 @@ class Corr_2PCF(TaskBase):
     def __init__(self, param_task):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
+        self.format_params()
+        self.convols_data1 = None
+        self.convols_data2 = None
+        self._fields_prepared = False
+
+    def _sync_runtime_options(self):
+        self.threads = max(1, int(self.threads))
+        self.task_params['threads'] = self.threads
+        self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
-        # Parameters from json or input
         self.convols_data_path = self.task_params['convols_data_path']
         self.convols_data1_path = self.task_params.get('convols_data1_path', '') or self.convols_data_path
         self.convols_data2_path = self.task_params.get('convols_data2_path', '') or self.convols_data_path
-        self.fout_path      = self.task_params['fout_path']
+        self.fout_path = self.task_params['fout_path']
         self.field_mode = self.task_params['field_mode']
         self.threads = int(self.task_params['threads'])
         win_params = self.task_params.get('window', None)
@@ -42,92 +51,141 @@ class Corr_2PCF(TaskBase):
             if (not win_params_i) and win_params:
                 win_params_i = dict(win_params)
             setattr(self, f'win_params{i}', win_params_i)
-        self.r_min             = self.task_params['r_min']
-        self.r_max             = self.task_params['r_max']
-        self.n_r         = int(self.task_params['n_r'])
+        self.r_min = self.task_params['r_min']
+        self.r_max = self.task_params['r_max']
+        self.n_r = int(self.task_params['n_r'])
 
-    def run(self, convols_data1=None, convols_data2=None, overwrite=False):
+    def _current_task_params_snapshot(self):
+        params = copy.deepcopy(self.task_params)
+        params['convols_data_path'] = self.convols_data_path
+        params['convols_data1_path'] = self.convols_data1_path
+        params['convols_data2_path'] = self.convols_data2_path
+        params['fout_path'] = self.fout_path
+        params['field_mode'] = self.field_mode
+        params['threads'] = self.threads
+        params['r_min'] = self.r_min
+        params['r_max'] = self.r_max
+        params['n_r'] = self.n_r
+        return params
+
+    def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
+        if provided_convols is not None:
+            if not isinstance(provided_convols, ConvolsData):
+                self.logger.error(f"Unexpected input: 'convols_data{leg_idx}' is not an instance of 'ConvolsData'.")
+                func_util.safe_exit(1)
+            return provided_convols, f"argument convols_data{leg_idx}"
+
+        base_path = getattr(self, f"convols_data{leg_idx}_path")
+        if not base_path:
+            self.logger.error(
+                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
+                f"'convols_data{leg_idx}_path' / 'convols_data_path'."
+            )
+            func_util.safe_exit(1)
+        if base_path not in base_convols_cache:
+            base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
+        return base_convols_cache[base_path], f"path={base_path}"
+
+    def _resolve_window(self, leg_idx, base_convols, provided_window):
+        if isinstance(provided_window, WindowFunc):
+            return provided_window, "provided WindowFunc instance"
+        if isinstance(provided_window, dict):
+            return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+                f"provided window dict | {func_util.describe_window_action(provided_window)}"
+            )
+        if provided_window is not None:
+            self.logger.error(
+                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
+                f"got {type(provided_window)}."
+            )
+            func_util.safe_exit(1)
+
+        config_window = getattr(self, f"win_params{leg_idx}", None)
+        if config_window:
+            return WindowFunc(config_window, base_convols.convols_info, threads=self.threads), (
+                f"config window{leg_idx} | {func_util.describe_window_action(config_window)}"
+            )
+        return None, "no additional window convolution"
+
+    def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None):
+        self.corr2pcf_data = Corr2PCFData()
+        self._sync_runtime_options()
+        if self.rank == 0:
+            self.logger.info("Preparing Corr_2PCF input fields ...")
+            self.logger.info(
+                f"field_mode={self.field_mode}, n_r={self.n_r}, "
+                f"r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
+            )
+            base_convols_cache = {}
+            for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
+                base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                window_obj, window_desc = self._resolve_window(i, base_convols, win)
+
+                if window_obj is not None:
+                    final_convols = base_convols @ window_obj
+                else:
+                    final_convols = base_convols._spawn_like()
+                    final_convols.epsilon = base_convols.epsilon
+                    final_convols.format_convols_params()
+
+                setattr(self, f"convols_data{i}", final_convols)
+                setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
+                self.logger.info(
+                    f"Field leg {i} ready | source={source_desc} | window={window_desc} | "
+                    f"L={final_convols.L}, SimBoxL={final_convols.SimBoxL}, V={final_convols.V:.5e}"
+                )
+
+            self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
+        self._fields_prepared = True
+
+    def _broadcast_input_fields(self):
+        comm = self.comm
+        rank = self.rank
+        convols_info1_serialized = None
+        convols_info2_serialized = None
+
+        if rank == 0:
+            convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
+            convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
+            self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
+            self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
+            local_convols1 = self.convols_data1
+            local_convols2 = self.convols_data2
+        else:
+            local_convols1 = ConvolsData(threads=self.threads)
+            local_convols2 = ConvolsData(threads=self.threads)
+
+        convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
+        convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
+
+        if rank != 0:
+            local_convols1.convols_info = pickle.loads(convols_info1_serialized)
+            local_convols1.format_convols_params()
+            local_convols1.epsilon = np.empty((local_convols1.L, local_convols1.L, local_convols1.L), dtype=np.float64)
+
+            local_convols2.convols_info = pickle.loads(convols_info2_serialized)
+            local_convols2.format_convols_params()
+            local_convols2.epsilon = np.empty((local_convols2.L, local_convols2.L, local_convols2.L), dtype=np.float64)
+
+        comm.Bcast(local_convols1.epsilon, root=0)
+        comm.Bcast(local_convols2.epsilon, root=0)
+        comm.Barrier()
+
+        self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
+        self.corr2pcf_data.task_params = self._current_task_params_snapshot()
+        return local_convols1, local_convols2
+
+    def run(self, save_result=True, overwrite=False):
         try:
+            self._sync_runtime_options()
             comm = self.comm
             rank = self.rank
             size = comm.Get_size()
             if rank == 0:
                 time_run_1 = time.perf_counter()
-            self.format_params()
-            self.corr2pcf_data = Corr2PCFData()
-
-            # The convols data now only loaded to rank0
-            convols_info1_serialized = None
-            convols_info2_serialized = None
-            if rank == 0:
-                base_convols_cache = {}
-
-                def load_base_convols(path):
-                    if path not in base_convols_cache:
-                        base_convols_cache[path] = ConvolsData(data_path=path, threads=self.threads)
-                    return base_convols_cache[path]
-
-                if not ((convols_data1 is not None or self.convols_data1_path) and (convols_data2 is not None or self.convols_data2_path)):
-                    self.logger.error(
-                        "Missing input field(s). Please either pass convols_data1/2 or specify "
-                        "'convols_data_path' / 'convols_data1_path' / 'convols_data2_path' in task_params."
-                    )
-                    func_util.safe_exit(1)
-                for i, cdata in zip([1, 2], [convols_data1, convols_data2]):
-                    if cdata:
-                        self.logger.info(f"Loading convols data from argument 'convols_data{i}'")
-                        if isinstance(cdata, ConvolsData):
-                            self.logger.info(f"Preparing field leg {i}: provided ConvolsData, no additional window convolution")
-                            _convols_data = cdata
-                            setattr(self, f"convols_data{i}", cdata)
-                        else:
-                            self.logger.error(f"Unexpected input: 'convols_data{i}' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
-                            func_util.safe_exit(1)
-                    else:
-                        _base_path = getattr(self, f"convols_data{i}_path")
-                        _base_convols = load_base_convols(_base_path)
-                        _win_params = getattr(self, f"win_params{i}", None)
-                        self.logger.info(f"Preparing field leg {i}: {func_util.describe_window_action(_win_params)}")
-                        if _win_params := getattr(self, f"win_params{i}", None):
-                            _window = WindowFunc(_win_params, _base_convols.convols_info, threads=self.threads)
-                            _convols_data = _base_convols @ _window
-                            setattr(self, f"convols_data{i}", _convols_data)
-                        else:
-                            _convols_data = _base_convols._spawn_like()
-                            _convols_data.epsilon = _base_convols.epsilon
-                            _convols_data.format_convols_params()
-                            setattr(self, f"convols_data{i}", _convols_data)
-                    setattr(self.corr2pcf_data, f"convols_info{i}", _convols_data.convols_info)
-                _corr2pcf_info = {
-                    **self.task_params,
-                }
-                self.corr2pcf_data.corr2pcf_info = dict(_corr2pcf_info)
-                self.corr2pcf_data.convols_info1 = self.convols_data1.convols_info
-                convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
-                self.corr2pcf_data.convols_info2 = self.convols_data2.convols_info
-                convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
-            # Broadcast parameters (read + from convols data) to all ranks
-            convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
-            convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
-            if rank == 0:
-                self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
-                _local_convols1 = self.convols_data1
-                self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
-                _local_convols2 = self.convols_data2
-            else:
-                _local_convols1 = ConvolsData(threads=self.threads)
-                _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
-                _local_convols1.format_convols_params()
-                _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
-                _local_convols2 = ConvolsData(threads=self.threads)
-                _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
-                _local_convols2.format_convols_params()
-                _local_convols2.epsilon = np.empty((_local_convols2.L, _local_convols2.L, _local_convols2.L), dtype=np.float64)
-            self.corr2pcf_data.task_params = self.task_params
-            # Broadcast epsilon to all rank
-            comm.Bcast(_local_convols1.epsilon, root=0)
-            comm.Bcast(_local_convols2.epsilon, root=0)
-            comm.Barrier()
+            if not self._fields_prepared:
+                self.prepare_input_fields()
+            _local_convols1, _local_convols2 = self._broadcast_input_fields()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
                 self.logger.info(
@@ -220,9 +278,12 @@ class Corr_2PCF(TaskBase):
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
                 # Output the 2pcf
-                if self.fout_path:
-                    self.corr2pcf_data.saveflag = True
-                    self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite) 
+                if save_result:
+                    if self.fout_path:
+                        self.corr2pcf_data.saveflag = True
+                        self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite) 
+                    else:
+                        self.logger.warning("No output path provided. The 2PCF result will not be saved.")
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
@@ -230,5 +291,4 @@ class Corr_2PCF(TaskBase):
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
-        # The data(s) below ⬇ are only valid on rank 0
         return self.corr2pcf_data

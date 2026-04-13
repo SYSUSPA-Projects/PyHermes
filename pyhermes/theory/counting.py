@@ -28,12 +28,13 @@ class Counting(TaskBase):
 
     def run(self, convols_data=None, overwrite=False):
         try:
+            self.format_params()
+            self.sync_runtime_options(context="Counting runtime configuration", blank_line=True)
             comm = self.comm
             rank = self.rank
             size = comm.Get_size()
             if rank == 0:
                 time_run_1 = time.perf_counter()
-            self.format_params()
             self.counting_data = CountingData()
             # Naïve optimization scheme for average-MPI
             base_tasks = self.N_randoms // size

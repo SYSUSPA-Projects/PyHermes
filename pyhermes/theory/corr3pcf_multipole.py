@@ -396,6 +396,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def run(self, convols_data1=None, convols_data2=None, convols_data3=None, overwrite=False):
         try:
+            self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
             comm = self.comm
             rank = self.rank
             if rank == 0:
