@@ -289,7 +289,7 @@ class Corr_3PCF(TaskBase):
             if rank == 0:
                 self.logger.info(f"Total centers used: {npos_total} (distributed over {size} ranks)")
                 t_start = time.perf_counter()
-                self.logger.info(f"Pre-DDD setup time: {t_start - t0:.4f} sec")
+                self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
 
             # -------------------------------
             # Progress reporting (pos-parallel): track per-rank theta completion

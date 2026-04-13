@@ -127,6 +127,7 @@ class Corr_2PCF(TaskBase):
                     f"r_min={self.r_min}, r_max={self.r_max}"
                 )
                 time_start = time.perf_counter()
+                self.logger.info(f"Pre-2PCF setup time: {time_start - time_run_1:.4f} sec")
             # Generate r_arr at rank0
             if rank == 0:
                 r_arr = np.linspace(self.r_min, self.r_max, self.n_r)

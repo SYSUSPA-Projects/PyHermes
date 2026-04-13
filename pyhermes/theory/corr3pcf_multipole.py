@@ -437,6 +437,10 @@ class Corr_3PCF_Multipole(TaskBase):
             convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
             convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
 
+            if rank == 0:
+                t_setup_done = time.perf_counter()
+                self.logger.info(f"Pre-3PCF multipole setup time: {t_setup_done - t0:.4f} sec")
+
             if self.execution_mode == "pair_mpi":
                 if rank == 0:
                     self.logger.info(
