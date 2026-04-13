@@ -290,7 +290,6 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"Total centers used: {npos_total} (distributed over {size} ranks)")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-DDD setup time: {t_start - t0:.4f} sec")
-                t_ddd_start = t_start
 
             # -------------------------------
             # Progress reporting (pos-parallel): track per-rank theta completion
@@ -315,6 +314,9 @@ class Corr_3PCF(TaskBase):
                 raise ValueError(f"Unknown field_mode='{field_mode}'. Use 'raw' or 'delta'.")
             r12_scaled = self.r12 * _local_convols1.ScaleFactor
             r13_scaled = self.r13 * _local_convols1.ScaleFactor
+
+            if rank == 0:
+                t_ddd_start = time.perf_counter()
 
             local_DDD_mean = np.empty(theta_arr.shape[0], dtype=np.float64)
 
