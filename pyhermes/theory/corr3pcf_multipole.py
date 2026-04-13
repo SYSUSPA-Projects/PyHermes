@@ -178,6 +178,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     "execution_mode='pair_mpi' requested with a single MPI rank. "
                     "Falling back to serial execution."
                 )
+                self.execution_mode = "serial"
                 self._run_serial_mode(rank)
             return
         if size < 2 or size % 2 != 0:
