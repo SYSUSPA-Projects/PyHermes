@@ -11,8 +11,8 @@ class Corr3PCFMultipoleData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.corr3pcf_multipole_info = {}
-        self.r1 = None
-        self.r2 = None
+        self.r12 = None
+        self.r13 = None
         self.l = None
         self.ddd_l = None
         self.delta_ddd_l = None
@@ -36,11 +36,16 @@ class Corr3PCFMultipoleData(HermesData):
         with open(f_in, "rb") as f:
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             dataset = pickle.loads(serialized_data.tobytes())
-            for key in ["r1", "r2", "l"]:
+            for key in ["l"]:
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
                 setattr(self, key, dataset[key])
+            self.r12 = dataset.get("r12", dataset.get("r1"))
+            self.r13 = dataset.get("r13", dataset.get("r2"))
+            if self.r12 is None or self.r13 is None:
+                self.logger.error("Failed to load the dataset. The file is missing the 'r12/r13' (or legacy 'r1/r2') keys.")
+                func_util.safe_exit(1)
             self.ddd_l = dataset.get("ddd_l")
             self.delta_ddd_l = dataset.get("delta_ddd_l")
             self.zeta_l = dataset.get("zeta_l")
@@ -67,8 +72,8 @@ class Corr3PCFMultipoleData(HermesData):
             "convols_info2": self.convols_info2,
             "convols_info3": self.convols_info3,
             "corr3pcf_multipole_info": self.corr3pcf_multipole_info,
-            "r1": self.r1,
-            "r2": self.r2,
+            "r12": self.r12,
+            "r13": self.r13,
             "l": self.l,
             "ddd_l": self.ddd_l,
             "delta_ddd_l": self.delta_ddd_l,

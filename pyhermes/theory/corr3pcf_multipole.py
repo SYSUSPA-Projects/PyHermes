@@ -29,8 +29,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 win_params_i = dict(win_params)
             setattr(self, f"win_params{i}", win_params_i)
 
-        self.r1 = float(self.task_params["r1"])
-        self.r2 = float(self.task_params["r2"])
+        self.r12 = float(self.task_params.get("r12", self.task_params.get("r1")))
+        self.r13 = float(self.task_params.get("r13", self.task_params.get("r2")))
         self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
@@ -66,8 +66,8 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _prepare_output(self, local_convols, l_arr, multipole_l):
         rho = 1.0 / local_convols[0].V
-        self.corr3pcf_multipole_data.r1 = self.r1
-        self.corr3pcf_multipole_data.r2 = self.r2
+        self.corr3pcf_multipole_data.r12 = self.r12
+        self.corr3pcf_multipole_data.r13 = self.r13
         self.corr3pcf_multipole_data.l = l_arr
         if self.field_mode == "raw":
             self.corr3pcf_multipole_data.ddd_l = multipole_l
@@ -147,7 +147,7 @@ class Corr_3PCF_Multipole(TaskBase):
         log_l_progress, log_m_progress = self._log_helpers()
         l_arr, multipole_l, timing_info = math_util.calc_DDD_multipole(
             field1, field2, field3,
-            self.r1, self.r2, self.l_min, self.l_max,
+            self.r12, self.r13, self.l_min, self.l_max,
             gpu_device_id=self.gpu_device_id,
             cache_multipole_fields=self.cache_multipole_fields,
             cache_dir=self.cache_dir,
@@ -250,11 +250,11 @@ class Corr_3PCF_Multipole(TaskBase):
                 _, l, m = local_meta
                 if is_r1_rank:
                     local_field = math_util._stream_convolution_fields(
-                        field2, self.r1, int(l), threads=self.threads, m_values=[int(m)], conv_context=conv_context_r1
+                        field2, self.r12, int(l), threads=self.threads, m_values=[int(m)], conv_context=conv_context_r1
                     )[0]
                 else:
                     local_field = math_util._stream_convolution_fields(
-                        field3, self.r2, int(l), threads=self.threads, m_values=[-int(m)], conv_context=conv_context_r2
+                        field3, self.r13, int(l), threads=self.threads, m_values=[-int(m)], conv_context=conv_context_r2
                     )[0]
             conv_elapsed = time.perf_counter() - t_conv
             total_conv_elapsed += conv_elapsed

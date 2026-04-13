@@ -5,8 +5,8 @@ Corr_3PCF_Multipole:
       type: "sphere"
       len_args:
          R: 5
-   r1: 20.0
-   r2: 40.0
+   r12: 20.0
+   r13: 40.0
    l_max: 7
    gpu_device_id: 0
    # field_mode: "raw"
