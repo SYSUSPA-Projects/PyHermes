@@ -17,6 +17,9 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def format_params(self):
         self.convols_data_path = self.task_params["convols_data_path"]
+        self.convols_data1_path = self.task_params.get("convols_data1_path", "") or self.convols_data_path
+        self.convols_data2_path = self.task_params.get("convols_data2_path", "") or self.convols_data_path
+        self.convols_data3_path = self.task_params.get("convols_data3_path", "") or self.convols_data_path
         self.fout_path = self.task_params["fout_path"]
 
         win_params = self.task_params.get("window", None)
@@ -65,7 +68,9 @@ class Corr_3PCF_Multipole(TaskBase):
         return local
 
     def _prepare_output(self, local_convols, l_arr, multipole_l):
-        rho = 1.0 / local_convols[0].V
+        rho1 = 1.0 / local_convols[0].V
+        rho2 = 1.0 / local_convols[1].V
+        rho3 = 1.0 / local_convols[2].V
         self.corr3pcf_multipole_data.r12 = self.r12
         self.corr3pcf_multipole_data.r13 = self.r13
         self.corr3pcf_multipole_data.l = l_arr
@@ -76,7 +81,7 @@ class Corr_3PCF_Multipole(TaskBase):
         else:
             self.corr3pcf_multipole_data.ddd_l = None
             self.corr3pcf_multipole_data.delta_ddd_l = multipole_l
-            self.corr3pcf_multipole_data.zeta_l = multipole_l / (rho ** 3)
+            self.corr3pcf_multipole_data.zeta_l = multipole_l / (rho1 * rho2 * rho3)
 
     def _log_helpers(self):
         def _format_complex(value):
@@ -131,15 +136,17 @@ class Corr_3PCF_Multipole(TaskBase):
             f"cache_multipole_fields={self.cache_multipole_fields}, "
             f"verbose_m_progress={self.verbose_m_progress}"
         )
-        R = 1.0 / self.convols_data1.V
+        rho1 = 1.0 / self.convols_data1.V
+        rho2 = 1.0 / self.convols_data2.V
+        rho3 = 1.0 / self.convols_data3.V
         if self.field_mode == "raw":
             field1 = self.convols_data1
             field2 = self.convols_data2
             field3 = self.convols_data3
         elif self.field_mode == "delta":
-            field1 = self.convols_data1 - R
-            field2 = self.convols_data2 - R
-            field3 = self.convols_data3 - R
+            field1 = self.convols_data1 - rho1
+            field2 = self.convols_data2 - rho2
+            field3 = self.convols_data3 - rho3
         else:
             self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             func_util.safe_exit(1)
@@ -195,15 +202,17 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"verbose_m_progress={self.verbose_m_progress}"
             )
 
-        rho = 1.0 / local_convols[0].V
+        rho1 = 1.0 / local_convols[0].V
+        rho2 = 1.0 / local_convols[1].V
+        rho3 = 1.0 / local_convols[2].V
         if self.field_mode == "raw":
             field1 = local_convols[0]
             field2 = local_convols[1]
             field3 = local_convols[2]
         elif self.field_mode == "delta":
-            field1 = local_convols[0] - rho
-            field2 = local_convols[1] - rho
-            field3 = local_convols[2] - rho
+            field1 = local_convols[0] - rho1
+            field2 = local_convols[1] - rho2
+            field3 = local_convols[2] - rho3
         else:
             self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             func_util.safe_exit(1)
@@ -348,7 +357,7 @@ class Corr_3PCF_Multipole(TaskBase):
                         )
                     if done_per_l[l] == l + 1:
                         multipole_l[l_idx] = math_util.combine_multipole_m_terms(m_storage[l], l)
-                        zeta_l = multipole_l[l_idx] / (rho ** 3)
+                        zeta_l = multipole_l[l_idx] / (rho1 * rho2 * rho3)
                         progress = (completed_m_tasks / total_m_tasks) * 100.0
                         if self.field_mode == "raw":
                             stat_str = f"ddd_l={multipole_l[l_idx]:.5e}"
@@ -399,13 +408,23 @@ class Corr_3PCF_Multipole(TaskBase):
             convols_info3_serialized = None
 
             if rank == 0:
-                if self.convols_data_path:
-                    self.logger.info("Initializing multipole input on rank 0: loading base ConvolsData ...")
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
-                elif not (convols_data1 and convols_data2 and convols_data3):
+                base_convols_cache = {}
+
+                def load_base_convols(path):
+                    if path not in base_convols_cache:
+                        self.logger.info(f"Initializing multipole input on rank 0: loading base ConvolsData from {path} ...")
+                        base_convols_cache[path] = ConvolsData(data_path=path, threads=self.threads)
+                    return base_convols_cache[path]
+
+                if not (
+                    (convols_data1 is not None or self.convols_data1_path)
+                    and (convols_data2 is not None or self.convols_data2_path)
+                    and (convols_data3 is not None or self.convols_data3_path)
+                ):
                     self.logger.error(
-                        "No input 'convols_data' provided and 'convols_data_path' is not set. "
-                        "Please either pass convols_data1/2/3 or set 'convols_data_path'."
+                        "Missing input field(s). Please either pass convols_data1/2/3 or specify "
+                        "'convols_data_path' / 'convols_data1_path' / 'convols_data2_path' / "
+                        "'convols_data3_path' in task_params."
                     )
                     func_util.safe_exit(1)
 
@@ -416,16 +435,20 @@ class Corr_3PCF_Multipole(TaskBase):
                                 f"Initializing multipole input on rank 0: preparing field leg {i} | "
                                 "provided ConvolsData, no additional window convolution"
                             )
+                            _convols_data = cdata
                             setattr(self, f"convols_data{i}", cdata)
                         else:
                             self.logger.error(f"convols_data{i} is not ConvolsData.")
                             func_util.safe_exit(1)
                     else:
+                        _base_path = getattr(self, f"convols_data{i}_path")
+                        _base_convols = load_base_convols(_base_path)
                         self.logger.info(
                             f"Initializing multipole input on rank 0: preparing field leg {i} | "
                             f"{func_util.describe_window_action(getattr(self, f'win_params{i}', None))}"
                         )
-                        setattr(self, f"convols_data{i}", self._spawn_windowed(self.convols_data, getattr(self, f"win_params{i}", None)))
+                        _convols_data = self._spawn_windowed(_base_convols, getattr(self, f"win_params{i}", None))
+                        setattr(self, f"convols_data{i}", _convols_data)
 
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", getattr(self, f"convols_data{i}").convols_info)
 

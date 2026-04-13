@@ -1,5 +1,8 @@
 Corr_3PCF:
    convols_data_path: "./output/quijote_sfc.pkl" 
+   convols_data1_path: ""
+   convols_data2_path: ""
+   convols_data3_path: ""
    fout_path: "./output/quijote_3pcf_rand1e7.pkl"
    window2:
       type: "sphere"

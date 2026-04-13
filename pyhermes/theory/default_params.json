@@ -14,6 +14,8 @@
 	},
 	"Corr_2PCF": {
 		"convols_data_path": "",
+		"convols_data1_path": "",
+		"convols_data2_path": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -38,6 +40,9 @@
 	},
 	"Corr_3PCF": {
 		"convols_data_path": "",
+		"convols_data1_path": "",
+		"convols_data2_path": "",
+		"convols_data3_path": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -71,6 +76,9 @@
 	},
 	"Corr_3PCF_Multipole": {
 		"convols_data_path": "",
+		"convols_data1_path": "",
+		"convols_data2_path": "",
+		"convols_data3_path": "",
 		"fout_path": "",
 		"window": {
 			"type": "",

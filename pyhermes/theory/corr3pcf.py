@@ -17,6 +17,7 @@ def calc_DDD_mean_mc(
     seed_base_rot=-1,
     theta_index=-1,
     eps1=None,
+    rho1=None,
 ):
     """
     Wrapper around numba kernels:
@@ -47,11 +48,12 @@ def calc_DDD_mean_mc(
             **kwargs_common,
         )
     elif center == "particle":
-        R = 1.0 / convols_meta.V
+        if rho1 is None:
+            raise ValueError("rho1 must be provided when center='particle'.")
         res = math_util.calc_DDD_mc_pos_center_fast(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
-            R, eps2, eps3,
+            rho1, eps2, eps3,
             **kwargs_common,
         )
     else:
@@ -81,6 +83,9 @@ class Corr_3PCF(TaskBase):
 
     def format_params(self):
         self.convols_data_path = self.task_params["convols_data_path"]
+        self.convols_data1_path = self.task_params.get("convols_data1_path", "") or self.convols_data_path
+        self.convols_data2_path = self.task_params.get("convols_data2_path", "") or self.convols_data_path
+        self.convols_data3_path = self.task_params.get("convols_data3_path", "") or self.convols_data_path
         self.fout_path = self.task_params["fout_path"]
         self.threads = int(self.task_params["threads"])
 
@@ -136,34 +141,46 @@ class Corr_3PCF(TaskBase):
             convols_info3_serialized = None
 
             if rank == 0:
-                if self.convols_data_path:
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
-                else:
-                    if not (convols_data1 and convols_data2 and convols_data3):
-                        self.logger.error(
-                            "No input 'convols_data' provided and 'convols_data_path' is not set. "
-                            "Please either pass convols_data1/2/3 or set 'convols_data_path'."
-                        )
-                        func_util.safe_exit(1)
+                base_convols_cache = {}
+
+                def load_base_convols(path):
+                    if path not in base_convols_cache:
+                        base_convols_cache[path] = ConvolsData(data_path=path, threads=self.threads)
+                    return base_convols_cache[path]
+
+                if not (
+                    (convols_data1 is not None or self.convols_data1_path)
+                    and (convols_data2 is not None or self.convols_data2_path)
+                    and (convols_data3 is not None or self.convols_data3_path)
+                ):
+                    self.logger.error(
+                        "Missing input field(s). Please either pass convols_data1/2/3 or specify "
+                        "'convols_data_path' / 'convols_data1_path' / 'convols_data2_path' / "
+                        "'convols_data3_path' in task_params."
+                    )
+                    func_util.safe_exit(1)
 
                 for i, cdata in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3]):
                     if cdata is not None:
                         self.logger.info(f"Loading convols data from argument 'convols_data{i}'")
                         if isinstance(cdata, ConvolsData):
                             self.logger.info(f"Preparing field leg {i}: provided ConvolsData, no additional window convolution")
+                            _convols_data = cdata
                             setattr(self, f"convols_data{i}", cdata)
                         else:
                             self.logger.error(f"convols_data{i} is not ConvolsData.")
                             func_util.safe_exit(1)
                     else:
+                        _base_path = getattr(self, f"convols_data{i}_path")
+                        _base_convols = load_base_convols(_base_path)
                         _win_params = getattr(self, f"win_params{i}", None)
                         self.logger.info(f"Preparing field leg {i}: {func_util.describe_window_action(_win_params)}")
                         if _win_params:
-                            _window = WindowFunc(_win_params, self.convols_data.convols_info, threads=self.threads)
-                            _convols_data = self.convols_data @ _window
+                            _window = WindowFunc(_win_params, _base_convols.convols_info, threads=self.threads)
+                            _convols_data = _base_convols @ _window
                         else:
-                            _convols_data = self.convols_data._spawn_like()
-                            _convols_data.epsilon = self.convols_data.epsilon
+                            _convols_data = _base_convols._spawn_like()
+                            _convols_data.epsilon = _base_convols.epsilon
                             _convols_data.format_convols_params()
                         setattr(self, f"convols_data{i}", _convols_data)
 
@@ -301,16 +318,18 @@ class Corr_3PCF(TaskBase):
             # -------------------------------
             # Main loop over theta on each rank (local means)
             # -------------------------------
-            R = 1.0 / _local_convols1.V
-            RRR = R ** 3
+            rho1 = 1.0 / _local_convols1.V
+            rho2 = 1.0 / _local_convols2.V
+            rho3 = 1.0 / _local_convols3.V
+            RRR = rho1 * rho2 * rho3
             if field_mode == "raw":
                 field_convols1 = _local_convols1
                 field_convols2 = _local_convols2
                 field_convols3 = _local_convols3
             elif field_mode == "delta":
-                field_convols1 = None if center == "particle" else (_local_convols1 - R)
-                field_convols2 = _local_convols2 - R
-                field_convols3 = _local_convols3 - R
+                field_convols1 = None if center == "particle" else (_local_convols1 - rho1)
+                field_convols2 = _local_convols2 - rho2
+                field_convols3 = _local_convols3 - rho3
             else:
                 raise ValueError(f"Unknown field_mode='{field_mode}'. Use 'raw' or 'delta'.")
             r12_scaled = self.r12 * _local_convols1.ScaleFactor
@@ -331,6 +350,7 @@ class Corr_3PCF(TaskBase):
                     seed_base_rot=seed_base_rot,
                     theta_index=it,
                     eps1=None if field_convols1 is None else field_convols1.epsilon,
+                    rho1=rho1,
                 )
                 local_completed += 1
                 if rank == 0:
@@ -361,20 +381,22 @@ class Corr_3PCF(TaskBase):
             # -------------------------------
             # Compute xi12/xi13 on rank 0 and xi23 in parallel across ranks
             # -------------------------------
-            RR = (1.0 / _local_convols1.V) ** 2
+            RR12 = rho1 * rho2
+            RR13 = rho1 * rho3
+            RR23 = rho2 * rho3
             delta_convols1 = None
             if rank == 0:
-                delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - R)
+                delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - rho1)
             delta_convols2 = field_convols2
             delta_convols3 = field_convols3
 
             if rank == 0:
                 t_xi12 = time.perf_counter()
-                xi12 = calc_DD_mean_r(self.r12, delta_convols1, delta_convols2) / RR
+                xi12 = calc_DD_mean_r(self.r12, delta_convols1, delta_convols2) / RR12
                 t_xi12 = time.perf_counter() - t_xi12
 
                 t_xi13 = time.perf_counter()
-                xi13 = calc_DD_mean_r(self.r13, delta_convols1, delta_convols3) / RR
+                xi13 = calc_DD_mean_r(self.r13, delta_convols1, delta_convols3) / RR13
                 t_xi13 = time.perf_counter() - t_xi13
             else:
                 xi12 = None
@@ -385,7 +407,7 @@ class Corr_3PCF(TaskBase):
             t_xi23_start = time.perf_counter()
             r23_local = comm.scatter(r23_chunks, root=0)
             if len(r23_local) > 0:
-                xi23_local = np.array([calc_DD_mean_r(r, delta_convols2, delta_convols3) / RR for r in r23_local], dtype=np.float64)
+                xi23_local = np.array([calc_DD_mean_r(r, delta_convols2, delta_convols3) / RR23 for r in r23_local], dtype=np.float64)
             else:
                 xi23_local = np.empty(0, dtype=np.float64)
             gathered_xi23 = comm.gather(xi23_local, root=0)

@@ -29,6 +29,8 @@ class Corr_2PCF(TaskBase):
     def format_params(self):
         # Parameters from json or input
         self.convols_data_path = self.task_params['convols_data_path']
+        self.convols_data1_path = self.task_params.get('convols_data1_path', '') or self.convols_data_path
+        self.convols_data2_path = self.task_params.get('convols_data2_path', '') or self.convols_data_path
         self.fout_path      = self.task_params['fout_path']
         self.field_mode = self.task_params['field_mode']
         self.threads = int(self.task_params['threads'])
@@ -58,37 +60,43 @@ class Corr_2PCF(TaskBase):
             convols_info1_serialized = None
             convols_info2_serialized = None
             if rank == 0:
-                if self.convols_data_path:
-                    self.convols_data = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
-                else:
-                    if not (convols_data1 and convols_data2):
-                        self.logger.error(
-                            "No input 'convols_data' provided and 'convols_data_path' is not set. "
-                            "Please either pass a ConvolsData instance to run(convols_data=...) "
-                            "or specify 'convols_data_path' in task_params."
-                        )
-                        func_util.safe_exit(1)
+                base_convols_cache = {}
+
+                def load_base_convols(path):
+                    if path not in base_convols_cache:
+                        base_convols_cache[path] = ConvolsData(data_path=path, threads=self.threads)
+                    return base_convols_cache[path]
+
+                if not ((convols_data1 is not None or self.convols_data1_path) and (convols_data2 is not None or self.convols_data2_path)):
+                    self.logger.error(
+                        "Missing input field(s). Please either pass convols_data1/2 or specify "
+                        "'convols_data_path' / 'convols_data1_path' / 'convols_data2_path' in task_params."
+                    )
+                    func_util.safe_exit(1)
                 for i, cdata in zip([1, 2], [convols_data1, convols_data2]):
                     if cdata:
                         self.logger.info(f"Loading convols data from argument 'convols_data{i}'")
                         if isinstance(cdata, ConvolsData):
                             self.logger.info(f"Preparing field leg {i}: provided ConvolsData, no additional window convolution")
+                            _convols_data = cdata
                             setattr(self, f"convols_data{i}", cdata)
                         else:
                             self.logger.error(f"Unexpected input: 'convols_data{i}' is not an instance of 'ConvolsData'. This should not have happened, program stopped!")
                             func_util.safe_exit(1)
                     else:
+                        _base_path = getattr(self, f"convols_data{i}_path")
+                        _base_convols = load_base_convols(_base_path)
                         _win_params = getattr(self, f"win_params{i}", None)
                         self.logger.info(f"Preparing field leg {i}: {func_util.describe_window_action(_win_params)}")
                         if _win_params := getattr(self, f"win_params{i}", None):
-                            _window = WindowFunc(_win_params, self.convols_data.convols_info, threads=self.threads)
-                            _convols_data = self.convols_data @ _window
+                            _window = WindowFunc(_win_params, _base_convols.convols_info, threads=self.threads)
+                            _convols_data = _base_convols @ _window
                             setattr(self, f"convols_data{i}", _convols_data)
                         else:
-                            _convols_data = self.convols_data._spawn_like()
-                            _convols_data.epsilon = self.convols_data.epsilon
+                            _convols_data = _base_convols._spawn_like()
+                            _convols_data.epsilon = _base_convols.epsilon
                             _convols_data.format_convols_params()
-                            setattr(self, f"convols_data{i}", self.convols_data)
+                            setattr(self, f"convols_data{i}", _convols_data)
                     setattr(self.corr2pcf_data, f"convols_info{i}", _convols_data.convols_info)
                 _corr2pcf_info = {
                     **self.task_params,
@@ -150,11 +158,12 @@ class Corr_2PCF(TaskBase):
             local_xi = []
             local_dd = []
             local_r = []
-            R = 1 / _local_convols1.V
-            RR = R ** 2
+            rho1 = 1.0 / _local_convols1.V
+            rho2 = 1.0 / _local_convols2.V
+            RR = rho1 * rho2
             if self.field_mode == "delta":
-                field1 = _local_convols1 - R
-                field2 = _local_convols2 - R
+                field1 = _local_convols1 - rho1
+                field2 = _local_convols2 - rho2
             elif self.field_mode == "raw":
                 field1 = _local_convols1
                 field2 = _local_convols2
