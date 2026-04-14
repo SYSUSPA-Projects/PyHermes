@@ -1,5 +1,6 @@
 import time
 import pickle
+import copy
 
 import numpy as np
 from mpi4py import MPI
@@ -11,9 +12,24 @@ from pyhermes.pipeline import TaskBase
 
 class Corr_3PCF_Multipole(TaskBase):
 
-    def __init__(self, param_task):
+    def __init__(self, param_task=None):
+        if param_task is None:
+            param_task = {"Corr_3PCF_Multipole": {}}
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
+        self.format_params()
+        self.convols_data1 = None
+        self.convols_data2 = None
+        self.convols_data3 = None
+        self.window1 = None
+        self.window2 = None
+        self.window3 = None
+        self._fields_prepared = False
+
+    def _sync_runtime_options(self):
+        self.threads = max(1, int(self.threads))
+        self.task_params["threads"] = self.threads
+        self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
 
     def format_params(self):
         self.convols_data_path = self.task_params["convols_data_path"]
@@ -44,6 +60,65 @@ class Corr_3PCF_Multipole(TaskBase):
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
         self.threads = int(self.task_params["threads"])
 
+    def _current_task_params_snapshot(self):
+        params = copy.deepcopy(self.task_params)
+        params["convols_data_path"] = self.convols_data_path
+        params["convols_data1_path"] = self.convols_data1_path
+        params["convols_data2_path"] = self.convols_data2_path
+        params["convols_data3_path"] = self.convols_data3_path
+        params["fout_path"] = self.fout_path
+        params["threads"] = self.threads
+        params["r12"] = self.r12
+        params["r13"] = self.r13
+        params["l_min"] = self.l_min
+        params["l_max"] = self.l_max
+        params["gpu_device_id"] = self.gpu_device_id
+        params["field_mode"] = self.field_mode
+        params["execution_mode"] = self.execution_mode
+        params["cache_multipole_fields"] = self.cache_multipole_fields
+        params["cache_dir"] = self.cache_dir
+        params["verbose_m_progress"] = self.verbose_m_progress
+        return params
+
+    def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
+        if provided_convols is not None:
+            if not isinstance(provided_convols, ConvolsData):
+                self.logger.error(f"Unexpected input: 'convols_data{leg_idx}' is not an instance of 'ConvolsData'.")
+                func_util.safe_exit(1)
+            return provided_convols, f"provided convols_data{leg_idx}"
+
+        base_path = getattr(self, f"convols_data{leg_idx}_path")
+        if not base_path:
+            self.logger.error(
+                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
+                f"'convols_data{leg_idx}_path' / 'convols_data_path'."
+            )
+            func_util.safe_exit(1)
+        if base_path not in base_convols_cache:
+            base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
+        return base_convols_cache[base_path], f"path={base_path}"
+
+    def _resolve_window(self, leg_idx, base_convols, provided_window):
+        if isinstance(provided_window, WindowFunc):
+            return provided_window, "provided WindowFunc instance"
+        if isinstance(provided_window, dict):
+            return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+                f"provided window dict | {func_util.describe_window_action(provided_window)}"
+            )
+        if provided_window is not None:
+            self.logger.error(
+                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
+                f"got {type(provided_window)}."
+            )
+            func_util.safe_exit(1)
+
+        config_window = getattr(self, f"win_params{leg_idx}", None)
+        if config_window:
+            return WindowFunc(config_window, base_convols.convols_info, threads=self.threads), (
+                f"config window{leg_idx} | {func_util.describe_window_action(config_window)}"
+            )
+        return None, "no additional window convolution"
+
     def _spawn_windowed(self, base_convols, win_params):
         if win_params:
             window = WindowFunc(win_params, base_convols.convols_info, threads=self.threads)
@@ -66,6 +141,78 @@ class Corr_3PCF_Multipole(TaskBase):
             local.epsilon = np.empty((local.L, local.L, local.L), dtype=np.float64)
         comm.Bcast(local.epsilon, root=0)
         return local
+
+    def prepare_input_fields(
+        self,
+        convols_data1=None,
+        convols_data2=None,
+        convols_data3=None,
+        window1=None,
+        window2=None,
+        window3=None,
+    ):
+        self.corr3pcf_multipole_data = Corr3PCFMultipoleData()
+        self._sync_runtime_options()
+        if convols_data1 is None:
+            convols_data1 = self.convols_data1
+        if convols_data2 is None:
+            convols_data2 = self.convols_data2
+        if convols_data3 is None:
+            convols_data3 = self.convols_data3
+        if window1 is None:
+            window1 = self.window1
+        if window2 is None:
+            window2 = self.window2
+        if window3 is None:
+            window3 = self.window3
+
+        if self.rank == 0:
+            self.logger.info("Preparing Corr_3PCF multipole input fields ...")
+            self.logger.info(
+                f"field_mode={self.field_mode}, execution_mode={self.execution_mode}, "
+                f"l_min={self.l_min}, l_max={self.l_max}, "
+                f"r12={self.r12}, r13={self.r13}, "
+                f"cache_multipole_fields={self.cache_multipole_fields}, "
+                f"verbose_m_progress={self.verbose_m_progress}"
+            )
+            base_convols_cache = {}
+            resolved_legs = []
+            for i, cdata, win in zip(
+                [1, 2, 3],
+                [convols_data1, convols_data2, convols_data3],
+                [window1, window2, window3],
+            ):
+                base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                resolved_legs.append((i, base_convols, source_desc, win))
+
+            shared_required = func_util.validate_convols_compatibility(
+                [item[1] for item in resolved_legs],
+                ConvolsData._REQUIRED_ARGV,
+                logger=self.logger,
+                label="Corr_3PCF multipole input fields",
+            )
+            shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
+            self.logger.info("Corr_3PCF multipole input compatibility check passed.")
+            self.logger.info(f"Shared required parameters | {shared_required_text}")
+
+            for i, base_convols, source_desc, win in resolved_legs:
+                window_obj, window_desc = self._resolve_window(i, base_convols, win)
+                if window_obj is not None:
+                    final_convols = base_convols @ window_obj
+                else:
+                    final_convols = base_convols.copy()
+                    final_convols.format_convols_params()
+
+                setattr(self, f"convols_data{i}", final_convols)
+                setattr(self, f"window{i}", window_obj)
+                setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
+                self.logger.info(
+                    f"Field leg {i} ready | source={source_desc} | window={window_desc}"
+                )
+
+            self.corr3pcf_multipole_data.corr3pcf_multipole_info = self._current_task_params_snapshot()
+            self.corr3pcf_multipole_data.task_params = self._current_task_params_snapshot()
+        self._fields_prepared = True
 
     def _prepare_output(self, local_convols, l_arr, multipole_l):
         rho1 = 1.0 / local_convols[0].V
@@ -394,66 +541,20 @@ class Corr_3PCF_Multipole(TaskBase):
                     f"d2h={total_d2h:.2f} sec | reduce={total_reduce:.2f} sec"
                 )
 
-    def run(self, convols_data1=None, convols_data2=None, convols_data3=None, overwrite=False):
+    def run(self, save_result=True, overwrite=False):
         try:
-            self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
             comm = self.comm
             rank = self.rank
             if rank == 0:
                 t0 = time.perf_counter()
 
-            self.format_params()
-            self.corr3pcf_multipole_data = Corr3PCFMultipoleData()
+            if not self._fields_prepared:
+                self.prepare_input_fields()
             convols_info1_serialized = None
             convols_info2_serialized = None
             convols_info3_serialized = None
 
             if rank == 0:
-                base_convols_cache = {}
-
-                def load_base_convols(path):
-                    if path not in base_convols_cache:
-                        self.logger.info(f"Initializing multipole input on rank 0: loading base ConvolsData from {path} ...")
-                        base_convols_cache[path] = ConvolsData(data_path=path, threads=self.threads)
-                    return base_convols_cache[path]
-
-                if not (
-                    (convols_data1 is not None or self.convols_data1_path)
-                    and (convols_data2 is not None or self.convols_data2_path)
-                    and (convols_data3 is not None or self.convols_data3_path)
-                ):
-                    self.logger.error(
-                        "Missing input field(s). Please either pass convols_data1/2/3 or specify "
-                        "'convols_data_path' / 'convols_data1_path' / 'convols_data2_path' / "
-                        "'convols_data3_path' in task_params."
-                    )
-                    func_util.safe_exit(1)
-
-                for i, cdata in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3]):
-                    if cdata is not None:
-                        if isinstance(cdata, ConvolsData):
-                            self.logger.info(
-                                f"Initializing multipole input on rank 0: preparing field leg {i} | "
-                                "provided ConvolsData, no additional window convolution"
-                            )
-                            _convols_data = cdata
-                            setattr(self, f"convols_data{i}", cdata)
-                        else:
-                            self.logger.error(f"convols_data{i} is not ConvolsData.")
-                            func_util.safe_exit(1)
-                    else:
-                        _base_path = getattr(self, f"convols_data{i}_path")
-                        _base_convols = load_base_convols(_base_path)
-                        self.logger.info(
-                            f"Initializing multipole input on rank 0: preparing field leg {i} | "
-                            f"{func_util.describe_window_action(getattr(self, f'win_params{i}', None))}"
-                        )
-                        _convols_data = self._spawn_windowed(_base_convols, getattr(self, f"win_params{i}", None))
-                        setattr(self, f"convols_data{i}", _convols_data)
-
-                    setattr(self.corr3pcf_multipole_data, f"convols_info{i}", getattr(self, f"convols_data{i}").convols_info)
-
-                self.corr3pcf_multipole_data.corr3pcf_multipole_info = dict(self.task_params)
                 convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
                 convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
                 convols_info3_serialized = pickle.dumps(self.convols_data3.convols_info)
@@ -461,6 +562,9 @@ class Corr_3PCF_Multipole(TaskBase):
             convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
             convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
             convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
+
+            self.corr3pcf_multipole_data.corr3pcf_multipole_info = self._current_task_params_snapshot()
+            self.corr3pcf_multipole_data.task_params = self._current_task_params_snapshot()
 
             if rank == 0:
                 t_setup_done = time.perf_counter()
@@ -491,7 +595,7 @@ class Corr_3PCF_Multipole(TaskBase):
                         local_convols.append(cdata)
                 self._run_serial_mode(rank)
 
-            if rank == 0 and self.fout_path:
+            if rank == 0 and save_result and self.fout_path:
                 self.corr3pcf_multipole_data.saveflag = True
                 self.corr3pcf_multipole_data.save_corr3pcf_multipole(self.fout_path, overwrite=overwrite)
 
