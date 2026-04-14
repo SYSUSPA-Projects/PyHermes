@@ -141,7 +141,7 @@ class Corr_2PCF(TaskBase):
         return None, "no additional window convolution"
 
     def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
-        self.corr2pcf_data = Corr2PCFData()
+        self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
         self.pair_window = self._normalize_pair_window(pair_window)
         if self.rank == 0:
