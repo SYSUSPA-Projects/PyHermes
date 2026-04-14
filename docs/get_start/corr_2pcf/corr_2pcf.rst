@@ -74,6 +74,7 @@ Key parameters
 - ``r_min``: minimum separation
 - ``r_max``: maximum separation
 - ``n_r``: number of radial bins
+- ``pair_window``: optional pair-correlation kernel template; if omitted, the standard shell window is used
 - ``field_mode``: choose ``"delta"`` to compute with ``D-R`` and save ``delta_dd``, or ``"raw"`` to compute with ``D`` and save ``dd``
 - ``threads``: number of threads per MPI rank
 
@@ -83,3 +84,9 @@ Notes
 You can also provide explicit window definitions through ``window``,
 ``window1``, or ``window2`` if you need custom smoothing behavior. For most
 basic runs, the radial settings shown above are the main controls.
+
+``pair_window`` is different from the smoothing windows above: it controls the
+kernel used inside the pair-correlation measurement itself. Leaving it empty
+uses the standard shell-based 2PCF. Supplying a custom template lets you build
+generalized pair statistics while still scanning over ``r``; the current radius
+is injected into ``pair_window.len_args.R`` at runtime.

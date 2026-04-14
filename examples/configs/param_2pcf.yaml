@@ -3,6 +3,10 @@ Corr_2PCF:
    convols_data1_path: ""
    convols_data2_path: ""
    fout_path: "./output/quijote_2pcf.pkl"
+   pair_window:
+      type: ""
+      len_args: {}
+      other_args: {}
    r_min: 1.0
    r_max: 150.0
    n_r: 30

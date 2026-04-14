@@ -32,6 +32,13 @@
 			"len_args": {},
 			"other_args": {}
 		},
+		"pair_window": {
+			"type": "shell",
+			"len_args": {
+				"R": null
+			},
+			"other_args": {}
+		},
 		"r_min": 1.0,
 		"r_max": 150.0,
 		"n_r": 30,

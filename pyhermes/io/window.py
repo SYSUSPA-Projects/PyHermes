@@ -51,8 +51,8 @@ class WindowFunc(ConvolsData):
         # Missing `type` will raise an error in math_util.
         self.window_params = dict(win_params)
         if "func" in win_params:
+            self.window_type = win_params.get('type', None) or "custom"
             self.window_func = win_params["func"]
-            self.window_type = "custom"
         else:
             assert "type" in win_params
             self.window_type = win_params['type']

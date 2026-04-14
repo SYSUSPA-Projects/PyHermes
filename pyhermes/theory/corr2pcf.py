@@ -11,13 +11,19 @@ from pyhermes.utils import func_util
 from pyhermes.pipeline import TaskBase
 
 
-def calc_DD_mean_r(radius, convols_data1, convols_data2=None):
-    win_params = {"type": "shell", "len_args": {"R": radius}}
-    win_shell = WindowFunc(win_params, convols_data1.convols_info, threads=convols_data1.threads)
+def calc_DD_mean_r(radius, convols_data1, convols_data2=None, pair_window=None):
+    if not isinstance(pair_window, dict):
+        raise TypeError(
+            f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
+        )
+    pair_window_params = copy.deepcopy(pair_window)
+    pair_window_params.setdefault("len_args", {})
+    pair_window_params["len_args"]["R"] = radius
+    pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     if convols_data2:
-        res = convols_data1 @ win_shell * convols_data2
+        res = convols_data1 @ pair_window_obj * convols_data2
     else:
-        res = convols_data1 @ win_shell * convols_data1
+        res = convols_data1 @ pair_window_obj * convols_data1
     return res.as_array().mean()
 
 
@@ -51,6 +57,11 @@ class Corr_2PCF(TaskBase):
             if (not win_params_i) and win_params:
                 win_params_i = dict(win_params)
             setattr(self, f'win_params{i}', win_params_i)
+        pair_window_params = self.task_params.get('pair_window', None)
+        if pair_window_params and pair_window_params.get('type'):
+            self.pair_window_params = copy.deepcopy(pair_window_params)
+        else:
+            self.pair_window_params = {"type": "shell", "len_args": {"R": None}, "other_args": {}}
         self.r_min = self.task_params['r_min']
         self.r_max = self.task_params['r_max']
         self.n_r = int(self.task_params['n_r'])
@@ -63,10 +74,16 @@ class Corr_2PCF(TaskBase):
         params['fout_path'] = self.fout_path
         params['field_mode'] = self.field_mode
         params['threads'] = self.threads
+        params['pair_window'] = copy.deepcopy(self.pair_window_params)
         params['r_min'] = self.r_min
         params['r_max'] = self.r_max
         params['n_r'] = self.n_r
         return params
+
+    def _describe_pair_window(self, pair_window):
+        if isinstance(pair_window, dict):
+            return f"pair_window dict | {func_util.describe_window_action(pair_window)} | runtime R follows current radius"
+        return "pair_window dict | shell window with runtime R=radius"
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
         if provided_convols is not None:
@@ -107,15 +124,24 @@ class Corr_2PCF(TaskBase):
             )
         return None, "no additional window convolution"
 
-    def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None):
+    def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
         self.corr2pcf_data = Corr2PCFData()
         self._sync_runtime_options()
+        if pair_window is None:
+            self.pair_window = copy.deepcopy(self.pair_window_params)
+        elif isinstance(pair_window, dict):
+            self.pair_window = copy.deepcopy(pair_window)
+        else:
+            raise TypeError(
+                f"Unsupported pair_window input: expected dict or None, got {type(pair_window)}."
+            )
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(
                 f"field_mode={self.field_mode}, n_r={self.n_r}, "
                 f"r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
             )
+            self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
             base_convols_cache = {}
             for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
                 base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
@@ -228,7 +254,7 @@ class Corr_2PCF(TaskBase):
             else:
                 raise ValueError(f"Unknown field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             for i, radius in enumerate(r_sub_arr):
-                dd_mean = calc_DD_mean_r(radius, field1, field2)
+                dd_mean = calc_DD_mean_r(radius, field1, field2, pair_window=self.pair_window)
                 if self.field_mode == "delta":
                     _xi = dd_mean / RR
                 else:
