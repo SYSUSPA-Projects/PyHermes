@@ -13,6 +13,7 @@
 		"particle_weight": null,
 		"fin": {
 			"path"      : "./data.bin",
+			"url"       : "",
 			"format"    : "generic_pos",
 			"weight_key": "no_weight"
 		}

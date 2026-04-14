@@ -109,12 +109,15 @@ def dl_rich_pbar(url, output_path=None):
     # Get the file size from the response headers
     response = requests.head(url, allow_redirects=True)
     total_size = int(response.headers.get('content-length', 0))
+    content_disposition = response.headers.get('content-disposition')
     if not output_path:
-        content_disposition = response.headers.get('content-disposition')
-    if content_disposition:
-        output_path = content_disposition.split("filename=")[-1].strip('"')
-    else:
-        output_path = os.path.basename(url)
+        if content_disposition:
+            output_path = content_disposition.split("filename=")[-1].strip('"')
+        else:
+            output_path = os.path.basename(url)
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
     if os.path.exists(output_path):
         logger.info(f"File '{output_path}' already exists. Skipping download.")
         return output_path

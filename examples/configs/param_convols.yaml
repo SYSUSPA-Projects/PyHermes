@@ -1,7 +1,8 @@
 Convols:
    J: 8
    fin:
-      path: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
+      url: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
+      path: "./data/quijote10000.bin"
       format: "generic_pos"
    fout_path: "./output/quijote_sfc.pkl"
    SampRate: 1024

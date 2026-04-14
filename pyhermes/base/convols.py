@@ -6,6 +6,7 @@ import numpy as np
 
 from pyhermes.io import ConvolsData
 from pyhermes.io import read_particle_data
+from pyhermes.io.funcs import dl_rich_pbar
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 from pyhermes.pipeline import TaskBase
@@ -29,6 +30,7 @@ class Convols(TaskBase):
         self.J             = self.task_params['J']
         self.fin           = copy.deepcopy(self.task_params['fin'])
         self.fin_path      = self.fin['path']
+        self.fin_url       = self.fin.get('url', '')
         self.fin_format    = self.fin['format']
         self.fin_wei_key   = self.fin['weight_key']
         self.fout_path     = self.task_params['fout_path']
@@ -63,12 +65,25 @@ class Convols(TaskBase):
             self.fin = merged_fin
         self.task_params['fin'] = copy.deepcopy(self.fin)
         self.fin_path = self.fin['path']
+        self.fin_url = self.fin.get('url', '')
         self.fin_format = self.fin['format']
         self.fin_wei_key = self.fin['weight_key']
         self.L = 1 << self.J
         self.sync_runtime_options(context="Convols runtime configuration")
 
+    def _resolve_fin_source(self):
+        if self.fin_url:
+            if not self.fin_path:
+                self.logger.error("When 'fin.url' is provided, 'fin.path' must also be provided as the local download target.")
+                func_util.safe_exit(1)
+            downloaded_path = dl_rich_pbar(self.fin_url, output_path=self.fin_path)
+            self.fin_path = downloaded_path
+            self.fin['path'] = downloaded_path
+            return f"url={self.fin_url} -> path={downloaded_path}"
+        return f"path={self.fin_path}"
+
     def _load_particle_input(self):
+        fin_source_desc = self._resolve_fin_source()
         if self.particle_pos is not None:
             p_pos = self.particle_pos
             self.N_particles = p_pos.shape[0]
@@ -106,7 +121,7 @@ class Convols(TaskBase):
                     )
                     p_wei = np.ones(self.N_particles, dtype=np.float32)
                     self.fin_wei_key = 'no_weight'
-            source_desc = f"file={self.fin_path} format={self.fin_format}"
+            source_desc = f"file={fin_source_desc} format={self.fin_format}"
 
         if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
             self.logger.error(
