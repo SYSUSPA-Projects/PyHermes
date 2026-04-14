@@ -11,7 +11,20 @@ This section walks through the standard PyHermes workflow:
 6. optionally run the full workflow from a single parameter file
 
 The examples in this section match the scripts shipped in the repository under
-``examples/``.
+``examples/``. They are also written around a common workflow ladder that
+appears repeatedly throughout the documentation:
+
+- **Workflow A. Command-Line Driver**
+- **Workflow B. Config-Driven Python API**
+- **Workflow C. Task Object with Attribute Overrides**
+- **Workflow D. Manual Input Objects and Custom Preparation**
+- **Workflow E. Low-Level Building Blocks**
+
+You do not need to use every layer. A good rule of thumb is:
+
+- start with Workflow A or B for routine usage
+- move to Workflow C or D when you want interactive control
+- use Workflow E only when you need a custom estimator or low-level extension
 
 .. toctree::
    :maxdepth: 1

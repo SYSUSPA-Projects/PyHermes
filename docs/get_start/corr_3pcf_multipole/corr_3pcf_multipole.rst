@@ -1,13 +1,27 @@
 Corr_3PCF_Multipole
 ===================
 
-``Corr_3PCF_Multipole`` measures ``zeta_l(r12, r13)`` from a saved multiresolution
-field using streamed CPU-side convolutions and CUDA summation.
+``Corr_3PCF_Multipole`` measures the multipole coefficients
+``zeta_l(r12, r13)`` from one or more prepared fields.
 
-Example configuration
----------------------
+As in ``Corr_3PCF``, field preparation and the main estimator are separated:
 
-The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
+- ``prepare_input_fields()`` prepares the three input legs
+- ``run()`` executes either the serial or grouped MPI multipole workflow
+
+Workflow Ladder
+---------------
+
+- **Workflow A. Command-Line Driver**
+- **Workflow B. Config-Driven Python API**
+- **Workflow C. Task Object with Attribute Overrides**
+- **Workflow D. Manual Input Objects and Custom Preparation**
+- **Workflow E. Low-Level Building Blocks**
+
+Workflow A. Command-Line Driver
+-------------------------------
+
+Use the shipped config:
 
 .. code-block:: yaml
 
@@ -31,70 +45,106 @@ The repository includes ``examples/configs/param_3pcf_multipole.yaml``:
       execution_mode: "serial"
       threads: 1
 
-Minimal Python driver
----------------------
-
-.. code-block:: python
-
-   from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
-   from pyhermes.param.parambase import read_param
-
-   params = read_param(config_path="./configs/param_3pcf_multipole.yaml")
-   corr3pcf_multipole = Corr_3PCF_Multipole(param_task=params)
-   corr3pcf_multipole.run(overwrite=True)
-
-If you want to modify parameters directly inside the Python driver when using
-MPI, do it only on rank 0. For example:
-
-.. code-block:: python
-
-   from pyhermes.utils.mpi_util import MPI
-
-   if MPI.COMM_WORLD.Get_rank() == 0:
-       params["Corr_3PCF_Multipole"]["execution_mode"] = "pair_mpi"
-       params["Corr_3PCF_Multipole"]["l_max"] = 7
-       params["Corr_3PCF_Multipole"]["fout_path"] = "./output/quijote_3pcf_multipole_lmax7.pkl"
-
-Run it
-------
-
-From the ``examples`` directory:
+Then run:
 
 .. code-block:: bash
 
    python run_3pcf_multipole.py
 
+Workflow B. Config-Driven Python API
+------------------------------------
+
+.. code-block:: python
+
+   from pyhermes.param.parambase import read_param
+   from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
+
+   params = read_param("./configs/param_3pcf_multipole.yaml")
+   task = Corr_3PCF_Multipole(param_task=params)
+   result = task.run(overwrite=True)
+
+Workflow C. Task Object with Attribute Overrides
+------------------------------------------------
+
+.. code-block:: python
+
+   from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
+
+   task = Corr_3PCF_Multipole()
+   task.execution_mode = "pair_mpi"
+   task.l_max = 7
+   task.threads = 1
+   task.prepare_input_fields()
+   result = task.run(save_result=False)
+
+Workflow D. Manual Input Objects and Custom Preparation
+-------------------------------------------------------
+
+This layer gives you explicit control over the three fields and optional
+smoothing windows:
+
+.. code-block:: python
+
+   from pyhermes.io import ConvolsData, WindowFunc
+   from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
+
+   D = ConvolsData(data_path="./output/quijote_sfc.pkl")
+   win_params = {"type": "sphere", "len_args": {"R": 5}}
+   filter_sph5 = WindowFunc(win_params, D.convols_info)
+
+   task = Corr_3PCF_Multipole()
+   task.execution_mode = "pair_mpi"
+   task.convols_data1 = D.copy()
+   task.convols_data2 = D.copy()
+   task.convols_data3 = D.copy()
+   task.window2 = filter_sph5
+   task.window3 = filter_sph5
+   task.prepare_input_fields()
+   result = task.run(save_result=False)
+
+Workflow E. Low-Level Building Blocks
+-------------------------------------
+
+At the lowest level, you can work directly with the streamed Legendre-window
+convolutions and GPU-side summation helpers used inside the official task.
+This offers maximum flexibility, but it also requires the strongest familiarity
+with the estimator and the normalization conventions.
+
+Output
+------
+
+The standard output is:
+
+.. code-block:: text
+
+   ./output/quijote_3pcf_multipole.pkl
+
 Key parameters
 --------------
 
-- ``r12`` and ``r13``: the two side lengths defining the multipole family
-- ``l_min`` and ``l_max``: minimum and maximum multipole order to compute
-- ``gpu_device_id``: CUDA device index used for the summation stage
-- ``field_mode``: choose ``"raw"`` to save ``ddd_l`` from ``<DDD>`` or ``"delta"`` to save ``delta_ddd_l`` and ``zeta_l``
-- ``execution_mode``: use ``"serial"`` for the default single-rank workflow or ``"pair_mpi"`` for grouped MPI execution; with one rank it falls back to serial, and with MPI it expects an even number of ranks so that the ``(r12,+m)`` and ``(r13,-m)`` convolution legs can be processed in parallel batches before rank 0 performs the CUDA summation
-- ``threads``: CPU threads used by the convolution stage; the current default is ``1``, and recent tests showed little difference between ``1`` and ``8`` for the present implementation
-- ``cache_multipole_fields`` and ``cache_dir``: optional disk cache for intermediate convolution fields
+- ``convols_data_path``:
+  shared fallback input field path
+- ``convols_data1_path`` / ``convols_data2_path`` / ``convols_data3_path``:
+  optional leg-specific field paths
+- ``window``, ``window1``, ``window2``, ``window3``:
+  optional smoothing windows for the three legs
+- ``r12`` and ``r13``:
+  side lengths of the multipole family
+- ``l_min`` and ``l_max``:
+  multipole range
+- ``gpu_device_id``:
+  CUDA device index
+- ``field_mode``:
+  ``"raw"`` or ``"delta"``
+- ``execution_mode``:
+  ``"serial"`` or ``"pair_mpi"``
+- ``cache_multipole_fields`` and ``cache_dir``:
+  optional intermediate cache
 
 Notes
 -----
 
-This task computes ``zeta_l(r12, r13) = <(D-R)(D-R)(D-R)>_l / <RRR>`` with
-``R = 1 / V`` and ``<RRR> = R^3``. The convolution stage runs on CPU while the
-local summation stage requires CUDA.
-
-For the low-order range ``l <= 7``, the implementation uses explicit fast-path
-Legendre window functions adapted from the validated legacy workflow. For
-higher multipoles it automatically falls back to the generic recursive window
-construction, which is supported but typically slower. Only the subset of
-``m`` values actually used by the final contractions is convolved, and the CUDA
-summation stage performs a device-side reduction before transferring the result
-back to host memory. In practice this combination substantially reduces first-run
-time compared with the original legacy scripts while preserving numerical
-agreement.
-
-For the current single-node GPU environment, the recommended high-performance
-workflow is ``execution_mode: "pair_mpi"`` with an even number of MPI ranks and
-``threads: 1``. In this mode the two convolution legs needed for each ``m`` are
-processed in grouped MPI batches on the CPU side, while rank 0 performs the
-CUDA summation. This mode substantially outperformed the single-rank
-``serial`` workflow in the current benchmark setup.
+- ``prepare_input_fields()`` prepares the three legs and checks compatibility.
+- ``run()`` executes the actual multipole estimator.
+- In the current implementation, ``execution_mode="pair_mpi"`` is the preferred
+  high-performance mode on a single GPU node with an even number of MPI ranks.

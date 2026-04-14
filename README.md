@@ -95,47 +95,46 @@ from pyhermes.base.convols import Convols
 from pyhermes.io import WindowFunc
 
 # Step 1: build the multiresolution coefficient field from particle positions
-task_params = {"Convols": {"fin": {"path": "./quijote10000.bin"}}}
+task_params = {'Convols': {'fin': {'path': './data/quijote10000.bin'}}}
 D = Convols(task_params).run()
 
 # Step 2: construct the fluctuation field delta = D - R
-R = 1 / D.V          # uniform random field in the same normalized convention
-RR = R ** 2          # <RR>, used to normalize the 2PCF estimator
-deltaD = D - R       # fluctuation field
+rho = 1 / D.V # uniform random field in the same normalized convention
+RR = rho ** 2 # <RR>, used to normalize the 2PCF estimator
+deltaD = D - rho # fluctuation field, i.e. the overdensity-like field
 
 # Step 3: smooth the fluctuation field with a spherical window
-win_params = {"type": "sphere", "len_args": {"R": 5}}
+win_params = {"type": "sphere", "len_args": {"R": 5}} # spherical top-hat window of radius 5
 win_filter = WindowFunc(win_params, D.convols_info)
-deltaD_w = deltaD @ win_filter
+deltaD_w = deltaD @ win_filter # smoothed fluctuation field
 
 # Step 4: measure xi(r) by shell convolution + spatial averaging
+# DD(r) = <n(x)n(x+r)>; n(x+r) = n_r(x) = n(x) @ W_shell(r)
+# \xi = (D-R)(D-R)/RR
 r_arr = np.linspace(1, 150, 30)
 xi_arr = np.zeros_like(r_arr)
-
 for i, r in enumerate(r_arr):
     win_params = {"type": "shell", "len_args": {"R": r}}
     win_shell = WindowFunc(win_params, D.convols_info)
-    deltaDD_w = deltaD_w @ win_shell * deltaD_w
-    xi_arr[i] = deltaDD_w.as_array().mean() / RR
+    deltaDD_w = deltaD_w @ win_shell * deltaD_w # shell-convolved field multiplied by the original field
+    xi_arr[i] = deltaDD_w.as_array().mean() / RR # spatial mean gives xi(r) after normalization by RR
 
 plt.plot(r_arr, xi_arr * r_arr**2)
-plt.xlabel(r"$r$")
-plt.ylabel(r"$r^2 \xi(r)$")
 plt.show()
 ```
 
 Notes:
 
 - `D` is the normalized density field in PyHermes' multiresolution representation.
-- `R = 1 / D.V` is the corresponding uniform random field.
-- `deltaD = D - R` is the fluctuation field.
+- `rho = 1 / D.V` is the corresponding uniform random field.
+- `deltaD = D - rho` is the fluctuation field.
 - `WindowFunc` constructs spherical, shell, and related window functions.
 - The `@` operator applies a window convolution to a field.
 - The product of two fields followed by `.as_array().mean()` gives the spatial average used in correlation estimators.
 
 ## Example Scripts
 
-The [`examples`](./examples) directory contains runnable task-level examples:
+The [`examples`](./examples) directory contains runnable task-level entry points:
 
 - [`examples/run_convols.py`](./examples/run_convols.py): build the multiresolution coefficient field from particle positions
 - [`examples/run_counting.py`](./examples/run_counting.py): sample the smoothed field on many random points
@@ -144,6 +143,20 @@ The [`examples`](./examples) directory contains runnable task-level examples:
 - [`examples/run_3pcf_multipole.py`](./examples/run_3pcf_multipole.py): compute 3PCF multipoles
 - [`examples/quick_start.ipynb`](./examples/quick_start.ipynb): notebook-based quick start
 - [`examples/full_example.ipynb`](./examples/full_example.ipynb): end-to-end notebook example
+
+The `Quick Start` section above is intentionally minimal. It is only meant to
+show one simple way to compute a 2PCF in PyHermes, including:
+
+- construction of the multiresolution field
+- construction of the fluctuation field
+- construction of spherical and shell windows
+- window convolution and spatial averaging
+
+For the fuller task-level workflows for `Convols`, `Counting`, `Corr_2PCF`,
+`Corr_3PCF`, and `Corr_3PCF_Multipole`, see:
+
+- [`examples/full_example.ipynb`](./examples/full_example.ipynb)
+- the documentation under [`docs/`](./docs)
 
 Example configuration files are stored in [`examples/configs`](./examples/configs):
 
@@ -155,7 +168,7 @@ Example configuration files are stored in [`examples/configs`](./examples/config
 
 ## Running the Examples
 
-After installation, you can enter the example directory and run any task directly:
+After installation, you can enter the example directory and run the task-level drivers directly:
 
 ```bash
 cd examples
@@ -173,8 +186,12 @@ mpirun -np 8 python run_convols.py
 mpirun -np 8 python run_counting.py
 mpirun -np 8 python run_2pcf.py
 mpirun -np 8 python run_3pcf.py
-python run_3pcf_multipole.py
+mpirun -np 8 python run_3pcf_multipole.py
 ```
+
+`Corr_3PCF_Multipole` requires CUDA for the GPU summation stage. The exact
+high-performance launch pattern depends on your local environment and is
+described in the documentation and notebook examples.
 
 If `mpi4py` is not installed, PyHermes still works in single-process mode.
 
@@ -207,10 +224,12 @@ Core dependencies listed in this repository include:
 
 ## Documentation
 
-For more detailed guides and API-oriented usage, see:
+For more detailed usage patterns, estimator-specific workflows, and Python API
+examples, see:
 
 - [PyHermes Official Docs](https://pyhermes.astroslacker.com)
 - [`docs/`](./docs) in this repository
+- [`examples/full_example.ipynb`](./examples/full_example.ipynb)
 
 ## License
 

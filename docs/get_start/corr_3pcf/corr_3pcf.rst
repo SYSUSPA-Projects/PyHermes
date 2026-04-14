@@ -2,12 +2,28 @@ Corr_3PCF
 =========
 
 ``Corr_3PCF`` measures the three-point correlation function for triangles
-defined by two side lengths and an angular grid.
+defined by two side lengths ``r12`` and ``r13`` and an angular grid in
+``theta``.
 
-Example configuration
----------------------
+The field preparation step and the center-sampling step are intentionally split:
 
-The repository includes ``examples/configs/param_3pcf.yaml``:
+- ``prepare_input_fields()`` prepares the three legs of the correlation
+- ``run()`` handles center generation or particle-center sampling and performs
+  the actual estimator
+
+Workflow Ladder
+---------------
+
+- **Workflow A. Command-Line Driver**
+- **Workflow B. Config-Driven Python API**
+- **Workflow C. Task Object with Attribute Overrides**
+- **Workflow D. Manual Input Objects and Custom Preparation**
+- **Workflow E. Low-Level Building Blocks**
+
+Workflow A. Command-Line Driver
+-------------------------------
+
+Use the shipped config:
 
 .. code-block:: yaml
 
@@ -31,48 +47,82 @@ The repository includes ``examples/configs/param_3pcf.yaml``:
       n_rand: 10000000
       base_seed: 42
 
-Minimal Python driver
----------------------
-
-.. code-block:: python
-
-   from pyhermes.theory.corr3pcf import Corr_3PCF
-   from pyhermes.param.parambase import read_param
-
-   corr3pcf_params = read_param(config_path="./configs/param_3pcf.yaml")
-   corr3pcf = Corr_3PCF(param_task=corr3pcf_params)
-   corr3pcf.run(overwrite=True)
-
-If you want to modify parameters directly inside the Python driver when using
-MPI, do it only on rank 0. For example:
-
-.. code-block:: python
-
-   from pyhermes.utils.mpi_util import MPI
-
-   if MPI.COMM_WORLD.Get_rank() == 0:
-       corr3pcf_params["Corr_3PCF"]["center"] = "particle"
-       corr3pcf_params["Corr_3PCF"]["fout_path"] = "./output/quijote_3pcf_part.pkl"
-
-Run it
-------
-
-From the ``examples`` directory:
+Then run:
 
 .. code-block:: bash
 
    python run_3pcf.py
 
-Or with MPI:
+or with MPI:
 
 .. code-block:: bash
 
-   mpirun -np 8 python run_3pcf.py
+   mpirun -np 4 python run_3pcf.py ./configs/param_3pcf.yaml
+
+Workflow B. Config-Driven Python API
+------------------------------------
+
+.. code-block:: python
+
+   from pyhermes.param.parambase import read_param
+   from pyhermes.theory.corr3pcf import Corr_3PCF
+
+   params = read_param("./configs/param_3pcf.yaml")
+   corr3pcf_task = Corr_3PCF(param_task=params)
+   corr3pcf = corr3pcf_task.run(overwrite=True)
+
+Workflow C. Task Object with Attribute Overrides
+------------------------------------------------
+
+.. code-block:: python
+
+   from pyhermes.theory.corr3pcf import Corr_3PCF
+
+   corr3pcf_task = Corr_3PCF()
+   corr3pcf_task.threads = 8
+   corr3pcf_task.center = "particle"
+   corr3pcf_task.n_theta = 20
+   corr3pcf_task.n_rot = 20
+   corr3pcf_task.prepare_input_fields()
+   corr3pcf = corr3pcf_task.run(save_result=False)
+
+Workflow D. Manual Input Objects and Custom Preparation
+-------------------------------------------------------
+
+This layer gives explicit control over the three legs:
+
+.. code-block:: python
+
+   from pyhermes.io import ConvolsData, WindowFunc
+   from pyhermes.theory.corr3pcf import Corr_3PCF
+
+   D = ConvolsData(data_path="./output/quijote_sfc.pkl")
+   win_params = {"type": "sphere", "len_args": {"R": 5}}
+   filter_sph5 = WindowFunc(win_params, D.convols_info)
+
+   corr3pcf_task = Corr_3PCF()
+   corr3pcf_task.threads = 8
+   corr3pcf_task.center = "particle"
+   corr3pcf_task.convols_data1 = D.copy()
+   corr3pcf_task.convols_data2 = D.copy()
+   corr3pcf_task.convols_data3 = D.copy()
+   corr3pcf_task.window2 = filter_sph5
+   corr3pcf_task.window3 = filter_sph5
+   corr3pcf_task.prepare_input_fields()
+   corr3pcf = corr3pcf_task.run(save_result=False)
+
+Workflow E. Low-Level Building Blocks
+-------------------------------------
+
+At the lowest level, you can work directly with prepared fields, explicit
+center positions, and the low-level Monte Carlo kernels in ``math_util``. This
+is the most flexible route, but it assumes you want to manage normalization,
+windows, and estimator bookkeeping yourself.
 
 Output
 ------
 
-The example writes:
+The standard output is:
 
 .. code-block:: text
 
@@ -81,19 +131,32 @@ The example writes:
 Key parameters
 --------------
 
-- ``convols_data_path``: path to the saved multiresolution field
-- ``fout_path``: output path for the 3PCF result
-- ``r12`` and ``r13``: the two side lengths defining the triangle family
-- ``n_theta``: number of angular bins
-- ``n_rot``: number of rotations used in the estimator
-- ``center``: center sampling mode, usually ``random`` or ``particle``
-- ``field_mode``: choose ``"delta"`` to work with ``D-R`` fields or ``"raw"`` to keep the original ``D``-field estimator
-- ``n_rand``: number of random centers when ``center`` is ``random``
-- ``base_seed``: random seed for reproducibility
-- ``window2`` and ``window3``: smoothing windows applied to the two legs
+- ``convols_data_path``:
+  shared fallback input field path
+- ``convols_data1_path`` / ``convols_data2_path`` / ``convols_data3_path``:
+  optional leg-specific field paths
+- ``window``, ``window1``, ``window2``, ``window3``:
+  optional smoothing windows for the three legs
+- ``r12`` and ``r13``:
+  triangle side lengths
+- ``n_theta``:
+  number of angular bins
+- ``n_rot``:
+  number of rotations used by the estimator
+- ``center``:
+  ``"random"`` or ``"particle"``
+- ``field_mode``:
+  ``"raw"`` or ``"delta"``
+- ``n_rand``:
+  number of random centers when ``center="random"``
+- ``base_seed``:
+  random seed
 
 Notes
 -----
 
-When ``center = "particle"``, PyHermes uses particle positions as triangle
-centers. When ``center = "random"``, it samples centers uniformly in the box.
+- ``prepare_input_fields()`` prepares the three fields and checks that they are
+  compatible.
+- ``run()`` keeps the center handling in the runtime stage, because center
+  generation depends strongly on MPI rank count and execution mode.
+- When using MPI, modify config values in Python only on rank 0.

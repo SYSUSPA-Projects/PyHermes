@@ -1,14 +1,25 @@
 Counting
 ========
 
-``Counting`` evaluates the field on many random positions. This is useful for
-sampling local densities, estimating one-point distributions, and generating
-downstream summary statistics after a smoothing step.
+``Counting`` evaluates the field at many random positions. This is useful for
+sampling local densities, estimating one-point distributions, and inspecting how
+a previously prepared field behaves under additional smoothing.
 
-Example configuration
----------------------
+Workflow Ladder
+---------------
 
-The repository includes ``examples/configs/param_counting.yaml``:
+As with the other PyHermes tasks, ``Counting`` can be used at several levels:
+
+- **Workflow A. Command-Line Driver**
+- **Workflow B. Config-Driven Python API**
+- **Workflow C. Task Object with Attribute Overrides**
+- **Workflow D. Manual Input Objects and Custom Preparation**
+- **Workflow E. Low-Level Building Blocks**
+
+Workflow A. Command-Line Driver
+-------------------------------
+
+Use the shipped example config:
 
 .. code-block:: yaml
 
@@ -21,43 +32,68 @@ The repository includes ``examples/configs/param_counting.yaml``:
          len_args:
             R: 20
 
-Minimal Python driver
----------------------
+Then run:
+
+.. code-block:: bash
+
+   python run_counting.py
+
+Workflow B. Config-Driven Python API
+------------------------------------
 
 .. code-block:: python
 
    from pyhermes.theory.counting import Counting
    from pyhermes.param.parambase import read_param
 
-   counting_params = read_param(config_path="./configs/param_counting.yaml")
-   counting = Counting(param_task=counting_params)
-   counting.run(overwrite=True)
+   counting_params = read_param("./configs/param_counting.yaml")
+   counting_task = Counting(param_task=counting_params)
+   counting = counting_task.run(overwrite=True)
 
-If you want to modify parameters directly inside the Python driver when using
-MPI, do it only on rank 0. For example:
+If you modify config values in an MPI workflow, do it only on rank 0.
+
+Workflow C. Task Object with Attribute Overrides
+------------------------------------------------
 
 .. code-block:: python
 
-   from pyhermes.utils.mpi_util import MPI
+   from pyhermes.theory.counting import Counting
 
-   if MPI.COMM_WORLD.Get_rank() == 0:
-       counting_params["Counting"]["window"] = {}
-       counting_params["Counting"]["fout_path"] = "./output/quijote_counting.pkl"
+   counting_task = Counting()
+   counting_task.N_randoms = 1_000_000
+   counting_task.threads = 8
+   counting_task.convols_data_path = "./output/quijote_sfc.pkl"
+   counting_task.prepare_input_fields()
+   counting = counting_task.run(save_result=False)
 
-Run it
-------
+Workflow D. Manual Input Objects and Custom Preparation
+-------------------------------------------------------
 
-From the ``examples`` directory:
+If you already have a prepared field or a custom smoothing window, inject them
+directly:
 
-.. code-block:: bash
+.. code-block:: python
 
-   python run_counting.py
+   from pyhermes.io import ConvolsData, WindowFunc
+   from pyhermes.theory.counting import Counting
 
-Or with MPI:
+   D = ConvolsData(data_path="./output/quijote_sfc.pkl")
+   win_params = {"type": "sphere", "len_args": {"R": 20}}
+   filter_sph20 = WindowFunc(win_params, D.convols_info)
 
-.. code-block:: bash
+   counting_task = Counting()
+   counting_task.N_randoms = 1_000_000
+   counting_task.convols_data = D.copy()
+   counting_task.window = filter_sph20
+   counting_task.prepare_input_fields()
+   counting = counting_task.run(save_result=False)
 
-   mpirun -np 8 python run_counting.py
+Workflow E. Low-Level Building Blocks
+-------------------------------------
+
+At the lowest level, you can generate the random positions yourself and call
+``n_at_pos`` directly on a prepared field. This is the most flexible option,
+but it assumes you want to manage the sampling and post-processing manually.
 
 Output
 ------
@@ -71,15 +107,21 @@ The example writes:
 Key parameters
 --------------
 
-- ``N_randoms``: number of random sampling points
-- ``convols_data_path``: path to the ``Convols`` output file
-- ``fout_path``: output path for counting results
-- ``window.type``: smoothing window type
-- ``window.len_args``: window scale parameters, for example ``R`` for a sphere
-- ``threads``: number of threads per MPI rank
+- ``N_randoms``:
+  number of random sampling points
+- ``convols_data_path``:
+  path to the ``Convols`` output file
+- ``window``:
+  optional smoothing window applied before counting
+- ``threads``:
+  CPU threads per MPI rank
+- ``fout_path``:
+  output path for the counting result
 
 Notes
 -----
 
-``Counting`` requires a previously generated ``Convols`` field. Run
-:doc:`../convols/convols` first if the input file does not yet exist.
+- ``prepare_input_fields()`` prepares the counting field.
+- ``run()`` generates random positions, evaluates the field, and gathers the result.
+- ``Counting`` requires a previously generated ``Convols`` field unless you pass a
+  prepared ``ConvolsData`` object directly.

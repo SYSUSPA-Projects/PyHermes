@@ -5,6 +5,10 @@ PyHermes tasks can be chained in a single Python script. This is convenient
 when you want to keep intermediate objects in memory instead of reloading them
 from disk between stages.
 
+This page is best thought of as a cross-task version of **Workflow B / C**:
+you still use the standard task objects, but you orchestrate several of them in
+one Python driver.
+
 Single parameter file
 ---------------------
 
@@ -54,8 +58,8 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
    Corr_3PCF_Multipole:
       convols_data_path: "./output/quijote_sfc.pkl"
       fout_path: "./output/quijote_3pcf_multipole.pkl"
-      r1: 20.0
-      r2: 40.0
+      r12: 20.0
+      r13: 40.0
       l_max: 4
       gpu_device_id: 0
 
