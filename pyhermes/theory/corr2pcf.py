@@ -37,6 +37,9 @@ class Corr_2PCF(TaskBase):
         self.format_params()
         self.convols_data1 = None
         self.convols_data2 = None
+        self.window1 = None
+        self.window2 = None
+        self.pair_window = None
         self._fields_prepared = False
 
     def _sync_runtime_options(self):
@@ -106,7 +109,7 @@ class Corr_2PCF(TaskBase):
             if not isinstance(provided_convols, ConvolsData):
                 self.logger.error(f"Unexpected input: 'convols_data{leg_idx}' is not an instance of 'ConvolsData'.")
                 func_util.safe_exit(1)
-            return provided_convols, f"argument convols_data{leg_idx}"
+            return provided_convols, f"provided convols_data{leg_idx}"
 
         base_path = getattr(self, f"convols_data{leg_idx}_path")
         if not base_path:
@@ -143,6 +146,16 @@ class Corr_2PCF(TaskBase):
     def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
+        if convols_data1 is None:
+            convols_data1 = self.convols_data1
+        if convols_data2 is None:
+            convols_data2 = self.convols_data2
+        if window1 is None:
+            window1 = self.window1
+        if window2 is None:
+            window2 = self.window2
+        if pair_window is None:
+            pair_window = self.pair_window
         self.pair_window = self._normalize_pair_window(pair_window)
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
@@ -177,6 +190,7 @@ class Corr_2PCF(TaskBase):
                     final_convols.format_convols_params()
 
                 setattr(self, f"convols_data{i}", final_convols)
+                setattr(self, f"window{i}", window_obj)
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
                     f"Field leg {i} ready | source={source_desc} | window={window_desc}"
