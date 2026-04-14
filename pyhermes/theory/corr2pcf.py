@@ -12,13 +12,16 @@ from pyhermes.pipeline import TaskBase
 
 
 def calc_DD_mean_r(radius, convols_data1, convols_data2=None, pair_window=None):
-    if not isinstance(pair_window, dict):
-        raise TypeError(
-            f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
-        )
-    pair_window_params = copy.deepcopy(pair_window)
-    pair_window_params.setdefault("len_args", {})
-    pair_window_params["len_args"]["R"] = radius
+    if pair_window is None:
+        pair_window_params = {"type": "shell", "len_args": {"R": radius}, "other_args": {}}
+    else:
+        if not isinstance(pair_window, dict):
+            raise TypeError(
+                f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
+            )
+        pair_window_params = copy.deepcopy(pair_window)
+        pair_window_params.setdefault("len_args", {})
+        pair_window_params["len_args"]["R"] = radius
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     if convols_data2:
         res = convols_data1 @ pair_window_obj * convols_data2
