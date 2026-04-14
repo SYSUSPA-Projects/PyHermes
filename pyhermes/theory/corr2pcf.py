@@ -146,12 +146,26 @@ class Corr_2PCF(TaskBase):
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(
                 f"field_mode={self.field_mode}, n_r={self.n_r}, "
-                f"r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
+                f"r_min={self.r_min}, r_max={self.r_max}"
             )
             self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
             base_convols_cache = {}
+            resolved_legs = []
             for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
                 base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                resolved_legs.append((i, base_convols, source_desc, win))
+
+            shared_required = func_util.validate_convols_compatibility(
+                [item[1] for item in resolved_legs],
+                ConvolsData._REQUIRED_ARGV,
+                logger=self.logger,
+                label="Corr_2PCF input fields",
+            )
+            shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
+            self.logger.info("Corr_2PCF input compatibility check passed.")
+            self.logger.info(f"Shared required parameters | {shared_required_text}")
+
+            for i, base_convols, source_desc, win in resolved_legs:
                 window_obj, window_desc = self._resolve_window(i, base_convols, win)
 
                 if window_obj is not None:
@@ -164,8 +178,7 @@ class Corr_2PCF(TaskBase):
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
-                    f"Field leg {i} ready | source={source_desc} | window={window_desc} | "
-                    f"L={final_convols.L}, SimBoxL={final_convols.SimBoxL}, V={final_convols.V:.5e}"
+                    f"Field leg {i} ready | source={source_desc} | window={window_desc}"
                 )
 
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
@@ -210,7 +223,6 @@ class Corr_2PCF(TaskBase):
 
     def run(self, save_result=True, overwrite=False):
         try:
-            self._sync_runtime_options()
             comm = self.comm
             rank = self.rank
             size = comm.Get_size()

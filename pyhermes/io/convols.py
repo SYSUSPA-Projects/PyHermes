@@ -11,6 +11,8 @@ from pyhermes.utils import math_util
 
 
 class ConvolsData(HermesData):
+    _REQUIRED_ARGV = ("J", "bandwidth", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
+
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.convols_info = {}
@@ -102,8 +104,7 @@ class ConvolsData(HermesData):
         if isinstance(other, ConvolsData):
             return other._conv(self)  
         return NotImplemented
-    
-    
+
     def __mul__(self, other):
         if isinstance(other, ConvolsData):
             return self._mul_field(other)
@@ -251,6 +252,10 @@ class ConvolsData(HermesData):
             return self.epsilon / self.NormFactor
 
     def format_convols_params(self):
+        missing = [k for k in self._REQUIRED_ARGV if k not in self.convols_info]
+        if missing:
+            self.logger.error(f"ConvolsData missing required keys: {missing}")
+            func_util.safe_exit(1)
         for key, value in self.convols_info.items():
             setattr(self, key, value)
 

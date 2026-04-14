@@ -1,6 +1,5 @@
 import os
 import pickle
-from datetime import datetime
 
 import numpy as np
 
@@ -9,12 +8,7 @@ from pyhermes.utils import func_util
 from pyhermes.utils import math_util
 
 
-
 class WindowFunc(ConvolsData):
-
-    # _REQUIRED_ARGV = ("L", "bandwidth", "DeltaXi", "PowerPhi")
-    _REQUIRED_ARGV = ("J", "bandwidth", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
-
     def __init__(self, win_params, convols_params, threads=1):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
