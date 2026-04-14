@@ -66,6 +66,20 @@ class Corr_2PCF(TaskBase):
         self.r_max = self.task_params['r_max']
         self.n_r = int(self.task_params['n_r'])
 
+    def _normalize_pair_window(self, pair_window):
+        if pair_window is None:
+            return copy.deepcopy(self.pair_window_params)
+        if not isinstance(pair_window, dict):
+            raise TypeError(
+                f"Unsupported pair_window input: expected dict or None, got {type(pair_window)}."
+            )
+        normalized = copy.deepcopy(pair_window)
+        if not normalized.get("type"):
+            normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
+        normalized.setdefault("len_args", {})
+        normalized.setdefault("other_args", {})
+        return normalized
+
     def _current_task_params_snapshot(self):
         params = copy.deepcopy(self.task_params)
         params['convols_data_path'] = self.convols_data_path
@@ -127,14 +141,7 @@ class Corr_2PCF(TaskBase):
     def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
         self.corr2pcf_data = Corr2PCFData()
         self._sync_runtime_options()
-        if pair_window is None:
-            self.pair_window = copy.deepcopy(self.pair_window_params)
-        elif isinstance(pair_window, dict):
-            self.pair_window = copy.deepcopy(pair_window)
-        else:
-            raise TypeError(
-                f"Unsupported pair_window input: expected dict or None, got {type(pair_window)}."
-            )
+        self.pair_window = self._normalize_pair_window(pair_window)
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(
