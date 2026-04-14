@@ -29,7 +29,9 @@ def calc_DD_mean_r(radius, convols_data1, convols_data2=None, pair_window=None):
 
 class Corr_2PCF(TaskBase):
 
-    def __init__(self, param_task):
+    def __init__(self, param_task=None):
+        if param_task is None:
+            param_task = {"Corr_2PCF": {}}
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
@@ -171,8 +173,7 @@ class Corr_2PCF(TaskBase):
                 if window_obj is not None:
                     final_convols = base_convols @ window_obj
                 else:
-                    final_convols = base_convols._spawn_like()
-                    final_convols.epsilon = base_convols.epsilon
+                    final_convols = base_convols.copy()
                     final_convols.format_convols_params()
 
                 setattr(self, f"convols_data{i}", final_convols)

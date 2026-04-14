@@ -44,6 +44,17 @@ class ConvolsData(HermesData):
 
         return new
 
+    def copy(self):
+        """
+        Create a deep copy of the object, including data arrays.
+        """
+        new = self._spawn_like()
+        new.convols_info = copy.deepcopy(self.convols_info)
+        new.task_params = copy.deepcopy(self.task_params)
+        new.epsilon = copy.deepcopy(self.epsilon)
+        new.format_convols_params()
+        return new
+
     def _conv(self, other):
         if not hasattr(other, "as_array"):
             if self.rank == 0:
