@@ -35,8 +35,8 @@ class ConvolsData(HermesData):
         new.logger = self.logger
 
         # --- copy metadata (shallow copy is enough) ---
-        new.convols_info = copy.copy(self.convols_info)
-        new.task_params        = copy.copy(self.task_params)
+        new.convols_info = copy.deepcopy(self.convols_info)
+        new.task_params  = copy.deepcopy(self.task_params)
 
         # --- clear data containers ---
         new.epsilon = None
@@ -49,8 +49,6 @@ class ConvolsData(HermesData):
         Create a deep copy of the object, including data arrays.
         """
         new = self._spawn_like()
-        new.convols_info = copy.deepcopy(self.convols_info)
-        new.task_params = copy.deepcopy(self.task_params)
         new.epsilon = copy.deepcopy(self.epsilon)
         new.format_convols_params()
         return new
