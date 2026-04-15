@@ -3,7 +3,7 @@
 	"Counting": {
 		"seed": 42,
 		"N_randoms": 1000000,
-		"convols_data_path": "",
+		"convols_data": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -46,10 +46,10 @@
 		"threads": 1
 	},
 	"Corr_3PCF": {
-		"convols_data_path": "",
-		"convols_data1_path": "",
-		"convols_data2_path": "",
-		"convols_data3_path": "",
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
+		"convols_data3": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -82,10 +82,10 @@
 		"threads": 1
 	},
 	"Corr_3PCF_Multipole": {
-		"convols_data_path": "",
-		"convols_data1_path": "",
-		"convols_data2_path": "",
-		"convols_data3_path": "",
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
+		"convols_data3": "",
 		"fout_path": "",
 		"window": {
 			"type": "",

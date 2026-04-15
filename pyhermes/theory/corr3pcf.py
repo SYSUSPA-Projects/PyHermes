@@ -84,12 +84,6 @@ class Corr_3PCF(TaskBase):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
-        self.convols_data1 = None
-        self.convols_data2 = None
-        self.convols_data3 = None
-        self.window1 = None
-        self.window2 = None
-        self.window3 = None
         self._fields_prepared = False
 
     def _sync_runtime_options(self):
@@ -98,22 +92,22 @@ class Corr_3PCF(TaskBase):
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
-        self.convols_data_path = self.task_params["convols_data_path"]
-        self.convols_data1_path = self.task_params.get("convols_data1_path", "") or self.convols_data_path
-        self.convols_data2_path = self.task_params.get("convols_data2_path", "") or self.convols_data_path
-        self.convols_data3_path = self.task_params.get("convols_data3_path", "") or self.convols_data_path
+        self.convols_data = self.task_params.get("convols_data", "")
+        self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
+        self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
+        self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
         self.fout_path = self.task_params["fout_path"]
         self.threads = int(self.task_params["threads"])
 
-        win_params = self.task_params.get("window", None)
-        win_params = win_params if (win_params and win_params.get("type")) else None
+        window = self.task_params.get("window", None)
+        self.window = window if (window and window.get("type")) else None
 
         for i in range(1, 4):
-            win_params_i = self.task_params.get(f"window{i}", None)
-            win_params_i = win_params_i if (win_params_i and win_params_i.get("type")) else None
-            if (not win_params_i) and win_params:
-                win_params_i = dict(win_params)
-            setattr(self, f"win_params{i}", win_params_i)
+            window_i = self.task_params.get(f"window{i}", None)
+            window_i = window_i if (window_i and window_i.get("type")) else None
+            if (not window_i) and self.window:
+                window_i = dict(self.window)
+            setattr(self, f"window{i}", window_i)
 
         self.r12 = float(self.task_params["r12"])   # physical (Mpc/h)
         self.r13 = float(self.task_params["r13"])   # physical (Mpc/h)
@@ -128,12 +122,41 @@ class Corr_3PCF(TaskBase):
         self.n_rand = int(self.task_params["n_rand"]) # total centers when center="random"
         self.base_seed = int(self.task_params["base_seed"])
 
+    def _serialize_convols_input(self, value):
+        if isinstance(value, str):
+            return value
+        if isinstance(value, ConvolsData):
+            return {
+                "kind": "ConvolsData",
+                "L": value.L,
+                "SimBoxL": value.SimBoxL,
+                "wavelet_mode": value.wavelet_mode,
+                "wavelet_level": value.wavelet_level,
+            }
+        return value
+
+    def _serialize_window_input(self, value):
+        if isinstance(value, dict):
+            return copy.deepcopy(value)
+        if isinstance(value, WindowFunc):
+            return {
+                "kind": "WindowFunc",
+                "type": getattr(value, "type", "custom"),
+                "len_args": copy.deepcopy(getattr(value, "len_args", {})),
+                "other_args": copy.deepcopy(getattr(value, "other_args", {})),
+            }
+        return value
+
     def _current_task_params_snapshot(self):
-        params = copy.deepcopy(self.task_params)
-        params["convols_data_path"] = self.convols_data_path
-        params["convols_data1_path"] = self.convols_data1_path
-        params["convols_data2_path"] = self.convols_data2_path
-        params["convols_data3_path"] = self.convols_data3_path
+        params = {}
+        params["convols_data"] = self._serialize_convols_input(self.convols_data)
+        params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
+        params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
+        params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
+        params["window"] = self._serialize_window_input(self.window)
+        params["window1"] = self._serialize_window_input(self.window1)
+        params["window2"] = self._serialize_window_input(self.window2)
+        params["window3"] = self._serialize_window_input(self.window3)
         params["fout_path"] = self.fout_path
         params["threads"] = self.threads
         params["r12"] = self.r12
@@ -148,21 +171,41 @@ class Corr_3PCF(TaskBase):
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
         if provided_convols is not None:
+            if isinstance(provided_convols, str):
+                base_path = provided_convols
+                if base_path not in base_convols_cache:
+                    base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
+                return base_convols_cache[base_path], f"path={base_path}"
             if not isinstance(provided_convols, ConvolsData):
-                self.logger.error(f"Unexpected input: 'convols_data{leg_idx}' is not an instance of 'ConvolsData'.")
+                self.logger.error(
+                    f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+                )
                 func_util.safe_exit(1)
             return provided_convols, f"provided convols_data{leg_idx}"
 
-        base_path = getattr(self, f"convols_data{leg_idx}_path")
-        if not base_path:
+        base_input = getattr(self, f"convols_data{leg_idx}")
+        if isinstance(base_input, str) and base_input:
+            if base_input not in base_convols_cache:
+                base_convols_cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
+            return base_convols_cache[base_input], f"path={base_input}"
+        if isinstance(base_input, ConvolsData):
+            return base_input, f"provided convols_data{leg_idx}"
+        if base_input not in (None, ""):
             self.logger.error(
-                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
-                f"'convols_data{leg_idx}_path' / 'convols_data_path'."
+                f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
             )
             func_util.safe_exit(1)
-        if base_path not in base_convols_cache:
-            base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
-        return base_convols_cache[base_path], f"path={base_path}"
+        if not self.convols_data and not self.convols_data1 and not self.convols_data2 and not self.convols_data3:
+            self.logger.error(
+                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
+                f"'convols_data{leg_idx}' / 'convols_data'."
+            )
+            func_util.safe_exit(1)
+        self.logger.error(
+            f"Missing usable input for field leg {leg_idx}. Expected a string path or ConvolsData instance in "
+            f"'convols_data{leg_idx}' or shared 'convols_data'."
+        )
+        func_util.safe_exit(1)
 
     def _resolve_window(self, leg_idx, base_convols, provided_window):
         if isinstance(provided_window, WindowFunc):
@@ -178,11 +221,6 @@ class Corr_3PCF(TaskBase):
             )
             func_util.safe_exit(1)
 
-        config_window = getattr(self, f"win_params{leg_idx}", None)
-        if config_window:
-            return WindowFunc(config_window, base_convols.convols_info, threads=self.threads), (
-                f"config window{leg_idx} | {func_util.describe_window_action(config_window)}"
-            )
         return None, "no additional window convolution"
 
     def prepare_input_fields(
@@ -245,7 +283,6 @@ class Corr_3PCF(TaskBase):
                     final_convols.format_convols_params()
 
                 setattr(self, f"convols_data{i}", final_convols)
-                setattr(self, f"window{i}", window_obj)
                 setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
                     f"Field leg {i} ready | source={source_desc} | window={window_desc}"

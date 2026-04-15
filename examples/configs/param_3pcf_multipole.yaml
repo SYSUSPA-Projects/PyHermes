@@ -1,8 +1,8 @@
 Corr_3PCF_Multipole:
-   convols_data_path: "./output/quijote_sfc.pkl"
-   convols_data1_path: ""
-   convols_data2_path: ""
-   convols_data3_path: ""
+   convols_data: "./output/quijote_sfc.pkl"
+   convols_data1: ""
+   convols_data2: ""
+   convols_data3: ""
    fout_path: "./output/quijote_3pcf_multipole.pkl"
    window:
       type: "sphere"

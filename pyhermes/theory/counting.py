@@ -19,18 +19,16 @@ class Counting(TaskBase):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
-        self.convols_data = None
-        self.window = None
         self._fields_prepared = False
 
     def format_params(self):
         # Parameters from json or input
         self.N_randoms        = int(self.task_params['N_randoms'])
         self.seed             = int(self.task_params['seed'])
-        self.convols_data_path             = self.task_params['convols_data_path']
+        self.convols_data     = self.task_params.get('convols_data', '')
         self.threads          = int(self.task_params['threads'])
-        win_params = self.task_params.get('window', None)
-        self.win_params = win_params if win_params['type'] else None
+        window = self.task_params.get('window', None)
+        self.window = window if (window and window.get('type')) else None
         self.fout_path      = self.task_params['fout_path']
 
     def _sync_runtime_options(self):
@@ -38,15 +36,41 @@ class Counting(TaskBase):
         self.task_params['threads'] = self.threads
         self.task_params['N_randoms'] = self.N_randoms
         self.task_params['seed'] = self.seed
-        self.task_params['convols_data_path'] = self.convols_data_path
+        self.task_params['convols_data'] = self.convols_data
         self.task_params['fout_path'] = self.fout_path
         self.sync_runtime_options(context="Counting runtime configuration", blank_line=True)
 
+    def _serialize_convols_input(self, value):
+        if isinstance(value, str):
+            return value
+        if isinstance(value, ConvolsData):
+            return {
+                "kind": "ConvolsData",
+                "L": value.L,
+                "SimBoxL": value.SimBoxL,
+                "wavelet_mode": value.wavelet_mode,
+                "wavelet_level": value.wavelet_level,
+            }
+        return value
+
+    def _serialize_window_input(self, value):
+        if isinstance(value, dict):
+            return copy.deepcopy(value)
+        if isinstance(value, WindowFunc):
+            return {
+                "kind": "WindowFunc",
+                "type": getattr(value, "type", "custom"),
+                "len_args": copy.deepcopy(getattr(value, "len_args", {})),
+                "other_args": copy.deepcopy(getattr(value, "other_args", {})),
+            }
+        return value
+
     def _current_task_params_snapshot(self):
-        params = copy.deepcopy(self.task_params)
+        params = {}
         params['N_randoms'] = self.N_randoms
         params['seed'] = self.seed
-        params['convols_data_path'] = self.convols_data_path
+        params['convols_data'] = self._serialize_convols_input(self.convols_data)
+        params['window'] = self._serialize_window_input(self.window)
         params['threads'] = self.threads
         params['fout_path'] = self.fout_path
         return params
@@ -65,36 +89,45 @@ class Counting(TaskBase):
                 f"N_randoms={self.N_randoms}, seed={self.seed}, threads={self.threads}"
             )
             if convols_data is not None:
-                if not isinstance(convols_data, ConvolsData):
-                    self.logger.error("Unexpected input: 'convols_data' is not an instance of 'ConvolsData'.")
+                if isinstance(convols_data, str):
+                    base_convols = ConvolsData(data_path=convols_data, threads=self.threads)
+                    source_desc = f"path={convols_data}"
+                elif isinstance(convols_data, ConvolsData):
+                    base_convols = convols_data
+                    source_desc = "provided convols_data"
+                else:
+                    self.logger.error("Unexpected input: 'convols_data' must be a string path or a ConvolsData instance.")
                     func_util.safe_exit(1)
-                base_convols = convols_data
-                source_desc = "provided convols_data"
             else:
-                if not self.convols_data_path:
+                if not self.convols_data:
                     self.logger.error(
-                        "No input 'convols_data' provided and 'convols_data_path' is not set. "
+                        "No input 'convols_data' provided and shared 'convols_data' is not set. "
                         "Please either pass a ConvolsData instance to prepare_input_fields(convols_data=...) "
-                        "or specify 'convols_data_path' in task_params."
+                        "or specify 'convols_data' in task_params."
                     )
                     func_util.safe_exit(1)
-                base_convols = ConvolsData(data_path=self.convols_data_path, threads=self.threads)
-                source_desc = f"path={self.convols_data_path}"
+                if isinstance(self.convols_data, str):
+                    base_convols = ConvolsData(data_path=self.convols_data, threads=self.threads)
+                    source_desc = f"path={self.convols_data}"
+                elif isinstance(self.convols_data, ConvolsData):
+                    base_convols = self.convols_data
+                    source_desc = "provided convols_data"
+                else:
+                    self.logger.error("Unexpected task attribute 'convols_data': expected string path or ConvolsData.")
+                    func_util.safe_exit(1)
 
-            if isinstance(window, WindowFunc):
-                window_obj = window
-                window_desc = "provided WindowFunc instance"
-            elif isinstance(window, dict):
-                window_obj = WindowFunc(window, base_convols.convols_info, threads=self.threads)
-                window_desc = f"provided window dict | {func_util.describe_window_action(window)}"
-            elif window is not None:
-                self.logger.error(
-                    f"Unsupported window input. Expected dict, WindowFunc, or None, got {type(window)}."
-                )
-                func_util.safe_exit(1)
-            elif self.win_params:
-                window_obj = WindowFunc(self.win_params, base_convols.convols_info, threads=self.threads)
-                window_desc = f"config window | {func_util.describe_window_action(self.win_params)}"
+            if window is not None:
+                if isinstance(window, WindowFunc):
+                    window_obj = window
+                    window_desc = "provided WindowFunc instance"
+                elif isinstance(window, dict):
+                    window_obj = WindowFunc(window, base_convols.convols_info, threads=self.threads)
+                    window_desc = f"provided window dict | {func_util.describe_window_action(window)}"
+                else:
+                    self.logger.error(
+                        f"Unsupported window input. Expected dict, WindowFunc, or None, got {type(window)}."
+                    )
+                    func_util.safe_exit(1)
             else:
                 window_obj = None
                 window_desc = "no additional window convolution"

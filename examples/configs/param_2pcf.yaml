@@ -1,7 +1,7 @@
 Corr_2PCF:
-   convols_data_path: "./output/quijote_sfc.pkl" 
-   convols_data1_path: ""
-   convols_data2_path: ""
+   convols_data: "./output/quijote_sfc.pkl"
+   convols_data1: ""
+   convols_data2: ""
    fout_path: "./output/quijote_2pcf.pkl"
    pair_window:
       type: ""
