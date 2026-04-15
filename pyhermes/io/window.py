@@ -45,12 +45,12 @@ class WindowFunc(ConvolsData):
         # Missing `type` will raise an error in math_util.
         self.window_params = dict(win_params)
         if "func" in win_params:
-            self.window_type = win_params.get('type', None) or "custom"
-            self.window_func = win_params["func"]
+            self.type = win_params.get('type', None) or "custom"
+            self.func = win_params["func"]
         else:
             assert "type" in win_params
-            self.window_type = win_params['type']
-            self.window_func = math_util.set_window_function(self.window_type, verbose=False)
+            self.type = win_params['type']
+            self.func = math_util.set_window_function(self.type, verbose=False)
         self.len_args = win_params['len_args']
         self.rescale_len_args = {k: v * self.L / self.SimBoxL for k, v in self.len_args.items()}
         self.other_args = win_params.get('other_args', {})
@@ -65,7 +65,7 @@ class WindowFunc(ConvolsData):
             bandwidth=self.bandwidth,
             DeltaXi=self.DeltaXi,
             PowerPhi=self.PowerPhi,
-            window_function_numba=self.window_func,
+            window_function_numba=self.func,
             **self.window_args,
         )
 
