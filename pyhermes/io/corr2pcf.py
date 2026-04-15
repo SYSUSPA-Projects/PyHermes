@@ -13,6 +13,7 @@ class Corr2PCFData(HermesData):
         self.r = None
         self.dd = None
         self.delta_dd = None
+        self.rr = None
         self.xi = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
@@ -37,14 +38,14 @@ class Corr2PCFData(HermesData):
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
-            # Check if the 'r' and 'xi' keys are present in the dataset
-            for key in ['r', 'xi']:
-                if key not in dataset:
-                    self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
-                    func_util.safe_exit(1)
-                setattr(self, key, dataset[key])
+            if 'r' not in dataset:
+                self.logger.error("Failed to load the dataset. The file is missing the 'r' key.")
+                func_util.safe_exit(1)
+            self.r = dataset['r']
             self.dd = dataset.get('dd')
             self.delta_dd = dataset.get('delta_dd')
+            self.rr = dataset.get('rr')
+            self.xi = dataset.get('xi')
             # Assign the dictionary from the file to self.corr2pcf_info
             for i in range(1, 3):
                 _convols_info = dataset.get(f'convols_info{i}')
@@ -74,6 +75,7 @@ class Corr2PCFData(HermesData):
             'r': self.r,
             'dd': self.dd,
             'delta_dd': self.delta_dd,
+            'rr': self.rr,
             'xi': self.xi  # Include the actual data
         }
         # Save the dataset to the specified file

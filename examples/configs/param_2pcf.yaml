@@ -1,7 +1,5 @@
 Corr_2PCF:
    convols_data: "./output/quijote_sfc.pkl"
-   convols_data1: ""
-   convols_data2: ""
    fout_path: "./output/quijote_2pcf.pkl"
    pair_window:
       type: ""
@@ -10,4 +8,4 @@ Corr_2PCF:
    r_min: 1.0
    r_max: 150.0
    n_r: 30
-   field_mode: "delta"
+   products: "xi"

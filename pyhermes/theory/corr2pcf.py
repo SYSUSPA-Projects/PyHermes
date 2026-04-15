@@ -44,14 +44,21 @@ class Corr_2PCF(TaskBase):
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
         self.task_params['threads'] = self.threads
+        self.task_params['products'] = copy.deepcopy(self.products)
         self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
         self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data
+        self.random = self.task_params.get('random', None)
+        self.random1 = self.task_params.get('random1', None)
+        self.random2 = self.task_params.get('random2', None)
+        if self.random1 in (None, ""):
+            self.random1 = self.random
+        if self.random2 in (None, ""):
+            self.random2 = self.random
         self.fout_path = self.task_params['fout_path']
-        self.field_mode = self.task_params['field_mode']
         self.threads = int(self.task_params['threads'])
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
@@ -69,6 +76,33 @@ class Corr_2PCF(TaskBase):
         self.r_min = self.task_params['r_min']
         self.r_max = self.task_params['r_max']
         self.n_r = int(self.task_params['n_r'])
+        self.products = self._normalize_products(self.task_params.get('products', 'xi'))
+
+    def _normalize_products(self, products):
+        if isinstance(products, str):
+            products = [products]
+        elif products is None:
+            products = ['xi']
+        elif not isinstance(products, (list, tuple, set)):
+            raise TypeError(
+                f"Unsupported products input: expected string or array of strings, got {type(products)}."
+            )
+
+        allowed = ['dd', 'delta_dd', 'rr', 'xi']
+        normalized = []
+        for item in products:
+            if not isinstance(item, str):
+                raise TypeError("Each product name must be a string.")
+            name = item.strip().lower()
+            if name not in allowed:
+                raise ValueError(f"Unsupported product '{item}'. Allowed values are {allowed}.")
+            if name not in normalized:
+                normalized.append(name)
+        if 'xi' in normalized:
+            for dep in ['delta_dd', 'rr']:
+                if dep not in normalized:
+                    normalized.append(dep)
+        return normalized
 
     def _normalize_pair_window(self, pair_window):
         if pair_window is None:
@@ -87,6 +121,10 @@ class Corr_2PCF(TaskBase):
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
             return value
+        if value == "uniform":
+            return "uniform"
+        if isinstance(value, (float, int, np.floating)):
+            return float(value)
         if isinstance(value, ConvolsData):
             return {
                 "kind": "ConvolsData",
@@ -110,16 +148,19 @@ class Corr_2PCF(TaskBase):
         return value
 
     def _current_task_params_snapshot(self):
-        params = copy.deepcopy(self.task_params)
+        params = {}
         params['convols_data'] = self._serialize_convols_input(self.convols_data)
         params['convols_data1'] = self._serialize_convols_input(self.convols_data1)
         params['convols_data2'] = self._serialize_convols_input(self.convols_data2)
+        params['random'] = self._serialize_convols_input(self.random)
+        params['random1'] = self._serialize_convols_input(self.random1)
+        params['random2'] = self._serialize_convols_input(self.random2)
         params['window'] = self._serialize_window_input(self.window)
         params['window1'] = self._serialize_window_input(self.window1)
         params['window2'] = self._serialize_window_input(self.window2)
         params['fout_path'] = self.fout_path
-        params['field_mode'] = self.field_mode
         params['threads'] = self.threads
+        params['products'] = copy.deepcopy(self.products)
         params['pair_window'] = copy.deepcopy(
             self.pair_window if self.pair_window is not None else self.pair_window_params
         )
@@ -132,6 +173,17 @@ class Corr_2PCF(TaskBase):
         if isinstance(pair_window, dict):
             return f"pair_window dict | {func_util.describe_window_action(pair_window)} | runtime R follows current radius"
         return "pair_window dict | shell window with runtime R=radius"
+
+    def _describe_random_input(self, value):
+        if value == "uniform":
+            return "uniform random density"
+        if isinstance(value, str):
+            return f"path={value}"
+        if isinstance(value, ConvolsData):
+            return "provided random ConvolsData"
+        if isinstance(value, (float, int, np.floating)):
+            return f"density={float(value):.5e}"
+        return "unset"
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
         if provided_convols is not None:
@@ -171,6 +223,30 @@ class Corr_2PCF(TaskBase):
         )
         func_util.safe_exit(1)
 
+    def _resolve_random_base(self, leg_idx, provided_random, base_convols_cache):
+        if provided_random is None or provided_random == "":
+            return None, "no random input"
+        if provided_random == "uniform":
+            return "uniform", "uniform random density"
+        if isinstance(provided_random, str):
+            base_path = provided_random
+            if base_path not in base_convols_cache:
+                base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
+            return base_convols_cache[base_path], f"path={base_path}"
+        if isinstance(provided_random, ConvolsData):
+            return provided_random, f"provided random{leg_idx}"
+        self.logger.error(
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a ConvolsData instance, or None."
+        )
+        func_util.safe_exit(1)
+
+    def _field_density(self, field):
+        if isinstance(field, (float, int, np.floating)):
+            return float(field)
+        if isinstance(field, ConvolsData):
+            return 1.0 / field.V
+        raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
+
     def _resolve_window(self, leg_idx, base_convols, provided_window):
         if provided_window is None:
             return None, "no additional window convolution"
@@ -188,13 +264,43 @@ class Corr_2PCF(TaskBase):
                 )
                 func_util.safe_exit(1)
 
-    def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
+    def _required_input_flags(self):
+        products = set(self.products)
+        needs_data = bool(products & {'dd', 'delta_dd', 'xi'})
+        needs_random = bool(products & {'rr', 'delta_dd', 'xi'})
+        return needs_data, needs_random
+
+    def calc_pair_product(self, radius, field1, field2=None, pair_window=None):
+        if field2 is None:
+            field2 = field1
+        if pair_window is None:
+            pair_window = self.pair_window
+        pair_window = self._normalize_pair_window(pair_window)
+        if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
+            return self._field_density(field1) * self._field_density(field2)
+        return calc_DD_mean_r(radius, field1, field2, pair_window=pair_window)
+
+    def prepare_input_fields(
+        self,
+        convols_data1=None,
+        convols_data2=None,
+        random1=None,
+        random2=None,
+        window1=None,
+        window2=None,
+        pair_window=None,
+    ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
+        self.products = self._normalize_products(self.products)
         if convols_data1 is None:
             convols_data1 = self.convols_data1
         if convols_data2 is None:
             convols_data2 = self.convols_data2
+        if random1 is None:
+            random1 = self.random1
+        if random2 is None:
+            random2 = self.random2
         if window1 is None:
             window1 = self.window1
         if window2 is None:
@@ -202,84 +308,117 @@ class Corr_2PCF(TaskBase):
         if pair_window is None:
             pair_window = self.pair_window
         self.pair_window = self._normalize_pair_window(pair_window)
+        needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(
-                f"field_mode={self.field_mode}, n_r={self.n_r}, "
-                f"r_min={self.r_min}, r_max={self.r_max}"
+                f"products={self.products}, n_r={self.n_r}, "
+                f"r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
             )
             self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
             base_convols_cache = {}
-            resolved_legs = []
-            for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
-                base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                resolved_legs.append((i, base_convols, source_desc, win))
+            resolved_data_legs = []
+            if needs_data:
+                for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
+                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                    resolved_data_legs.append((i, base_convols, source_desc, win))
 
-            shared_required = func_util.validate_convols_compatibility(
-                [item[1] for item in resolved_legs],
-                ConvolsData._REQUIRED_ARGV,
-                logger=self.logger,
-                label="Corr_2PCF input fields",
-            )
-            shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
-            self.logger.info("Corr_2PCF input compatibility check passed.")
-            self.logger.info(f"Shared required parameters | {shared_required_text}")
+            resolved_random_legs = []
+            if needs_random:
+                for i, rdata, win in zip([1, 2], [random1, random2], [window1, window2]):
+                    base_random, source_desc = self._resolve_random_base(i, rdata, base_convols_cache)
+                    if base_random is None:
+                        self.logger.error(
+                            f"Missing input for random leg {i}. Products {self.products} require 'random{i}' or shared 'random'."
+                        )
+                        func_util.safe_exit(1)
+                    resolved_random_legs.append((i, base_random, source_desc, win))
 
-            for i, base_convols, source_desc, win in resolved_legs:
+            compat_fields = [item[1] for item in resolved_data_legs if isinstance(item[1], ConvolsData)]
+            compat_fields.extend(item[1] for item in resolved_random_legs if isinstance(item[1], ConvolsData))
+            if compat_fields:
+                shared_required = func_util.validate_convols_compatibility(
+                    compat_fields,
+                    ConvolsData._REQUIRED_ARGV,
+                    logger=self.logger,
+                    label="Corr_2PCF input fields",
+                )
+                shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
+                self.logger.info("Corr_2PCF input compatibility check passed.")
+                self.logger.info(f"Shared required parameters | {shared_required_text}")
+
+            for i, base_convols, source_desc, win in resolved_data_legs:
                 window_obj, window_desc = self._resolve_window(i, base_convols, win)
-
                 if window_obj is not None:
                     final_convols = base_convols @ window_obj
                 else:
                     final_convols = base_convols.copy()
                     final_convols.format_convols_params()
-
                 setattr(self, f"convols_data{i}", final_convols)
-                setattr(self, f"window{i}", win if win is not None else getattr(self, f"window{i}"))
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
                     f"Field leg {i} ready | source={source_desc} | window={window_desc}"
                 )
 
+            for i, base_random, source_desc, win in resolved_random_legs:
+                if base_random == "uniform":
+                    signal_ref = getattr(self, f"convols_data{i}", None)
+                    if not isinstance(signal_ref, ConvolsData):
+                        signal_ref, _ = self._resolve_base_convols(i, None, base_convols_cache)
+                    rho = 1.0 / signal_ref.V
+                    setattr(self, f"random{i}", rho)
+                    self.logger.info(
+                        f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}"
+                    )
+                else:
+                    window_obj, window_desc = self._resolve_window(i, base_random, win)
+                    if window_obj is not None:
+                        final_random = base_random @ window_obj
+                    else:
+                        final_random = base_random.copy()
+                        final_random.format_convols_params()
+                    setattr(self, f"random{i}", final_random)
+                    self.logger.info(
+                        f"Random leg {i} ready | source={source_desc} | window={window_desc}"
+                    )
+
+            self.window1 = window1
+            self.window2 = window2
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
         self._fields_prepared = True
 
-    def _broadcast_input_fields(self):
+    def _broadcast_field(self, value):
         comm = self.comm
         rank = self.rank
-        convols_info1_serialized = None
-        convols_info2_serialized = None
+        serialized = None
+        is_density = None
+        density_value = None
 
         if rank == 0:
-            convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
-            convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
-            self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
-            self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
-            local_convols1 = self.convols_data1
-            local_convols2 = self.convols_data2
+            is_density = isinstance(value, (float, int, np.floating))
+            if is_density:
+                density_value = float(value)
+            else:
+                serialized = pickle.dumps(value.convols_info)
+                value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
+                local_value = value
         else:
-            local_convols1 = ConvolsData(threads=self.threads)
-            local_convols2 = ConvolsData(threads=self.threads)
+            local_value = None
 
-        convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
-        convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
+        is_density = comm.bcast(is_density, root=0)
+        if is_density:
+            return float(comm.bcast(density_value, root=0))
 
+        serialized = comm.bcast(serialized, root=0)
         if rank != 0:
-            local_convols1.convols_info = pickle.loads(convols_info1_serialized)
-            local_convols1.format_convols_params()
-            local_convols1.epsilon = np.empty((local_convols1.L, local_convols1.L, local_convols1.L), dtype=np.float64)
+            local_value = ConvolsData(threads=self.threads)
+            local_value.convols_info = pickle.loads(serialized)
+            local_value.format_convols_params()
+            local_value.epsilon = np.empty((local_value.L, local_value.L, local_value.L), dtype=np.float64)
 
-            local_convols2.convols_info = pickle.loads(convols_info2_serialized)
-            local_convols2.format_convols_params()
-            local_convols2.epsilon = np.empty((local_convols2.L, local_convols2.L, local_convols2.L), dtype=np.float64)
-
-        comm.Bcast(local_convols1.epsilon, root=0)
-        comm.Bcast(local_convols2.epsilon, root=0)
+        comm.Bcast(local_value.epsilon, root=0)
         comm.Barrier()
-
-        self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
-        self.corr2pcf_data.task_params = self._current_task_params_snapshot()
-        return local_convols1, local_convols2
+        return local_value
 
     def run(self, save_result=True, overwrite=False):
         try:
@@ -290,11 +429,17 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            _local_convols1, _local_convols2 = self._broadcast_input_fields()
+            needs_data, needs_random = self._required_input_flags()
+            _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
+            _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
+            _local_random1 = self._broadcast_field(self.random1) if needs_random else None
+            _local_random2 = self._broadcast_field(self.random2) if needs_random else None
+            self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
+            self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
                 self.logger.info(
-                    f"field_mode={self.field_mode}, n_r={self.n_r}, "
+                    f"products={self.products}, n_r={self.n_r}, "
                     f"r_min={self.r_min}, r_max={self.r_max}"
                 )
                 time_start = time.perf_counter()
@@ -320,26 +465,28 @@ class Corr_2PCF(TaskBase):
             # Init local 2pcf results
             local_xi = []
             local_dd = []
+            local_delta_dd = []
+            local_rr = []
             local_r = []
-            rho1 = 1.0 / _local_convols1.V
-            rho2 = 1.0 / _local_convols2.V
-            RR = rho1 * rho2
-            if self.field_mode == "delta":
-                field1 = _local_convols1 - rho1
-                field2 = _local_convols2 - rho2
-            elif self.field_mode == "raw":
-                field1 = _local_convols1
-                field2 = _local_convols2
-            else:
-                raise ValueError(f"Unknown field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
             for i, radius in enumerate(r_sub_arr):
-                dd_mean = calc_DD_mean_r(radius, field1, field2, pair_window=self.pair_window)
-                if self.field_mode == "delta":
-                    _xi = dd_mean / RR
-                else:
-                    _xi = dd_mean / RR - 1.0
-                local_dd.append(dd_mean)
-                local_xi.append(_xi)
+                dd_value = None
+                delta_dd_value = None
+                rr_value = None
+                xi_value = None
+                if 'dd' in self.products:
+                    dd_value = self.calc_pair_product(radius, _local_convols1, _local_convols2, pair_window=self.pair_window)
+                if 'delta_dd' in self.products:
+                    field1 = _local_convols1 - self._field_density(_local_random1)
+                    field2 = _local_convols2 - self._field_density(_local_random2)
+                    delta_dd_value = self.calc_pair_product(radius, field1, field2, pair_window=self.pair_window)
+                if 'rr' in self.products:
+                    rr_value = self.calc_pair_product(radius, _local_random1, _local_random2, pair_window=self.pair_window)
+                if 'xi' in self.products:
+                    xi_value = delta_dd_value / rr_value
+                local_dd.append(dd_value)
+                local_delta_dd.append(delta_dd_value)
+                local_rr.append(rr_value)
+                local_xi.append(xi_value)
                 local_r.append(radius)
                 local_completed += 1
                 if local_completed % local_report_interval == 0:
@@ -366,17 +513,19 @@ class Corr_2PCF(TaskBase):
             # Gathering to rank0
             gathered_xi = comm.gather(local_xi, root=0)
             gathered_dd = comm.gather(local_dd, root=0)
+            gathered_delta_dd = comm.gather(local_delta_dd, root=0)
+            gathered_rr = comm.gather(local_rr, root=0)
             gathered_r = comm.gather(local_r, root=0)
             if rank == 0:
-                self.corr2pcf_data.xi = np.array([item for sublist in gathered_xi for item in sublist])
-                dd_arr = np.array([item for sublist in gathered_dd for item in sublist])
+                xi_arr = np.array([item for sublist in gathered_xi for item in sublist], dtype=object)
+                dd_arr = np.array([item for sublist in gathered_dd for item in sublist], dtype=object)
+                delta_dd_arr = np.array([item for sublist in gathered_delta_dd for item in sublist], dtype=object)
+                rr_arr = np.array([item for sublist in gathered_rr for item in sublist], dtype=object)
                 self.corr2pcf_data.r = np.array([item for sublist in gathered_r for item in sublist])
-                if self.field_mode == "delta":
-                    self.corr2pcf_data.dd = None
-                    self.corr2pcf_data.delta_dd = dd_arr
-                else:
-                    self.corr2pcf_data.dd = dd_arr
-                    self.corr2pcf_data.delta_dd = None
+                self.corr2pcf_data.dd = None if 'dd' not in self.products else np.asarray(dd_arr, dtype=np.float64)
+                self.corr2pcf_data.delta_dd = None if 'delta_dd' not in self.products else np.asarray(delta_dd_arr, dtype=np.float64)
+                self.corr2pcf_data.rr = None if 'rr' not in self.products else np.asarray(rr_arr, dtype=np.float64)
+                self.corr2pcf_data.xi = None if 'xi' not in self.products else np.asarray(xi_arr, dtype=np.float64)
                 if not count_all:
                     progress = 100.
                     self.logger.info(f" Progress: {progress:6.2f}%")

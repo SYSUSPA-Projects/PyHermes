@@ -16,6 +16,9 @@
 		"convols_data": "",
 		"convols_data1": "",
 		"convols_data2": "",
+		"random": "uniform",
+		"random1": "",
+		"random2": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -42,7 +45,7 @@
 		"r_min": 1.0,
 		"r_max": 150.0,
 		"n_r": 30,
-		"field_mode": "delta",
+		"products": "xi",
 		"threads": 1
 	},
 	"Corr_3PCF": {
