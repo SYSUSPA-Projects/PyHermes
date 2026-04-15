@@ -88,7 +88,7 @@ class Corr_2PCF(TaskBase):
                 f"Unsupported products input: expected string or array of strings, got {type(products)}."
             )
 
-        allowed = ['dd', 'delta_dd', 'rr', 'xi']
+        allowed = ['dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi']
         normalized = []
         for item in products:
             if not isinstance(item, str):
@@ -266,8 +266,8 @@ class Corr_2PCF(TaskBase):
 
     def _required_input_flags(self):
         products = set(self.products)
-        needs_data = bool(products & {'dd', 'delta_dd', 'xi'})
-        needs_random = bool(products & {'rr', 'delta_dd', 'xi'})
+        needs_data = bool(products & {'dd', 'dr', 'rd', 'delta_dd', 'xi'})
+        needs_random = bool(products & {'dr', 'rd', 'rr', 'delta_dd', 'xi'})
         return needs_data, needs_random
 
     def calc_pair_product(self, radius, field1, field2=None, pair_window=None):
@@ -465,16 +465,24 @@ class Corr_2PCF(TaskBase):
             # Init local 2pcf results
             local_xi = []
             local_dd = []
+            local_dr = []
+            local_rd = []
             local_delta_dd = []
             local_rr = []
             local_r = []
             for i, radius in enumerate(r_sub_arr):
                 dd_value = None
+                dr_value = None
+                rd_value = None
                 delta_dd_value = None
                 rr_value = None
                 xi_value = None
                 if 'dd' in self.products:
                     dd_value = self.calc_pair_product(radius, _local_convols1, _local_convols2, pair_window=self.pair_window)
+                if 'dr' in self.products:
+                    dr_value = self.calc_pair_product(radius, _local_convols1, _local_random2, pair_window=self.pair_window)
+                if 'rd' in self.products:
+                    rd_value = self.calc_pair_product(radius, _local_random1, _local_convols2, pair_window=self.pair_window)
                 if 'delta_dd' in self.products:
                     if isinstance(_local_random1, (float, int, np.floating)):
                         field1 = _local_convols1 - self._field_density(_local_random1)
@@ -490,6 +498,8 @@ class Corr_2PCF(TaskBase):
                 if 'xi' in self.products:
                     xi_value = delta_dd_value / rr_value
                 local_dd.append(dd_value)
+                local_dr.append(dr_value)
+                local_rd.append(rd_value)
                 local_delta_dd.append(delta_dd_value)
                 local_rr.append(rr_value)
                 local_xi.append(xi_value)
@@ -519,16 +529,22 @@ class Corr_2PCF(TaskBase):
             # Gathering to rank0
             gathered_xi = comm.gather(local_xi, root=0)
             gathered_dd = comm.gather(local_dd, root=0)
+            gathered_dr = comm.gather(local_dr, root=0)
+            gathered_rd = comm.gather(local_rd, root=0)
             gathered_delta_dd = comm.gather(local_delta_dd, root=0)
             gathered_rr = comm.gather(local_rr, root=0)
             gathered_r = comm.gather(local_r, root=0)
             if rank == 0:
                 xi_arr = np.array([item for sublist in gathered_xi for item in sublist], dtype=object)
                 dd_arr = np.array([item for sublist in gathered_dd for item in sublist], dtype=object)
+                dr_arr = np.array([item for sublist in gathered_dr for item in sublist], dtype=object)
+                rd_arr = np.array([item for sublist in gathered_rd for item in sublist], dtype=object)
                 delta_dd_arr = np.array([item for sublist in gathered_delta_dd for item in sublist], dtype=object)
                 rr_arr = np.array([item for sublist in gathered_rr for item in sublist], dtype=object)
                 self.corr2pcf_data.r = np.array([item for sublist in gathered_r for item in sublist])
                 self.corr2pcf_data.dd = None if 'dd' not in self.products else np.asarray(dd_arr, dtype=np.float64)
+                self.corr2pcf_data.dr = None if 'dr' not in self.products else np.asarray(dr_arr, dtype=np.float64)
+                self.corr2pcf_data.rd = None if 'rd' not in self.products else np.asarray(rd_arr, dtype=np.float64)
                 self.corr2pcf_data.delta_dd = None if 'delta_dd' not in self.products else np.asarray(delta_dd_arr, dtype=np.float64)
                 self.corr2pcf_data.rr = None if 'rr' not in self.products else np.asarray(rr_arr, dtype=np.float64)
                 self.corr2pcf_data.xi = None if 'xi' not in self.products else np.asarray(xi_arr, dtype=np.float64)

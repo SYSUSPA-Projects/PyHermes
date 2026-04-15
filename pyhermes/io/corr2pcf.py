@@ -12,6 +12,8 @@ class Corr2PCFData(HermesData):
         self.corr2pcf_info = {}
         self.r = None
         self.dd = None
+        self.dr = None
+        self.rd = None
         self.delta_dd = None
         self.rr = None
         self.xi = None
@@ -43,6 +45,8 @@ class Corr2PCFData(HermesData):
                 func_util.safe_exit(1)
             self.r = dataset['r']
             self.dd = dataset.get('dd')
+            self.dr = dataset.get('dr')
+            self.rd = dataset.get('rd')
             self.delta_dd = dataset.get('delta_dd')
             self.rr = dataset.get('rr')
             self.xi = dataset.get('xi')
@@ -74,6 +78,8 @@ class Corr2PCFData(HermesData):
             'corr2pcf_info': self.corr2pcf_info,
             'r': self.r,
             'dd': self.dd,
+            'dr': self.dr,
+            'rd': self.rd,
             'delta_dd': self.delta_dd,
             'rr': self.rr,
             'xi': self.xi  # Include the actual data
