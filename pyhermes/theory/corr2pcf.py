@@ -476,8 +476,14 @@ class Corr_2PCF(TaskBase):
                 if 'dd' in self.products:
                     dd_value = self.calc_pair_product(radius, _local_convols1, _local_convols2, pair_window=self.pair_window)
                 if 'delta_dd' in self.products:
-                    field1 = _local_convols1 - self._field_density(_local_random1)
-                    field2 = _local_convols2 - self._field_density(_local_random2)
+                    if isinstance(_local_random1, (float, int, np.floating)):
+                        field1 = _local_convols1 - self._field_density(_local_random1)
+                    else:
+                        field1 = _local_convols1 - _local_random1
+                    if isinstance(_local_random2, (float, int, np.floating)):
+                        field2 = _local_convols2 - self._field_density(_local_random2)
+                    else:
+                        field2 = _local_convols2 - _local_random2
                     delta_dd_value = self.calc_pair_product(radius, field1, field2, pair_window=self.pair_window)
                 if 'rr' in self.products:
                     rr_value = self.calc_pair_product(radius, _local_random1, _local_random2, pair_window=self.pair_window)

@@ -147,13 +147,23 @@ class ParamBase(object):
                 # Recursively to due the whole dict structure
                 self._recursive_update(default_dict[key], value, full_key)
             else:
-                if not isinstance(value, type(default_dict[key])):
+                if not self._is_type_compatible(full_key, default_dict[key], value):
                     self.logger.warning(f"Type mismatch for key: '{full_key}' !!!")
                 else:
                     if default_dict[key] != value:
                         old_value = 'empty' if default_dict[key] == '' or default_dict[key] == [] else default_dict[key]
                         self.logger.info(f"Default '{full_key}' from '{old_value}' to '{value}'")
                 default_dict[key] = value
+
+    def _is_type_compatible(self, full_key, default_value, new_value):
+        if isinstance(new_value, type(default_value)):
+            return True
+        # Some fields intentionally support either a single string or a list of strings.
+        if full_key.endswith(".products"):
+            default_ok = isinstance(default_value, (str, list, tuple))
+            new_ok = isinstance(new_value, (str, list, tuple))
+            return default_ok and new_ok
+        return False
     
     def recursive_update(self, default_dict, new_dict, parent_key='', section=None):
         return self._recursive_update(default_dict, new_dict, parent_key=parent_key, section=section)
