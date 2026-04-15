@@ -120,7 +120,9 @@ class Corr_2PCF(TaskBase):
         params['fout_path'] = self.fout_path
         params['field_mode'] = self.field_mode
         params['threads'] = self.threads
-        params['pair_window'] = copy.deepcopy(self.pair_window_params)
+        params['pair_window'] = copy.deepcopy(
+            self.pair_window if self.pair_window is not None else self.pair_window_params
+        )
         params['r_min'] = self.r_min
         params['r_max'] = self.r_max
         params['n_r'] = self.n_r
@@ -170,19 +172,21 @@ class Corr_2PCF(TaskBase):
         func_util.safe_exit(1)
 
     def _resolve_window(self, leg_idx, base_convols, provided_window):
-        if isinstance(provided_window, WindowFunc):
-            return provided_window, "provided WindowFunc instance"
-        if isinstance(provided_window, dict):
-            return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
-                f"provided window dict | {func_util.describe_window_action(provided_window)}"
-            )
-        if provided_window is not None:
-            self.logger.error(
-                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
-                f"got {type(provided_window)}."
-            )
-            func_util.safe_exit(1)
-        return None, "no additional window convolution"
+        if provided_window is None:
+            return None, "no additional window convolution"
+        else:
+            if isinstance(provided_window, WindowFunc):
+                return provided_window, "provided WindowFunc instance"
+            elif isinstance(provided_window, dict):
+                return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+                    f"provided window dict | {func_util.describe_window_action(provided_window)}"
+                )
+            else:
+                self.logger.error(
+                    f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
+                    f"got {type(provided_window)}."
+                )
+                func_util.safe_exit(1)
 
     def prepare_input_fields(self, convols_data1=None, convols_data2=None, window1=None, window2=None, pair_window=None):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
