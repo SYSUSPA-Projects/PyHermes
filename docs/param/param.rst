@@ -20,6 +20,7 @@ fields fall back to those defaults.
    :maxdepth: 2
    :caption: Reference
    
+   defaults/defaults
    io/io
    perform/perform
    cal/cal
