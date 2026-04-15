@@ -13,9 +13,9 @@
 		"threads": 1
 	},
 	"Corr_2PCF": {
-		"convols_data_path": "",
-		"convols_data1_path": "",
-		"convols_data2_path": "",
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
