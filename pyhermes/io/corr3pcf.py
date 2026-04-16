@@ -13,8 +13,9 @@ class Corr3PCFData(HermesData):
         self.theta               = None
         self.r23                 = None
         self.ddd                 = None
+        self.rrr                 = None
+        self.d_delta_dd          = None
         self.delta_ddd           = None
-        self.pdelta_ddd          = None
         self.xi12                = None
         self.xi13                = None
         self.xi23                = None
@@ -41,15 +42,15 @@ class Corr3PCFData(HermesData):
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
-            # Check if the 'r' and 'xi' keys are present in the dataset
             for key in ['theta', 'r23', 'xi12', 'xi13', 'xi23', 'zeta', 'Q']:
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
                 setattr(self, key, dataset[key])
             self.ddd = dataset.get('ddd')
+            self.rrr = dataset.get('rrr')
+            self.d_delta_dd = dataset.get('d_delta_dd', dataset.get('pdelta_ddd'))
             self.delta_ddd = dataset.get('delta_ddd')
-            self.pdelta_ddd = dataset.get('pdelta_ddd')
             # Assign the dictionary from the file to self.corr3pcf_info
             for i in range(1, 4):
                 _convols_info = dataset.get(f'convols_info{i}')
@@ -80,8 +81,9 @@ class Corr3PCFData(HermesData):
             'theta': self.theta,
             'r23': self.r23,
             'ddd': self.ddd,
+            'rrr': self.rrr,
+            'd_delta_dd': self.d_delta_dd,
             'delta_ddd': self.delta_ddd,
-            'pdelta_ddd': self.pdelta_ddd,
             'xi12': self.xi12,
             'xi13': self.xi13,
             'xi23': self.xi23,

@@ -53,6 +53,10 @@
 		"convols_data1": "",
 		"convols_data2": "",
 		"convols_data3": "",
+		"random": "uniform",
+		"random1": "",
+		"random2": "",
+		"random3": "",
 		"fout_path": "",
 		"window": {
 			"type": "",
@@ -79,7 +83,7 @@
 		"n_theta": 20,
 		"n_rot": 100,
 		"center": "random",
-		"field_mode": "delta",
+		"products": "Q",
 		"n_rand": 5000000,
 		"base_seed": 42,
 		"threads": 1

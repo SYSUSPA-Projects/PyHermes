@@ -20,20 +20,13 @@ def calc_DDD_mean_mc(
     eps1=None,
     rho1=None,
 ):
-    """
-    Wrapper around numba kernels:
-    - center="random"   -> calc_DDD_mc_random_center
-    - center="particle" -> calc_DDD_mc_pos_center_fast
-
-    All lengths/positions are SCALED (GRID) units here.
-    """
     kwargs_common = {
         "phi_data": convols_meta.phi_data,
         "L": convols_meta.L,
         "SampRate": convols_meta.SampRate,
         "PhiSupport": convols_meta.PhiSupport,
         "seed_base_rot": seed_base_rot,
-        "theta_index": theta_index
+        "theta_index": theta_index,
     }
 
     eps2 = convols_data2.epsilon
@@ -42,41 +35,27 @@ def calc_DDD_mean_mc(
     if center == "random":
         if eps1 is None:
             raise ValueError("eps1 must be provided when center='random'.")
-        res = math_util.calc_DDD_mc_random_center(
+        return math_util.calc_DDD_mc_random_center(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
             eps1, eps2, eps3,
             **kwargs_common,
         )
-    elif center == "particle":
+
+    if center == "particle":
         if rho1 is None:
             raise ValueError("rho1 must be provided when center='particle'.")
-        res = math_util.calc_DDD_mc_pos_center_fast(
+        return math_util.calc_DDD_mc_pos_center_fast(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
             rho1, eps2, eps3,
             **kwargs_common,
         )
-    else:
-        raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
 
-    return res
+    raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
 
 
 class Corr_3PCF(TaskBase):
-    """
-    3PCF task.
-
-    Parallelization:
-      - Each MPI rank works on a subset of centers (pos_local).
-      - Every rank computes all theta values.
-      - Results are combined by weighted averaging with weights = N_local centers.
-
-    Random strategy:
-      - centers ("random"): each rank generates its own centers using a rank-dependent seed
-      - rotations: handled inside math_util.calc_DDD_mc_* using deterministic seeds
-        based on (theta_index, rot_index), identical across ranks.
-    """
 
     def __init__(self, param_task=None):
         if param_task is None:
@@ -89,6 +68,7 @@ class Corr_3PCF(TaskBase):
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
         self.task_params["threads"] = self.threads
+        self.task_params["products"] = copy.deepcopy(self.products)
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
@@ -96,35 +76,112 @@ class Corr_3PCF(TaskBase):
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
+        self.random = self.task_params.get("random", None)
+        self.random1 = self.task_params.get("random1", None)
+        self.random2 = self.task_params.get("random2", None)
+        self.random3 = self.task_params.get("random3", None)
+        if self.random1 in (None, ""):
+            self.random1 = self.random
+        if self.random2 in (None, ""):
+            self.random2 = self.random
+        if self.random3 in (None, ""):
+            self.random3 = self.random
+
         self.fout_path = self.task_params["fout_path"]
         self.threads = int(self.task_params["threads"])
 
         window = self.task_params.get("window", None)
-        self.window = window if (window and window.get("type")) else None
-
+        self.window = window if (window and (window.get("type") or window.get("func"))) else None
         for i in range(1, 4):
             window_i = self.task_params.get(f"window{i}", None)
-            window_i = window_i if (window_i and window_i.get("type")) else None
+            window_i = window_i if (window_i and (window_i.get("type") or window_i.get("func"))) else None
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f"window{i}", window_i)
 
-        self.r12 = float(self.task_params["r12"])   # physical (Mpc/h)
-        self.r13 = float(self.task_params["r13"])   # physical (Mpc/h)
-
+        self.r12 = float(self.task_params["r12"])
+        self.r13 = float(self.task_params["r13"])
         self.theta_min = 0.0
         self.theta_max = np.pi
         self.n_theta = int(self.task_params["n_theta"])
         self.n_rot = int(self.task_params["n_rot"])
-
-        self.center = self.task_params["center"]      # "random" or "particle"
-        self.field_mode = self.task_params["field_mode"]  # "raw" or "delta"
-        self.n_rand = int(self.task_params["n_rand"]) # total centers when center="random"
+        self.center = self.task_params["center"]
+        self.n_rand = int(self.task_params["n_rand"])
         self.base_seed = int(self.task_params["base_seed"])
+        self.products = self._normalize_products(self.task_params.get("products", "Q"))
+
+    def _normalize_products(self, products):
+        if isinstance(products, str):
+            products = [products]
+        elif products is None:
+            products = ["Q"]
+        elif not isinstance(products, (list, tuple, set)):
+            raise TypeError(
+                f"Unsupported products input: expected string or array of strings, got {type(products)}."
+            )
+
+        allowed_random = {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
+        allowed_particle = {"ddd", "rrr", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
+        allowed = allowed_random if self.center == "random" else allowed_particle
+
+        normalized = []
+        for item in products:
+            if not isinstance(item, str):
+                raise TypeError("Each product name must be a string.")
+            raw_name = item.strip()
+            name = "Q" if raw_name.upper() == "Q" else raw_name.lower()
+            if name not in allowed:
+                raise ValueError(f"Unsupported product '{item}' for center='{self.center}'. Allowed values are {sorted(allowed)}.")
+            if name not in normalized:
+                normalized.append(name)
+        return normalized
+
+    def _expanded_products(self):
+        expanded = list(self.products)
+        if self.center == "random":
+            if "Q" in expanded:
+                for dep in ["zeta", "xi12", "xi13", "xi23"]:
+                    if dep not in expanded:
+                        expanded.append(dep)
+            if "zeta" in expanded:
+                for dep in ["delta_ddd", "rrr"]:
+                    if dep not in expanded:
+                        expanded.append(dep)
+        else:
+            if "Q" in expanded:
+                for dep in ["zeta", "xi12", "xi13", "xi23"]:
+                    if dep not in expanded:
+                        expanded.append(dep)
+            if "zeta" in expanded:
+                for dep in ["delta_ddd", "rrr"]:
+                    if dep not in expanded:
+                        expanded.append(dep)
+            if "delta_ddd" in expanded:
+                for dep in ["d_delta_dd", "xi23", "rrr"]:
+                    if dep not in expanded:
+                        expanded.append(dep)
+        return expanded
+
+    def _required_input_flags(self):
+        expanded = set(self._expanded_products())
+        needs_data = bool(expanded & {"ddd", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
+        needs_random = bool(expanded & {"rrr", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
+        return needs_data, needs_random
+
+    def _normalize_random(self, value):
+        if value in (None, ""):
+            return None
+        if value == "uniform":
+            return "uniform"
+        return value
 
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
             return value
+        if value == "uniform":
+            return "uniform"
+        if isinstance(value, (float, int, np.floating)):
+            return float(value)
         if isinstance(value, ConvolsData):
             return {
                 "kind": "ConvolsData",
@@ -153,6 +210,10 @@ class Corr_3PCF(TaskBase):
         params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
         params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
         params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
+        params["random"] = self._serialize_convols_input(self.random)
+        params["random1"] = self._serialize_convols_input(self.random1)
+        params["random2"] = self._serialize_convols_input(self.random2)
+        params["random3"] = self._serialize_convols_input(self.random3)
         params["window"] = self._serialize_window_input(self.window)
         params["window1"] = self._serialize_window_input(self.window1)
         params["window2"] = self._serialize_window_input(self.window2)
@@ -164,18 +225,17 @@ class Corr_3PCF(TaskBase):
         params["n_theta"] = self.n_theta
         params["n_rot"] = self.n_rot
         params["center"] = self.center
-        params["field_mode"] = self.field_mode
         params["n_rand"] = self.n_rand
         params["base_seed"] = self.base_seed
+        params["products"] = copy.deepcopy(self.products)
         return params
 
-    def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
+    def _resolve_base_convols(self, leg_idx, provided_convols, cache):
         if provided_convols is not None:
             if isinstance(provided_convols, str):
-                base_path = provided_convols
-                if base_path not in base_convols_cache:
-                    base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
-                return base_convols_cache[base_path], f"path={base_path}"
+                if provided_convols not in cache:
+                    cache[provided_convols] = ConvolsData(data_path=provided_convols, threads=self.threads)
+                return cache[provided_convols], f"path={provided_convols}"
             if not isinstance(provided_convols, ConvolsData):
                 self.logger.error(
                     f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
@@ -185,25 +245,31 @@ class Corr_3PCF(TaskBase):
 
         base_input = getattr(self, f"convols_data{leg_idx}")
         if isinstance(base_input, str) and base_input:
-            if base_input not in base_convols_cache:
-                base_convols_cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
-            return base_convols_cache[base_input], f"path={base_input}"
+            if base_input not in cache:
+                cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
+            return cache[base_input], f"path={base_input}"
         if isinstance(base_input, ConvolsData):
             return base_input, f"provided convols_data{leg_idx}"
-        if base_input not in (None, ""):
-            self.logger.error(
-                f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
-            )
-            func_util.safe_exit(1)
-        if not self.convols_data and not self.convols_data1 and not self.convols_data2 and not self.convols_data3:
-            self.logger.error(
-                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
-                f"'convols_data{leg_idx}' / 'convols_data'."
-            )
-            func_util.safe_exit(1)
         self.logger.error(
             f"Missing usable input for field leg {leg_idx}. Expected a string path or ConvolsData instance in "
             f"'convols_data{leg_idx}' or shared 'convols_data'."
+        )
+        func_util.safe_exit(1)
+
+    def _resolve_random_base(self, leg_idx, provided_random, cache):
+        provided_random = self._normalize_random(provided_random)
+        if provided_random is None:
+            return None, "no random input"
+        if provided_random == "uniform":
+            return "uniform", "uniform random density"
+        if isinstance(provided_random, str):
+            if provided_random not in cache:
+                cache[provided_random] = ConvolsData(data_path=provided_random, threads=self.threads)
+            return cache[provided_random], f"path={provided_random}"
+        if isinstance(provided_random, ConvolsData):
+            return provided_random, f"provided random{leg_idx}"
+        self.logger.error(
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a ConvolsData instance, or None."
         )
         func_util.safe_exit(1)
 
@@ -216,18 +282,100 @@ class Corr_3PCF(TaskBase):
             )
         if provided_window is not None:
             self.logger.error(
-                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
-                f"got {type(provided_window)}."
+                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
             )
             func_util.safe_exit(1)
-
         return None, "no additional window convolution"
+
+    def _field_density(self, field):
+        if isinstance(field, (float, int, np.floating)):
+            return float(field)
+        if isinstance(field, ConvolsData):
+            return 1.0 / field.V
+        raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
+
+    def _find_geometry_reference(self, *candidates):
+        for candidate in candidates:
+            if isinstance(candidate, ConvolsData):
+                return candidate
+        return None
+
+    def _broadcast_field(self, value):
+        comm = self.comm
+        rank = self.rank
+        serialized = None
+        is_density = None
+        density_value = None
+        if rank == 0:
+            is_density = isinstance(value, (float, int, np.floating))
+            if is_density:
+                density_value = float(value)
+            else:
+                serialized = pickle.dumps(value.convols_info)
+                value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
+                local_value = value
+        else:
+            local_value = None
+
+        is_density = comm.bcast(is_density, root=0)
+        if is_density:
+            return float(comm.bcast(density_value, root=0))
+
+        serialized = comm.bcast(serialized, root=0)
+        if rank != 0:
+            local_value = ConvolsData(threads=self.threads)
+            local_value.convols_info = pickle.loads(serialized)
+            local_value.format_convols_params()
+            local_value.epsilon = np.empty((local_value.L, local_value.L, local_value.L), dtype=np.float64)
+        comm.Bcast(local_value.epsilon, root=0)
+        comm.Barrier()
+        return local_value
+
+    def calc_pair_product(self, radius, field1, field2):
+        if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
+            return self._field_density(field1) * self._field_density(field2)
+        return calc_DD_mean_r(radius, field1, field2)
+
+    def _compute_rrr_value(self, theta, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
+        n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
+        if n_uniform == 3:
+            return self._field_density(random1) * self._field_density(random2) * self._field_density(random3)
+        if n_uniform == 2:
+            return self._field_density(random1) * self._field_density(random2) * self._field_density(random3)
+        if isinstance(random1, (float, int, np.floating)):
+            if rr23_cache is None:
+                rr23_cache = self.calc_pair_product(r23_value, random2, random3)
+            return self._field_density(random1) * rr23_cache
+        if isinstance(random2, (float, int, np.floating)):
+            rr13 = self.calc_pair_product(self.r13, random1, random3)
+            return self._field_density(random2) * rr13
+        if isinstance(random3, (float, int, np.floating)):
+            rr12 = self.calc_pair_product(self.r12, random1, random2)
+            return self._field_density(random3) * rr12
+        return calc_DDD_mean_mc(
+            self.r12_scaled,
+            self.r13_scaled,
+            theta,
+            pos_local,
+            self.n_rot,
+            self.meta_convols,
+            random2,
+            random3,
+            center=center,
+            seed_base_rot=seed_base_rot,
+            theta_index=theta_index,
+            eps1=random1.epsilon,
+            rho1=self._field_density(random1),
+        )
 
     def prepare_input_fields(
         self,
         convols_data1=None,
         convols_data2=None,
         convols_data3=None,
+        random1=None,
+        random2=None,
+        random3=None,
         window1=None,
         window2=None,
         window3=None,
@@ -240,6 +388,12 @@ class Corr_3PCF(TaskBase):
             convols_data2 = self.convols_data2
         if convols_data3 is None:
             convols_data3 = self.convols_data3
+        if random1 is None:
+            random1 = self.random1
+        if random2 is None:
+            random2 = self.random2
+        if random3 is None:
+            random3 = self.random3
         if window1 is None:
             window1 = self.window1
         if window2 is None:
@@ -247,50 +401,114 @@ class Corr_3PCF(TaskBase):
         if window3 is None:
             window3 = self.window3
 
+        needs_data, needs_random = self._required_input_flags()
+
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
             self.logger.info(
-                f"field_mode={self.field_mode}, center={self.center}, "
-                f"n_theta={self.n_theta}, n_rot={self.n_rot}, "
-                f"r12={self.r12}, r13={self.r13}"
+                f"center={self.center}, requested_products={self.products}, expanded_products={self._expanded_products()}, n_theta={self.n_theta}, "
+                f"n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
             )
-            base_convols_cache = {}
-            resolved_legs = []
-            for i, cdata, win in zip(
-                [1, 2, 3],
-                [convols_data1, convols_data2, convols_data3],
-                [window1, window2, window3],
-            ):
-                base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                resolved_legs.append((i, base_convols, source_desc, win))
+            cache = {}
+            data_legs = []
+            if needs_data:
+                for i, cdata, win in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3], [window1, window2, window3]):
+                    base_convols, source_desc = self._resolve_base_convols(i, cdata, cache)
+                    data_legs.append((i, base_convols, source_desc, win))
 
-            shared_required = func_util.validate_convols_compatibility(
-                [item[1] for item in resolved_legs],
-                ConvolsData._REQUIRED_ARGV,
-                logger=self.logger,
-                label="Corr_3PCF input fields",
-            )
-            shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
-            self.logger.info("Corr_3PCF input compatibility check passed.")
-            self.logger.info(f"Shared required parameters | {shared_required_text}")
+            random_legs = []
+            if needs_random:
+                for i, rdata, win in zip([1, 2, 3], [random1, random2, random3], [window1, window2, window3]):
+                    base_random, source_desc = self._resolve_random_base(i, rdata, cache)
+                    random_legs.append((i, base_random, source_desc, win))
 
-            for i, base_convols, source_desc, win in resolved_legs:
+            if self.center == "particle":
+                if needs_random and random_legs and random_legs[0][1] != "uniform":
+                    self.logger.error("For center='particle', random1 must be 'uniform'.")
+                    func_util.safe_exit(1)
+                if window1 is not None:
+                    self.logger.warning("window1 has no effect for center='particle'; leg 1 uses particle centers directly.")
+                    data_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_legs]
+                    random_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in random_legs]
+
+            compat_fields = [item[1] for item in data_legs if isinstance(item[1], ConvolsData)]
+            compat_fields.extend(item[1] for item in random_legs if isinstance(item[1], ConvolsData))
+            if compat_fields:
+                shared_required = func_util.validate_convols_compatibility(
+                    compat_fields,
+                    ConvolsData._REQUIRED_ARGV,
+                    logger=self.logger,
+                    label="Corr_3PCF input fields",
+                )
+                shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
+                self.logger.info("Corr_3PCF input compatibility check passed.")
+                self.logger.info(f"Shared required parameters | {shared_required_text}")
+
+            for i, base_convols, source_desc, win in data_legs:
                 window_obj, window_desc = self._resolve_window(i, base_convols, win)
                 if window_obj is not None:
                     final_convols = base_convols @ window_obj
                 else:
                     final_convols = base_convols.copy()
                     final_convols.format_convols_params()
-
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
-                self.logger.info(
-                    f"Field leg {i} ready | source={source_desc} | window={window_desc}"
-                )
+                self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
 
+            for i, base_random, source_desc, win in random_legs:
+                if base_random == "uniform":
+                    signal_ref = self._find_geometry_reference(
+                        getattr(self, f"convols_data{i}", None),
+                        *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
+                        *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
+                    )
+                    if signal_ref is None:
+                        self.logger.error(
+                            f"Cannot resolve the geometry for uniform random leg {i}. "
+                            f"Please provide at least one ConvolsData input field or an explicit random field."
+                        )
+                        func_util.safe_exit(1)
+                    rho = 1.0 / signal_ref.V
+                    setattr(self, f"random{i}", rho)
+                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
+                else:
+                    window_obj, window_desc = self._resolve_window(i, base_random, win)
+                    if window_obj is not None:
+                        final_random = base_random @ window_obj
+                    else:
+                        final_random = base_random.copy()
+                        final_random.format_convols_params()
+                    setattr(self, f"random{i}", final_random)
+                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+
+            self.window1 = window1
+            self.window2 = window2
+            self.window3 = window3
             self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
             self.corr3pcf_data.task_params = self._current_task_params_snapshot()
         self._fields_prepared = True
+
+    def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
+        rr = self.calc_pair_product(radius, random_a, random_b)
+        delta_a = field_a - self._field_density(random_a) if isinstance(random_a, (float, int, np.floating)) else field_a - random_a
+        delta_b = field_b - self._field_density(random_b) if isinstance(random_b, (float, int, np.floating)) else field_b - random_b
+        delta_dd = self.calc_pair_product(radius, delta_a, delta_b)
+        xi = delta_dd / rr
+        return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
+
+    def _compute_pair_stats_series(self, field_a, field_b, random_a, random_b, radii):
+        radii_arr = np.atleast_1d(np.asarray(radii, dtype=np.float64))
+        rr = np.empty_like(radii_arr)
+        delta_dd = np.empty_like(radii_arr)
+        xi = np.empty_like(radii_arr)
+        for idx, radius in enumerate(radii_arr):
+            stats = self._compute_pair_stats(field_a, field_b, random_a, random_b, float(radius))
+            rr[idx] = stats["rr"]
+            delta_dd[idx] = stats["delta_dd"]
+            xi[idx] = stats["xi"]
+        if np.ndim(radii) == 0:
+            return {"rr": float(rr[0]), "delta_dd": float(delta_dd[0]), "xi": float(xi[0])}
+        return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
 
     def run(self, save_result=True, overwrite=False):
         try:
@@ -303,290 +521,230 @@ class Corr_3PCF(TaskBase):
 
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            base_seed = self.base_seed
-            center = self.center
-            n_rand = self.n_rand
-            field_mode = self.field_mode
 
-            # -------------------------------
-            # Load / build convols_data1/2/3 on rank 0, broadcast convols_info, Bcast epsilon
-            # -------------------------------
-            convols_info1_serialized = None
-            convols_info2_serialized = None
-            convols_info3_serialized = None
+            expanded_products = self._expanded_products()
+            needs_data, needs_random = self._required_input_flags()
 
-            if rank == 0:
-                convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
-                convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
-                convols_info3_serialized = pickle.dumps(self.convols_data3.convols_info)
-
-            convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
-            convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
-            convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
-
-            if rank == 0:
-                if center == "random":
-                    self.convols_data1.epsilon = np.ascontiguousarray(self.convols_data1.epsilon, dtype=np.float64)
-                self.convols_data2.epsilon = np.ascontiguousarray(self.convols_data2.epsilon, dtype=np.float64)
-                self.convols_data3.epsilon = np.ascontiguousarray(self.convols_data3.epsilon, dtype=np.float64)
-                _local_convols1 = self.convols_data1
-                _local_convols2 = self.convols_data2
-                _local_convols3 = self.convols_data3
-            else:
-                _local_convols1 = ConvolsData(threads=self.threads)
-                _local_convols1.convols_info = pickle.loads(convols_info1_serialized)
-                _local_convols1.format_convols_params()
-                if center == "random":
-                    _local_convols1.epsilon = np.empty((_local_convols1.L, _local_convols1.L, _local_convols1.L), dtype=np.float64)
-                else:
-                    _local_convols1.epsilon = None
-
-                _local_convols2 = ConvolsData(threads=self.threads)
-                _local_convols2.convols_info = pickle.loads(convols_info2_serialized)
-                _local_convols2.format_convols_params()
-                _local_convols2.epsilon = np.empty((_local_convols2.L, _local_convols2.L, _local_convols2.L), dtype=np.float64)
-
-                _local_convols3 = ConvolsData(threads=self.threads)
-                _local_convols3.convols_info = pickle.loads(convols_info3_serialized)
-                _local_convols3.format_convols_params()
-                _local_convols3.epsilon = np.empty((_local_convols3.L, _local_convols3.L, _local_convols3.L), dtype=np.float64)
+            _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
+            _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
+            _local_convols3 = self._broadcast_field(self.convols_data3) if needs_data else None
+            _local_random1 = self._broadcast_field(self.random1) if needs_random else None
+            _local_random2 = self._broadcast_field(self.random2) if needs_random else None
+            _local_random3 = self._broadcast_field(self.random3) if needs_random else None
 
             self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
             self.corr3pcf_data.task_params = self._current_task_params_snapshot()
 
-            if center == "random":
-                comm.Bcast(_local_convols1.epsilon, root=0)
-            comm.Bcast(_local_convols2.epsilon, root=0)
-            comm.Bcast(_local_convols3.epsilon, root=0)
-            comm.Barrier()
-
-            # -------------------------------
-            # Prepare theta and seeds (all ranks compute all theta)
-            # -------------------------------
             if rank == 0:
-                self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
-                if center == "random":
-                    self.logger.info(
-                        f"center={center}, field_mode={field_mode}, n_rot={self.n_rot}, "
-                        f"n_theta={self.n_theta}, n_rand(total)={n_rand}"
-                    )
-                elif center == "particle":
-                    pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor  # (N,3)
+                if self.center == "particle":
+                    pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
                     Nall = pos_all.shape[0]
-                    self.logger.info(
-                        f"center={center}, field_mode={field_mode}, n_rot={self.n_rot}, "
-                        f"n_theta={self.n_theta}, n_particle(total)={Nall}"
-                    )
-                else:
-                    raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
                 theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
             else:
                 theta_arr = None
+                pos_all = None
+                Nall = None
             theta_arr = comm.bcast(theta_arr, root=0)
 
-            # seed_base_rot: used inside numba kernels to create per-(theta,rot) seeds
-            seed_base_rot = base_seed + 1
-
-            # -------------------------------
-            # Build pos_local (POS-parallel)
-            # -------------------------------
-            if center == "random":
-                # each rank gets a local count
+            if self.center == "random":
                 if rank == 0:
-                    counts = np.full(size, n_rand // size, dtype=np.int64)
-                    counts[: (n_rand % size)] += 1
+                    counts = np.full(size, self.n_rand // size, dtype=np.int64)
+                    counts[: (self.n_rand % size)] += 1
                 else:
                     counts = None
-
                 n_local = int(comm.scatter(counts, root=0))
-
-                # rank-dependent seed ensures different center sets across ranks
-                seed_center_rank = base_seed + 1000003 * (rank + 1)
+                seed_center_rank = self.base_seed + 1000003 * (rank + 1)
                 pos_local = math_util.random_points_box(N=n_local, SimBoxL=_local_convols1.L, seed=seed_center_rank)
-
-            elif center == "particle":
-                # Scatterv particle centers (scaled to GRID units)
+            else:
                 if rank == 0:
                     counts = np.full(size, Nall // size, dtype=np.int64)
                     counts[: (Nall % size)] += 1
                     displs = np.zeros(size, dtype=np.int64)
                     displs[1:] = np.cumsum(counts[:-1])
-
-                    pos_all = np.ascontiguousarray(pos_all, dtype=np.float64)
-                    sendbuf = pos_all.ravel()
+                    sendbuf = np.ascontiguousarray(pos_all, dtype=np.float64).ravel()
                     counts3 = counts * 3
                     displs3 = displs * 3
                 else:
-                    sendbuf = None
-                    counts = None
-                    counts3 = None
-                    displs3 = None
-
+                    counts = sendbuf = counts3 = displs3 = None
                 n_local = int(comm.scatter(counts, root=0))
                 recvbuf = np.empty(n_local * 3, dtype=np.float64)
                 comm.Scatterv([sendbuf, counts3, displs3, MPI.DOUBLE], recvbuf, root=0)
                 pos_local = recvbuf.reshape(n_local, 3)
 
-            else:
-                raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
-
             npos_local = pos_local.shape[0]
             npos_total = comm.allreduce(npos_local, op=MPI.SUM)
+            self.meta_convols = _local_convols1
+            self.r12_scaled = self.r12 * _local_convols1.ScaleFactor
+            self.r13_scaled = self.r13 * _local_convols1.ScaleFactor
+            seed_base_rot = self.base_seed + 1
 
             if rank == 0:
-                self.logger.info(f"Total centers used: {npos_total} (distributed over {size} ranks)")
+                self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
+                self.logger.info(
+                    f"center={self.center}, requested_products={self.products}, expanded_products={expanded_products}, n_rot={self.n_rot}, "
+                    f"n_theta={self.n_theta}, total_centers={npos_total}"
+                )
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
+                loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products]
+                self.logger.info(f"Main DDD loop products: {loop_products}")
 
-            # -------------------------------
-            # Progress reporting (pos-parallel): track per-rank theta completion
-            # -------------------------------
-            total_tasks = len(theta_arr)
-            local_completed = 0
-
-            # -------------------------------
-            # Main loop over theta on each rank (local means)
-            # -------------------------------
-            rho1 = 1.0 / _local_convols1.V
-            rho2 = 1.0 / _local_convols2.V
-            rho3 = 1.0 / _local_convols3.V
-            RRR = rho1 * rho2 * rho3
-            if field_mode == "raw":
-                field_convols1 = _local_convols1
-                field_convols2 = _local_convols2
-                field_convols3 = _local_convols3
-            elif field_mode == "delta":
-                field_convols1 = None if center == "particle" else (_local_convols1 - rho1)
-                field_convols2 = _local_convols2 - rho2
-                field_convols3 = _local_convols3 - rho3
+            local_results = {key: np.zeros(theta_arr.shape[0], dtype=np.float64) for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products}
+            progress_result_key = None
+            if self.center == "particle":
+                for candidate in ["d_delta_dd", "ddd", "rrr"]:
+                    if candidate in expanded_products:
+                        progress_result_key = candidate
+                        break
             else:
-                raise ValueError(f"Unknown field_mode='{field_mode}'. Use 'raw' or 'delta'.")
-            r12_scaled = self.r12 * _local_convols1.ScaleFactor
-            r13_scaled = self.r13 * _local_convols1.ScaleFactor
-
-            if rank == 0:
-                t_ddd_start = time.perf_counter()
-
-            local_DDD_mean = np.empty(theta_arr.shape[0], dtype=np.float64)
+                for candidate in ["delta_ddd", "ddd", "rrr"]:
+                    if candidate in expanded_products:
+                        progress_result_key = candidate
+                        break
 
             for it, th in enumerate(theta_arr):
-                theta_start = time.perf_counter()
-                local_DDD_mean[it] = calc_DDD_mean_mc(
-                    r12_scaled, r13_scaled, th,
-                    pos_local, self.n_rot,
-                    _local_convols1, field_convols2, field_convols3,
-                    center=center,
-                    seed_base_rot=seed_base_rot,
-                    theta_index=it,
-                    eps1=None if field_convols1 is None else field_convols1.epsilon,
-                    rho1=rho1,
-                )
-                local_completed += 1
+                t_theta_start = time.perf_counter() if rank == 0 else None
+                r23_value = math_util.third_side(self.r12, self.r13, th)
+                if self.center == "random":
+                    if "ddd" in expanded_products:
+                        local_results["ddd"][it] = calc_DDD_mean_mc(
+                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
+                            _local_convols1, _local_convols2, _local_convols3,
+                            center="random", seed_base_rot=seed_base_rot, theta_index=it,
+                            eps1=_local_convols1.epsilon,
+                        )
+                    if "delta_ddd" in expanded_products:
+                        field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
+                        field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+                        field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+                        local_results["delta_ddd"][it] = calc_DDD_mean_mc(
+                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
+                            _local_convols1, field2, field3,
+                            center="random", seed_base_rot=seed_base_rot, theta_index=it,
+                            eps1=field1.epsilon,
+                        )
+                    if "rrr" in expanded_products:
+                        local_results["rrr"][it] = self._compute_rrr_value(
+                            th, r23_value, "random", pos_local, seed_base_rot, it,
+                            _local_random1, _local_random2, _local_random3, rr23_cache=None
+                        )
+                else:
+                    rho1 = self._field_density(_local_random1)
+                    if "ddd" in expanded_products:
+                        local_results["ddd"][it] = calc_DDD_mean_mc(
+                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
+                            _local_convols1, _local_convols2, _local_convols3,
+                            center="particle", seed_base_rot=seed_base_rot, theta_index=it,
+                            rho1=self._field_density(_local_convols1),
+                        )
+                    if "rrr" in expanded_products:
+                        local_results["rrr"][it] = self._compute_rrr_value(
+                            th, r23_value, "particle", pos_local, seed_base_rot, it,
+                            _local_random1, _local_random2, _local_random3, rr23_cache=None
+                        )
+                    if "d_delta_dd" in expanded_products:
+                        field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+                        field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+                        local_results["d_delta_dd"][it] = calc_DDD_mean_mc(
+                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
+                            _local_convols1, field2, field3,
+                            center="particle", seed_base_rot=seed_base_rot, theta_index=it,
+                            rho1=rho1,
+                        )
+
                 if rank == 0:
-                    theta_elapsed = time.perf_counter() - theta_start
+                    elapsed_theta = time.perf_counter() - t_theta_start
                     self.logger.info(
-                        f" theta[{it + 1:02d}/{total_tasks:02d}] done | "
-                        f"theta={th:.5f} rad | local_DDD_mean={local_DDD_mean[it]:.5e} | "
-                        f"elapsed={theta_elapsed:.2f} sec"
+                        f" theta[{it + 1:02d}/{self.n_theta}] done | theta={th:.5f} rad | "
+                        f"elapsed={elapsed_theta:.2f} sec"
                     )
 
-            # weighted reduce to global mean
-            local_weighted = local_DDD_mean * npos_local
-            global_weighted = np.empty_like(local_weighted)
-            comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
+            global_results = {}
+            for key, arr in local_results.items():
+                local_weighted = arr * npos_local
+                global_weighted = np.empty_like(arr)
+                comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
+                global_results[key] = global_weighted / npos_total
 
             if rank == 0:
-                t_ddd_end = time.perf_counter()
-                self.logger.info(f"DDD main loop time: {t_ddd_end - t_ddd_start:.4f} sec")
+                t_loop_end = time.perf_counter()
+                self.logger.info(f"DDD main loop time: {t_loop_end - t_start:.4f} sec")
                 self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
-                DDD_mean_global = global_weighted / npos_total
+
+                pair_cache = {}
+                rr23_cache = None
+                t_post_start = time.perf_counter()
+                xi12_time = 0.0
+                xi13_time = 0.0
+                xi23_time = 0.0
+                if "xi12" in expanded_products:
+                    t_pair = time.perf_counter()
+                    pair_cache["xi12"] = self._compute_pair_stats(
+                        _local_convols1, _local_convols2, _local_random1, _local_random2, self.r12
+                    )
+                    xi12_time = time.perf_counter() - t_pair
+                if "xi13" in expanded_products:
+                    t_pair = time.perf_counter()
+                    pair_cache["xi13"] = self._compute_pair_stats(
+                        _local_convols1, _local_convols3, _local_random1, _local_random3, self.r13
+                    )
+                    xi13_time = time.perf_counter() - t_pair
+                if "xi23" in expanded_products or "rrr" in expanded_products:
+                    t_pair = time.perf_counter()
+                    pair_cache["xi23"] = self._compute_pair_stats_series(
+                        _local_convols2,
+                        _local_convols3,
+                        _local_random2,
+                        _local_random3,
+                        math_util.third_side(self.r12, self.r13, theta_arr),
+                    )
+                    rr23_cache = pair_cache["xi23"]["rr"]
+                    xi23_time = time.perf_counter() - t_pair
+
                 self.corr3pcf_data.theta = theta_arr
                 self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
-                r23_chunks = np.array_split(self.corr3pcf_data.r23, size)
-            else:
-                DDD_mean_global = None
-                r23_chunks = None
+                self.corr3pcf_data.ddd = global_results.get("ddd")
+                self.corr3pcf_data.rrr = global_results.get("rrr")
+                self.corr3pcf_data.d_delta_dd = global_results.get("d_delta_dd")
+                self.corr3pcf_data.delta_ddd = global_results.get("delta_ddd")
 
-            # -------------------------------
-            # Compute xi12/xi13 on rank 0 and xi23 in parallel across ranks
-            # -------------------------------
-            RR12 = rho1 * rho2
-            RR13 = rho1 * rho3
-            RR23 = rho2 * rho3
-            delta_convols1 = None
-            if rank == 0:
-                delta_convols1 = field_convols1 if field_convols1 is not None else (_local_convols1 - rho1)
-            delta_convols2 = field_convols2
-            delta_convols3 = field_convols3
+                self.corr3pcf_data.xi12 = pair_cache.get("xi12", {}).get("xi")
+                self.corr3pcf_data.xi13 = pair_cache.get("xi13", {}).get("xi")
+                self.corr3pcf_data.xi23 = pair_cache.get("xi23", {}).get("xi")
 
-            if rank == 0:
-                t_xi12 = time.perf_counter()
-                xi12 = calc_DD_mean_r(self.r12, delta_convols1, delta_convols2) / RR12
-                t_xi12 = time.perf_counter() - t_xi12
+                if "rrr" in expanded_products and self.corr3pcf_data.rrr is None:
+                    rho1 = self._field_density(_local_random1)
+                    if rr23_cache is not None and isinstance(_local_random1, (float, int, np.floating)):
+                        self.corr3pcf_data.rrr = rho1 * rr23_cache
+                    else:
+                        self.corr3pcf_data.rrr = np.array([
+                            self._compute_rrr_value(th, r23, self.center, pos_local, seed_base_rot, i, _local_random1, _local_random2, _local_random3, rr23_cache=None)
+                            for i, (th, r23) in enumerate(zip(theta_arr, self.corr3pcf_data.r23))
+                        ], dtype=np.float64)
 
-                t_xi13 = time.perf_counter()
-                xi13 = calc_DD_mean_r(self.r13, delta_convols1, delta_convols3) / RR13
-                t_xi13 = time.perf_counter() - t_xi13
-            else:
-                xi12 = None
-                xi13 = None
-                t_xi12 = None
-                t_xi13 = None
+                if self.center == "particle" and "delta_ddd" in expanded_products:
+                    self.corr3pcf_data.delta_ddd = self.corr3pcf_data.d_delta_dd - self.corr3pcf_data.xi23 * self.corr3pcf_data.rrr
 
-            t_xi23_start = time.perf_counter()
-            r23_local = comm.scatter(r23_chunks, root=0)
-            if len(r23_local) > 0:
-                xi23_local = np.array([calc_DD_mean_r(r, delta_convols2, delta_convols3) / RR23 for r in r23_local], dtype=np.float64)
-            else:
-                xi23_local = np.empty(0, dtype=np.float64)
-            gathered_xi23 = comm.gather(xi23_local, root=0)
-
-            if rank == 0:
-                xi23 = np.concatenate(gathered_xi23) if gathered_xi23 else np.empty(0, dtype=np.float64)
-                t_xi23 = time.perf_counter() - t_xi23_start
-
-                self.logger.info(
-                    f"Post-processing timing | xi12={t_xi12:.2f} sec | "
-                    f"xi13={t_xi13:.2f} sec | xi23={t_xi23:.2f} sec"
-                )
-
-                if field_mode == "raw":
-                    xi12 -= 1.0
-                    xi13 -= 1.0
-                    xi23 -= 1.0
-
-                self.corr3pcf_data.xi12 = xi12
-                self.corr3pcf_data.xi13 = xi13
-                self.corr3pcf_data.xi23 = xi23
-                self.corr3pcf_data.ddd = None
-                self.corr3pcf_data.delta_ddd = None
-                # pdelta_ddd stores <D_1 (D_2-R) (D_3-R)> for particle-centered delta runs.
-                self.corr3pcf_data.pdelta_ddd = None
-
-                if field_mode == "raw":
-                    zeta_p = DDD_mean_global / RRR - 1.0
-                    self.corr3pcf_data.ddd = DDD_mean_global
-                    self.corr3pcf_data.zeta = zeta_p - xi12 - xi13 - xi23
-                elif center == "random":
-                    self.corr3pcf_data.delta_ddd = DDD_mean_global
-                    self.corr3pcf_data.zeta = DDD_mean_global / RRR
-                else:
-                    self.corr3pcf_data.pdelta_ddd = DDD_mean_global
-                    self.corr3pcf_data.zeta = DDD_mean_global / RRR - xi23
-
-                self.corr3pcf_data.Q = self.corr3pcf_data.zeta / (xi12 * xi23 + xi13 * xi23 + xi12 * xi13)
+                if "zeta" in expanded_products:
+                    self.corr3pcf_data.zeta = self.corr3pcf_data.delta_ddd / self.corr3pcf_data.rrr
+                if "Q" in expanded_products:
+                    xi12 = self.corr3pcf_data.xi12
+                    xi13 = self.corr3pcf_data.xi13
+                    xi23 = self.corr3pcf_data.xi23
+                    self.corr3pcf_data.Q = self.corr3pcf_data.zeta / (xi12 * xi13 + xi12 * xi23 + xi13 * xi23)
 
                 t_end = time.perf_counter()
+                self.logger.info(
+                    f"Post-processing timing | xi12={xi12_time:.2f} sec | "
+                    f"xi13={xi13_time:.2f} sec | xi23={xi23_time:.2f} sec"
+                )
                 self.logger.info(f"The time for 3PCF (pos-parallel): {t_end - t_start:.4f} sec")
-
-                # Save
                 if save_result and self.fout_path:
                     self.logger.info("Saving 3PCF result to output file ...")
                     self.corr3pcf_data.saveflag = True
                     self.corr3pcf_data.save_corr3pcf(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
-
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
@@ -595,5 +753,4 @@ class Corr_3PCF(TaskBase):
             t1 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {t1 - t0:.4f} sec")
-
         return self.corr3pcf_data

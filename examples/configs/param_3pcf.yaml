@@ -18,6 +18,6 @@ Corr_3PCF:
    n_rot: 20
    # center: "particle"
    center: "random"
-   field_mode: "delta"
+   products: "Q"
    n_rand: 10000000
    base_seed: 42
