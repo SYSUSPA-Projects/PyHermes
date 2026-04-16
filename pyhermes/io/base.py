@@ -50,12 +50,6 @@ class HermesData(object):
                         self.logger.info(f'r: Num = {self.r.shape[0]}, Min = {self.r.min():.4g}, Max = {self.r.max():.4g}')
                         products = [key for key in ['dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi'] if getattr(self, key) is not None]
                         self.logger.info(f'Products loaded: {products}')
-                        # if self.dd is not None:
-                        #     self.logger.info(f'dd: Mean = {self.dd.mean():.4g}, Min = {self.dd.min():.4g}, Max = {self.dd.max():.4g}')
-                        # if self.delta_dd is not None:
-                        #     self.logger.info(f'delta_dd: Mean = {self.delta_dd.mean():.4g}, Min = {self.delta_dd.min():.4g}, Max = {self.delta_dd.max():.4g}')
-                        # if self.xi is not None:
-                        #     self.logger.info(f'xi: Mean = {self.xi.mean():.4g}, Min = {self.xi.min():.4g}, Max = {self.xi.max():.4g}')
                     elif read_3pcf:
                         extra_str = '3PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
