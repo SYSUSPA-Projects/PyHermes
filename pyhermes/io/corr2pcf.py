@@ -23,8 +23,6 @@ class Corr2PCFData(HermesData):
             self.load_corr2pcf(data_path)
 
     def format_corr2pcf_params(self):
-        # for key, value in self.convols_info.items():
-        #     setattr(self, key, value)
         for key, value in self.corr2pcf_info.items():
             setattr(self, key, value)
 
