@@ -531,6 +531,11 @@ class Corr_3PCF(TaskBase):
             _local_random1 = self._broadcast_field(self.random1) if needs_random else None
             _local_random2 = self._broadcast_field(self.random2) if needs_random else None
             _local_random3 = self._broadcast_field(self.random3) if needs_random else None
+            defer_rrr_to_rr23 = (
+                "rrr" in expanded_products
+                and "xi23" in expanded_products
+                and isinstance(_local_random1, (float, int, np.floating))
+            )
 
             self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
             self.corr3pcf_data.task_params = self._current_task_params_snapshot()
@@ -580,27 +585,23 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
-                self.logger.info(
-                    f"center={self.center}, requested_products={self.products}, expanded_products={expanded_products}, n_rot={self.n_rot}, "
-                    f"n_theta={self.n_theta}, total_centers={npos_total}"
-                )
+                self.logger.info(f"total_centers={npos_total}")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
                 loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products]
+                if defer_rrr_to_rr23 and "rrr" in loop_products:
+                    loop_products.remove("rrr")
+                if self.center == "particle" and "delta_ddd" in loop_products:
+                    loop_products.remove("delta_ddd")
                 self.logger.info(f"Main DDD loop products: {loop_products}")
 
-            local_results = {key: np.zeros(theta_arr.shape[0], dtype=np.float64) for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products}
-            progress_result_key = None
-            if self.center == "particle":
-                for candidate in ["d_delta_dd", "ddd", "rrr"]:
-                    if candidate in expanded_products:
-                        progress_result_key = candidate
-                        break
-            else:
-                for candidate in ["delta_ddd", "ddd", "rrr"]:
-                    if candidate in expanded_products:
-                        progress_result_key = candidate
-                        break
+            local_results = {
+                key: np.zeros(theta_arr.shape[0], dtype=np.float64)
+                for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"]
+                if key in expanded_products
+                and not (key == "rrr" and defer_rrr_to_rr23)
+                and not (self.center == "particle" and key == "delta_ddd")
+            }
 
             for it, th in enumerate(theta_arr):
                 t_theta_start = time.perf_counter() if rank == 0 else None
@@ -623,7 +624,7 @@ class Corr_3PCF(TaskBase):
                             center="random", seed_base_rot=seed_base_rot, theta_index=it,
                             eps1=field1.epsilon,
                         )
-                    if "rrr" in expanded_products:
+                    if "rrr" in local_results:
                         local_results["rrr"][it] = self._compute_rrr_value(
                             th, r23_value, "random", pos_local, seed_base_rot, it,
                             _local_random1, _local_random2, _local_random3, rr23_cache=None
@@ -637,7 +638,7 @@ class Corr_3PCF(TaskBase):
                             center="particle", seed_base_rot=seed_base_rot, theta_index=it,
                             rho1=self._field_density(_local_convols1),
                         )
-                    if "rrr" in expanded_products:
+                    if "rrr" in local_results:
                         local_results["rrr"][it] = self._compute_rrr_value(
                             th, r23_value, "particle", pos_local, seed_base_rot, it,
                             _local_random1, _local_random2, _local_random3, rr23_cache=None
@@ -673,7 +674,6 @@ class Corr_3PCF(TaskBase):
 
                 pair_cache = {}
                 rr23_cache = None
-                t_post_start = time.perf_counter()
                 xi12_time = 0.0
                 xi13_time = 0.0
                 xi23_time = 0.0
