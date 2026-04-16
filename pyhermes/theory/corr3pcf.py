@@ -406,9 +406,9 @@ class Corr_3PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
             self.logger.info(
-                f"center={self.center}, requested_products={self.products}, expanded_products={self._expanded_products()}, n_theta={self.n_theta}, "
-                f"n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
+                f"center={self.center}, n_theta={self.n_theta}, n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
             )
+            self.logger.info(f"requested_products={self.products}, expanded_products={self._expanded_products()}")
             cache = {}
             data_legs = []
             if needs_data:
