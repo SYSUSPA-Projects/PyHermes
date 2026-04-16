@@ -215,6 +215,9 @@ class ConvolsData(HermesData):
         return new
     
     def get_particle_data(self):
+        if not self.fin_path:
+            self.logger.error("Input particle path is not specified.")
+            func_util.safe_exit(1)
         return read_particle_data(self.fin_path, self.fin_format)['pos']
     
     def phi_at_pos(self, pos):

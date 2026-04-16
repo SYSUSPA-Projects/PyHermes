@@ -12,7 +12,7 @@
 		"particle_pos"   : null,
 		"particle_weight": null,
 		"fin": {
-			"path"      : "./data.bin",
+			"path"      : "",
 			"url"       : "",
 			"format"    : "generic_pos",
 			"weight_key": "no_weight"
