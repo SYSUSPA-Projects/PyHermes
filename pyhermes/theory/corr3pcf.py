@@ -585,7 +585,7 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
-                self.logger.info(f"total_centers={npos_total}")
+                self.logger.info(f"total_centers={npos_total}, each rank has n_local={npos_local} centers")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
                 loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products]
