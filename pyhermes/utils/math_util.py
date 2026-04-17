@@ -493,7 +493,7 @@ def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
 
 
 @njit
-def calc_DDD_mc_pos_center_fast(
+def estimate_triplet_product_particle_centers(
     R1_scaled, R2_scaled, theta,
     centers_scaled, n_rot,
     R, epsilon2, epsilon3,
@@ -543,7 +543,7 @@ def calc_DDD_mc_pos_center_fast(
 
 
 @njit
-def calc_DDD_mc_random_center(
+def estimate_triplet_product_box_random_centers(
     R1_scaled, R2_scaled, theta,
     centers_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
@@ -604,7 +604,7 @@ def calc_DDD_mc_random_center(
 
 
 @njit
-def calc_DDD_RDD_mc_pos_center_legacy(
+def estimate_triplet_contrast_particle_centers_legacy(
     R1_scaled, R2_scaled, theta,
     pos_scaled, rand_scaled, n_rot,
     R, epsilon2, epsilon3,

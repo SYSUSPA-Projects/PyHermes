@@ -8,7 +8,7 @@ from pyhermes.utils import func_util, math_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.pipeline import TaskBase
 
-from .corr2pcf import calc_DD_mean_r
+from .corr2pcf import compute_pair_product_at_radius
 
 
 # Product expansion rules are kept in one place so the runtime logic only needs
@@ -46,7 +46,7 @@ PRODUCT_INPUT_FLAGS = {
 }
 
 
-def calc_DDD_mean_mc(
+def compute_triplet_product_mc(
     r12_scaled, r13_scaled, theta, pos_scaled, n_rot,
     convols_meta, convols_data2, convols_data3,
     center="box_random",
@@ -71,7 +71,7 @@ def calc_DDD_mean_mc(
     if center == "box_random":
         if eps1 is None:
             raise ValueError("eps1 must be provided when center='box_random'.")
-        return math_util.calc_DDD_mc_random_center(
+        return math_util.estimate_triplet_product_box_random_centers(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
             eps1, eps2, eps3,
@@ -81,7 +81,7 @@ def calc_DDD_mean_mc(
     if center == "particle":
         if rho1 is None:
             raise ValueError("rho1 must be provided when center='particle'.")
-        return math_util.calc_DDD_mc_pos_center_fast(
+        return math_util.estimate_triplet_product_particle_centers(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
             rho1, eps2, eps3,
@@ -471,7 +471,7 @@ class Corr_3PCF(TaskBase):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
-        return calc_DD_mean_r(radius, field1, field2)
+        return compute_pair_product_at_radius(radius, field1, field2)
 
     def _compute_rrr_value(self, theta, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
@@ -488,7 +488,7 @@ class Corr_3PCF(TaskBase):
         if isinstance(random3, (float, int, np.floating)):
             rr12 = self.calc_pair_product(self.r12, random1, random2)
             return self._field_density(random3) * rr12
-        return calc_DDD_mean_mc(
+        return compute_triplet_product_mc(
             self.r12_scaled,
             self.r13_scaled,
             theta,
@@ -776,7 +776,7 @@ class Corr_3PCF(TaskBase):
     ):
         """Compute theta-local products for the box-random center mode."""
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = calc_DDD_mean_mc(
+            local_results["ddd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
                 _local_convols1, _local_convols2, _local_convols3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -786,7 +786,7 @@ class Corr_3PCF(TaskBase):
             field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
             field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
             field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
-            local_results["delta_ddd"][theta_index] = calc_DDD_mean_mc(
+            local_results["delta_ddd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -806,7 +806,7 @@ class Corr_3PCF(TaskBase):
         """Compute theta-local products for the particle-center mode."""
         rho = self._shared_density()
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = calc_DDD_mean_mc(
+            local_results["ddd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -819,7 +819,7 @@ class Corr_3PCF(TaskBase):
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
-            local_results["d_delta_dd"][theta_index] = calc_DDD_mean_mc(
+            local_results["d_delta_dd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -832,7 +832,7 @@ class Corr_3PCF(TaskBase):
                 pass
             else:
                 field2, field3 = self._particle_delta_fields
-                local_results["r_delta_dd"][theta_index] = calc_DDD_mean_mc(
+                local_results["r_delta_dd"][theta_index] = compute_triplet_product_mc(
                     self.r12_scaled, self.r13_scaled, theta, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
                     center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,

@@ -11,7 +11,24 @@ from pyhermes.utils import func_util
 from pyhermes.pipeline import TaskBase
 
 
-def calc_DD_mean_r(radius, convols_data1, convols_data2=None, pair_window=None):
+PRODUCT_RULES = {
+    "allowed": {"dd", "dr", "rd", "delta_dd", "rr", "xi"},
+    "deps": {
+        "xi": ["delta_dd", "rr"],
+    },
+}
+
+PRODUCT_INPUT_FLAGS = {
+    "dd": (True, False),
+    "dr": (True, True),
+    "rd": (True, True),
+    "delta_dd": (True, True),
+    "rr": (False, True),
+    "xi": (True, True),
+}
+
+
+def compute_pair_product_at_radius(radius, convols_data1, convols_data2=None, pair_window=None):
     if pair_window is None:
         pair_window_params = {"type": "shell", "len_args": {"R": radius}, "other_args": {}}
     else:
@@ -88,21 +105,27 @@ class Corr_2PCF(TaskBase):
                 f"Unsupported products input: expected string or array of strings, got {type(products)}."
             )
 
-        allowed = ['dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi']
+        allowed = PRODUCT_RULES["allowed"]
         normalized = []
         for item in products:
             if not isinstance(item, str):
                 raise TypeError("Each product name must be a string.")
             name = item.strip().lower()
             if name not in allowed:
-                raise ValueError(f"Unsupported product '{item}'. Allowed values are {allowed}.")
+                raise ValueError(f"Unsupported product '{item}'. Allowed values are {sorted(allowed)}.")
             if name not in normalized:
                 normalized.append(name)
-        if 'xi' in normalized:
-            for dep in ['delta_dd', 'rr']:
-                if dep not in normalized:
-                    normalized.append(dep)
         return normalized
+
+    def _expanded_products(self):
+        expanded = list(self.products)
+        idx = 0
+        while idx < len(expanded):
+            for dep in PRODUCT_RULES["deps"].get(expanded[idx], []):
+                if dep not in expanded:
+                    expanded.append(dep)
+            idx += 1
+        return expanded
 
     def _normalize_pair_window(self, pair_window):
         if pair_window is None:
@@ -265,9 +288,12 @@ class Corr_2PCF(TaskBase):
                 func_util.safe_exit(1)
 
     def _required_input_flags(self):
-        products = set(self.products)
-        needs_data = bool(products & {'dd', 'dr', 'rd', 'delta_dd', 'xi'})
-        needs_random = bool(products & {'dr', 'rd', 'rr', 'delta_dd', 'xi'})
+        needs_data = False
+        needs_random = False
+        for product in self._expanded_products():
+            product_needs_data, product_needs_random = PRODUCT_INPUT_FLAGS[product]
+            needs_data = needs_data or product_needs_data
+            needs_random = needs_random or product_needs_random
         return needs_data, needs_random
 
     def calc_pair_product(self, radius, field1, field2=None, pair_window=None):
@@ -278,7 +304,8 @@ class Corr_2PCF(TaskBase):
         pair_window = self._normalize_pair_window(pair_window)
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
-        return calc_DD_mean_r(radius, field1, field2, pair_window=pair_window)
+        return compute_pair_product_at_radius(radius, field1, field2, pair_window=pair_window)
+
 
     def prepare_input_fields(
         self,
@@ -293,6 +320,7 @@ class Corr_2PCF(TaskBase):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
         self.products = self._normalize_products(self.products)
+        expanded_products = self._expanded_products()
         if convols_data1 is None:
             convols_data1 = self.convols_data1
         if convols_data2 is None:
@@ -312,9 +340,9 @@ class Corr_2PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(
-                f"products={self.products}, n_r={self.n_r}, "
-                f"r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
+                f"n_r={self.n_r}, r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
             )
+            self.logger.info(f"requested_products={self.products}, expanded_products={expanded_products}")
             self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
             base_convols_cache = {}
             resolved_data_legs = []
@@ -431,6 +459,7 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
                 self.prepare_input_fields()
+            expanded_products = self._expanded_products()
             needs_data, needs_random = self._required_input_flags()
             _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
             _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
@@ -441,11 +470,14 @@ class Corr_2PCF(TaskBase):
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
                 self.logger.info(
-                    f"products={self.products}, n_r={self.n_r}, "
-                    f"r_min={self.r_min}, r_max={self.r_max}"
+                    f"n_r={self.n_r}, r_min={self.r_min}, r_max={self.r_max}"
+                )
+                self.logger.info(
+                    f"requested_products={self.products}, expanded_products={expanded_products}"
                 )
                 time_start = time.perf_counter()
                 self.logger.info(f"Pre-2PCF setup time: {time_start - time_run_1:.4f} sec")
+                self.logger.info(f"Main 2PCF loop products: {expanded_products}")
             # Generate r_arr at rank0
             if rank == 0:
                 r_arr = np.linspace(self.r_min, self.r_max, self.n_r)
@@ -479,13 +511,13 @@ class Corr_2PCF(TaskBase):
                 delta_dd_value = None
                 rr_value = None
                 xi_value = None
-                if 'dd' in self.products:
+                if 'dd' in expanded_products:
                     dd_value = self.calc_pair_product(radius, _local_convols1, _local_convols2, pair_window=self.pair_window)
-                if 'dr' in self.products:
+                if 'dr' in expanded_products:
                     dr_value = self.calc_pair_product(radius, _local_convols1, _local_random2, pair_window=self.pair_window)
-                if 'rd' in self.products:
+                if 'rd' in expanded_products:
                     rd_value = self.calc_pair_product(radius, _local_random1, _local_convols2, pair_window=self.pair_window)
-                if 'delta_dd' in self.products:
+                if 'delta_dd' in expanded_products:
                     if isinstance(_local_random1, (float, int, np.floating)):
                         field1 = _local_convols1 - self._field_density(_local_random1)
                     else:
@@ -495,9 +527,9 @@ class Corr_2PCF(TaskBase):
                     else:
                         field2 = _local_convols2 - _local_random2
                     delta_dd_value = self.calc_pair_product(radius, field1, field2, pair_window=self.pair_window)
-                if 'rr' in self.products:
+                if 'rr' in expanded_products:
                     rr_value = self.calc_pair_product(radius, _local_random1, _local_random2, pair_window=self.pair_window)
-                if 'xi' in self.products:
+                if 'xi' in expanded_products:
                     xi_value = delta_dd_value / rr_value
                 local_dd.append(dd_value)
                 local_dr.append(dr_value)
@@ -554,7 +586,8 @@ class Corr_2PCF(TaskBase):
                     progress = 100.
                     self.logger.info(f" Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
-                self.logger.info(f"The time for 2PCF: {time_end - time_start:.4f} sec")
+                self.logger.info(f"2PCF main loop time: {time_end - time_start:.4f} sec")
+                self.logger.info("Main 2PCF loop finished, gathering results on rank 0 ...")
                 # Output the 2pcf
                 if save_result:
                     if self.fout_path:
