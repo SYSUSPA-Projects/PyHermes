@@ -301,6 +301,11 @@ class Corr_3PCF(TaskBase):
             return 1.0 / field.V
         raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
+    def _shared_density(self):
+        if self.rho is None:
+            raise RuntimeError("Shared density is not initialized.")
+        return self.rho
+
     def _find_geometry_reference(self, *candidates):
         for candidate in candidates:
             if isinstance(candidate, ConvolsData):
@@ -492,16 +497,7 @@ class Corr_3PCF(TaskBase):
             else:
                 self.rho = None
 
-            for i, base_convols, source_desc, win in data_legs:
-                window_obj, window_desc = self._resolve_window(i, base_convols, win)
-                if window_obj is not None:
-                    final_convols = base_convols @ window_obj
-                else:
-                    final_convols = base_convols.copy()
-                    final_convols.format_convols_params()
-                setattr(self, f"convols_data{i}", final_convols)
-                setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
-                self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+            self._prepare_signal_legs(data_legs)
 
             if not requires_signal_leg1:
                 self.convols_data1 = None
@@ -513,31 +509,7 @@ class Corr_3PCF(TaskBase):
             elif self.center != "particle":
                 self.particle_pos1 = None
 
-            for i, base_random, source_desc, win in random_legs:
-                if base_random == "uniform":
-                    signal_ref = self._find_geometry_reference(
-                        getattr(self, f"convols_data{i}", None),
-                        *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
-                        *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
-                    )
-                    if signal_ref is None:
-                        self.logger.error(
-                            f"Cannot resolve the geometry for uniform random leg {i}. "
-                            f"Please provide at least one ConvolsData input field or an explicit random field."
-                        )
-                        func_util.safe_exit(1)
-                    rho = self.rho if self.rho is not None else (1.0 / signal_ref.V)
-                    setattr(self, f"random{i}", rho)
-                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
-                else:
-                    window_obj, window_desc = self._resolve_window(i, base_random, win)
-                    if window_obj is not None:
-                        final_random = base_random @ window_obj
-                    else:
-                        final_random = base_random.copy()
-                        final_random.format_convols_params()
-                    setattr(self, f"random{i}", final_random)
-                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+            self._prepare_random_legs(data_legs, random_legs)
 
             self.window1 = window1
             self.window2 = window2
@@ -567,6 +539,134 @@ class Corr_3PCF(TaskBase):
         if np.ndim(radii) == 0:
             return {"rr": float(rr[0]), "delta_dd": float(delta_dd[0]), "xi": float(xi[0])}
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
+
+    def _prepare_signal_legs(self, data_legs):
+        for i, base_convols, source_desc, win in data_legs:
+            window_obj, window_desc = self._resolve_window(i, base_convols, win)
+            if window_obj is not None:
+                final_convols = base_convols @ window_obj
+            else:
+                final_convols = base_convols.copy()
+                final_convols.format_convols_params()
+            setattr(self, f"convols_data{i}", final_convols)
+            setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
+            self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+
+    def _prepare_random_legs(self, data_legs, random_legs):
+        for i, base_random, source_desc, win in random_legs:
+            if base_random == "uniform":
+                signal_ref = self._find_geometry_reference(
+                    getattr(self, f"convols_data{i}", None),
+                    *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
+                    *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
+                )
+                if signal_ref is None:
+                    self.logger.error(
+                        f"Cannot resolve the geometry for uniform random leg {i}. "
+                        f"Please provide at least one ConvolsData input field or an explicit random field."
+                    )
+                    func_util.safe_exit(1)
+                rho = self._shared_density() if self.rho is not None else (1.0 / signal_ref.V)
+                setattr(self, f"random{i}", rho)
+                self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
+            else:
+                window_obj, window_desc = self._resolve_window(i, base_random, win)
+                if window_obj is not None:
+                    final_random = base_random @ window_obj
+                else:
+                    final_random = base_random.copy()
+                    final_random.format_convols_params()
+                setattr(self, f"random{i}", final_random)
+                self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+
+    def _compute_random_center_theta(
+        self, theta, r23_value, pos_local, seed_base_rot, theta_index,
+        local_results, _local_convols1, _local_convols2, _local_convols3,
+        _local_random1, _local_random2, _local_random3
+    ):
+        if "ddd" in local_results:
+            local_results["ddd"][theta_index] = calc_DDD_mean_mc(
+                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                _local_convols1, _local_convols2, _local_convols3,
+                center="random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                eps1=_local_convols1.epsilon,
+            )
+        if "delta_ddd" in local_results:
+            field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
+            field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+            field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+            local_results["delta_ddd"][theta_index] = calc_DDD_mean_mc(
+                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                _local_convols1, field2, field3,
+                center="random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                eps1=field1.epsilon,
+            )
+        if "rrr" in local_results:
+            local_results["rrr"][theta_index] = self._compute_rrr_value(
+                theta, r23_value, "random", pos_local, seed_base_rot, theta_index,
+                _local_random1, _local_random2, _local_random3, rr23_cache=None
+            )
+
+    def _compute_particle_center_theta(
+        self, theta, r23_value, pos_local, seed_base_rot, theta_index,
+        local_results, _local_convols2, _local_convols3,
+        _local_random1, _local_random2, _local_random3
+    ):
+        rho = self._shared_density()
+        if "ddd" in local_results:
+            local_results["ddd"][theta_index] = calc_DDD_mean_mc(
+                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.meta_convols, _local_convols2, _local_convols3,
+                center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                rho1=rho,
+            )
+        if "rrr" in local_results:
+            local_results["rrr"][theta_index] = self._compute_rrr_value(
+                theta, r23_value, "particle", pos_local, seed_base_rot, theta_index,
+                _local_random1, _local_random2, _local_random3, rr23_cache=None
+            )
+        if "d_delta_dd" in local_results:
+            field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+            field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+            local_results["d_delta_dd"][theta_index] = calc_DDD_mean_mc(
+                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.meta_convols, field2, field3,
+                center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                rho1=rho,
+            )
+
+    def _compute_pair_cache(
+        self, expanded_products, theta_arr,
+        _local_convols1, _local_convols2, _local_convols3,
+        _local_random1, _local_random2, _local_random3
+    ):
+        pair_cache = {}
+        rr23_cache = None
+        timing = {"xi12": 0.0, "xi13": 0.0, "xi23": 0.0}
+        if "xi12" in expanded_products:
+            t_pair = time.perf_counter()
+            pair_cache["xi12"] = self._compute_pair_stats(
+                _local_convols1, _local_convols2, _local_random1, _local_random2, self.r12
+            )
+            timing["xi12"] = time.perf_counter() - t_pair
+        if "xi13" in expanded_products:
+            t_pair = time.perf_counter()
+            pair_cache["xi13"] = self._compute_pair_stats(
+                _local_convols1, _local_convols3, _local_random1, _local_random3, self.r13
+            )
+            timing["xi13"] = time.perf_counter() - t_pair
+        if "xi23" in expanded_products or "rrr" in expanded_products:
+            t_pair = time.perf_counter()
+            pair_cache["xi23"] = self._compute_pair_stats_series(
+                _local_convols2,
+                _local_convols3,
+                _local_random2,
+                _local_random3,
+                math_util.third_side(self.r12, self.r13, theta_arr),
+            )
+            rr23_cache = pair_cache["xi23"]["rr"]
+            timing["xi23"] = time.perf_counter() - t_pair
+        return pair_cache, rr23_cache, timing
 
     def run(self, save_result=True, overwrite=False):
         try:
@@ -677,53 +777,17 @@ class Corr_3PCF(TaskBase):
                 t_theta_start = time.perf_counter() if rank == 0 else None
                 r23_value = math_util.third_side(self.r12, self.r13, th)
                 if self.center == "random":
-                    if "ddd" in expanded_products:
-                        local_results["ddd"][it] = calc_DDD_mean_mc(
-                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            _local_convols1, _local_convols2, _local_convols3,
-                            center="random", seed_base_rot=seed_base_rot, theta_index=it,
-                            eps1=_local_convols1.epsilon,
-                        )
-                    if "delta_ddd" in expanded_products:
-                        field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
-                        field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-                        field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
-                        local_results["delta_ddd"][it] = calc_DDD_mean_mc(
-                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            _local_convols1, field2, field3,
-                            center="random", seed_base_rot=seed_base_rot, theta_index=it,
-                            eps1=field1.epsilon,
-                        )
-                    if "rrr" in local_results:
-                        local_results["rrr"][it] = self._compute_rrr_value(
-                            th, r23_value, "random", pos_local, seed_base_rot, it,
-                            _local_random1, _local_random2, _local_random3, rr23_cache=None
-                        )
-                else:
-                    rho = self.rho if self.rho is not None else (
-                        self._field_density(_local_convols1) if _local_convols1 is not None else (1.0 / self.meta_convols.V)
+                    self._compute_random_center_theta(
+                        th, r23_value, pos_local, seed_base_rot, it,
+                        local_results, _local_convols1, _local_convols2, _local_convols3,
+                        _local_random1, _local_random2, _local_random3
                     )
-                    if "ddd" in expanded_products:
-                        local_results["ddd"][it] = calc_DDD_mean_mc(
-                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            self.meta_convols, _local_convols2, _local_convols3,
-                            center="particle", seed_base_rot=seed_base_rot, theta_index=it,
-                            rho1=rho,
-                        )
-                    if "rrr" in local_results:
-                        local_results["rrr"][it] = self._compute_rrr_value(
-                            th, r23_value, "particle", pos_local, seed_base_rot, it,
-                            _local_random1, _local_random2, _local_random3, rr23_cache=None
-                        )
-                    if "d_delta_dd" in expanded_products:
-                        field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-                        field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
-                        local_results["d_delta_dd"][it] = calc_DDD_mean_mc(
-                            self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            self.meta_convols, field2, field3,
-                            center="particle", seed_base_rot=seed_base_rot, theta_index=it,
-                            rho1=rho,
-                        )
+                else:
+                    self._compute_particle_center_theta(
+                        th, r23_value, pos_local, seed_base_rot, it,
+                        local_results, _local_convols2, _local_convols3,
+                        _local_random1, _local_random2, _local_random3
+                    )
 
                 if rank == 0:
                     elapsed_theta = time.perf_counter() - t_theta_start
@@ -744,34 +808,11 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"DDD main loop time: {t_loop_end - t_start:.4f} sec")
                 self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
 
-                pair_cache = {}
-                rr23_cache = None
-                xi12_time = 0.0
-                xi13_time = 0.0
-                xi23_time = 0.0
-                if "xi12" in expanded_products:
-                    t_pair = time.perf_counter()
-                    pair_cache["xi12"] = self._compute_pair_stats(
-                        _local_convols1, _local_convols2, _local_random1, _local_random2, self.r12
-                    )
-                    xi12_time = time.perf_counter() - t_pair
-                if "xi13" in expanded_products:
-                    t_pair = time.perf_counter()
-                    pair_cache["xi13"] = self._compute_pair_stats(
-                        _local_convols1, _local_convols3, _local_random1, _local_random3, self.r13
-                    )
-                    xi13_time = time.perf_counter() - t_pair
-                if "xi23" in expanded_products or "rrr" in expanded_products:
-                    t_pair = time.perf_counter()
-                    pair_cache["xi23"] = self._compute_pair_stats_series(
-                        _local_convols2,
-                        _local_convols3,
-                        _local_random2,
-                        _local_random3,
-                        math_util.third_side(self.r12, self.r13, theta_arr),
-                    )
-                    rr23_cache = pair_cache["xi23"]["rr"]
-                    xi23_time = time.perf_counter() - t_pair
+                pair_cache, rr23_cache, pair_timing = self._compute_pair_cache(
+                    expanded_products, theta_arr,
+                    _local_convols1, _local_convols2, _local_convols3,
+                    _local_random1, _local_random2, _local_random3
+                )
 
                 self.corr3pcf_data.theta = theta_arr
                 self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
@@ -807,8 +848,8 @@ class Corr_3PCF(TaskBase):
 
                 t_end = time.perf_counter()
                 self.logger.info(
-                    f"Post-processing timing | xi12={xi12_time:.2f} sec | "
-                    f"xi13={xi13_time:.2f} sec | xi23={xi23_time:.2f} sec"
+                    f"Post-processing timing | xi12={pair_timing['xi12']:.2f} sec | "
+                    f"xi13={pair_timing['xi13']:.2f} sec | xi23={pair_timing['xi23']:.2f} sec"
                 )
                 self.logger.info(f"The time for 3PCF (pos-parallel): {t_end - t_start:.4f} sec")
                 if save_result and self.fout_path:
