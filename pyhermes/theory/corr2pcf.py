@@ -576,12 +576,12 @@ class Corr_2PCF(TaskBase):
                 delta_dd_arr = np.array([item for sublist in gathered_delta_dd for item in sublist], dtype=object)
                 rr_arr = np.array([item for sublist in gathered_rr for item in sublist], dtype=object)
                 self.corr2pcf_data.r = np.array([item for sublist in gathered_r for item in sublist])
-                self.corr2pcf_data.dd = None if 'dd' not in self.products else np.asarray(dd_arr, dtype=np.float64)
-                self.corr2pcf_data.dr = None if 'dr' not in self.products else np.asarray(dr_arr, dtype=np.float64)
-                self.corr2pcf_data.rd = None if 'rd' not in self.products else np.asarray(rd_arr, dtype=np.float64)
-                self.corr2pcf_data.delta_dd = None if 'delta_dd' not in self.products else np.asarray(delta_dd_arr, dtype=np.float64)
-                self.corr2pcf_data.rr = None if 'rr' not in self.products else np.asarray(rr_arr, dtype=np.float64)
-                self.corr2pcf_data.xi = None if 'xi' not in self.products else np.asarray(xi_arr, dtype=np.float64)
+                self.corr2pcf_data.dd = None if 'dd' not in expanded_products else np.asarray(dd_arr, dtype=np.float64)
+                self.corr2pcf_data.dr = None if 'dr' not in expanded_products else np.asarray(dr_arr, dtype=np.float64)
+                self.corr2pcf_data.rd = None if 'rd' not in expanded_products else np.asarray(rd_arr, dtype=np.float64)
+                self.corr2pcf_data.delta_dd = None if 'delta_dd' not in expanded_products else np.asarray(delta_dd_arr, dtype=np.float64)
+                self.corr2pcf_data.rr = None if 'rr' not in expanded_products else np.asarray(rr_arr, dtype=np.float64)
+                self.corr2pcf_data.xi = None if 'xi' not in expanded_products else np.asarray(xi_arr, dtype=np.float64)
                 if not count_all:
                     progress = 100.
                     self.logger.info(f" Progress: {progress:6.2f}%")
