@@ -77,7 +77,7 @@ class Corr_3PCF(TaskBase):
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
-        self.particle_data1 = self.task_params.get("particle_data1", None)
+        self.particle_pos1 = self.task_params.get("particle_pos1", None)
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -212,11 +212,11 @@ class Corr_3PCF(TaskBase):
         params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
         params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
         params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
-        if self.particle_data1 is None:
-            params["particle_data1"] = None
+        if self.particle_pos1 is None:
+            params["particle_pos1"] = None
         else:
-            arr = np.asarray(self.particle_data1)
-            params["particle_data1"] = {"kind": "particle_data1", "shape": tuple(arr.shape)}
+            arr = np.asarray(self.particle_pos1)
+            params["particle_pos1"] = {"kind": "particle_pos1", "shape": tuple(arr.shape)}
         params["random"] = self._serialize_convols_input(self.random)
         params["random1"] = self._serialize_convols_input(self.random1)
         params["random2"] = self._serialize_convols_input(self.random2)
@@ -313,7 +313,7 @@ class Corr_3PCF(TaskBase):
         arr = np.asarray(value, dtype=np.float64)
         if arr.ndim != 2 or arr.shape[1] != 3:
             raise ValueError(
-                f"particle_data1 must be an array-like with shape (N, 3), got shape {arr.shape}."
+                f"particle_pos1 must be an array-like with shape (N, 3), got shape {arr.shape}."
             )
         return np.ascontiguousarray(arr, dtype=np.float64)
 
@@ -390,7 +390,7 @@ class Corr_3PCF(TaskBase):
         convols_data1=None,
         convols_data2=None,
         convols_data3=None,
-        particle_data1=None,
+        particle_pos1=None,
         random1=None,
         random2=None,
         random3=None,
@@ -406,8 +406,8 @@ class Corr_3PCF(TaskBase):
             convols_data2 = self.convols_data2
         if convols_data3 is None:
             convols_data3 = self.convols_data3
-        if particle_data1 is None:
-            particle_data1 = self.particle_data1
+        if particle_pos1 is None:
+            particle_pos1 = self.particle_pos1
         if random1 is None:
             random1 = self.random1
         if random2 is None:
@@ -423,10 +423,10 @@ class Corr_3PCF(TaskBase):
 
         needs_data, needs_random = self._required_input_flags()
         expanded_products = set(self._expanded_products())
-        particle_data1_arr = self._normalize_particle_data(particle_data1)
-        use_particle_data1 = self.center == "particle" and particle_data1_arr is not None
+        particle_pos1_arr = self._normalize_particle_data(particle_pos1)
+        use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         requires_signal_leg1 = needs_data and (
-            not use_particle_data1 or bool(expanded_products & {"xi12", "xi13", "Q"})
+            not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "Q"})
         )
 
         if self.rank == 0:
@@ -454,20 +454,20 @@ class Corr_3PCF(TaskBase):
                 if needs_random and random_legs and random_legs[0][1] != "uniform":
                     self.logger.error("For center='particle', random1 must be 'uniform'.")
                     func_util.safe_exit(1)
-                if use_particle_data1 and (expanded_products & {"xi12", "xi13", "Q"}):
+                if use_particle_pos1 and (expanded_products & {"xi12", "xi13", "Q"}):
                     self.logger.error(
-                        "particle_data1 can replace convols_data1 only for particle-center products that do not require "
+                        "particle_pos1 can replace convols_data1 only for particle-center products that do not require "
                         "xi12/xi13/Q. Please provide convols_data1 as well if those products are requested."
                     )
                     func_util.safe_exit(1)
-                if not use_particle_data1 and requires_signal_leg1:
+                if not use_particle_pos1 and requires_signal_leg1:
                     leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
                     try:
-                        self.particle_data1 = self._normalize_particle_data(leg1_base.get_particle_data())
+                        self.particle_pos1 = self._normalize_particle_data(leg1_base.get_particle_data())
                     except Exception:
                         self.logger.error(
                             "For center='particle', convols_data1 could not provide usable particle coordinates. "
-                            "Please provide particle_data1 explicitly."
+                            "Please provide particle_pos1 explicitly."
                         )
                         func_util.safe_exit(1)
                 if window1 is not None:
@@ -507,11 +507,11 @@ class Corr_3PCF(TaskBase):
                 self.convols_data1 = None
                 self.corr3pcf_data.convols_info1 = None
 
-            if use_particle_data1:
-                self.particle_data1 = particle_data1_arr
-                self.logger.info(f"Particle leg 1 ready | source=provided particle_data1 | N_particles={self.particle_data1.shape[0]}")
+            if use_particle_pos1:
+                self.particle_pos1 = particle_pos1_arr
+                self.logger.info(f"Particle leg 1 ready | source=provided particle_pos1 | N_particles={self.particle_pos1.shape[0]}")
             elif self.center != "particle":
-                self.particle_data1 = None
+                self.particle_pos1 = None
 
             for i, base_random, source_desc, win in random_legs:
                 if base_random == "uniform":
@@ -605,8 +605,8 @@ class Corr_3PCF(TaskBase):
                     if geometry_ref is None:
                         self.logger.error("At least one ConvolsData input is required to define geometry for center='particle'.")
                         func_util.safe_exit(1)
-                    if self.particle_data1 is not None:
-                        pos_all = self.particle_data1 * geometry_ref.ScaleFactor
+                    if self.particle_pos1 is not None:
+                        pos_all = self.particle_pos1 * geometry_ref.ScaleFactor
                     else:
                         pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
                     Nall = pos_all.shape[0]
