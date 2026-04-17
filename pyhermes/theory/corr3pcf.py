@@ -456,6 +456,12 @@ class Corr_3PCF(TaskBase):
         random_pos1_arr = self._normalize_particle_data(random_pos1)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         use_random_pos1 = self.center == "particle" and random_pos1_arr is not None
+        if needs_random and all(x in (None, "") for x in [random1, random2, random3]) and not use_random_pos1:
+            self.logger.error(
+                "Random-related products were requested, but no random inputs were provided. "
+                "Please set shared 'random', leg-specific 'random1/2/3', or 'random_pos1' when appropriate."
+            )
+            func_util.safe_exit(1)
         requires_signal_leg1 = needs_data and (
             not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "Q"})
         )
@@ -490,7 +496,12 @@ class Corr_3PCF(TaskBase):
                         "xi12/xi13/Q. Please provide convols_data1 as well if those products are requested."
                     )
                     func_util.safe_exit(1)
-                if random_pos1_arr is not None and random1_base is not None:
+                if particle_pos1_arr is not None and leg1_base is not None:
+                    self.logger.warning(
+                        "particle_pos1 is provided for center='particle'; it will override leg-1 data centers only, "
+                        "while convols_data1 will still be used as the leg-1 signal field."
+                    )
+                if random_pos1_arr is not None and random1_base is not None and "r_delta_dd" in expanded_products:
                     self.logger.warning(
                         "random_pos1 is provided for center='particle'; it will override leg-1 random centers only, "
                         "while random1 will still be used as the leg-1 random field."
@@ -593,7 +604,12 @@ class Corr_3PCF(TaskBase):
 
     def _prepare_random_legs(self, data_legs, random_legs):
         for i, base_random, source_desc, win in random_legs:
-            if self.center == "particle" and i == 1 and self.random_pos1 is not None:
+            if (
+                self.center == "particle"
+                and i == 1
+                and self.random_pos1 is not None
+                and isinstance(getattr(self, "random1", None), (float, int, np.floating))
+            ):
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"convols_data{i}", None),
                     *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
