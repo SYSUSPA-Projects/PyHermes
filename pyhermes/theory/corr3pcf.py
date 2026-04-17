@@ -1100,7 +1100,7 @@ class Corr_3PCF(TaskBase):
                     self.logger.info("Computed Q from zeta and xi12/xi13/xi23.")
 
                 t_end = time.perf_counter()
-                self.logger.info(f"The time for 3PCF (pos-parallel): {t_end - t_start:.4f} sec")
+                self.logger.info(f"The time for 3PCF: {t_end - t_start:.4f} sec")
                 if save_result and self.fout_path:
                     self.logger.info("Saving 3PCF result to output file ...")
                     self.corr3pcf_data.saveflag = True
