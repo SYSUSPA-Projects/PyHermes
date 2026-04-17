@@ -329,7 +329,9 @@ class Corr_2PCF(TaskBase):
                     base_random, source_desc = self._resolve_random_base(i, rdata, base_convols_cache)
                     if base_random is None:
                         self.logger.error(
-                            f"Missing input for random leg {i}. Products {self.products} require 'random{i}' or shared 'random'."
+                            f"Missing input for random leg {i}. Products {self.products} require "
+                            f"'random{i}' or shared 'random'. Corr_2PCF now defaults random to null, "
+                            f"so please set it explicitly when RR/DR/RD/delta_DD/xi-related products are requested."
                         )
                         func_util.safe_exit(1)
                     resolved_random_legs.append((i, base_random, source_desc, win))

@@ -1,5 +1,6 @@
 Corr_2PCF:
    convols_data: "./output/quijote_sfc.pkl"
+   random: "uniform"
    fout_path: "./output/quijote_2pcf.pkl"
    pair_window:
       type: ""

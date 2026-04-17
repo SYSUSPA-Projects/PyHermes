@@ -16,7 +16,7 @@
 		"convols_data": "",
 		"convols_data1": "",
 		"convols_data2": "",
-		"random": "uniform",
+		"random": null,
 		"random1": "",
 		"random2": "",
 		"fout_path": "",
