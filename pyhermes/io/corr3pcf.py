@@ -15,6 +15,7 @@ class Corr3PCFData(HermesData):
         self.ddd                 = None
         self.rrr                 = None
         self.d_delta_dd          = None
+        self.r_delta_dd          = None
         self.delta_ddd           = None
         self.xi12                = None
         self.xi13                = None
@@ -50,6 +51,7 @@ class Corr3PCFData(HermesData):
             self.ddd = dataset.get('ddd')
             self.rrr = dataset.get('rrr')
             self.d_delta_dd = dataset.get('d_delta_dd', dataset.get('pdelta_ddd'))
+            self.r_delta_dd = dataset.get('r_delta_dd')
             self.delta_ddd = dataset.get('delta_ddd')
             # Assign the dictionary from the file to self.corr3pcf_info
             for i in range(1, 4):
@@ -83,6 +85,7 @@ class Corr3PCFData(HermesData):
             'ddd': self.ddd,
             'rrr': self.rrr,
             'd_delta_dd': self.d_delta_dd,
+            'r_delta_dd': self.r_delta_dd,
             'delta_ddd': self.delta_ddd,
             'xi12': self.xi12,
             'xi13': self.xi13,

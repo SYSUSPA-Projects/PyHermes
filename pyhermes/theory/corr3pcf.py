@@ -78,6 +78,7 @@ class Corr_3PCF(TaskBase):
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
         self.particle_pos1 = self.task_params.get("particle_pos1", None)
+        self.random_pos1 = self.task_params.get("random_pos1", None)
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -123,7 +124,7 @@ class Corr_3PCF(TaskBase):
             )
 
         allowed_random = {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
-        allowed_particle = {"ddd", "rrr", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
+        allowed_particle = {"ddd", "rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
         allowed = allowed_random if self.center == "random" else allowed_particle
 
         normalized = []
@@ -159,15 +160,15 @@ class Corr_3PCF(TaskBase):
                     if dep not in expanded:
                         expanded.append(dep)
             if "delta_ddd" in expanded:
-                for dep in ["d_delta_dd", "xi23", "rrr"]:
+                for dep in ["d_delta_dd", "r_delta_dd"]:
                     if dep not in expanded:
                         expanded.append(dep)
         return expanded
 
     def _required_input_flags(self):
         expanded = set(self._expanded_products())
-        needs_data = bool(expanded & {"ddd", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
-        needs_random = bool(expanded & {"rrr", "d_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
+        needs_data = bool(expanded & {"ddd", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
+        needs_random = bool(expanded & {"rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
         return needs_data, needs_random
 
     def _normalize_random(self, value):
@@ -217,6 +218,11 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.particle_pos1)
             params["particle_pos1"] = {"kind": "particle_pos1", "shape": tuple(arr.shape)}
+        if self.random_pos1 is None:
+            params["random_pos1"] = None
+        else:
+            arr = np.asarray(self.random_pos1)
+            params["random_pos1"] = {"kind": "random_pos1", "shape": tuple(arr.shape)}
         params["random"] = self._serialize_convols_input(self.random)
         params["random1"] = self._serialize_convols_input(self.random1)
         params["random2"] = self._serialize_convols_input(self.random2)
@@ -322,6 +328,21 @@ class Corr_3PCF(TaskBase):
             )
         return np.ascontiguousarray(arr, dtype=np.float64)
 
+    def _resolve_pos1_array(self, provided_pos, fallback_field, label, explicit_name):
+        pos_arr = self._normalize_particle_data(provided_pos)
+        if pos_arr is not None:
+            return pos_arr
+        if fallback_field is None:
+            return None
+        try:
+            return self._normalize_particle_data(fallback_field.get_particle_data())
+        except Exception:
+            self.logger.error(
+                f"For center='particle', {label} could not provide usable particle coordinates. "
+                f"Please provide {explicit_name} explicitly."
+            )
+            func_util.safe_exit(1)
+
     def _broadcast_field(self, value):
         comm = self.comm
         rank = self.rank
@@ -396,6 +417,7 @@ class Corr_3PCF(TaskBase):
         convols_data2=None,
         convols_data3=None,
         particle_pos1=None,
+        random_pos1=None,
         random1=None,
         random2=None,
         random3=None,
@@ -406,30 +428,34 @@ class Corr_3PCF(TaskBase):
         self.corr3pcf_data = Corr3PCFData()
         self._sync_runtime_options()
         if convols_data1 is None:
-            convols_data1 = self.convols_data1
+            convols_data1 = self.convols_data1 if self.convols_data1 not in (None, "") else self.convols_data
         if convols_data2 is None:
-            convols_data2 = self.convols_data2
+            convols_data2 = self.convols_data2 if self.convols_data2 not in (None, "") else self.convols_data
         if convols_data3 is None:
-            convols_data3 = self.convols_data3
+            convols_data3 = self.convols_data3 if self.convols_data3 not in (None, "") else self.convols_data
         if particle_pos1 is None:
             particle_pos1 = self.particle_pos1
+        if random_pos1 is None:
+            random_pos1 = self.random_pos1
         if random1 is None:
-            random1 = self.random1
+            random1 = self.random1 if self.random1 not in (None, "") else self.random
         if random2 is None:
-            random2 = self.random2
+            random2 = self.random2 if self.random2 not in (None, "") else self.random
         if random3 is None:
-            random3 = self.random3
+            random3 = self.random3 if self.random3 not in (None, "") else self.random
         if window1 is None:
-            window1 = self.window1
+            window1 = self.window1 if self.window1 is not None else self.window
         if window2 is None:
-            window2 = self.window2
+            window2 = self.window2 if self.window2 is not None else self.window
         if window3 is None:
-            window3 = self.window3
+            window3 = self.window3 if self.window3 is not None else self.window
 
         needs_data, needs_random = self._required_input_flags()
         expanded_products = set(self._expanded_products())
         particle_pos1_arr = self._normalize_particle_data(particle_pos1)
+        random_pos1_arr = self._normalize_particle_data(random_pos1)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
+        use_random_pos1 = self.center == "particle" and random_pos1_arr is not None
         requires_signal_leg1 = needs_data and (
             not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "Q"})
         )
@@ -456,25 +482,34 @@ class Corr_3PCF(TaskBase):
                     random_legs.append((i, base_random, source_desc, win))
 
             if self.center == "particle":
-                if needs_random and random_legs and random_legs[0][1] != "uniform":
-                    self.logger.error("For center='particle', random1 must be 'uniform'.")
-                    func_util.safe_exit(1)
-                if use_particle_pos1 and (expanded_products & {"xi12", "xi13", "Q"}):
+                leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
+                random1_base = next((base for i, base, _, _ in random_legs if i == 1), None)
+                if use_particle_pos1 and (expanded_products & {"xi12", "xi13", "Q"}) and leg1_base is None:
                     self.logger.error(
                         "particle_pos1 can replace convols_data1 only for particle-center products that do not require "
                         "xi12/xi13/Q. Please provide convols_data1 as well if those products are requested."
                     )
                     func_util.safe_exit(1)
-                if not use_particle_pos1 and requires_signal_leg1:
-                    leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
-                    try:
-                        self.particle_pos1 = self._normalize_particle_data(leg1_base.get_particle_data())
-                    except Exception:
-                        self.logger.error(
-                            "For center='particle', convols_data1 could not provide usable particle coordinates. "
-                            "Please provide particle_pos1 explicitly."
-                        )
-                        func_util.safe_exit(1)
+                if random_pos1_arr is not None and random1_base is not None:
+                    self.logger.warning(
+                        "random_pos1 is provided for center='particle'; it will override leg-1 random centers only, "
+                        "while random1 will still be used as the leg-1 random field."
+                    )
+                if random_pos1_arr is not None and random1_base is None:
+                    for idx, (i, base, src, win) in enumerate(random_legs):
+                        if i == 1:
+                            random_legs[idx] = (i, "uniform", "uniform random density", win)
+                            random1_base = "uniform"
+                            break
+                self.particle_pos1 = self._resolve_pos1_array(
+                    particle_pos1 if use_particle_pos1 else None, leg1_base, "convols_data1", "particle_pos1"
+                ) if (expanded_products & {"ddd", "d_delta_dd"}) else None
+                self.random_pos1 = self._resolve_pos1_array(
+                    random_pos1 if use_random_pos1 else None,
+                    random1_base if isinstance(random1_base, ConvolsData) else None,
+                    "random1",
+                    "random_pos1",
+                ) if "r_delta_dd" in expanded_products else None
                 if window1 is not None:
                     self.logger.warning("window1 has no effect for center='particle'; leg 1 uses particle centers directly.")
                     data_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_legs]
@@ -497,17 +532,21 @@ class Corr_3PCF(TaskBase):
             else:
                 self.rho = None
 
+            if self.particle_pos1 is not None:
+                self.logger.info(f"Particle leg 1 ready | source=provided particle_pos1 | N_particles={self.particle_pos1.shape[0]}")
+            elif self.center != "particle":
+                self.particle_pos1 = None
+
             self._prepare_signal_legs(data_legs)
 
             if not requires_signal_leg1:
                 self.convols_data1 = None
                 self.corr3pcf_data.convols_info1 = None
 
-            if use_particle_pos1:
-                self.particle_pos1 = particle_pos1_arr
-                self.logger.info(f"Particle leg 1 ready | source=provided particle_pos1 | N_particles={self.particle_pos1.shape[0]}")
+            if self.random_pos1 is not None:
+                self.logger.info(f"Random leg 1 centers ready | source=provided random_pos1 | N_particles={self.random_pos1.shape[0]}")
             elif self.center != "particle":
-                self.particle_pos1 = None
+                self.random_pos1 = None
 
             self._prepare_random_legs(data_legs, random_legs)
 
@@ -554,6 +593,21 @@ class Corr_3PCF(TaskBase):
 
     def _prepare_random_legs(self, data_legs, random_legs):
         for i, base_random, source_desc, win in random_legs:
+            if self.center == "particle" and i == 1 and self.random_pos1 is not None:
+                signal_ref = self._find_geometry_reference(
+                    getattr(self, f"convols_data{i}", None),
+                    *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
+                    *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
+                )
+                if signal_ref is None:
+                    self.logger.error(
+                        "Cannot resolve the geometry for particle-center random leg 1. "
+                        "Please provide at least one ConvolsData input field."
+                    )
+                    func_util.safe_exit(1)
+                rho = self._shared_density() if self.rho is not None else (1.0 / signal_ref.V)
+                setattr(self, "random1", rho)
+                continue
             if base_random == "uniform":
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"convols_data{i}", None),
@@ -608,32 +662,45 @@ class Corr_3PCF(TaskBase):
             )
 
     def _compute_particle_center_theta(
-        self, theta, r23_value, pos_local, seed_base_rot, theta_index,
+        self, theta, r23_value, pos_local_data, pos_local_random1, seed_base_rot, theta_index,
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
         rho = self._shared_density()
         if "ddd" in local_results:
             local_results["ddd"][theta_index] = calc_DDD_mean_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
             )
         if "rrr" in local_results:
             local_results["rrr"][theta_index] = self._compute_rrr_value(
-                theta, r23_value, "particle", pos_local, seed_base_rot, theta_index,
+                theta, r23_value, "particle", pos_local_random1, seed_base_rot, theta_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
         if "d_delta_dd" in local_results:
             field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
             field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
             local_results["d_delta_dd"][theta_index] = calc_DDD_mean_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
             )
+        if "r_delta_dd" in local_results:
+            if pos_local_random1 is None and isinstance(_local_random1, (float, int, np.floating)):
+                # For uniform random1, r_delta_dd = rrr * xi23 and is assembled in post-processing.
+                pass
+            else:
+                field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+                field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+                local_results["r_delta_dd"][theta_index] = calc_DDD_mean_mc(
+                    self.r12_scaled, self.r13_scaled, theta, pos_local_random1, self.n_rot,
+                    self.meta_convols, field2, field3,
+                    center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                    rho1=rho,
+                )
 
     def _compute_pair_cache(
         self, expanded_products, theta_arr,
@@ -680,6 +747,8 @@ class Corr_3PCF(TaskBase):
             if not self._fields_prepared:
                 self.prepare_input_fields()
 
+            self.rho = comm.bcast(self.rho, root=0)
+
             expanded_products = self._expanded_products()
             needs_data, needs_random = self._required_input_flags()
             needs_signal_leg1 = not (self.center == "particle" and self.convols_data1 is None)
@@ -694,6 +763,7 @@ class Corr_3PCF(TaskBase):
                 "rrr" in expanded_products
                 and "xi23" in expanded_products
                 and isinstance(_local_random1, (float, int, np.floating))
+                and self.random_pos1 is None
             )
 
             self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
@@ -710,11 +780,19 @@ class Corr_3PCF(TaskBase):
                     else:
                         pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
                     Nall = pos_all.shape[0]
+                    if self.random_pos1 is not None:
+                        pos_all_random1 = self.random_pos1 * geometry_ref.ScaleFactor
+                        Nall_random1 = pos_all_random1.shape[0]
+                    else:
+                        pos_all_random1 = None
+                        Nall_random1 = None
                 theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
             else:
                 theta_arr = None
                 pos_all = None
                 Nall = None
+                pos_all_random1 = None
+                Nall_random1 = None
             theta_arr = comm.bcast(theta_arr, root=0)
 
             if self.center == "random":
@@ -741,6 +819,23 @@ class Corr_3PCF(TaskBase):
                 recvbuf = np.empty(n_local * 3, dtype=np.float64)
                 comm.Scatterv([sendbuf, counts3, displs3, MPI.DOUBLE], recvbuf, root=0)
                 pos_local = recvbuf.reshape(n_local, 3)
+                if self.random_pos1 is not None:
+                    counts_random1 = np.full(size, Nall_random1 // size, dtype=np.int64) if rank == 0 else None
+                    if rank == 0:
+                        counts_random1[: (Nall_random1 % size)] += 1
+                        displs_random1 = np.zeros(size, dtype=np.int64)
+                        displs_random1[1:] = np.cumsum(counts_random1[:-1])
+                        sendbuf_random1 = np.ascontiguousarray(pos_all_random1, dtype=np.float64).ravel()
+                        counts3_random1 = counts_random1 * 3
+                        displs3_random1 = displs_random1 * 3
+                    else:
+                        displs_random1 = sendbuf_random1 = counts3_random1 = displs3_random1 = None
+                    n_local_random1 = int(comm.scatter(counts_random1, root=0))
+                    recvbuf_random1 = np.empty(n_local_random1 * 3, dtype=np.float64)
+                    comm.Scatterv([sendbuf_random1, counts3_random1, displs3_random1, MPI.DOUBLE], recvbuf_random1, root=0)
+                    pos_local_random1 = recvbuf_random1.reshape(n_local_random1, 3)
+                else:
+                    pos_local_random1 = None
 
             npos_local = pos_local.shape[0]
             npos_total = comm.allreduce(npos_local, op=MPI.SUM)
@@ -758,19 +853,32 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"total_centers={npos_total}, each rank has n_local={npos_local} centers")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
-                loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"] if key in expanded_products]
+                loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"] if key in expanded_products]
                 if defer_rrr_to_rr23 and "rrr" in loop_products:
                     loop_products.remove("rrr")
                 if self.center == "particle" and "delta_ddd" in loop_products:
                     loop_products.remove("delta_ddd")
+                if (
+                    self.center == "particle"
+                    and self.random_pos1 is None
+                    and isinstance(_local_random1, (float, int, np.floating))
+                    and "r_delta_dd" in loop_products
+                ):
+                    loop_products.remove("r_delta_dd")
                 self.logger.info(f"Main DDD loop products: {loop_products}")
 
             local_results = {
                 key: np.zeros(theta_arr.shape[0], dtype=np.float64)
-                for key in ["ddd", "delta_ddd", "d_delta_dd", "rrr"]
+                for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"]
                 if key in expanded_products
                 and not (key == "rrr" and defer_rrr_to_rr23)
                 and not (self.center == "particle" and key == "delta_ddd")
+                and not (
+                    self.center == "particle"
+                    and key == "r_delta_dd"
+                    and self.random_pos1 is None
+                    and isinstance(_local_random1, (float, int, np.floating))
+                )
             }
 
             for it, th in enumerate(theta_arr):
@@ -784,7 +892,7 @@ class Corr_3PCF(TaskBase):
                     )
                 else:
                     self._compute_particle_center_theta(
-                        th, r23_value, pos_local, seed_base_rot, it,
+                        th, r23_value, pos_local, pos_local_random1 if pos_local_random1 is not None else pos_local, seed_base_rot, it,
                         local_results, _local_convols2, _local_convols3,
                         _local_random1, _local_random2, _local_random3
                     )
@@ -819,6 +927,7 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.ddd = global_results.get("ddd")
                 self.corr3pcf_data.rrr = global_results.get("rrr")
                 self.corr3pcf_data.d_delta_dd = global_results.get("d_delta_dd")
+                self.corr3pcf_data.r_delta_dd = global_results.get("r_delta_dd")
                 self.corr3pcf_data.delta_ddd = global_results.get("delta_ddd")
 
                 self.corr3pcf_data.xi12 = pair_cache.get("xi12", {}).get("xi")
@@ -835,8 +944,12 @@ class Corr_3PCF(TaskBase):
                             for i, (th, r23) in enumerate(zip(theta_arr, self.corr3pcf_data.r23))
                         ], dtype=np.float64)
 
+                if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
+                    if self.random_pos1 is None and isinstance(_local_random1, (float, int, np.floating)):
+                        self.corr3pcf_data.r_delta_dd = self.corr3pcf_data.rrr * self.corr3pcf_data.xi23
+
                 if self.center == "particle" and "delta_ddd" in expanded_products:
-                    self.corr3pcf_data.delta_ddd = self.corr3pcf_data.d_delta_dd - self.corr3pcf_data.xi23 * self.corr3pcf_data.rrr
+                    self.corr3pcf_data.delta_ddd = self.corr3pcf_data.d_delta_dd - self.corr3pcf_data.r_delta_dd
 
                 if "zeta" in expanded_products:
                     self.corr3pcf_data.zeta = self.corr3pcf_data.delta_ddd / self.corr3pcf_data.rrr

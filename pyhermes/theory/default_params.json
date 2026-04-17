@@ -54,10 +54,11 @@
 		"convols_data2": "",
 		"convols_data3": "",
 		"particle_pos1": null,
-		"random": "uniform",
+		"random": null,
 		"random1": "",
 		"random2": "",
 		"random3": "",
+		"random_pos1": null,
 		"fout_path": "",
 		"window": {
 			"type": "",
