@@ -3,6 +3,7 @@ Corr_3PCF:
    convols_data1: ""
    convols_data2: ""
    convols_data3: ""
+   particle_data1:
    fout_path: "./output/quijote_3pcf_rand1e7.pkl"
    window2:
       type: "sphere"

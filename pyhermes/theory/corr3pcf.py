@@ -63,6 +63,7 @@ class Corr_3PCF(TaskBase):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
+        self.rho = None
         self._fields_prepared = False
 
     def _sync_runtime_options(self):
@@ -76,6 +77,7 @@ class Corr_3PCF(TaskBase):
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
+        self.particle_data1 = self.task_params.get("particle_data1", None)
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -210,6 +212,11 @@ class Corr_3PCF(TaskBase):
         params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
         params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
         params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
+        if self.particle_data1 is None:
+            params["particle_data1"] = None
+        else:
+            arr = np.asarray(self.particle_data1)
+            params["particle_data1"] = {"kind": "particle_data1", "shape": tuple(arr.shape)}
         params["random"] = self._serialize_convols_input(self.random)
         params["random1"] = self._serialize_convols_input(self.random1)
         params["random2"] = self._serialize_convols_input(self.random2)
@@ -300,6 +307,16 @@ class Corr_3PCF(TaskBase):
                 return candidate
         return None
 
+    def _normalize_particle_data(self, value):
+        if value is None:
+            return None
+        arr = np.asarray(value, dtype=np.float64)
+        if arr.ndim != 2 or arr.shape[1] != 3:
+            raise ValueError(
+                f"particle_data1 must be an array-like with shape (N, 3), got shape {arr.shape}."
+            )
+        return np.ascontiguousarray(arr, dtype=np.float64)
+
     def _broadcast_field(self, value):
         comm = self.comm
         rank = self.rank
@@ -373,6 +390,7 @@ class Corr_3PCF(TaskBase):
         convols_data1=None,
         convols_data2=None,
         convols_data3=None,
+        particle_data1=None,
         random1=None,
         random2=None,
         random3=None,
@@ -388,6 +406,8 @@ class Corr_3PCF(TaskBase):
             convols_data2 = self.convols_data2
         if convols_data3 is None:
             convols_data3 = self.convols_data3
+        if particle_data1 is None:
+            particle_data1 = self.particle_data1
         if random1 is None:
             random1 = self.random1
         if random2 is None:
@@ -402,6 +422,12 @@ class Corr_3PCF(TaskBase):
             window3 = self.window3
 
         needs_data, needs_random = self._required_input_flags()
+        expanded_products = set(self._expanded_products())
+        particle_data1_arr = self._normalize_particle_data(particle_data1)
+        use_particle_data1 = self.center == "particle" and particle_data1_arr is not None
+        requires_signal_leg1 = needs_data and (
+            not use_particle_data1 or bool(expanded_products & {"xi12", "xi13", "Q"})
+        )
 
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
@@ -413,6 +439,8 @@ class Corr_3PCF(TaskBase):
             data_legs = []
             if needs_data:
                 for i, cdata, win in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3], [window1, window2, window3]):
+                    if i == 1 and not requires_signal_leg1:
+                        continue
                     base_convols, source_desc = self._resolve_base_convols(i, cdata, cache)
                     data_legs.append((i, base_convols, source_desc, win))
 
@@ -426,6 +454,22 @@ class Corr_3PCF(TaskBase):
                 if needs_random and random_legs and random_legs[0][1] != "uniform":
                     self.logger.error("For center='particle', random1 must be 'uniform'.")
                     func_util.safe_exit(1)
+                if use_particle_data1 and (expanded_products & {"xi12", "xi13", "Q"}):
+                    self.logger.error(
+                        "particle_data1 can replace convols_data1 only for particle-center products that do not require "
+                        "xi12/xi13/Q. Please provide convols_data1 as well if those products are requested."
+                    )
+                    func_util.safe_exit(1)
+                if not use_particle_data1 and requires_signal_leg1:
+                    leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
+                    try:
+                        self.particle_data1 = self._normalize_particle_data(leg1_base.get_particle_data())
+                    except Exception:
+                        self.logger.error(
+                            "For center='particle', convols_data1 could not provide usable particle coordinates. "
+                            "Please provide particle_data1 explicitly."
+                        )
+                        func_util.safe_exit(1)
                 if window1 is not None:
                     self.logger.warning("window1 has no effect for center='particle'; leg 1 uses particle centers directly.")
                     data_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_legs]
@@ -440,9 +484,13 @@ class Corr_3PCF(TaskBase):
                     logger=self.logger,
                     label="Corr_3PCF input fields",
                 )
+                self.rho = 1.0 / compat_fields[0].V
                 shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
                 self.logger.info("Corr_3PCF input compatibility check passed.")
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
+                self.logger.info(f"Shared density | rho={self.rho:.5e}")
+            else:
+                self.rho = None
 
             for i, base_convols, source_desc, win in data_legs:
                 window_obj, window_desc = self._resolve_window(i, base_convols, win)
@@ -454,6 +502,16 @@ class Corr_3PCF(TaskBase):
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+
+            if not requires_signal_leg1:
+                self.convols_data1 = None
+                self.corr3pcf_data.convols_info1 = None
+
+            if use_particle_data1:
+                self.particle_data1 = particle_data1_arr
+                self.logger.info(f"Particle leg 1 ready | source=provided particle_data1 | N_particles={self.particle_data1.shape[0]}")
+            elif self.center != "particle":
+                self.particle_data1 = None
 
             for i, base_random, source_desc, win in random_legs:
                 if base_random == "uniform":
@@ -468,7 +526,7 @@ class Corr_3PCF(TaskBase):
                             f"Please provide at least one ConvolsData input field or an explicit random field."
                         )
                         func_util.safe_exit(1)
-                    rho = 1.0 / signal_ref.V
+                    rho = self.rho if self.rho is not None else (1.0 / signal_ref.V)
                     setattr(self, f"random{i}", rho)
                     self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
                 else:
@@ -524,8 +582,9 @@ class Corr_3PCF(TaskBase):
 
             expanded_products = self._expanded_products()
             needs_data, needs_random = self._required_input_flags()
+            needs_signal_leg1 = not (self.center == "particle" and self.convols_data1 is None)
 
-            _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
+            _local_convols1 = self._broadcast_field(self.convols_data1) if (needs_data and needs_signal_leg1) else None
             _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
             _local_convols3 = self._broadcast_field(self.convols_data3) if needs_data else None
             _local_random1 = self._broadcast_field(self.random1) if needs_random else None
@@ -542,7 +601,14 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 if self.center == "particle":
-                    pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
+                    geometry_ref = self._find_geometry_reference(_local_convols1, _local_convols2, _local_convols3)
+                    if geometry_ref is None:
+                        self.logger.error("At least one ConvolsData input is required to define geometry for center='particle'.")
+                        func_util.safe_exit(1)
+                    if self.particle_data1 is not None:
+                        pos_all = self.particle_data1 * geometry_ref.ScaleFactor
+                    else:
+                        pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
                     Nall = pos_all.shape[0]
                 theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
             else:
@@ -578,9 +644,13 @@ class Corr_3PCF(TaskBase):
 
             npos_local = pos_local.shape[0]
             npos_total = comm.allreduce(npos_local, op=MPI.SUM)
-            self.meta_convols = _local_convols1
-            self.r12_scaled = self.r12 * _local_convols1.ScaleFactor
-            self.r13_scaled = self.r13 * _local_convols1.ScaleFactor
+            geometry_ref = self._find_geometry_reference(_local_convols1, _local_convols2, _local_convols3)
+            if geometry_ref is None:
+                self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
+                func_util.safe_exit(1)
+            self.meta_convols = geometry_ref
+            self.r12_scaled = self.r12 * geometry_ref.ScaleFactor
+            self.r13_scaled = self.r13 * geometry_ref.ScaleFactor
             seed_base_rot = self.base_seed + 1
 
             if rank == 0:
@@ -630,13 +700,15 @@ class Corr_3PCF(TaskBase):
                             _local_random1, _local_random2, _local_random3, rr23_cache=None
                         )
                 else:
-                    rho1 = self._field_density(_local_random1)
+                    rho = self.rho if self.rho is not None else (
+                        self._field_density(_local_convols1) if _local_convols1 is not None else (1.0 / self.meta_convols.V)
+                    )
                     if "ddd" in expanded_products:
                         local_results["ddd"][it] = calc_DDD_mean_mc(
                             self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            _local_convols1, _local_convols2, _local_convols3,
+                            self.meta_convols, _local_convols2, _local_convols3,
                             center="particle", seed_base_rot=seed_base_rot, theta_index=it,
-                            rho1=self._field_density(_local_convols1),
+                            rho1=rho,
                         )
                     if "rrr" in local_results:
                         local_results["rrr"][it] = self._compute_rrr_value(
@@ -648,9 +720,9 @@ class Corr_3PCF(TaskBase):
                         field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
                         local_results["d_delta_dd"][it] = calc_DDD_mean_mc(
                             self.r12_scaled, self.r13_scaled, th, pos_local, self.n_rot,
-                            _local_convols1, field2, field3,
+                            self.meta_convols, field2, field3,
                             center="particle", seed_base_rot=seed_base_rot, theta_index=it,
-                            rho1=rho1,
+                            rho1=rho,
                         )
 
                 if rank == 0:
