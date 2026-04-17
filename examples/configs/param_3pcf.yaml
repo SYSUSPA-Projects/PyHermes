@@ -20,7 +20,7 @@ Corr_3PCF:
    n_theta: 20
    n_rot: 20
    # center: "particle"
-   center: "random"
+   center: "box_random"
    products: "Q"
-   n_rand: 10000000
+   n_box_centers: 10000000
    base_seed: 42

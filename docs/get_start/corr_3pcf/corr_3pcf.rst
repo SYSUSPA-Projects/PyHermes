@@ -42,9 +42,9 @@ Use the shipped config:
       r13: 40.0
       n_theta: 20
       n_rot: 20
-      center: "random"
+      center: "box_random"
       field_mode: "delta"
-      n_rand: 10000000
+      n_box_centers: 10000000
       base_seed: 42
 
 Then run:
@@ -144,11 +144,11 @@ Key parameters
 - ``n_rot``:
   number of rotations used by the estimator
 - ``center``:
-  ``"random"`` or ``"particle"``
+  ``"box_random"`` or ``"particle"``
 - ``field_mode``:
   ``"raw"`` or ``"delta"``
-- ``n_rand``:
-  number of random centers when ``center="random"``
+- ``n_box_centers``:
+  number of random centers when ``center="box_random"``
 - ``base_seed``:
   random seed
 

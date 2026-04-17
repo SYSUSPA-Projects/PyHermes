@@ -84,9 +84,9 @@
 		"r13": 40.0,
 		"n_theta": 20,
 		"n_rot": 100,
-		"center": "random",
+		"center": "box_random",
 		"products": "Q",
-		"n_rand": 5000000,
+		"n_box_centers": 5000000,
 		"base_seed": 42,
 		"threads": 1
 	},

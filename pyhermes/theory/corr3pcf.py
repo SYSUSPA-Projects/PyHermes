@@ -11,15 +11,51 @@ from pyhermes.pipeline import TaskBase
 from .corr2pcf import calc_DD_mean_r
 
 
+# Product expansion rules are kept in one place so the runtime logic only needs
+# to consume an expanded execution plan instead of duplicating dependency checks.
+PRODUCT_RULES = {
+    "box_random": {
+        "allowed": {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"},
+        "deps": {
+            "Q": ["zeta", "xi12", "xi13", "xi23"],
+            "zeta": ["delta_ddd", "rrr"],
+        },
+    },
+    "particle": {
+        "allowed": {"ddd", "rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"},
+        "deps": {
+            "Q": ["zeta", "xi12", "xi13", "xi23"],
+            "zeta": ["delta_ddd", "rrr"],
+            "delta_ddd": ["d_delta_dd", "r_delta_dd"],
+        },
+    },
+}
+
+# Each product declares whether it needs data legs, random legs, or both.
+PRODUCT_INPUT_FLAGS = {
+    "ddd": (True, False),
+    "rrr": (False, True),
+    "d_delta_dd": (True, True),
+    "r_delta_dd": (True, True),
+    "delta_ddd": (True, True),
+    "xi12": (True, True),
+    "xi13": (True, True),
+    "xi23": (True, True),
+    "zeta": (True, True),
+    "Q": (True, True),
+}
+
+
 def calc_DDD_mean_mc(
     r12_scaled, r13_scaled, theta, pos_scaled, n_rot,
     convols_meta, convols_data2, convols_data3,
-    center="random",
+    center="box_random",
     seed_base_rot=-1,
     theta_index=-1,
     eps1=None,
     rho1=None,
 ):
+    """Dispatch the 3PCF Monte Carlo kernel for the chosen center definition."""
     kwargs_common = {
         "phi_data": convols_meta.phi_data,
         "L": convols_meta.L,
@@ -32,9 +68,9 @@ def calc_DDD_mean_mc(
     eps2 = convols_data2.epsilon
     eps3 = convols_data3.epsilon
 
-    if center == "random":
+    if center == "box_random":
         if eps1 is None:
-            raise ValueError("eps1 must be provided when center='random'.")
+            raise ValueError("eps1 must be provided when center='box_random'.")
         return math_util.calc_DDD_mc_random_center(
             r12_scaled, r13_scaled, theta,
             pos_scaled, n_rot,
@@ -52,10 +88,11 @@ def calc_DDD_mean_mc(
             **kwargs_common,
         )
 
-    raise ValueError(f"Unknown center='{center}'. Use 'random' or 'particle'.")
+    raise ValueError(f"Unknown center='{center}'. Use 'box_random' or 'particle'.")
 
 
 class Corr_3PCF(TaskBase):
+    """Three-point correlation estimator with box-random and particle-center modes."""
 
     def __init__(self, param_task=None):
         if param_task is None:
@@ -73,6 +110,7 @@ class Corr_3PCF(TaskBase):
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
+        """Read user-facing task parameters into runtime attributes."""
         self.convols_data = self.task_params.get("convols_data", "")
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
@@ -109,11 +147,12 @@ class Corr_3PCF(TaskBase):
         self.n_theta = int(self.task_params["n_theta"])
         self.n_rot = int(self.task_params["n_rot"])
         self.center = self.task_params["center"]
-        self.n_rand = int(self.task_params["n_rand"])
+        self.n_box_centers = int(self.task_params["n_box_centers"])
         self.base_seed = int(self.task_params["base_seed"])
         self.products = self._normalize_products(self.task_params.get("products", "Q"))
 
     def _normalize_products(self, products):
+        """Normalize requested products and validate them against the current center mode."""
         if isinstance(products, str):
             products = [products]
         elif products is None:
@@ -123,9 +162,7 @@ class Corr_3PCF(TaskBase):
                 f"Unsupported products input: expected string or array of strings, got {type(products)}."
             )
 
-        allowed_random = {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
-        allowed_particle = {"ddd", "rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"}
-        allowed = allowed_random if self.center == "random" else allowed_particle
+        allowed = PRODUCT_RULES[self.center]["allowed"]
 
         normalized = []
         for item in products:
@@ -140,35 +177,25 @@ class Corr_3PCF(TaskBase):
         return normalized
 
     def _expanded_products(self):
+        """Expand requested products to the full dependency-closed execution plan."""
         expanded = list(self.products)
-        if self.center == "random":
-            if "Q" in expanded:
-                for dep in ["zeta", "xi12", "xi13", "xi23"]:
-                    if dep not in expanded:
-                        expanded.append(dep)
-            if "zeta" in expanded:
-                for dep in ["delta_ddd", "rrr"]:
-                    if dep not in expanded:
-                        expanded.append(dep)
-        else:
-            if "Q" in expanded:
-                for dep in ["zeta", "xi12", "xi13", "xi23"]:
-                    if dep not in expanded:
-                        expanded.append(dep)
-            if "zeta" in expanded:
-                for dep in ["delta_ddd", "rrr"]:
-                    if dep not in expanded:
-                        expanded.append(dep)
-            if "delta_ddd" in expanded:
-                for dep in ["d_delta_dd", "r_delta_dd"]:
-                    if dep not in expanded:
-                        expanded.append(dep)
+        rules = PRODUCT_RULES[self.center]["deps"]
+        idx = 0
+        while idx < len(expanded):
+            for dep in rules.get(expanded[idx], []):
+                if dep not in expanded:
+                    expanded.append(dep)
+            idx += 1
         return expanded
 
     def _required_input_flags(self):
-        expanded = set(self._expanded_products())
-        needs_data = bool(expanded & {"ddd", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
-        needs_random = bool(expanded & {"rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"})
+        """Determine whether the current execution plan requires data and/or random inputs."""
+        needs_data = False
+        needs_random = False
+        for product in self._expanded_products():
+            product_needs_data, product_needs_random = PRODUCT_INPUT_FLAGS[product]
+            needs_data = needs_data or product_needs_data
+            needs_random = needs_random or product_needs_random
         return needs_data, needs_random
 
     def _normalize_random(self, value):
@@ -208,6 +235,7 @@ class Corr_3PCF(TaskBase):
         return value
 
     def _current_task_params_snapshot(self):
+        """Record a serializable snapshot of the effective task configuration."""
         params = {}
         params["convols_data"] = self._serialize_convols_input(self.convols_data)
         params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
@@ -238,12 +266,13 @@ class Corr_3PCF(TaskBase):
         params["n_theta"] = self.n_theta
         params["n_rot"] = self.n_rot
         params["center"] = self.center
-        params["n_rand"] = self.n_rand
+        params["n_box_centers"] = self.n_box_centers
         params["base_seed"] = self.base_seed
         params["products"] = copy.deepcopy(self.products)
         return params
 
     def _resolve_base_convols(self, leg_idx, provided_convols, cache):
+        """Resolve one signal leg from a path, shared fallback, or ConvolsData instance."""
         if provided_convols is not None:
             if isinstance(provided_convols, str):
                 if provided_convols not in cache:
@@ -270,6 +299,7 @@ class Corr_3PCF(TaskBase):
         func_util.safe_exit(1)
 
     def _resolve_random_base(self, leg_idx, provided_random, cache):
+        """Resolve one random leg, allowing the special uniform shortcut."""
         provided_random = self._normalize_random(provided_random)
         if provided_random is None:
             return None, "no random input"
@@ -287,6 +317,7 @@ class Corr_3PCF(TaskBase):
         func_util.safe_exit(1)
 
     def _resolve_window(self, leg_idx, base_convols, provided_window):
+        """Resolve a smoothing window for one leg from dict/WindowFunc/None."""
         if isinstance(provided_window, WindowFunc):
             return provided_window, "provided WindowFunc instance"
         if isinstance(provided_window, dict):
@@ -301,6 +332,7 @@ class Corr_3PCF(TaskBase):
         return None, "no additional window convolution"
 
     def _field_density(self, field):
+        """Extract the uniform-density representation used by shortcut branches."""
         if isinstance(field, (float, int, np.floating)):
             return float(field)
         if isinstance(field, ConvolsData):
@@ -308,17 +340,20 @@ class Corr_3PCF(TaskBase):
         raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
     def _shared_density(self):
+        """Return the common density implied by the validated compatible fields."""
         if self.rho is None:
             raise RuntimeError("Shared density is not initialized.")
         return self.rho
 
     def _find_geometry_reference(self, *candidates):
+        """Pick the first ConvolsData object that can define geometry/scale metadata."""
         for candidate in candidates:
             if isinstance(candidate, ConvolsData):
                 return candidate
         return None
 
     def _normalize_particle_data(self, value):
+        """Normalize explicit center positions to a contiguous (N, 3) float64 array."""
         if value is None:
             return None
         arr = np.asarray(value, dtype=np.float64)
@@ -329,6 +364,7 @@ class Corr_3PCF(TaskBase):
         return np.ascontiguousarray(arr, dtype=np.float64)
 
     def _resolve_pos1_array(self, provided_pos, fallback_field, label, explicit_name):
+        """Resolve leg-1 center coordinates from explicit arrays or from a ConvolsData source."""
         pos_arr = self._normalize_particle_data(provided_pos)
         if pos_arr is not None:
             return pos_arr, f"provided {explicit_name}"
@@ -349,6 +385,7 @@ class Corr_3PCF(TaskBase):
         particle_pos1, random_pos1, random1, random2, random3,
         window1, window2, window3,
     ):
+        """Apply shared-input fallbacks right before preparation/run-time use."""
         if convols_data1 is None:
             convols_data1 = self.convols_data1 if self.convols_data1 not in (None, "") else self.convols_data
         if convols_data2 is None:
@@ -378,6 +415,7 @@ class Corr_3PCF(TaskBase):
         )
 
     def _broadcast_field(self, value):
+        """Broadcast a ConvolsData field or scalar density to all MPI ranks."""
         comm = self.comm
         rank = self.rank
         serialized = None
@@ -409,6 +447,7 @@ class Corr_3PCF(TaskBase):
         return local_value
 
     def _scatter_positions(self, pos_all):
+        """Scatter a rank-0 position array into rank-local position chunks."""
         comm = self.comm
         rank = self.rank
         size = comm.Get_size()
@@ -429,11 +468,13 @@ class Corr_3PCF(TaskBase):
         return recvbuf.reshape(n_local, 3)
 
     def calc_pair_product(self, radius, field1, field2):
+        """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
         return calc_DD_mean_r(radius, field1, field2)
 
     def _compute_rrr_value(self, theta, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
+        """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
         n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
         if n_uniform >= 2:
             return self._field_density(random1) * self._field_density(random2) * self._field_density(random3)
@@ -466,6 +507,7 @@ class Corr_3PCF(TaskBase):
     def _configure_particle_center_leg1(
         self, expanded_products, particle_pos1_arr, random_pos1_arr, data_legs, random_legs, window1
     ):
+        """Resolve particle-center leg-1 state for data centers, random centers, and warnings."""
         leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
         random1_base = next((base for i, base, _, _ in random_legs if i == 1), None)
 
@@ -511,7 +553,14 @@ class Corr_3PCF(TaskBase):
             data_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_legs]
             random_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in random_legs]
 
-        return data_legs, random_legs, particle_pos1, particle_pos1_source, random_pos1, random_pos1_source
+        return {
+            "data_legs": data_legs,
+            "random_legs": random_legs,
+            "particle_pos1": particle_pos1,
+            "particle_pos1_source": particle_pos1_source,
+            "random_pos1": random_pos1,
+            "random_pos1_source": random_pos1_source,
+        }
 
     def prepare_input_fields(
         self,
@@ -527,6 +576,7 @@ class Corr_3PCF(TaskBase):
         window2=None,
         window3=None,
     ):
+        """Prepare all fields, random inputs, and center-position side inputs before run()."""
         self.corr3pcf_data = Corr3PCFData()
         self._sync_runtime_options()
         (
@@ -577,20 +627,21 @@ class Corr_3PCF(TaskBase):
                     random_legs.append((i, base_random, source_desc, win))
 
             if self.center == "particle":
-                (
-                    data_legs,
-                    random_legs,
-                    self.particle_pos1,
-                    particle_pos1_source,
-                    self.random_pos1,
-                    random_pos1_source,
-                ) = self._configure_particle_center_leg1(
+                leg1_ctx = self._configure_particle_center_leg1(
                     expanded_products, particle_pos1_arr, random_pos1_arr, data_legs, random_legs, window1
                 )
+                data_legs = leg1_ctx["data_legs"]
+                random_legs = leg1_ctx["random_legs"]
+                self.particle_pos1 = leg1_ctx["particle_pos1"]
+                self.random_pos1 = leg1_ctx["random_pos1"]
+                particle_pos1_source = leg1_ctx["particle_pos1_source"]
+                random_pos1_source = leg1_ctx["random_pos1_source"]
             else:
                 particle_pos1_source = None
                 random_pos1_source = None
 
+            # All ConvolsData inputs, including random legs, must agree on the
+            # same geometry and wavelet metadata before any mixed statistics are valid.
             compat_fields = [item[1] for item in data_legs if isinstance(item[1], ConvolsData)]
             compat_fields.extend(item[1] for item in random_legs if isinstance(item[1], ConvolsData))
             if compat_fields:
@@ -634,6 +685,7 @@ class Corr_3PCF(TaskBase):
         self._fields_prepared = True
 
     def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
+        """Compute RR, delta_DD, and xi for one pair radius."""
         rr = self.calc_pair_product(radius, random_a, random_b)
         delta_a = field_a - self._field_density(random_a) if isinstance(random_a, (float, int, np.floating)) else field_a - random_a
         delta_b = field_b - self._field_density(random_b) if isinstance(random_b, (float, int, np.floating)) else field_b - random_b
@@ -642,6 +694,7 @@ class Corr_3PCF(TaskBase):
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
 
     def _compute_pair_stats_series(self, field_a, field_b, random_a, random_b, radii):
+        """Vectorized convenience wrapper over _compute_pair_stats for radius arrays."""
         radii_arr = np.atleast_1d(np.asarray(radii, dtype=np.float64))
         rr = np.empty_like(radii_arr)
         delta_dd = np.empty_like(radii_arr)
@@ -656,6 +709,7 @@ class Corr_3PCF(TaskBase):
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
 
     def _prepare_signal_legs(self, data_legs):
+        """Apply optional smoothing windows and finalize the signal-leg fields."""
         for i, base_convols, source_desc, win in data_legs:
             window_obj, window_desc = self._resolve_window(i, base_convols, win)
             if window_obj is not None:
@@ -668,6 +722,7 @@ class Corr_3PCF(TaskBase):
             self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
 
     def _prepare_random_legs(self, data_legs, random_legs):
+        """Apply random-leg smoothing and inject uniform-density shortcuts when requested."""
         for i, base_random, source_desc, win in random_legs:
             if (
                 self.center == "particle"
@@ -719,11 +774,12 @@ class Corr_3PCF(TaskBase):
         local_results, _local_convols1, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
+        """Compute theta-local products for the box-random center mode."""
         if "ddd" in local_results:
             local_results["ddd"][theta_index] = calc_DDD_mean_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
                 _local_convols1, _local_convols2, _local_convols3,
-                center="random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 eps1=_local_convols1.epsilon,
             )
         if "delta_ddd" in local_results:
@@ -733,12 +789,12 @@ class Corr_3PCF(TaskBase):
             local_results["delta_ddd"][theta_index] = calc_DDD_mean_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
-                center="random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 eps1=field1.epsilon,
             )
         if "rrr" in local_results:
             local_results["rrr"][theta_index] = self._compute_rrr_value(
-                theta, r23_value, "random", pos_local, seed_base_rot, theta_index,
+                theta, r23_value, "box_random", pos_local, seed_base_rot, theta_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
 
@@ -747,6 +803,7 @@ class Corr_3PCF(TaskBase):
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
+        """Compute theta-local products for the particle-center mode."""
         rho = self._shared_density()
         if "ddd" in local_results:
             local_results["ddd"][theta_index] = calc_DDD_mean_mc(
@@ -761,8 +818,7 @@ class Corr_3PCF(TaskBase):
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
         if "d_delta_dd" in local_results:
-            field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-            field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+            field2, field3 = self._particle_delta_fields
             local_results["d_delta_dd"][theta_index] = calc_DDD_mean_mc(
                 self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
@@ -771,11 +827,11 @@ class Corr_3PCF(TaskBase):
             )
         if "r_delta_dd" in local_results:
             if pos_local_random1 is None and isinstance(_local_random1, (float, int, np.floating)):
-                # For uniform random1, r_delta_dd = rrr * xi23 and is assembled in post-processing.
+                # The uniform-random leg-1 shortcut is cheaper to assemble from
+                # rrr * xi23 after the loop than to sample explicitly here.
                 pass
             else:
-                field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-                field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+                field2, field3 = self._particle_delta_fields
                 local_results["r_delta_dd"][theta_index] = calc_DDD_mean_mc(
                     self.r12_scaled, self.r13_scaled, theta, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
@@ -788,6 +844,7 @@ class Corr_3PCF(TaskBase):
         _local_convols1, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
+        """Compute and cache all requested 2PCF-derived quantities after the main loop."""
         pair_cache = {}
         rr23_cache = None
         timing = {"xi12": 0.0, "xi13": 0.0, "xi23": 0.0}
@@ -817,6 +874,7 @@ class Corr_3PCF(TaskBase):
         return pair_cache, rr23_cache, timing
 
     def run(self, save_result=True, overwrite=False):
+        """Execute the full 3PCF workflow, including center generation and post-processing."""
         try:
             comm = self.comm
             rank = self.rank
@@ -831,6 +889,7 @@ class Corr_3PCF(TaskBase):
             self.rho = comm.bcast(self.rho, root=0)
 
             expanded_products = self._expanded_products()
+            expanded_products_set = set(expanded_products)
             needs_data, needs_random = self._required_input_flags()
             needs_signal_leg1 = not (self.center == "particle" and self.convols_data1 is None)
 
@@ -876,10 +935,10 @@ class Corr_3PCF(TaskBase):
                 Nall_random1 = None
             theta_arr = comm.bcast(theta_arr, root=0)
 
-            if self.center == "random":
+            if self.center == "box_random":
                 if rank == 0:
-                    counts = np.full(size, self.n_rand // size, dtype=np.int64)
-                    counts[: (self.n_rand % size)] += 1
+                    counts = np.full(size, self.n_box_centers // size, dtype=np.int64)
+                    counts[: (self.n_box_centers % size)] += 1
                 else:
                     counts = None
                 n_local = int(comm.scatter(counts, root=0))
@@ -899,6 +958,20 @@ class Corr_3PCF(TaskBase):
                 self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
                 func_util.safe_exit(1)
             self.meta_convols = geometry_ref
+            if self.center == "particle" and expanded_products_set & {"d_delta_dd", "r_delta_dd"}:
+                delta_field2 = (
+                    _local_convols2 - self._field_density(_local_random2)
+                    if isinstance(_local_random2, (float, int, np.floating))
+                    else _local_convols2 - _local_random2
+                )
+                delta_field3 = (
+                    _local_convols3 - self._field_density(_local_random3)
+                    if isinstance(_local_random3, (float, int, np.floating))
+                    else _local_convols3 - _local_random3
+                )
+                self._particle_delta_fields = (delta_field2, delta_field3)
+            else:
+                self._particle_delta_fields = None
             self.r12_scaled = self.r12 * geometry_ref.ScaleFactor
             self.r13_scaled = self.r13 * geometry_ref.ScaleFactor
             seed_base_rot = self.base_seed + 1
@@ -939,7 +1012,7 @@ class Corr_3PCF(TaskBase):
             for it, th in enumerate(theta_arr):
                 t_theta_start = time.perf_counter() if rank == 0 else None
                 r23_value = math_util.third_side(self.r12, self.r13, th)
-                if self.center == "random":
+                if self.center == "box_random":
                     self._compute_random_center_theta(
                         th, r23_value, pos_local, seed_base_rot, it,
                         local_results, _local_convols1, _local_convols2, _local_convols3,
