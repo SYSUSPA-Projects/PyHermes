@@ -993,7 +993,7 @@ class Corr_3PCF(TaskBase):
                     and "r_delta_dd" in loop_products
                 ):
                     loop_products.remove("r_delta_dd")
-                self.logger.info(f"Main DDD loop products: {loop_products}")
+                self.logger.info(f"Main 3PCF loop products: {loop_products}")
 
             local_results = {
                 key: np.zeros(theta_arr.shape[0], dtype=np.float64)
@@ -1041,14 +1041,21 @@ class Corr_3PCF(TaskBase):
 
             if rank == 0:
                 t_loop_end = time.perf_counter()
-                self.logger.info(f"DDD main loop time: {t_loop_end - t_start:.4f} sec")
-                self.logger.info("Main DDD loop finished, computing xi12/xi13/xi23 on rank 0 ...")
+                self.logger.info(f"3PCF main loop time: {t_loop_end - t_start:.4f} sec")
+                self.logger.info("Main 3PCF loop finished, post-processing on rank 0 ...")
 
                 pair_cache, rr23_cache, pair_timing = self._compute_pair_cache(
                     expanded_products, theta_arr,
                     _local_convols1, _local_convols2, _local_convols3,
                     _local_random1, _local_random2, _local_random3
                 )
+
+                pair_timing_parts = []
+                for key in ["xi12", "xi13", "xi23"]:
+                    if key in expanded_products:
+                        pair_timing_parts.append(f"{key}={pair_timing[key]:.2f} sec")
+                if pair_timing_parts:
+                    self.logger.info(f"2PCF timing | {' | '.join(pair_timing_parts)}")
 
                 self.corr3pcf_data.theta = theta_arr
                 self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
@@ -1071,27 +1078,28 @@ class Corr_3PCF(TaskBase):
                             self._compute_rrr_value(th, r23, self.center, pos_local, seed_base_rot, i, _local_random1, _local_random2, _local_random3, rr23_cache=None)
                             for i, (th, r23) in enumerate(zip(theta_arr, self.corr3pcf_data.r23))
                         ], dtype=np.float64)
+                    self.logger.info("Computed rrr from pair cache and random1 density.")
 
                 if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
                     if self.random_pos1 is None and isinstance(_local_random1, (float, int, np.floating)):
                         self.corr3pcf_data.r_delta_dd = self.corr3pcf_data.rrr * self.corr3pcf_data.xi23
+                    self.logger.info("Computed r_delta_dd from xi23 and rrr for particle center with uniform random leg 1.")
 
                 if self.center == "particle" and "delta_ddd" in expanded_products:
                     self.corr3pcf_data.delta_ddd = self.corr3pcf_data.d_delta_dd - self.corr3pcf_data.r_delta_dd
+                    self.logger.info("Computed delta_ddd from d_delta_dd and r_delta_dd for particle center.")
 
                 if "zeta" in expanded_products:
                     self.corr3pcf_data.zeta = self.corr3pcf_data.delta_ddd / self.corr3pcf_data.rrr
+                    self.logger.info("Computed zeta from delta_ddd and rrr.")
                 if "Q" in expanded_products:
                     xi12 = self.corr3pcf_data.xi12
                     xi13 = self.corr3pcf_data.xi13
                     xi23 = self.corr3pcf_data.xi23
                     self.corr3pcf_data.Q = self.corr3pcf_data.zeta / (xi12 * xi13 + xi12 * xi23 + xi13 * xi23)
+                    self.logger.info("Computed Q from zeta and xi12/xi13/xi23.")
 
                 t_end = time.perf_counter()
-                self.logger.info(
-                    f"Post-processing timing | xi12={pair_timing['xi12']:.2f} sec | "
-                    f"xi13={pair_timing['xi13']:.2f} sec | xi23={pair_timing['xi23']:.2f} sec"
-                )
                 self.logger.info(f"The time for 3PCF (pos-parallel): {t_end - t_start:.4f} sec")
                 if save_result and self.fout_path:
                     self.logger.info("Saving 3PCF result to output file ...")
