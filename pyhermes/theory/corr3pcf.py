@@ -47,7 +47,7 @@ PRODUCT_INPUT_FLAGS = {
 
 
 def compute_triplet_product_mc(
-    r12_scaled, r13_scaled, theta, pos_scaled, n_rot,
+    r12_scaled, r13_scaled, mu, pos_scaled, n_rot,
     convols_meta, convols_data2, convols_data3,
     center="box_random",
     seed_base_rot=-1,
@@ -72,7 +72,7 @@ def compute_triplet_product_mc(
         if eps1 is None:
             raise ValueError("eps1 must be provided when center='box_random'.")
         return math_util.estimate_triplet_product_box_random_centers(
-            r12_scaled, r13_scaled, theta,
+            r12_scaled, r13_scaled, mu,
             pos_scaled, n_rot,
             eps1, eps2, eps3,
             **kwargs_common,
@@ -82,7 +82,7 @@ def compute_triplet_product_mc(
         if rho1 is None:
             raise ValueError("rho1 must be provided when center='particle'.")
         return math_util.estimate_triplet_product_particle_centers(
-            r12_scaled, r13_scaled, theta,
+            r12_scaled, r13_scaled, mu,
             pos_scaled, n_rot,
             rho1, eps2, eps3,
             **kwargs_common,
@@ -142,9 +142,26 @@ class Corr_3PCF(TaskBase):
 
         self.r12 = float(self.task_params["r12"])
         self.r13 = float(self.task_params["r13"])
-        self.theta_min = 0.0
-        self.theta_max = np.pi
-        self.n_theta = int(self.task_params["n_theta"])
+        self.angle_param = self.task_params.get("angle_param", "theta")
+        legacy_n_theta = int(self.task_params.get("n_theta", 20))
+        legacy_theta_min = float(self.task_params.get("theta_min", 0.0))
+        legacy_theta_max = float(self.task_params.get("theta_max", float(np.pi)))
+        self.theta = copy.deepcopy(
+            self.task_params.get("theta", {"theta_min": legacy_theta_min, "theta_max": legacy_theta_max, "n_theta": legacy_n_theta})
+        )
+        self.mu = copy.deepcopy(
+            self.task_params.get(
+                "mu",
+                {"mu_min": -1.0, "mu_max": 1.0, "n_mu": legacy_n_theta},
+            )
+        )
+        self.theta_arr = None
+        self.mu_arr = None
+        self.theta_min = legacy_theta_min
+        self.theta_max = legacy_theta_max
+        self.mu_min = -1.0
+        self.mu_max = 1.0
+        self.n_theta = legacy_n_theta
         self.n_rot = int(self.task_params["n_rot"])
         self.center = self.task_params["center"]
         self.n_box_centers = int(self.task_params["n_box_centers"])
@@ -205,6 +222,74 @@ class Corr_3PCF(TaskBase):
             return "uniform"
         return value
 
+    def _serialize_angle_spec(self, value):
+        if isinstance(value, dict):
+            return copy.deepcopy(value)
+        if value is None:
+            return None
+        arr = np.asarray(value, dtype=np.float64)
+        return arr.tolist()
+
+    def _normalize_sampling_array(self, values, name, vmin, vmax):
+        arr = np.asarray(values, dtype=np.float64)
+        if arr.ndim != 1:
+            raise TypeError(f"'{name}' must be a 1D array-like input.")
+        if arr.size == 0:
+            raise ValueError(f"'{name}' must contain at least one sampling point.")
+        if np.any(arr < vmin) or np.any(arr > vmax):
+            raise ValueError(f"'{name}' values must lie in [{vmin}, {vmax}].")
+        diffs = np.diff(arr)
+        if np.any(diffs < 0.0) and np.any(diffs > 0.0):
+            raise ValueError(f"'{name}' values must be monotonic.")
+        return np.ascontiguousarray(arr, dtype=np.float64)
+
+    def _resolve_angle_sampling(self):
+        angle_param = str(self.angle_param).strip().lower()
+        if angle_param not in {"theta", "mu"}:
+            raise ValueError(f"Unsupported angle_param='{self.angle_param}'. Use 'theta' or 'mu'.")
+
+        if angle_param == "theta":
+            theta_spec = self.theta
+            if isinstance(theta_spec, dict):
+                theta_min = float(theta_spec.get("theta_min", self.theta_min))
+                theta_max = float(theta_spec.get("theta_max", self.theta_max))
+                n_theta = int(theta_spec.get("n_theta", self.n_theta))
+                if self.theta_min != float(theta_spec.get("theta_min", self.theta_min)):
+                    theta_min = float(self.theta_min)
+                if self.theta_max != float(theta_spec.get("theta_max", self.theta_max)):
+                    theta_max = float(self.theta_max)
+                if self.n_theta != int(theta_spec.get("n_theta", self.n_theta)):
+                    n_theta = int(self.n_theta)
+                theta_arr = np.linspace(theta_min, theta_max, n_theta, dtype=np.float64)
+            else:
+                theta_arr = self._normalize_sampling_array(theta_spec, "theta", 0.0, float(np.pi))
+            mu_arr = np.cos(theta_arr)
+        else:
+            mu_spec = self.mu
+            if isinstance(mu_spec, dict):
+                mu_min = float(mu_spec.get("mu_min", -1.0))
+                mu_max = float(mu_spec.get("mu_max", 1.0))
+                n_mu = int(mu_spec.get("n_mu", self.n_theta))
+                if self.mu_min != float(mu_spec.get("mu_min", self.mu_min)):
+                    mu_min = float(self.mu_min)
+                if self.mu_max != float(mu_spec.get("mu_max", self.mu_max)):
+                    mu_max = float(self.mu_max)
+                if self.n_theta != int(mu_spec.get("n_mu", self.n_theta)):
+                    n_mu = int(self.n_theta)
+                mu_arr = np.linspace(mu_min, mu_max, n_mu, dtype=np.float64)
+            else:
+                mu_arr = self._normalize_sampling_array(mu_spec, "mu", -1.0, 1.0)
+            theta_arr = np.arccos(np.clip(mu_arr, -1.0, 1.0))
+
+        self.angle_param = angle_param
+        self.theta_arr = np.ascontiguousarray(theta_arr, dtype=np.float64)
+        self.mu_arr = np.ascontiguousarray(mu_arr, dtype=np.float64)
+        self.n_theta = int(self.theta_arr.size)
+        self.theta_min = float(np.min(self.theta_arr))
+        self.theta_max = float(np.max(self.theta_arr))
+        self.mu_min = float(np.min(self.mu_arr))
+        self.mu_max = float(np.max(self.mu_arr))
+
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
             return value
@@ -263,7 +348,14 @@ class Corr_3PCF(TaskBase):
         params["threads"] = self.threads
         params["r12"] = self.r12
         params["r13"] = self.r13
+        params["angle_param"] = self.angle_param
+        params["theta_spec"] = self._serialize_angle_spec(self.theta)
+        params["mu_spec"] = self._serialize_angle_spec(self.mu)
         params["n_theta"] = self.n_theta
+        params["theta_min"] = self.theta_min
+        params["theta_max"] = self.theta_max
+        params["mu_min"] = self.mu_min
+        params["mu_max"] = self.mu_max
         params["n_rot"] = self.n_rot
         params["center"] = self.center
         params["n_box_centers"] = self.n_box_centers
@@ -473,7 +565,7 @@ class Corr_3PCF(TaskBase):
             return self._field_density(field1) * self._field_density(field2)
         return compute_pair_product_at_radius(radius, field1, field2)
 
-    def _compute_rrr_value(self, theta, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
+    def _compute_rrr_value(self, mu, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
         n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
         if n_uniform >= 2:
@@ -491,7 +583,7 @@ class Corr_3PCF(TaskBase):
         return compute_triplet_product_mc(
             self.r12_scaled,
             self.r13_scaled,
-            theta,
+            mu,
             pos_local,
             self.n_rot,
             self.meta_convols,
@@ -579,6 +671,7 @@ class Corr_3PCF(TaskBase):
         """Prepare all fields, random inputs, and center-position side inputs before run()."""
         self.corr3pcf_data = Corr3PCFData()
         self._sync_runtime_options()
+        self._resolve_angle_sampling()
         (
             convols_data1, convols_data2, convols_data3,
             particle_pos1, random_pos1, random1, random2, random3,
@@ -608,7 +701,10 @@ class Corr_3PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
             self.logger.info(
-                f"center={self.center}, n_theta={self.n_theta}, n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
+                f"center={self.center}, angle_param={self.angle_param}, n_theta={self.n_theta}, "
+                f"theta_min={self.theta_min:.5f}, theta_max={self.theta_max:.5f}, "
+                f"mu_min={self.mu_min:.5f}, mu_max={self.mu_max:.5f}, "
+                f"n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
             )
             self.logger.info(f"requested_products={self.products}, expanded_products={self._expanded_products()}")
             cache = {}
@@ -770,14 +866,14 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
     def _compute_random_center_theta(
-        self, theta, r23_value, pos_local, seed_base_rot, theta_index,
+        self, mu, r23_value, pos_local, seed_base_rot, theta_index,
         local_results, _local_convols1, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
         """Compute theta-local products for the box-random center mode."""
         if "ddd" in local_results:
             local_results["ddd"][theta_index] = compute_triplet_product_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, _local_convols2, _local_convols3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 eps1=_local_convols1.epsilon,
@@ -787,19 +883,19 @@ class Corr_3PCF(TaskBase):
             field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
             field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
             local_results["delta_ddd"][theta_index] = compute_triplet_product_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local, self.n_rot,
+                self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 eps1=field1.epsilon,
             )
         if "rrr" in local_results:
             local_results["rrr"][theta_index] = self._compute_rrr_value(
-                theta, r23_value, "box_random", pos_local, seed_base_rot, theta_index,
+                mu, r23_value, "box_random", pos_local, seed_base_rot, theta_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
 
     def _compute_particle_center_theta(
-        self, theta, r23_value, pos_local_data, pos_local_random1, seed_base_rot, theta_index,
+        self, mu, r23_value, pos_local_data, pos_local_random1, seed_base_rot, theta_index,
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
@@ -807,20 +903,20 @@ class Corr_3PCF(TaskBase):
         rho = self._shared_density()
         if "ddd" in local_results:
             local_results["ddd"][theta_index] = compute_triplet_product_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
+                self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
             )
         if "rrr" in local_results:
             local_results["rrr"][theta_index] = self._compute_rrr_value(
-                theta, r23_value, "particle", pos_local_random1, seed_base_rot, theta_index,
+                mu, r23_value, "particle", pos_local_random1, seed_base_rot, theta_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
             local_results["d_delta_dd"][theta_index] = compute_triplet_product_mc(
-                self.r12_scaled, self.r13_scaled, theta, pos_local_data, self.n_rot,
+                self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
                 center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
@@ -833,14 +929,14 @@ class Corr_3PCF(TaskBase):
             else:
                 field2, field3 = self._particle_delta_fields
                 local_results["r_delta_dd"][theta_index] = compute_triplet_product_mc(
-                    self.r12_scaled, self.r13_scaled, theta, pos_local_random1, self.n_rot,
+                    self.r12_scaled, self.r13_scaled, mu, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
                     center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
                     rho1=rho,
                 )
 
     def _compute_pair_cache(
-        self, expanded_products, theta_arr,
+        self, expanded_products, mu_arr,
         _local_convols1, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
@@ -867,7 +963,7 @@ class Corr_3PCF(TaskBase):
                 _local_convols3,
                 _local_random2,
                 _local_random3,
-                math_util.third_side(self.r12, self.r13, theta_arr),
+                math_util.third_side_from_mu(self.r12, self.r13, mu_arr),
             )
             rr23_cache = pair_cache["xi23"]["rr"]
             timing["xi23"] = time.perf_counter() - t_pair
@@ -926,14 +1022,18 @@ class Corr_3PCF(TaskBase):
                     else:
                         pos_all_random1 = None
                         Nall_random1 = None
-                theta_arr = np.linspace(self.theta_min, self.theta_max, self.n_theta)
+                else:
+                    pos_all = None
+                    Nall = None
+                    pos_all_random1 = None
+                    Nall_random1 = None
             else:
-                theta_arr = None
                 pos_all = None
                 Nall = None
                 pos_all_random1 = None
                 Nall_random1 = None
-            theta_arr = comm.bcast(theta_arr, root=0)
+            mu_arr = np.ascontiguousarray(self.mu_arr, dtype=np.float64)
+            theta_arr = np.ascontiguousarray(self.theta_arr, dtype=np.float64)
 
             if self.center == "box_random":
                 if rank == 0:
@@ -996,7 +1096,7 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"Main 3PCF loop products: {loop_products}")
 
             local_results = {
-                key: np.zeros(theta_arr.shape[0], dtype=np.float64)
+                key: np.zeros(mu_arr.shape[0], dtype=np.float64)
                 for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"]
                 if key in expanded_products
                 and not (key == "rrr" and defer_rrr_to_rr23)
@@ -1009,18 +1109,18 @@ class Corr_3PCF(TaskBase):
                 )
             }
 
-            for it, th in enumerate(theta_arr):
+            for it, mu in enumerate(mu_arr):
                 t_theta_start = time.perf_counter() if rank == 0 else None
-                r23_value = math_util.third_side(self.r12, self.r13, th)
+                r23_value = math_util.third_side_from_mu(self.r12, self.r13, mu)
                 if self.center == "box_random":
                     self._compute_random_center_theta(
-                        th, r23_value, pos_local, seed_base_rot, it,
+                        mu, r23_value, pos_local, seed_base_rot, it,
                         local_results, _local_convols1, _local_convols2, _local_convols3,
                         _local_random1, _local_random2, _local_random3
                     )
                 else:
                     self._compute_particle_center_theta(
-                        th, r23_value, pos_local, pos_local_random1 if pos_local_random1 is not None else pos_local, seed_base_rot, it,
+                        mu, r23_value, pos_local, pos_local_random1 if pos_local_random1 is not None else pos_local, seed_base_rot, it,
                         local_results, _local_convols2, _local_convols3,
                         _local_random1, _local_random2, _local_random3
                     )
@@ -1028,7 +1128,7 @@ class Corr_3PCF(TaskBase):
                 if rank == 0:
                     elapsed_theta = time.perf_counter() - t_theta_start
                     self.logger.info(
-                        f" theta[{it + 1:02d}/{self.n_theta}] done | theta={th:.5f} rad | "
+                        f" theta[{it + 1:02d}/{self.n_theta}] done | theta={theta_arr[it]:.5f} rad | mu={mu:.5f} | "
                         f"elapsed={elapsed_theta:.2f} sec"
                     )
 
@@ -1045,7 +1145,7 @@ class Corr_3PCF(TaskBase):
                 self.logger.info("Main 3PCF loop finished, post-processing on rank 0 ...")
 
                 pair_cache, rr23_cache, pair_timing = self._compute_pair_cache(
-                    expanded_products, theta_arr,
+                    expanded_products, mu_arr,
                     _local_convols1, _local_convols2, _local_convols3,
                     _local_random1, _local_random2, _local_random3
                 )
@@ -1057,8 +1157,9 @@ class Corr_3PCF(TaskBase):
                 if pair_timing_parts:
                     self.logger.info(f"2PCF timing | {' | '.join(pair_timing_parts)}")
 
+                self.corr3pcf_data.mu = mu_arr
                 self.corr3pcf_data.theta = theta_arr
-                self.corr3pcf_data.r23 = math_util.third_side(self.r12, self.r13, theta_arr)
+                self.corr3pcf_data.r23 = math_util.third_side_from_mu(self.r12, self.r13, mu_arr)
                 self.corr3pcf_data.ddd = global_results.get("ddd")
                 self.corr3pcf_data.rrr = global_results.get("rrr")
                 self.corr3pcf_data.d_delta_dd = global_results.get("d_delta_dd")

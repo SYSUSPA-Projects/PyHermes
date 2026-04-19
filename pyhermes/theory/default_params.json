@@ -82,7 +82,17 @@
 		},
 		"r12": 20.0,
 		"r13": 40.0,
-		"n_theta": 20,
+		"angle_param": "theta",
+		"theta": {
+			"theta_min": 0.0,
+			"theta_max": 3.141592653589793,
+			"n_theta": 20
+		},
+		"mu": {
+			"mu_min": -1.0,
+			"mu_max": 1.0,
+			"n_mu": 20
+		},
 		"n_rot": 100,
 		"center": "box_random",
 		"products": "Q",

@@ -447,11 +447,16 @@ def third_side(r1, r2, theta):
     return np.sqrt(r1**2 + r2**2 - 2.0 * r1 * r2 * np.cos(theta))
 
 
+def third_side_from_mu(r1, r2, mu):
+    """Return r23 from (r1, r2, mu) with mu = cos(theta)."""
+    return np.sqrt(np.clip(r1**2 + r2**2 - 2.0 * r1 * r2 * mu, 0.0, None))
+
+
 @njit
-def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
+def generate_triangle_offsets(R1, R2, mu, phi, costheta1, alpha):
     """
     Generate offsets (x2,y2,z2) and (x3,y3,z3) that form a triangle with:
-      |r1| = R1, |r2| = R2, angle(r1,r2) = theta
+      |r1| = R1, |r2| = R2, cos(angle(r1,r2)) = mu
 
     All lengths here are in SCALED (GRID) units.
     """
@@ -480,10 +485,15 @@ def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
 
     cos_alpha = math.cos(alpha)
     sin_alpha = math.sin(alpha)
+    cos_theta = mu
+    sin_theta_sq = 1.0 - mu * mu
+    if sin_theta_sq < 0.0:
+        sin_theta_sq = 0.0
+    sin_theta = math.sqrt(sin_theta_sq)
 
-    dx2 = math.cos(theta) * dx1 + math.sin(theta) * (cos_alpha * ox1 + sin_alpha * ox2)
-    dy2 = math.cos(theta) * dy1 + math.sin(theta) * (cos_alpha * oy1 + sin_alpha * oy2)
-    dz2 = math.cos(theta) * dz1 + math.sin(theta) * (cos_alpha * oz1 + sin_alpha * oz2)
+    dx2 = cos_theta * dx1 + sin_theta * (cos_alpha * ox1 + sin_alpha * ox2)
+    dy2 = cos_theta * dy1 + sin_theta * (cos_alpha * oy1 + sin_alpha * oy2)
+    dz2 = cos_theta * dz1 + sin_theta * (cos_alpha * oz1 + sin_alpha * oz2)
 
     x3 = R2 * dx2
     y3 = R2 * dy2
@@ -494,7 +504,7 @@ def generate_triangle_offsets(R1, R2, theta, phi, costheta1, alpha):
 
 @njit
 def estimate_triplet_product_particle_centers(
-    R1_scaled, R2_scaled, theta,
+    R1_scaled, R2_scaled, mu,
     centers_scaled, n_rot,
     R, epsilon2, epsilon3,
     phi_data, L, SampRate, PhiSupport,
@@ -532,7 +542,7 @@ def estimate_triplet_product_particle_centers(
         phi = two_pi * a
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
         n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
         n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
         s = 0.0
@@ -544,7 +554,7 @@ def estimate_triplet_product_particle_centers(
 
 @njit
 def estimate_triplet_product_box_random_centers(
-    R1_scaled, R2_scaled, theta,
+    R1_scaled, R2_scaled, mu,
     centers_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
     phi_data, L, SampRate, PhiSupport,
@@ -590,7 +600,7 @@ def estimate_triplet_product_box_random_centers(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
 
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
 
         n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
         n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
@@ -605,7 +615,7 @@ def estimate_triplet_product_box_random_centers(
 
 @njit
 def estimate_triplet_contrast_particle_centers_legacy(
-    R1_scaled, R2_scaled, theta,
+    R1_scaled, R2_scaled, mu,
     pos_scaled, rand_scaled, n_rot,
     R, epsilon2, epsilon3,
     phi_data, L, SampRate, PhiSupport,
@@ -646,7 +656,7 @@ def estimate_triplet_contrast_particle_centers_legacy(
         phi = two_pi * a
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
-        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, theta, phi, costheta1, alpha)
+        x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
         n_at_pos_numba(n2, pos_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
         n_at_pos_numba(n3, pos_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
         n_at_pos_numba(n20, rand_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)

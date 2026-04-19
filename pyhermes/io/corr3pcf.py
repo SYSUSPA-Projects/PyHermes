@@ -10,6 +10,7 @@ class Corr3PCFData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.corr3pcf_info = {}
+        self.mu                  = None
         self.theta               = None
         self.r23                 = None
         self.ddd                 = None
@@ -29,7 +30,18 @@ class Corr3PCFData(HermesData):
 
     def format_corr3pcf_params(self):
         for key, value in self.corr3pcf_info.items():
+            if key in {"theta", "mu"}:
+                # theta/mu are data arrays stored in the dataset body and should
+                # never be overwritten by config-style metadata entries.
+                continue
             setattr(self, key, value)
+
+    def _ensure_1d_array(self, value, name):
+        arr = np.ascontiguousarray(np.asarray(value, dtype=np.float64))
+        if arr.ndim != 1:
+            self.logger.error(f"Failed to load the dataset. '{name}' must be stored as a 1D array.")
+            func_util.safe_exit(1)
+        return arr
 
     def load_corr3pcf(self, f_in, single=True):
         self.load(f_in, read_3pcf=True, single=single)
@@ -47,7 +59,11 @@ class Corr3PCFData(HermesData):
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
-                setattr(self, key, dataset[key])
+                if key == "theta":
+                    self.theta = self._ensure_1d_array(dataset[key], "theta")
+                else:
+                    setattr(self, key, dataset[key])
+            self.mu = self._ensure_1d_array(dataset.get('mu', np.cos(self.theta)), "mu")
             self.ddd = dataset.get('ddd')
             self.rrr = dataset.get('rrr')
             self.d_delta_dd = dataset.get('d_delta_dd', dataset.get('pdelta_ddd'))
@@ -75,12 +91,15 @@ class Corr3PCFData(HermesData):
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         # If all required variables are present, create the dataset
+        theta_arr = self._ensure_1d_array(self.theta, "theta")
+        mu_arr = self._ensure_1d_array(self.mu, "mu")
         dataset = {
             'convols_info1': self.convols_info1,
             'convols_info2': self.convols_info2,
             'convols_info3': self.convols_info3,
             'corr3pcf_info': self.corr3pcf_info,
-            'theta': self.theta,
+            'mu': mu_arr,
+            'theta': theta_arr,
             'r23': self.r23,
             'ddd': self.ddd,
             'rrr': self.rrr,
