@@ -142,26 +142,30 @@ class Corr_3PCF(TaskBase):
 
         self.r12 = float(self.task_params["r12"])
         self.r13 = float(self.task_params["r13"])
+        legacy_angle_keys = {"n_theta", "theta_min", "theta_max", "n_mu", "mu_min", "mu_max"}
+        used_legacy_angle_keys = sorted(key for key in legacy_angle_keys if key in self.task_params)
+        if used_legacy_angle_keys:
+            raise ValueError(
+                "Legacy top-level angle sampling keys are no longer supported in Corr_3PCF. "
+                f"Found {used_legacy_angle_keys}. Please provide 'theta' or 'mu' as a dict or array-like input instead."
+            )
         self.angle_param = self.task_params.get("angle_param", "theta")
-        legacy_n_theta = int(self.task_params.get("n_theta", 20))
-        legacy_theta_min = float(self.task_params.get("theta_min", 0.0))
-        legacy_theta_max = float(self.task_params.get("theta_max", float(np.pi)))
         self.theta = copy.deepcopy(
-            self.task_params.get("theta", {"theta_min": legacy_theta_min, "theta_max": legacy_theta_max, "n_theta": legacy_n_theta})
+            self.task_params.get("theta", {"theta_min": 0.0, "theta_max": float(np.pi), "n_theta": 20})
         )
         self.mu = copy.deepcopy(
             self.task_params.get(
                 "mu",
-                {"mu_min": -1.0, "mu_max": 1.0, "n_mu": legacy_n_theta},
+                {"mu_min": -1.0, "mu_max": 1.0, "n_mu": 20},
             )
         )
         self.theta_arr = None
         self.mu_arr = None
-        self.theta_min = legacy_theta_min
-        self.theta_max = legacy_theta_max
+        self.theta_min = 0.0
+        self.theta_max = float(np.pi)
         self.mu_min = -1.0
         self.mu_max = 1.0
-        self.n_theta = legacy_n_theta
+        self.n_theta = 20
         self.n_rot = int(self.task_params["n_rot"])
         self.center = self.task_params["center"]
         self.n_box_centers = int(self.task_params["n_box_centers"])
@@ -250,32 +254,24 @@ class Corr_3PCF(TaskBase):
 
         if angle_param == "theta":
             theta_spec = self.theta
+            if theta_spec is None:
+                raise ValueError("angle_param='theta' requires 'theta' to be provided as a dict or array-like input.")
             if isinstance(theta_spec, dict):
-                theta_min = float(theta_spec.get("theta_min", self.theta_min))
-                theta_max = float(theta_spec.get("theta_max", self.theta_max))
-                n_theta = int(theta_spec.get("n_theta", self.n_theta))
-                if self.theta_min != float(theta_spec.get("theta_min", self.theta_min)):
-                    theta_min = float(self.theta_min)
-                if self.theta_max != float(theta_spec.get("theta_max", self.theta_max)):
-                    theta_max = float(self.theta_max)
-                if self.n_theta != int(theta_spec.get("n_theta", self.n_theta)):
-                    n_theta = int(self.n_theta)
+                theta_min = float(theta_spec.get("theta_min", 0.0))
+                theta_max = float(theta_spec.get("theta_max", float(np.pi)))
+                n_theta = int(theta_spec.get("n_theta", 20))
                 theta_arr = np.linspace(theta_min, theta_max, n_theta, dtype=np.float64)
             else:
                 theta_arr = self._normalize_sampling_array(theta_spec, "theta", 0.0, float(np.pi))
             mu_arr = np.cos(theta_arr)
         else:
             mu_spec = self.mu
+            if mu_spec is None:
+                raise ValueError("angle_param='mu' requires 'mu' to be provided as a dict or array-like input.")
             if isinstance(mu_spec, dict):
                 mu_min = float(mu_spec.get("mu_min", -1.0))
                 mu_max = float(mu_spec.get("mu_max", 1.0))
-                n_mu = int(mu_spec.get("n_mu", self.n_theta))
-                if self.mu_min != float(mu_spec.get("mu_min", self.mu_min)):
-                    mu_min = float(self.mu_min)
-                if self.mu_max != float(mu_spec.get("mu_max", self.mu_max)):
-                    mu_max = float(self.mu_max)
-                if self.n_theta != int(mu_spec.get("n_mu", self.n_theta)):
-                    n_mu = int(self.n_theta)
+                n_mu = int(mu_spec.get("n_mu", 20))
                 mu_arr = np.linspace(mu_min, mu_max, n_mu, dtype=np.float64)
             else:
                 mu_arr = self._normalize_sampling_array(mu_spec, "mu", -1.0, 1.0)
