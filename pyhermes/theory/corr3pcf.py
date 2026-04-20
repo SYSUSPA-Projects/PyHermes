@@ -692,7 +692,7 @@ class Corr_3PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
             self.logger.info(
-                f"center={self.center}, n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
+                f"center={self.center}, r12={self.r12}, r13={self.r13}, n_rot={self.n_rot}, base_seed={self.base_seed}, threads={self.threads}"
             )
             if self.angle_param == "theta":
                 self.logger.info(f"angle_param=theta, theta_min={self.theta_min}, theta_max={self.theta_max}, n_theta={self.n_theta}")
