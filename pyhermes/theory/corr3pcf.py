@@ -416,6 +416,12 @@ class Corr_3PCF(TaskBase):
             return 1.0 / field.V
         raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
+    def _compute_delta_field(self, field, random_field):
+        """Build one contrast field D-R, using a scalar-density shortcut when possible."""
+        if isinstance(random_field, (float, int, np.floating)):
+            return field - self._field_density(random_field)
+        return field - random_field
+
     def _shared_density(self):
         """Return the common density implied by the validated compatible fields."""
         if self.rho is None:
@@ -762,15 +768,16 @@ class Corr_3PCF(TaskBase):
             self.window1 = window1
             self.window2 = window2
             self.window3 = window3
-            self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
-            self.corr3pcf_data.task_params = self._current_task_params_snapshot()
+            snapshot = self._current_task_params_snapshot()
+            self.corr3pcf_data.corr3pcf_info = snapshot
+            self.corr3pcf_data.task_params = snapshot
         self._fields_prepared = True
 
     def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
         """Compute RR, delta_DD, and xi for one pair radius."""
         rr = self.calc_pair_product(radius, random_a, random_b)
-        delta_a = field_a - self._field_density(random_a) if isinstance(random_a, (float, int, np.floating)) else field_a - random_a
-        delta_b = field_b - self._field_density(random_b) if isinstance(random_b, (float, int, np.floating)) else field_b - random_b
+        delta_a = self._compute_delta_field(field_a, random_a)
+        delta_b = self._compute_delta_field(field_b, random_b)
         delta_dd = self.calc_pair_product(radius, delta_a, delta_b)
         xi = delta_dd / rr
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
@@ -781,11 +788,14 @@ class Corr_3PCF(TaskBase):
         rr = np.empty_like(radii_arr)
         delta_dd = np.empty_like(radii_arr)
         xi = np.empty_like(radii_arr)
+        delta_a = self._compute_delta_field(field_a, random_a)
+        delta_b = self._compute_delta_field(field_b, random_b)
         for idx, radius in enumerate(radii_arr):
-            stats = self._compute_pair_stats(field_a, field_b, random_a, random_b, float(radius))
-            rr[idx] = stats["rr"]
-            delta_dd[idx] = stats["delta_dd"]
-            xi[idx] = stats["xi"]
+            rr_val = self.calc_pair_product(float(radius), random_a, random_b)
+            delta_val = self.calc_pair_product(float(radius), delta_a, delta_b)
+            rr[idx] = rr_val
+            delta_dd[idx] = delta_val
+            xi[idx] = delta_val / rr_val
         if np.ndim(radii) == 0:
             return {"rr": float(rr[0]), "delta_dd": float(delta_dd[0]), "xi": float(xi[0])}
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
@@ -988,8 +998,9 @@ class Corr_3PCF(TaskBase):
                 and self.random_pos1 is None
             )
 
-            self.corr3pcf_data.corr3pcf_info = self._current_task_params_snapshot()
-            self.corr3pcf_data.task_params = self._current_task_params_snapshot()
+            snapshot = self._current_task_params_snapshot()
+            self.corr3pcf_data.corr3pcf_info = snapshot
+            self.corr3pcf_data.task_params = snapshot
 
             if rank == 0:
                 if self.center == "particle":
@@ -1018,8 +1029,8 @@ class Corr_3PCF(TaskBase):
                 Nall = None
                 pos_all_random1 = None
                 Nall_random1 = None
-            mu_arr = np.ascontiguousarray(self.mu_arr, dtype=np.float64)
-            theta_arr = np.ascontiguousarray(self.theta_arr, dtype=np.float64)
+            mu_arr = self.mu_arr
+            theta_arr = self.theta_arr
 
             if self.center == "box_random":
                 if rank == 0:
@@ -1045,16 +1056,8 @@ class Corr_3PCF(TaskBase):
                 func_util.safe_exit(1)
             self.meta_convols = geometry_ref
             if self.center == "particle" and expanded_products_set & {"d_delta_dd", "r_delta_dd"}:
-                delta_field2 = (
-                    _local_convols2 - self._field_density(_local_random2)
-                    if isinstance(_local_random2, (float, int, np.floating))
-                    else _local_convols2 - _local_random2
-                )
-                delta_field3 = (
-                    _local_convols3 - self._field_density(_local_random3)
-                    if isinstance(_local_random3, (float, int, np.floating))
-                    else _local_convols3 - _local_random3
-                )
+                delta_field2 = self._compute_delta_field(_local_convols2, _local_random2)
+                delta_field3 = self._compute_delta_field(_local_convols3, _local_random3)
                 self._particle_delta_fields = (delta_field2, delta_field3)
             else:
                 self._particle_delta_fields = None
@@ -1160,12 +1163,13 @@ class Corr_3PCF(TaskBase):
                     rho1 = self._field_density(_local_random1)
                     if rr23_cache is not None and isinstance(_local_random1, (float, int, np.floating)):
                         self.corr3pcf_data.rrr = rho1 * rr23_cache
+                        self.logger.info("Computed rrr from pair cache and random1 density.")
                     else:
                         self.corr3pcf_data.rrr = np.array([
                             self._compute_rrr_value(th, r23, self.center, pos_local, seed_base_rot, i, _local_random1, _local_random2, _local_random3, rr23_cache=None)
                             for i, (th, r23) in enumerate(zip(theta_arr, self.corr3pcf_data.r23))
                         ], dtype=np.float64)
-                    self.logger.info("Computed rrr from pair cache and random1 density.")
+                        self.logger.info("Computed rrr from explicit random-field evaluation.")
 
                 if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
                     if self.random_pos1 is None and isinstance(_local_random1, (float, int, np.floating)):

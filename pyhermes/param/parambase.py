@@ -163,6 +163,15 @@ class ParamBase(object):
             default_ok = isinstance(default_value, (str, list, tuple))
             new_ok = isinstance(new_value, (str, list, tuple))
             return default_ok and new_ok
+        # Random inputs intentionally allow a missing default (null/None) to be
+        # overridden by a runtime string such as "uniform" or a data path.
+        if full_key.endswith(".random"):
+            return default_value is None and isinstance(new_value, str)
+        # Angle sampling specs accept either dict configs or explicit arrays/lists.
+        if full_key.endswith(".theta") or full_key.endswith(".mu"):
+            default_ok = isinstance(default_value, (dict, list, tuple))
+            new_ok = isinstance(new_value, (dict, list, tuple))
+            return default_ok and new_ok
         return False
     
     def recursive_update(self, default_dict, new_dict, parent_key='', section=None):
