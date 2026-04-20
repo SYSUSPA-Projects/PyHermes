@@ -142,30 +142,17 @@ class Corr_3PCF(TaskBase):
 
         self.r12 = float(self.task_params["r12"])
         self.r13 = float(self.task_params["r13"])
-        legacy_angle_keys = {"n_theta", "theta_min", "theta_max", "n_mu", "mu_min", "mu_max"}
-        used_legacy_angle_keys = sorted(key for key in legacy_angle_keys if key in self.task_params)
-        if used_legacy_angle_keys:
-            raise ValueError(
-                "Legacy top-level angle sampling keys are no longer supported in Corr_3PCF. "
-                f"Found {used_legacy_angle_keys}. Please provide 'theta' or 'mu' as a dict or array-like input instead."
-            )
-        self.angle_param = self.task_params.get("angle_param", "theta")
-        self.theta = copy.deepcopy(
-            self.task_params.get("theta", {"theta_min": 0.0, "theta_max": float(np.pi), "n_theta": 20})
-        )
-        self.mu = copy.deepcopy(
-            self.task_params.get(
-                "mu",
-                {"mu_min": -1.0, "mu_max": 1.0, "n_mu": 20},
-            )
-        )
+        self.angle_param = self.task_params["angle_param"]
+        self.theta = copy.deepcopy(self.task_params["theta"])
+        self.mu = copy.deepcopy(self.task_params["mu"])
         self.theta_arr = None
         self.mu_arr = None
-        self.theta_min = 0.0
-        self.theta_max = float(np.pi)
-        self.mu_min = -1.0
-        self.mu_max = 1.0
-        self.n_theta = 20
+        self.theta_min = None
+        self.theta_max = None
+        self.mu_min = None
+        self.mu_max = None
+        self.n_theta = None
+        self.n_mu = None
         self.n_rot = int(self.task_params["n_rot"])
         self.center = self.task_params["center"]
         self.n_box_centers = int(self.task_params["n_box_centers"])
@@ -281,6 +268,7 @@ class Corr_3PCF(TaskBase):
         self.theta_arr = np.ascontiguousarray(theta_arr, dtype=np.float64)
         self.mu_arr = np.ascontiguousarray(mu_arr, dtype=np.float64)
         self.n_theta = int(self.theta_arr.size)
+        self.n_mu = int(self.mu_arr.size)
         self.theta_min = float(np.min(self.theta_arr))
         self.theta_max = float(np.max(self.theta_arr))
         self.mu_min = float(np.min(self.mu_arr))
@@ -348,6 +336,7 @@ class Corr_3PCF(TaskBase):
         params["theta_spec"] = self._serialize_angle_spec(self.theta)
         params["mu_spec"] = self._serialize_angle_spec(self.mu)
         params["n_theta"] = self.n_theta
+        params["n_mu"] = self.n_mu
         params["theta_min"] = self.theta_min
         params["theta_max"] = self.theta_max
         params["mu_min"] = self.mu_min
@@ -697,11 +686,12 @@ class Corr_3PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF input fields ...")
             self.logger.info(
-                f"center={self.center}, angle_param={self.angle_param}, n_theta={self.n_theta}, "
-                f"theta_min={self.theta_min:.5f}, theta_max={self.theta_max:.5f}, "
-                f"mu_min={self.mu_min:.5f}, mu_max={self.mu_max:.5f}, "
-                f"n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
+                f"center={self.center}, n_rot={self.n_rot}, r12={self.r12}, r13={self.r13}, threads={self.threads}"
             )
+            if self.angle_param == "theta":
+                self.logger.info(f"angle_param=theta, theta_min={self.theta_min}, theta_max={self.theta_max}, n_theta={self.n_theta}")
+            else:
+                self.logger.info(f"angle_param=mu, mu_min={self.mu_min}, mu_max={self.mu_max}, n_mu={self.n_mu}")
             self.logger.info(f"requested_products={self.products}, expanded_products={self._expanded_products()}")
             cache = {}
             data_legs = []
