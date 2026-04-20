@@ -54,10 +54,26 @@ class HermesData(object):
                         extra_str = '3PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr3pcf(f_in)
+                        self.logger.info(
+                            f"theta: Num = {self.theta.shape[0]}, Min = {self.theta.min():.4g}, Max = {self.theta.max():.4g}"
+                        )
+                        self.logger.info(
+                            f"mu: Num = {self.mu.shape[0]}, Min = {self.mu.min():.4g}, Max = {self.mu.max():.4g}"
+                        )
+                        products = [
+                            key for key in ['ddd', 'rrr', 'd_delta_dd', 'r_delta_dd', 'delta_ddd', 'xi12', 'xi13', 'xi23', 'zeta', 'Q']
+                            if getattr(self, key) is not None
+                        ]
+                        self.logger.info(f'Products loaded: {products}')
                     elif read_3pcf_multipole:
                         extra_str = '3PCF Multipole '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr3pcf_multipole(f_in)
+                        self.logger.info(
+                            f"l: Num = {self.l.shape[0]}, Min = {self.l.min()}, Max = {self.l.max()}"
+                        )
+                        products = [key for key in ['ddd_l', 'delta_ddd_l', 'zeta_l'] if getattr(self, key) is not None]
+                        self.logger.info(f'Products loaded: {products}')
                     else:
                         extra_str = ''
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')

@@ -90,9 +90,11 @@ class Corr_2PCF(TaskBase):
             self.pair_window_params = copy.deepcopy(pair_window_params)
         else:
             self.pair_window_params = {"type": "shell", "len_args": {"R": None}, "other_args": {}}
-        self.r_min = self.task_params['r_min']
-        self.r_max = self.task_params['r_max']
-        self.n_r = int(self.task_params['n_r'])
+        self.r = copy.deepcopy(self.task_params['r'])
+        self.r_arr = None
+        self.r_min = None
+        self.r_max = None
+        self.n_r = None
         self.products = self._normalize_products(self.task_params.get('products', 'xi'))
 
     def _normalize_products(self, products):
@@ -141,6 +143,40 @@ class Corr_2PCF(TaskBase):
         normalized.setdefault("other_args", {})
         return normalized
 
+    def _normalize_sampling_array(self, values):
+        arr = np.asarray(values, dtype=np.float64)
+        if arr.ndim != 1:
+            raise TypeError("'r' must be a 1D array-like input.")
+        if arr.size == 0:
+            raise ValueError("'r' must contain at least one sampling point.")
+        if np.any(arr <= 0.0):
+            raise ValueError("'r' values must be strictly positive.")
+        diffs = np.diff(arr)
+        if np.any(diffs < 0.0) and np.any(diffs > 0.0):
+            raise ValueError("'r' values must be monotonic.")
+        return np.ascontiguousarray(arr, dtype=np.float64)
+
+    def _describe_radius_sampling(self):
+        base = f"n_r={self.n_r}, r_min={self.r_min}, r_max={self.r_max}"
+        if isinstance(self.r, dict):
+            return base
+        return f"{base}, source=explicit r array"
+
+    def _resolve_radius_sampling(self):
+        if self.r is None:
+            raise ValueError("Corr_2PCF requires 'r' to be provided as a dict or array-like input.")
+        if isinstance(self.r, dict):
+            r_min = float(self.r["r_min"])
+            r_max = float(self.r["r_max"])
+            n_r = int(self.r["n_r"])
+            r_arr = np.linspace(r_min, r_max, n_r, dtype=np.float64)
+        else:
+            r_arr = self._normalize_sampling_array(self.r)
+        self.r_arr = np.ascontiguousarray(r_arr, dtype=np.float64)
+        self.n_r = int(self.r_arr.size)
+        self.r_min = float(np.min(self.r_arr))
+        self.r_max = float(np.max(self.r_arr))
+
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
             return value
@@ -187,6 +223,7 @@ class Corr_2PCF(TaskBase):
         params['pair_window'] = copy.deepcopy(
             self.pair_window if self.pair_window is not None else self.pair_window_params
         )
+        params['r_spec'] = copy.deepcopy(self.r) if isinstance(self.r, dict) else np.asarray(self.r, dtype=np.float64).tolist()
         params['r_min'] = self.r_min
         params['r_max'] = self.r_max
         params['n_r'] = self.n_r
@@ -319,6 +356,7 @@ class Corr_2PCF(TaskBase):
     ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
+        self._resolve_radius_sampling()
         self.products = self._normalize_products(self.products)
         expanded_products = self._expanded_products()
         if convols_data1 is None:
@@ -339,9 +377,7 @@ class Corr_2PCF(TaskBase):
         needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
-            self.logger.info(
-                f"n_r={self.n_r}, r_min={self.r_min}, r_max={self.r_max}, threads={self.threads}"
-            )
+            self.logger.info(f"{self._describe_radius_sampling()}, threads={self.threads}")
             self.logger.info(f"requested_products={self.products}, expanded_products={expanded_products}")
             self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
             base_convols_cache = {}
@@ -469,9 +505,7 @@ class Corr_2PCF(TaskBase):
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
-                self.logger.info(
-                    f"n_r={self.n_r}, r_min={self.r_min}, r_max={self.r_max}"
-                )
+                self.logger.info(self._describe_radius_sampling())
                 self.logger.info(
                     f"requested_products={self.products}, expanded_products={expanded_products}"
                 )
@@ -480,7 +514,7 @@ class Corr_2PCF(TaskBase):
                 self.logger.info(f"Main 2PCF loop products: {expanded_products}")
             # Generate r_arr at rank0
             if rank == 0:
-                r_arr = np.linspace(self.r_min, self.r_max, self.n_r)
+                r_arr = self.r_arr
                 r_sub_arrs = np.array_split(r_arr, size)
                 # Global process status
                 arr_complete = np.zeros(size, dtype=int)

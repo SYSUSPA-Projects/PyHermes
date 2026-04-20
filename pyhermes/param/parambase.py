@@ -172,6 +172,10 @@ class ParamBase(object):
             default_ok = isinstance(default_value, (dict, list, tuple))
             new_ok = isinstance(new_value, (dict, list, tuple))
             return default_ok and new_ok
+        if full_key.endswith(".r"):
+            default_ok = isinstance(default_value, (dict, list, tuple))
+            new_ok = isinstance(new_value, (dict, list, tuple))
+            return default_ok and new_ok
         return False
     
     def recursive_update(self, default_dict, new_dict, parent_key='', section=None):

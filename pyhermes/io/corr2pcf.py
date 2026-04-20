@@ -24,7 +24,15 @@ class Corr2PCFData(HermesData):
 
     def format_corr2pcf_params(self):
         for key, value in self.corr2pcf_info.items():
+            if key == 'r':
+                continue
             setattr(self, key, value)
+
+    def _ensure_1d_array(self, values, name):
+        arr = np.asarray(values, dtype=np.float64)
+        if arr.ndim != 1:
+            raise ValueError(f"'{name}' must be stored as a 1D array, got shape {arr.shape}.")
+        return np.ascontiguousarray(arr, dtype=np.float64)
 
     def load_corr2pcf(self, f_in, single=True):
         self.load(f_in, read_2pcf=True, single=single)
@@ -41,7 +49,7 @@ class Corr2PCFData(HermesData):
             if 'r' not in dataset:
                 self.logger.error("Failed to load the dataset. The file is missing the 'r' key.")
                 func_util.safe_exit(1)
-            self.r = dataset['r']
+            self.r = self._ensure_1d_array(dataset['r'], 'r')
             self.dd = dataset.get('dd')
             self.dr = dataset.get('dr')
             self.rd = dataset.get('rd')
@@ -74,7 +82,7 @@ class Corr2PCFData(HermesData):
             'convols_info1': self.convols_info1,
             'convols_info2': self.convols_info2,
             'corr2pcf_info': self.corr2pcf_info,
-            'r': self.r,
+            'r': self._ensure_1d_array(self.r, 'r'),
             'dd': self.dd,
             'dr': self.dr,
             'rd': self.rd,

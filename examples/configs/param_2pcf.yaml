@@ -6,7 +6,8 @@ Corr_2PCF:
       type: ""
       len_args: {}
       other_args: {}
-   r_min: 1.0
-   r_max: 150.0
-   n_r: 30
+   r:
+      r_min: 1.0
+      r_max: 150.0
+      n_r: 30
    products: "xi"
