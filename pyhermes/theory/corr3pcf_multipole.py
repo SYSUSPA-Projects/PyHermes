@@ -1,16 +1,32 @@
-import time
-import pickle
 import copy
+import pickle
+import time
 
 import numpy as np
 from mpi4py import MPI
 
 from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFMultipoleData
-from pyhermes.utils import func_util, math_util
 from pyhermes.pipeline import TaskBase
+from pyhermes.utils import func_util, math_util
+
+
+PRODUCT_RULES = {
+    "allowed": {"ddd_l", "rrr_l", "delta_ddd_l", "zeta_l"},
+    "deps": {
+        "zeta_l": ["delta_ddd_l", "rrr_l"],
+    },
+}
+
+PRODUCT_INPUT_FLAGS = {
+    "ddd_l": (True, False),
+    "rrr_l": (False, True),
+    "delta_ddd_l": (True, True),
+    "zeta_l": (True, True),
+}
 
 
 class Corr_3PCF_Multipole(TaskBase):
+    """Compute Legendre multipoles of 3PCF-like triplet products."""
 
     def __init__(self, param_task=None):
         if param_task is None:
@@ -20,24 +36,25 @@ class Corr_3PCF_Multipole(TaskBase):
         self.format_params()
         self._fields_prepared = False
 
-    def _sync_runtime_options(self):
-        self.threads = max(1, int(self.threads))
-        self.task_params["threads"] = self.threads
-        self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
-
     def format_params(self):
         self.convols_data = self.task_params.get("convols_data", "")
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
+        self.random = self.task_params.get("random", None)
+        self.random1 = self.task_params.get("random1", None)
+        self.random2 = self.task_params.get("random2", None)
+        self.random3 = self.task_params.get("random3", None)
+        self.random1 = self._fallback_random(self.random1)
+        self.random2 = self._fallback_random(self.random2)
+        self.random3 = self._fallback_random(self.random3)
         self.fout_path = self.task_params["fout_path"]
 
         window = self.task_params.get("window", None)
-        self.window = window if (window and window.get("type")) else None
-
+        self.window = window if (isinstance(window, dict) and window.get("type")) else None
         for i in range(1, 4):
             window_i = self.task_params.get(f"window{i}", None)
-            window_i = window_i if (window_i and window_i.get("type")) else None
+            window_i = window_i if (isinstance(window_i, dict) and window_i.get("type")) else None
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f"window{i}", window_i)
@@ -47,25 +64,89 @@ class Corr_3PCF_Multipole(TaskBase):
         self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
-        self.field_mode = self.task_params["field_mode"]
         self.execution_mode = self.task_params["execution_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
         self.threads = int(self.task_params["threads"])
+        self.products = self._normalize_products(self.task_params.get("products", "zeta_l"))
+        self.rho = None
+        self.reference_convols = None
+
+    def _fallback_random(self, value):
+        return self.random if value is None or value == "" else value
+
+    def _fallback_convols(self, value):
+        return self.convols_data if value is None or value == "" else value
+
+    def _fallback_window(self, value):
+        if value is None:
+            return self.window
+        if isinstance(value, dict) and not value.get("type") and self.window:
+            return self.window
+        return value
+
+    def _sync_runtime_options(self):
+        self.threads = max(1, int(self.threads))
+        self.products = self._normalize_products(self.products)
+        self.task_params["threads"] = self.threads
+        self.task_params["products"] = copy.deepcopy(self.products)
+        self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
+
+    def _normalize_products(self, products):
+        if isinstance(products, str):
+            products = [products]
+        elif products is None:
+            products = ["zeta_l"]
+        elif not isinstance(products, (list, tuple, set)):
+            raise TypeError(
+                f"Unsupported products input: expected string or array of strings, got {type(products)}."
+            )
+
+        normalized = []
+        for item in products:
+            if not isinstance(item, str):
+                raise TypeError("Each product name must be a string.")
+            name = item.strip().lower()
+            if name not in PRODUCT_RULES["allowed"]:
+                raise ValueError(f"Unsupported product '{item}'. Allowed values are {sorted(PRODUCT_RULES['allowed'])}.")
+            if name not in normalized:
+                normalized.append(name)
+        return normalized
+
+    def _expanded_products(self):
+        expanded = list(self.products)
+        idx = 0
+        while idx < len(expanded):
+            for dep in PRODUCT_RULES["deps"].get(expanded[idx], []):
+                if dep not in expanded:
+                    expanded.append(dep)
+            idx += 1
+        return expanded
+
+    def _required_input_flags(self):
+        needs_data = False
+        needs_random = False
+        for product in self._expanded_products():
+            product_needs_data, product_needs_random = PRODUCT_INPUT_FLAGS[product]
+            needs_data = needs_data or product_needs_data
+            needs_random = needs_random or product_needs_random
+        return needs_data, needs_random
 
     def _serialize_convols_input(self, value):
-        if isinstance(value, str):
+        if isinstance(value, str) or value is None:
             return value
         if isinstance(value, ConvolsData):
             return {
                 "kind": "ConvolsData",
-                "L": value.L,
-                "SimBoxL": value.SimBoxL,
-                "wavelet_mode": value.wavelet_mode,
-                "wavelet_level": value.wavelet_level,
+                "L": getattr(value, "L", value.epsilon.shape[0] if value.epsilon is not None else None),
+                "SimBoxL": getattr(value, "SimBoxL", None),
+                "wavelet_mode": getattr(value, "wavelet_mode", None),
+                "wavelet_level": getattr(value, "wavelet_level", None),
             }
-        return value
+        if np.isscalar(value):
+            return float(value)
+        return str(type(value))
 
     def _serialize_window_input(self, value):
         if isinstance(value, dict):
@@ -80,64 +161,69 @@ class Corr_3PCF_Multipole(TaskBase):
         return value
 
     def _current_task_params_snapshot(self):
-        params = {}
-        params["convols_data"] = self._serialize_convols_input(self.convols_data)
-        params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
-        params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
-        params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
-        params["window"] = self._serialize_window_input(self.window)
-        params["window1"] = self._serialize_window_input(self.window1)
-        params["window2"] = self._serialize_window_input(self.window2)
-        params["window3"] = self._serialize_window_input(self.window3)
-        params["fout_path"] = self.fout_path
-        params["threads"] = self.threads
-        params["r12"] = self.r12
-        params["r13"] = self.r13
-        params["l_min"] = self.l_min
-        params["l_max"] = self.l_max
-        params["gpu_device_id"] = self.gpu_device_id
-        params["field_mode"] = self.field_mode
-        params["execution_mode"] = self.execution_mode
-        params["cache_multipole_fields"] = self.cache_multipole_fields
-        params["cache_dir"] = self.cache_dir
-        params["verbose_m_progress"] = self.verbose_m_progress
-        return params
+        return {
+            "convols_data": self._serialize_convols_input(self.convols_data),
+            "convols_data1": self._serialize_convols_input(self.convols_data1),
+            "convols_data2": self._serialize_convols_input(self.convols_data2),
+            "convols_data3": self._serialize_convols_input(self.convols_data3),
+            "random": self._serialize_convols_input(self.random),
+            "random1": self._serialize_convols_input(self.random1),
+            "random2": self._serialize_convols_input(self.random2),
+            "random3": self._serialize_convols_input(self.random3),
+            "window": self._serialize_window_input(self.window),
+            "window1": self._serialize_window_input(self.window1),
+            "window2": self._serialize_window_input(self.window2),
+            "window3": self._serialize_window_input(self.window3),
+            "fout_path": self.fout_path,
+            "threads": self.threads,
+            "r12": self.r12,
+            "r13": self.r13,
+            "l_min": self.l_min,
+            "l_max": self.l_max,
+            "gpu_device_id": self.gpu_device_id,
+            "products": copy.deepcopy(self.products),
+            "expanded_products": self._expanded_products(),
+            "execution_mode": self.execution_mode,
+            "cache_multipole_fields": self.cache_multipole_fields,
+            "cache_dir": self.cache_dir,
+            "verbose_m_progress": self.verbose_m_progress,
+        }
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
-        if provided_convols is not None:
-            if isinstance(provided_convols, str):
-                base_path = provided_convols
-                if base_path not in base_convols_cache:
-                    base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
-                return base_convols_cache[base_path], f"path={base_path}"
-            if not isinstance(provided_convols, ConvolsData):
-                self.logger.error(
-                    f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
-                )
-                func_util.safe_exit(1)
+        if isinstance(provided_convols, str) and provided_convols:
+            if provided_convols not in base_convols_cache:
+                base_convols_cache[provided_convols] = ConvolsData(data_path=provided_convols, threads=self.threads)
+            return base_convols_cache[provided_convols], f"path={provided_convols}"
+        if isinstance(provided_convols, ConvolsData):
             return provided_convols, f"provided convols_data{leg_idx}"
-
-        base_input = getattr(self, f"convols_data{leg_idx}")
-        if isinstance(base_input, str) and base_input:
-            if base_input not in base_convols_cache:
-                base_convols_cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
-            return base_convols_cache[base_input], f"path={base_input}"
-        if isinstance(base_input, ConvolsData):
-            return base_input, f"provided convols_data{leg_idx}"
-        if base_input not in (None, ""):
+        if provided_convols in (None, ""):
             self.logger.error(
-                f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
-            )
-            func_util.safe_exit(1)
-        if not self.convols_data and not self.convols_data1 and not self.convols_data2 and not self.convols_data3:
-            self.logger.error(
-                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
-                f"'convols_data{leg_idx}' / 'convols_data'."
+                f"Missing input for field leg {leg_idx}. Products {self._expanded_products()} require "
+                f"'convols_data{leg_idx}' or shared 'convols_data'."
             )
             func_util.safe_exit(1)
         self.logger.error(
-            f"Missing usable input for field leg {leg_idx}. Expected a string path or ConvolsData instance in "
-            f"'convols_data{leg_idx}' or shared 'convols_data'."
+            f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+        )
+        func_util.safe_exit(1)
+
+    def _resolve_random_base(self, leg_idx, provided_random, random_cache):
+        if provided_random is None or provided_random == "":
+            self.logger.error(
+                f"Missing input for random leg {leg_idx}. Products {self._expanded_products()} require "
+                f"'random{leg_idx}' or shared 'random'. Use 'uniform' for the analytic uniform random field."
+            )
+            func_util.safe_exit(1)
+        if isinstance(provided_random, str):
+            if provided_random == "uniform":
+                return "uniform", "uniform random density"
+            if provided_random not in random_cache:
+                random_cache[provided_random] = ConvolsData(data_path=provided_random, threads=self.threads)
+            return random_cache[provided_random], f"path={provided_random}"
+        if isinstance(provided_random, ConvolsData):
+            return provided_random, f"provided random{leg_idx}"
+        self.logger.error(
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, or a ConvolsData instance."
         )
         func_util.safe_exit(1)
 
@@ -150,12 +236,32 @@ class Corr_3PCF_Multipole(TaskBase):
             )
         if provided_window is not None:
             self.logger.error(
-                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
-                f"got {type(provided_window)}."
+                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
             )
             func_util.safe_exit(1)
-
         return None, "no additional window convolution"
+
+    def _field_density(self, field):
+        if isinstance(field, (float, int, np.floating)):
+            return float(field)
+        if isinstance(field, ConvolsData):
+            return 1.0 / field.V
+        raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
+
+    def _uniform_density(self):
+        if self.rho is None:
+            raise ValueError("Shared density is not initialized.")
+        return float(self.rho)
+
+    def _materialize_uniform_random(self, reference_field, rho, leg_idx):
+        field = reference_field._spawn_like()
+        field.epsilon = np.full_like(reference_field.epsilon, rho, dtype=np.float64)
+        field.convols_info.update({
+            "uniform_random_materialized": True,
+            "uniform_random_leg": int(leg_idx),
+        })
+        field.format_convols_params()
+        return field
 
     def _broadcast_convols(self, rank, comm, convols_data):
         serialized = pickle.dumps(convols_data.convols_info) if rank == 0 else None
@@ -176,89 +282,144 @@ class Corr_3PCF_Multipole(TaskBase):
         convols_data1=None,
         convols_data2=None,
         convols_data3=None,
+        random1=None,
+        random2=None,
+        random3=None,
         window1=None,
         window2=None,
         window3=None,
     ):
         self.corr3pcf_multipole_data = Corr3PCFMultipoleData()
         self._sync_runtime_options()
-        if convols_data1 is None:
-            convols_data1 = self.convols_data1
-        if convols_data2 is None:
-            convols_data2 = self.convols_data2
-        if convols_data3 is None:
-            convols_data3 = self.convols_data3
-        if window1 is None:
-            window1 = self.window1
-        if window2 is None:
-            window2 = self.window2
-        if window3 is None:
-            window3 = self.window3
+
+        if "zeta_l" in self._expanded_products() and self.l_min > 0:
+            if self.rank == 0:
+                self.logger.error("zeta_l requires l_min=0 because the ratio solve needs multipoles from l=0.")
+            func_util.safe_exit(1)
+
+        needs_data, needs_random = self._required_input_flags()
+        data_inputs = [
+            convols_data1 if convols_data1 is not None else self._fallback_convols(self.convols_data1),
+            convols_data2 if convols_data2 is not None else self._fallback_convols(self.convols_data2),
+            convols_data3 if convols_data3 is not None else self._fallback_convols(self.convols_data3),
+        ]
+        random_inputs = [
+            random1 if random1 is not None else self._fallback_random(self.random1),
+            random2 if random2 is not None else self._fallback_random(self.random2),
+            random3 if random3 is not None else self._fallback_random(self.random3),
+        ]
+        window_inputs = [
+            window1 if window1 is not None else self._fallback_window(self.window1),
+            window2 if window2 is not None else self._fallback_window(self.window2),
+            window3 if window3 is not None else self._fallback_window(self.window3),
+        ]
 
         if self.rank == 0:
             self.logger.info("Preparing Corr_3PCF multipole input fields ...")
             self.logger.info(
-                f"field_mode={self.field_mode}, execution_mode={self.execution_mode}, "
-                f"l_min={self.l_min}, l_max={self.l_max}, "
-                f"r12={self.r12}, r13={self.r13}, "
+                f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
+                f"r12={self.r12}, r13={self.r13}, threads={self.threads}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}"
             )
+            self.logger.info(
+                f"requested_products={self.products}, expanded_products={self._expanded_products()}"
+            )
+
             base_convols_cache = {}
-            resolved_legs = []
-            for i, cdata, win in zip(
-                [1, 2, 3],
-                [convols_data1, convols_data2, convols_data3],
-                [window1, window2, window3],
-            ):
-                base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                resolved_legs.append((i, base_convols, source_desc, win))
+            random_cache = {}
+            data_legs = []
+            random_legs = []
+            compatibility_fields = []
+
+            if needs_data:
+                for i, cdata in enumerate(data_inputs, start=1):
+                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                    data_legs.append((i, base_convols, source_desc, window_inputs[i - 1]))
+                    compatibility_fields.append(base_convols)
+
+            if needs_random:
+                for i, random_input in enumerate(random_inputs, start=1):
+                    base_random, source_desc = self._resolve_random_base(i, random_input, random_cache)
+                    random_legs.append((i, base_random, source_desc, window_inputs[i - 1]))
+                    if isinstance(base_random, ConvolsData):
+                        compatibility_fields.append(base_random)
+
+            if not compatibility_fields:
+                for i, cdata in enumerate(data_inputs, start=1):
+                    if cdata is None or cdata == "":
+                        continue
+                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
+                    compatibility_fields.append(base_convols)
+                    self.logger.info(
+                        f"Geometry reference loaded from field leg {i} | source={source_desc}"
+                    )
+                    break
+
+            if not compatibility_fields:
+                self.logger.error(
+                    "At least one ConvolsData input is required to define the grid geometry and shared density."
+                )
+                func_util.safe_exit(1)
 
             shared_required = func_util.validate_convols_compatibility(
-                [item[1] for item in resolved_legs],
+                compatibility_fields,
                 ConvolsData._REQUIRED_ARGV,
                 logger=self.logger,
                 label="Corr_3PCF multipole input fields",
             )
             shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
+            self.reference_convols = compatibility_fields[0]
+            self.rho = 1.0 / self.reference_convols.V
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
+            self.logger.info(f"Shared density | rho={self.rho:.6g}")
 
-            for i, base_convols, source_desc, win in resolved_legs:
-                window_obj, window_desc = self._resolve_window(i, base_convols, win)
-                if window_obj is not None:
-                    final_convols = base_convols @ window_obj
-                else:
-                    final_convols = base_convols.copy()
-                    final_convols.format_convols_params()
+            if needs_data:
+                for i, base_convols, source_desc, win in data_legs:
+                    window_obj, window_desc = self._resolve_window(i, base_convols, win)
+                    if window_obj is not None:
+                        final_convols = base_convols @ window_obj
+                    else:
+                        final_convols = base_convols.copy()
+                        final_convols.format_convols_params()
 
-                setattr(self, f"convols_data{i}", final_convols)
-                setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
-                self.logger.info(
-                    f"Field leg {i} ready | source={source_desc} | window={window_desc}"
-                )
+                    setattr(self, f"convols_data{i}", final_convols)
+                    setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
+                    self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+            else:
+                for i in range(1, 4):
+                    setattr(self.corr3pcf_multipole_data, f"convols_info{i}", self.reference_convols.convols_info)
 
-            self.corr3pcf_multipole_data.corr3pcf_multipole_info = self._current_task_params_snapshot()
-            self.corr3pcf_multipole_data.task_params = self._current_task_params_snapshot()
+            if needs_random:
+                for i, base_random, source_desc, win in random_legs:
+                    if isinstance(base_random, str) and base_random == "uniform":
+                        setattr(self, f"random{i}", self.rho)
+                        self.logger.info(
+                            f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={self.rho:.6g}"
+                        )
+                        continue
+                    window_obj, window_desc = self._resolve_window(i, base_random, win)
+                    if window_obj is not None:
+                        final_random = base_random @ window_obj
+                    else:
+                        final_random = base_random.copy()
+                        final_random.format_convols_params()
+                    setattr(self, f"random{i}", final_random)
+                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+
+            snapshot = self._current_task_params_snapshot()
+            self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
+            self.corr3pcf_multipole_data.task_params = snapshot
         self._fields_prepared = True
 
-    def _prepare_output(self, local_convols, l_arr, multipole_l):
-        rho1 = 1.0 / local_convols[0].V
-        rho2 = 1.0 / local_convols[1].V
-        rho3 = 1.0 / local_convols[2].V
+    def _store_product(self, product_name, l_arr, values):
         self.corr3pcf_multipole_data.r12 = self.r12
         self.corr3pcf_multipole_data.r13 = self.r13
-        self.corr3pcf_multipole_data.l = l_arr
-        if self.field_mode == "raw":
-            self.corr3pcf_multipole_data.ddd_l = multipole_l
-            self.corr3pcf_multipole_data.delta_ddd_l = None
-            self.corr3pcf_multipole_data.zeta_l = None
-        else:
-            self.corr3pcf_multipole_data.ddd_l = None
-            self.corr3pcf_multipole_data.delta_ddd_l = multipole_l
-            self.corr3pcf_multipole_data.zeta_l = multipole_l / (rho1 * rho2 * rho3)
+        self.corr3pcf_multipole_data.l = np.asarray(l_arr, dtype=np.int32)
+        setattr(self.corr3pcf_multipole_data, product_name, np.asarray(values, dtype=np.float64))
 
-    def _log_helpers(self):
+    def _log_helpers(self, product_name):
         def _format_complex(value):
             real = float(value.real)
             imag = float(value.imag)
@@ -278,12 +439,8 @@ class Corr_3PCF_Multipole(TaskBase):
             total_m_tasks,
         ):
             progress = (completed_m_tasks / total_m_tasks) * 100.0
-            if self.field_mode == "raw":
-                stat_str = f"ddd_l={ddd_l:.5e}"
-            else:
-                stat_str = f"delta_ddd_l={ddd_l:.5e} | zeta_l={zeta_l:.5e}"
             self.logger.info(
-                f" l={l:2d}/{l_max:2d} done | {stat_str} | "
+                f" l={l:2d}/{l_max:2d} done | {product_name}={ddd_l:.5e} | "
                 f"elapsed={elapsed_sec:.2f} sec | conv={conv_elapsed_sec:.2f} sec | "
                 f"sum={sum_elapsed_sec:.2f} sec | progress={progress:6.2f}% "
                 f"({completed_m_tasks}/{total_m_tasks} m-tasks)"
@@ -300,35 +457,20 @@ class Corr_3PCF_Multipole(TaskBase):
 
         return _log_l_progress, _log_m_progress
 
-    def _run_serial_mode(self, rank):
+    def _run_serial_mode(self, rank, fields, product_name):
         if rank != 0:
-            return
+            return None, None
 
-        self.logger.info("Start to calculate 3PCF multipole ...")
+        self.logger.info(f"Start to calculate 3PCF multipole product '{product_name}' ...")
         self.logger.info(
-            f"execution_mode={self.execution_mode}, field_mode={self.field_mode}, "
-            f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, "
-            f"cache_multipole_fields={self.cache_multipole_fields}, "
+            f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
+            f"threads={self.threads}, cache_multipole_fields={self.cache_multipole_fields}, "
             f"verbose_m_progress={self.verbose_m_progress}"
         )
-        rho1 = 1.0 / self.convols_data1.V
-        rho2 = 1.0 / self.convols_data2.V
-        rho3 = 1.0 / self.convols_data3.V
-        if self.field_mode == "raw":
-            field1 = self.convols_data1
-            field2 = self.convols_data2
-            field3 = self.convols_data3
-        elif self.field_mode == "delta":
-            field1 = self.convols_data1 - rho1
-            field2 = self.convols_data2 - rho2
-            field3 = self.convols_data3 - rho3
-        else:
-            self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
-            func_util.safe_exit(1)
 
-        log_l_progress, log_m_progress = self._log_helpers()
+        log_l_progress, log_m_progress = self._log_helpers(product_name)
         l_arr, multipole_l, timing_info = math_util.calc_DDD_multipole(
-            field1, field2, field3,
+            fields[0], fields[1], fields[2],
             self.r12, self.r13, self.l_min, self.l_max,
             gpu_device_id=self.gpu_device_id,
             cache_multipole_fields=self.cache_multipole_fields,
@@ -337,61 +479,45 @@ class Corr_3PCF_Multipole(TaskBase):
             progress_callback=log_l_progress if self.verbose_m_progress else None,
             m_progress_callback=log_m_progress if self.verbose_m_progress else None,
         )
-        self._prepare_output([self.convols_data1, self.convols_data2, self.convols_data3], l_arr, multipole_l)
         if self.verbose_m_progress:
             self.logger.info(
-                f"3PCF multipole timing | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
+                f"3PCF multipole timing [{product_name}] | convolution={timing_info['conv_elapsed_sec']:.2f} sec | "
                 f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
             )
             self.logger.info(
-                f"3PCF multipole summation breakdown | "
+                f"3PCF multipole summation breakdown [{product_name}] | "
                 f"h2d={timing_info['sum_h2d_elapsed_sec']:.2f} sec | "
                 f"kernel={timing_info['sum_kernel_elapsed_sec']:.2f} sec | "
                 f"d2h={timing_info['sum_d2h_elapsed_sec']:.2f} sec | "
                 f"reduce={timing_info['sum_reduce_elapsed_sec']:.2f} sec | "
                 f"callback={timing_info['sum_callback_elapsed_sec']:.2f} sec"
             )
+        return l_arr, multipole_l
 
-    def _run_pair_mpi_mode(self, comm, rank, local_convols):
+    def _run_pair_mpi_mode(self, comm, rank, local_fields, product_name):
         size = comm.Get_size()
         if size == 1:
             if rank == 0:
                 self.logger.warning(
-                    "execution_mode='pair_mpi' requested with a single MPI rank. "
-                    "Falling back to serial execution."
+                    "execution_mode='pair_mpi' requested with a single MPI rank. Falling back to serial execution."
                 )
                 self.execution_mode = "serial"
-                self._run_serial_mode(rank)
-            return
+            return self._run_serial_mode(rank, local_fields, product_name)
         if size < 2 or size % 2 != 0:
             self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
             func_util.safe_exit(1)
         n_pairs = size // 2
 
         if rank == 0:
-            self.logger.info("Start to calculate 3PCF multipole ...")
+            self.logger.info(f"Start to calculate 3PCF multipole product '{product_name}' ...")
             self.logger.info(
-                f"execution_mode={self.execution_mode}, field_mode={self.field_mode}, "
-                f"l_min={self.l_min}, l_max={self.l_max}, threads={self.threads}, ranks={size}, pairs={n_pairs}, "
+                f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
+                f"threads={self.threads}, ranks={size}, pairs={n_pairs}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}"
             )
 
-        rho1 = 1.0 / local_convols[0].V
-        rho2 = 1.0 / local_convols[1].V
-        rho3 = 1.0 / local_convols[2].V
-        if self.field_mode == "raw":
-            field1 = local_convols[0]
-            field2 = local_convols[1]
-            field3 = local_convols[2]
-        elif self.field_mode == "delta":
-            field1 = local_convols[0] - rho1
-            field2 = local_convols[1] - rho2
-            field3 = local_convols[2] - rho3
-        else:
-            self.logger.error(f"Unsupported field_mode='{self.field_mode}'. Use 'raw' or 'delta'.")
-            func_util.safe_exit(1)
-
+        field1, field2, field3 = local_fields
         pair_idx = rank if rank < n_pairs else rank - n_pairs
         is_r1_rank = rank < n_pairs
 
@@ -413,7 +539,7 @@ class Corr_3PCF_Multipole(TaskBase):
         total_h2d = total_kernel = total_reduce = total_d2h = 0.0
         total_m_tasks = len(task_list)
         completed_m_tasks = 0
-        _, log_m_progress = self._log_helpers()
+        _, log_m_progress = self._log_helpers(product_name)
         l_wall_starts = ({int(l): None for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
         l_conv_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
         l_comm_accum = ({int(l): 0.0 for l in l_arr} if (rank == 0 and self.verbose_m_progress) else None)
@@ -495,9 +621,7 @@ class Corr_3PCF_Multipole(TaskBase):
                         if idx_task < 0 or idx_task >= active_count:
                             continue
                         side = int(side_float)
-                        if idx_task not in timing_by_task:
-                            timing_by_task[idx_task] = {}
-                        timing_by_task[idx_task][side] = (float(conv_val), float(comm_val))
+                        timing_by_task.setdefault(idx_task, {})[side] = (float(conv_val), float(comm_val))
                 for idx in range(active_count):
                     l_idx, l, m = map(int, round_meta[idx])
                     key = (l_idx, l, m)
@@ -524,7 +648,6 @@ class Corr_3PCF_Multipole(TaskBase):
                         l_conv_accum[l] += max(conv_r1, conv_r2)
                         l_comm_accum[l] += max(comm_r1, comm_r2)
                         l_sum_accum[l] += sum_elapsed
-                    if self.verbose_m_progress:
                         log_m_progress(
                             l=l, l_max=self.l_max, m=m, m_max=l, value=value,
                             elapsed_sec=max(conv_r1, conv_r2) + max(comm_r1, comm_r2) + sum_elapsed,
@@ -532,12 +655,8 @@ class Corr_3PCF_Multipole(TaskBase):
                         )
                     if done_per_l[l] == l + 1:
                         multipole_l[l_idx] = math_util.combine_multipole_m_terms(m_storage[l], l)
-                        zeta_l = multipole_l[l_idx] / (rho1 * rho2 * rho3)
                         progress = (completed_m_tasks / total_m_tasks) * 100.0
-                        if self.field_mode == "raw":
-                            stat_str = f"ddd_l={multipole_l[l_idx]:.5e}"
-                        else:
-                            stat_str = f"delta_ddd_l={multipole_l[l_idx]:.5e} | zeta_l={zeta_l:.5e}"
+                        stat_str = f"{product_name}={multipole_l[l_idx]:.5e}"
                         if self.verbose_m_progress:
                             self.logger.info(
                                 f" l={l:2d}/{self.l_max:2d} done | {stat_str} | "
@@ -556,18 +675,88 @@ class Corr_3PCF_Multipole(TaskBase):
         conv_max_rank = comm.reduce(total_conv_elapsed, op=MPI.MAX, root=0) if self.verbose_m_progress else None
         comm_sum_all = comm.reduce(total_comm_elapsed, op=MPI.SUM, root=0) if self.verbose_m_progress else None
         comm_max_rank = comm.reduce(total_comm_elapsed, op=MPI.MAX, root=0) if self.verbose_m_progress else None
-        if rank == 0:
-            self._prepare_output(local_convols, l_arr, multipole_l)
-            if self.verbose_m_progress:
+        if rank == 0 and self.verbose_m_progress:
+            self.logger.info(
+                f"Pair-MPI timing [{product_name}] | conv_rank0={total_conv_elapsed:.2f} sec | "
+                f"conv_sum_all={conv_sum_all:.2f} sec | conv_max_rank={conv_max_rank:.2f} sec | "
+                f"comm_sum_all={comm_sum_all:.2f} sec | comm_max_rank={comm_max_rank:.2f} sec | "
+                f"summation={total_sum_elapsed:.2f} sec"
+            )
+            self.logger.info(
+                f"Pair-MPI summation breakdown [{product_name}] | h2d={total_h2d:.2f} sec | "
+                f"kernel={total_kernel:.2f} sec | d2h={total_d2h:.2f} sec | reduce={total_reduce:.2f} sec"
+            )
+        return l_arr if rank == 0 else None, multipole_l
+
+    def _is_uniform_random(self, field):
+        return isinstance(field, (float, int, np.floating))
+
+    def _delta_field(self, data_field, random_field):
+        if self._is_uniform_random(random_field):
+            return data_field - self._field_density(random_field)
+        return data_field - random_field
+
+    def _prepare_product_fields(self, product_name):
+        if product_name == "ddd_l":
+            return [self.convols_data1, self.convols_data2, self.convols_data3]
+        if product_name == "delta_ddd_l":
+            return [
+                self._delta_field(self.convols_data1, self.random1),
+                self._delta_field(self.convols_data2, self.random2),
+                self._delta_field(self.convols_data3, self.random3),
+            ]
+        if product_name == "rrr_l":
+            rho = self._uniform_density()
+            reference = self.reference_convols
+            fields = []
+            for i, random_field in enumerate([self.random1, self.random2, self.random3], start=1):
+                if self._is_uniform_random(random_field):
+                    self.logger.info(
+                        f"Random leg {i} for rrr_l materialized from uniform density for the generic multipole kernel."
+                    )
+                    fields.append(self._materialize_uniform_random(reference, rho, i))
+                else:
+                    fields.append(random_field)
+            return fields
+        raise ValueError(f"Product '{product_name}' does not map to direct multipole fields.")
+
+    def _all_random_uniform(self):
+        return all(self._is_uniform_random(getattr(self, f"random{i}", None)) for i in range(1, 4))
+
+    def _analytic_uniform_rrr_l(self):
+        l_arr = np.arange(self.l_min, self.l_max + 1, dtype=np.int32)
+        rrr_l = np.zeros(l_arr.size, dtype=np.float64)
+        zero_idx = np.where(l_arr == 0)[0]
+        if zero_idx.size:
+            rrr_l[zero_idx[0]] = self._uniform_density() ** 3
+        return l_arr, rrr_l
+
+    def _compute_product_multipole(self, product_name, fields):
+        comm = self.comm
+        rank = self.rank
+        if self.execution_mode == "pair_mpi":
+            if rank == 0:
                 self.logger.info(
-                    f"Pair-MPI timing | conv_rank0={total_conv_elapsed:.2f} sec | conv_sum_all={conv_sum_all:.2f} sec | "
-                    f"conv_max_rank={conv_max_rank:.2f} sec | comm_sum_all={comm_sum_all:.2f} sec | "
-                    f"comm_max_rank={comm_max_rank:.2f} sec | summation={total_sum_elapsed:.2f} sec"
+                    f"Initializing multipole input for '{product_name}': broadcasting fields to {comm.Get_size()} MPI ranks ..."
                 )
-                self.logger.info(
-                    f"Pair-MPI summation breakdown | h2d={total_h2d:.2f} sec | kernel={total_kernel:.2f} sec | "
-                    f"d2h={total_d2h:.2f} sec | reduce={total_reduce:.2f} sec"
-                )
+            local_fields = [
+                self._broadcast_convols(rank, comm, fields[i] if rank == 0 else None)
+                for i in range(3)
+            ]
+            if rank == 0:
+                self.logger.info(f"Initializing multipole input for '{product_name}': broadcast complete.")
+            return self._run_pair_mpi_mode(comm, rank, local_fields, product_name)
+        return self._run_serial_mode(rank, fields if rank == 0 else None, product_name)
+
+    def _compute_zeta_l(self):
+        delta_ddd_l = self.corr3pcf_multipole_data.delta_ddd_l
+        rrr_l = self.corr3pcf_multipole_data.rrr_l
+        if delta_ddd_l is None or rrr_l is None:
+            self.logger.error("zeta_l requires both delta_ddd_l and rrr_l.")
+            func_util.safe_exit(1)
+        zeta_l, _, cond_m = math_util.solve_multipoles_from_ratio(delta_ddd_l, rrr_l, self.l_max)
+        self.corr3pcf_multipole_data.zeta_l = zeta_l
+        self.logger.info(f"zeta_l solved from multipole ratio | mixing matrix cond={cond_m:.3e}")
 
     def run(self, save_result=True, overwrite=False):
         try:
@@ -578,50 +767,44 @@ class Corr_3PCF_Multipole(TaskBase):
 
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            convols_info1_serialized = None
-            convols_info2_serialized = None
-            convols_info3_serialized = None
 
+            self.rho = comm.bcast(self.rho if rank == 0 else None, root=0)
+            expanded_products = self._expanded_products()
             if rank == 0:
-                convols_info1_serialized = pickle.dumps(self.convols_data1.convols_info)
-                convols_info2_serialized = pickle.dumps(self.convols_data2.convols_info)
-                convols_info3_serialized = pickle.dumps(self.convols_data3.convols_info)
-
-            convols_info1_serialized = comm.bcast(convols_info1_serialized, root=0)
-            convols_info2_serialized = comm.bcast(convols_info2_serialized, root=0)
-            convols_info3_serialized = comm.bcast(convols_info3_serialized, root=0)
-
-            self.corr3pcf_multipole_data.corr3pcf_multipole_info = self._current_task_params_snapshot()
-            self.corr3pcf_multipole_data.task_params = self._current_task_params_snapshot()
-
-            if rank == 0:
+                snapshot = self._current_task_params_snapshot()
+                self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
+                self.corr3pcf_multipole_data.task_params = snapshot
                 t_setup_done = time.perf_counter()
                 self.logger.info(f"Pre-3PCF multipole setup time: {t_setup_done - t0:.4f} sec")
+                self.logger.info(f"Main 3PCF multipole products: {[p for p in expanded_products if p != 'zeta_l']}")
 
-            if self.execution_mode == "pair_mpi":
+            for product_name in expanded_products:
+                if product_name == "zeta_l":
+                    continue
                 if rank == 0:
-                    self.logger.info(
-                        f"Initializing multipole input: broadcasting smoothed fields to {comm.Get_size()} MPI ranks ..."
-                    )
-                local_convols = [
-                    self._broadcast_convols(rank, comm, self.convols_data1 if rank == 0 else None),
-                    self._broadcast_convols(rank, comm, self.convols_data2 if rank == 0 else None),
-                    self._broadcast_convols(rank, comm, self.convols_data3 if rank == 0 else None),
-                ]
+                    self.logger.info(f"Computing product '{product_name}' ...")
+                all_random_uniform = comm.bcast(
+                    self._all_random_uniform() if rank == 0 else None,
+                    root=0,
+                )
+                if product_name == "rrr_l" and all_random_uniform:
+                    if rank == 0:
+                        l_arr, product_l = self._analytic_uniform_rrr_l()
+                        self._store_product(product_name, l_arr, product_l)
+                        self.logger.info(
+                            f"Product 'rrr_l' used all-uniform analytic shortcut | rho^3={self._uniform_density() ** 3:.6e}"
+                        )
+                    continue
+
+                fields = self._prepare_product_fields(product_name) if rank == 0 else None
+                l_arr, product_l = self._compute_product_multipole(product_name, fields)
                 if rank == 0:
-                    self.logger.info("Initializing multipole input: broadcast complete, entering MPI convolution stage ...")
-                self._run_pair_mpi_mode(comm, rank, local_convols)
-            else:
-                if rank == 0:
-                    local_convols = [self.convols_data1, self.convols_data2, self.convols_data3]
-                else:
-                    local_convols = []
-                    for serialized in [convols_info1_serialized, convols_info2_serialized, convols_info3_serialized]:
-                        cdata = ConvolsData(threads=self.threads)
-                        cdata.convols_info = pickle.loads(serialized)
-                        cdata.format_convols_params()
-                        local_convols.append(cdata)
-                self._run_serial_mode(rank)
+                    self._store_product(product_name, l_arr, product_l)
+                    del fields
+
+            if "zeta_l" in expanded_products and rank == 0:
+                self.logger.info("Computing product 'zeta_l' from delta_ddd_l and rrr_l ...")
+                self._compute_zeta_l()
 
             if rank == 0 and save_result and self.fout_path:
                 self.corr3pcf_multipole_data.saveflag = True

@@ -15,6 +15,7 @@ class Corr3PCFMultipoleData(HermesData):
         self.r13 = None
         self.l = None
         self.ddd_l = None
+        self.rrr_l = None
         self.delta_ddd_l = None
         self.zeta_l = None
         super().__init__(*args, threads=threads, **kwargs)
@@ -47,6 +48,7 @@ class Corr3PCFMultipoleData(HermesData):
                 self.logger.error("Failed to load the dataset. The file is missing the 'r12/r13' (or legacy 'r1/r2') keys.")
                 func_util.safe_exit(1)
             self.ddd_l = dataset.get("ddd_l")
+            self.rrr_l = dataset.get("rrr_l")
             self.delta_ddd_l = dataset.get("delta_ddd_l")
             self.zeta_l = dataset.get("zeta_l")
             for i in range(1, 4):
@@ -76,6 +78,7 @@ class Corr3PCFMultipoleData(HermesData):
             "r13": self.r13,
             "l": self.l,
             "ddd_l": self.ddd_l,
+            "rrr_l": self.rrr_l,
             "delta_ddd_l": self.delta_ddd_l,
             "zeta_l": self.zeta_l,
         }
