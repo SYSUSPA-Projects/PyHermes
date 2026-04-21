@@ -717,6 +717,21 @@ def spherical_jn_numba(l, x):
             return 1.0
         return 0.0
 
+    ax = abs(x)
+    if ax <= 5.0e-2:
+        if l == 0:
+            x2 = x * x
+            return 1.0 - x2 / 6.0 + x2 * x2 / 120.0
+        denom = 1.0
+        for n in range(1, l + 1):
+            denom *= 2.0 * n + 1.0
+        x2 = x * x
+        return (x ** l / denom) * (
+            1.0
+            - x2 / (2.0 * (2.0 * l + 3.0))
+            + x2 * x2 / (8.0 * (2.0 * l + 3.0) * (2.0 * l + 5.0))
+        )
+
     sx = math.sin(x)
     cx = math.cos(x)
     j0 = sx / x
@@ -726,6 +741,42 @@ def spherical_jn_numba(l, x):
     j1 = sx / (x * x) - cx / x
     if l == 1:
         return j1
+
+    if ax < l + 1.0:
+        n_stop = l + 40
+        jp1 = 0.0
+        jcur = 1.0
+        j_target = 0.0
+        j_down_0 = 0.0
+        j_down_1 = 0.0
+        # Upward recurrence is unstable here; Miller downward recurrence is
+        # normalized against stable closed forms for j0 or j1 after the sweep.
+        for n in range(n_stop, 0, -1):
+            jm1 = ((2.0 * n + 1.0) / x) * jcur - jp1
+            if n - 1 == l:
+                j_target = jm1
+            if n - 1 == 1:
+                j_down_1 = jm1
+            if n - 1 == 0:
+                j_down_0 = jm1
+            jp1 = jcur
+            jcur = jm1
+            if abs(jcur) > 1.0e200:
+                jp1 *= 1.0e-200
+                jcur *= 1.0e-200
+                j_target *= 1.0e-200
+                j_down_0 *= 1.0e-200
+                j_down_1 *= 1.0e-200
+            elif abs(jcur) < 1.0e-200 and jcur != 0.0:
+                jp1 *= 1.0e200
+                jcur *= 1.0e200
+                j_target *= 1.0e200
+                j_down_0 *= 1.0e200
+                j_down_1 *= 1.0e200
+
+        if abs(j_down_0) >= abs(j_down_1) or j_down_1 == 0.0:
+            return j_target * (j0 / j_down_0)
+        return j_target * (j1 / j_down_1)
 
     jm1 = j0
     jcur = j1
