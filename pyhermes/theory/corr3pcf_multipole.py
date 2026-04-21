@@ -277,6 +277,37 @@ class Corr_3PCF_Multipole(TaskBase):
         comm.Bcast(local.epsilon, root=0)
         return local
 
+    def _broadcast_convols_to_ranks(self, comm, convols_data, target_ranks):
+        """
+        Broadcast one ConvolsData only to ranks that need it.
+
+        Rank 0 is always included as the sender. If rank 0 is not in
+        target_ranks, it participates in the broadcast but returns None so the
+        pair-MPI compute path does not keep an extra local reference.
+        """
+        rank = comm.Get_rank()
+        members = set(target_ranks)
+        members.add(0)
+        subcomm = comm.Split(0 if rank in members else MPI.UNDEFINED, rank)
+        if subcomm == MPI.COMM_NULL:
+            return None
+
+        serialized = pickle.dumps(convols_data.convols_info) if rank == 0 else None
+        serialized = subcomm.bcast(serialized, root=0)
+        if rank == 0:
+            send_field = convols_data
+            send_field.epsilon = np.ascontiguousarray(send_field.epsilon, dtype=np.float64)
+            subcomm.Bcast(send_field.epsilon, root=0)
+            local = send_field if rank in target_ranks else None
+        else:
+            local = ConvolsData(threads=self.threads)
+            local.convols_info = pickle.loads(serialized)
+            local.format_convols_params()
+            local.epsilon = np.empty((local.L, local.L, local.L), dtype=np.float64)
+            subcomm.Bcast(local.epsilon, root=0)
+        subcomm.Free()
+        return local
+
     def prepare_input_fields(
         self,
         convols_data1=None,
@@ -751,16 +782,30 @@ class Corr_3PCF_Multipole(TaskBase):
         comm = self.comm
         rank = self.rank
         if self.execution_mode == "pair_mpi":
+            size = comm.Get_size()
+            if size == 1:
+                return self._run_pair_mpi_mode(comm, rank, fields if rank == 0 else None, product_name)
+            if size < 2 or size % 2 != 0:
+                self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
+                func_util.safe_exit(1)
+            n_pairs = size // 2
             if rank == 0:
                 self.logger.info(
-                    f"Initializing multipole input for '{product_name}': broadcasting fields to {comm.Get_size()} MPI ranks ..."
+                    f"Initializing multipole input for '{product_name}': role-aware broadcast to {size} MPI ranks ..."
+                )
+                self.logger.info(
+                    "Role-aware layout | field1 -> rank0 only | "
+                    f"field2 -> ranks 0-{n_pairs - 1} | field3 -> ranks {n_pairs}-{size - 1}"
                 )
             local_fields = [
-                self._broadcast_convols(rank, comm, fields[i] if rank == 0 else None)
-                for i in range(3)
+                self._broadcast_convols_to_ranks(comm, fields[0] if rank == 0 else None, {0}),
+                self._broadcast_convols_to_ranks(comm, fields[1] if rank == 0 else None, set(range(n_pairs))),
+                self._broadcast_convols_to_ranks(comm, fields[2] if rank == 0 else None, set(range(n_pairs, size))),
             ]
             if rank == 0:
-                self.logger.info(f"Initializing multipole input for '{product_name}': broadcast complete.")
+                fields[:] = [None, None, None]
+            if rank == 0:
+                self.logger.info(f"Initializing multipole input for '{product_name}': role-aware broadcast complete.")
             return self._run_pair_mpi_mode(comm, rank, local_fields, product_name)
         return self._run_serial_mode(rank, fields if rank == 0 else None, product_name)
 
