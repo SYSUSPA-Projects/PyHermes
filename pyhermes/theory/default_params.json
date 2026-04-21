@@ -141,7 +141,8 @@
 		"execution_mode": "serial",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
-		"verbose_m_progress": true,
+		"verbose_m_progress": false,
+		"verbose_profile": false,
 		"threads": 1
 	}
 }
