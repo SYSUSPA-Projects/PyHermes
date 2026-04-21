@@ -843,6 +843,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 if product_name == "zeta_l":
                     continue
                 if rank == 0:
+                    product_t0 = time.perf_counter()
                     self.logger.info(f"Computing product '{product_name}' ...")
                 all_random_uniform = comm.bcast(
                     self._all_random_uniform() if rank == 0 else None,
@@ -855,6 +856,9 @@ class Corr_3PCF_Multipole(TaskBase):
                         self.logger.info(
                             f"Product 'rrr_l' used all-uniform analytic shortcut | rho^3={self._uniform_density() ** 3:.6e}"
                         )
+                        self.logger.info(
+                            f"Product timing | {product_name}={time.perf_counter() - product_t0:.4f} sec"
+                        )
                     continue
 
                 fields = self._prepare_product_fields(product_name) if rank == 0 else None
@@ -862,6 +866,9 @@ class Corr_3PCF_Multipole(TaskBase):
                 if rank == 0:
                     self._store_product(product_name, l_arr, product_l)
                     del fields
+                    self.logger.info(
+                        f"Product timing | {product_name}={time.perf_counter() - product_t0:.4f} sec"
+                    )
 
             if rank == 0:
                 if "zeta_l" in expanded_products:
