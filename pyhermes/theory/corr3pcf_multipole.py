@@ -774,8 +774,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 snapshot = self._current_task_params_snapshot()
                 self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
                 self.corr3pcf_multipole_data.task_params = snapshot
-                t_setup_done = time.perf_counter()
-                self.logger.info(f"Pre-3PCF multipole setup time: {t_setup_done - t0:.4f} sec")
+                t_start = time.perf_counter()
+                self.logger.info(f"Pre-3PCF multipole setup time: {t_start - t0:.4f} sec")
                 self.logger.info(f"Main 3PCF multipole products: {[p for p in expanded_products if p != 'zeta_l']}")
 
             for product_name in expanded_products:
@@ -802,21 +802,25 @@ class Corr_3PCF_Multipole(TaskBase):
                     self._store_product(product_name, l_arr, product_l)
                     del fields
 
-            if "zeta_l" in expanded_products and rank == 0:
-                self.logger.info("Computing product 'zeta_l' from delta_ddd_l and rrr_l ...")
-                self._compute_zeta_l()
+            if rank == 0:
+                if "zeta_l" in expanded_products:
+                    self.logger.info("Computing product 'zeta_l' from delta_ddd_l and rrr_l ...")
+                    self._compute_zeta_l()
 
-            if rank == 0 and save_result and self.fout_path:
-                self.corr3pcf_multipole_data.saveflag = True
-                self.corr3pcf_multipole_data.save_corr3pcf_multipole(self.fout_path, overwrite=overwrite)
+                t_end = time.perf_counter()
+                self.logger.info(f"The time for 3PCF: {t_end - t_start:.4f} sec")
+
+                if save_result and self.fout_path:
+                    self.corr3pcf_multipole_data.saveflag = True
+                    self.corr3pcf_multipole_data.save_corr3pcf_multipole(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
-            if rank == 0:
-                t1 = time.perf_counter()
-                print("")
-                self.logger.info(f"The time for task: {t1 - t0:.4f} sec")
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
 
+        if rank == 0:
+            t1 = time.perf_counter()
+            print("")
+            self.logger.info(f"The time for task: {t1 - t0:.4f} sec")
         return self.corr3pcf_multipole_data
