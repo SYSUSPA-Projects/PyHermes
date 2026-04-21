@@ -811,13 +811,12 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.corr3pcf_multipole_data.save_corr3pcf_multipole(self.fout_path, overwrite=overwrite)
 
             comm.Barrier()
+            if rank == 0:
+                t1 = time.perf_counter()
+                print("")
+                self.logger.info(f"The time for task: {t1 - t0:.4f} sec")
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
-
-        if self.rank == 0:
-            t1 = time.perf_counter()
-            print("")
-            self.logger.info(f"The time for task: {t1 - t0:.4f} sec")
 
         return self.corr3pcf_multipole_data
