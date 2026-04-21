@@ -808,7 +808,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     self._compute_zeta_l()
 
                 t_end = time.perf_counter()
-                self.logger.info(f"The time for 3PCF: {t_end - t_start:.4f} sec")
+                self.logger.info(f"The time for 3PCF multipole: {t_end - t_start:.4f} sec")
 
                 if save_result and self.fout_path:
                     self.corr3pcf_multipole_data.saveflag = True
