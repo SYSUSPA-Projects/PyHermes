@@ -8,8 +8,8 @@ import pywt
 import numpy as np
 import numba
 from scipy.fft import rfftn, irfftn, fftn, ifftn
-from scipy.special import spherical_jn, sph_harm
-from numba import cuda, int16, jit, njit, prange
+from scipy.special import spherical_jn, sph_harm, gammaln
+from numba import cuda, jit, njit, prange
 from numba.core.errors import NumbaExperimentalFeatureWarning
 
 from pyhermes.param.logbase import setup_logger
@@ -1177,3 +1177,152 @@ def calc_DDD_multipole(
         "sum_callback_elapsed_sec": total_sum_callback_elapsed,
     }
     return l_values, ddd_l, timing_info
+
+
+def legendre_triple_coeff(l: int, lp: int, k: int) -> float:
+    """
+    Return the Legendre triple-product coupling coefficient
+
+        G_{lp,l,k} = (2k+1)/2 * ∫_{-1}^1 P_lp(mu) P_l(mu) P_k(mu) dmu
+
+    using the closed-form expression valid for Legendre polynomials.
+
+    Notes
+    -----
+    Nonzero only if:
+      - triangle condition: |l-lp| <= k <= l+lp
+      - parity condition: l + lp + k is even
+    """
+    s = l + lp + k
+
+    # selection rules
+    if (k > l + lp) or (k < abs(l - lp)) or (s % 2 != 0):
+        return 0.0
+
+    g = s // 2
+
+    # closed-form log expression
+    log_val = (
+        gammaln(s - 2 * l + 1)
+        + gammaln(s - 2 * lp + 1)
+        + gammaln(s - 2 * k + 1)
+        - gammaln(s + 2)
+        + 2 * (
+            gammaln(g + 1)
+            - gammaln(g - l + 1)
+            - gammaln(g - lp + 1)
+            - gammaln(g - k + 1)
+        )
+    )
+
+    # this equals the Legendre triple-product integral coefficient
+    return float((2 * k + 1) * np.exp(log_val))
+
+
+def build_mixing_matrix(B: np.ndarray, lmax: int) -> np.ndarray:
+    """
+    Return the mixing matrix M defined by
+
+        A_k = sum_l M[k, l] * C_l
+
+    for the ratio problem
+
+        A(mu) = B(mu) * C(mu).
+
+    Parameters
+    ----------
+    B : ndarray
+        Multipoles B_l of the denominator, with length >= lmax + 1.
+    lmax : int
+        Maximum multipole order.
+
+    Returns
+    -------
+    ndarray
+        Mixing matrix M of shape (lmax + 1, lmax + 1).
+
+    Notes
+    -----
+    The matrix is built by separating the monopole term B_0 from the
+    higher-order multipoles, i.e.
+
+        B(mu) = B_0 [1 + sum_{l>0} (B_l / B_0) P_l(mu)].
+
+    The normalized matrix is first constructed using B_l / B_0, and the
+    overall factor B_0 is restored at the end.
+
+    In the limit B_l = 0 for l > 0, the matrix reduces to
+
+        M = B_0 I.
+    """
+    B = np.asarray(B, dtype=np.float64)
+    B0 = B[0]
+
+    if B0 == 0:
+        raise ValueError("B[0] is zero.")
+
+    f = B / B0
+    M = np.zeros((lmax + 1, lmax + 1), dtype=np.float64)
+
+    # k = 0 row
+    for l in range(lmax + 1):
+        for lp in range(1, lmax + 1):
+            if l == lp:
+                M[0, l] += f[lp] / (2 * l + 1)
+
+    # k >= 1 rows
+    for k in range(1, lmax + 1):
+        for l in range(lmax + 1):
+            for lp in range(1, lmax + 1):
+                M[k, l] += legendre_triple_coeff(l, lp, k) * f[lp]
+
+    # add the identity contribution in the normalized convention
+    M += np.eye(lmax + 1)
+
+    # restore the overall monopole factor
+    M *= B0
+    return M
+
+
+def solve_multipoles_from_ratio(A: np.ndarray, B: np.ndarray, lmax: int, rcond_warning: float = 1e12):
+    """
+    Return the multipoles C_l of the ratio defined by
+
+        A(mu) = B(mu) * C(mu).
+
+    Parameters
+    ----------
+    A : ndarray
+        Multipoles A_l of the numerator, with length >= lmax + 1.
+    B : ndarray
+        Multipoles B_l of the denominator, with length >= lmax + 1.
+    lmax : int
+        Maximum multipole order.
+
+    Returns
+    -------
+    C : ndarray
+        Multipoles C_l of the ratio.
+    M : ndarray
+        Mixing matrix of shape (lmax + 1, lmax + 1).
+    condM : float
+        Condition number of M.
+    """
+    A = np.asarray(A, dtype=np.float64)
+    B = np.asarray(B, dtype=np.float64)
+
+    if A.shape[0] < lmax + 1 or B.shape[0] < lmax + 1:
+        raise ValueError("A and B must have length at least lmax+1.")
+
+    A_cut = A[:lmax + 1]
+    B_cut = B[:lmax + 1]
+
+    M = build_mixing_matrix(B_cut, lmax)
+    
+    condM = np.linalg.cond(M)
+    if condM > rcond_warning:
+        print(f"[warning] mixing matrix is ill-conditioned: cond(M) = {condM:.3e}")
+
+    C = np.linalg.solve(M, A_cut)
+
+    return C, M, condM
