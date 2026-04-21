@@ -571,32 +571,51 @@ class Corr_3PCF_Multipole(TaskBase):
             total_conv_elapsed += conv_elapsed
 
             t_comm = time.perf_counter()
+            round_summands = {} if rank == 0 else None
             if pair_idx < active_count:
                 l_idx, l, m = local_meta
                 tag_base = 200000 + round_idx * 100 + pair_idx
                 if rank == 0:
-                    round_fields = {}
-                    if pair_idx == 0:
-                        round_fields[(int(l_idx), int(l), int(m))] = [local_field, None]
+                    root_comm_elapsed = 0.0
                     for idx in range(active_count):
                         recv_l_idx, recv_l, recv_m = map(int, round_meta[idx])
                         key = (recv_l_idx, recv_l, recv_m)
                         if idx == 0:
+                            field_r1_m = local_field
+                            t_recv = time.perf_counter()
                             recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
                             comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs, tag=tag_base + 50)
-                            round_fields[key][1] = recv_r2
+                            root_comm_elapsed += time.perf_counter() - t_recv
+                            field_r2_m = recv_r2
                         else:
+                            t_recv = time.perf_counter()
                             recv_r1 = np.empty(local_field.shape, dtype=np.complex128)
                             recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
                             comm.Recv([recv_r1, MPI.COMPLEX16], source=idx, tag=200000 + round_idx * 100 + idx)
                             comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs + idx, tag=200000 + round_idx * 100 + idx + 50)
-                            round_fields[key] = [recv_r1, recv_r2]
+                            root_comm_elapsed += time.perf_counter() - t_recv
+                            field_r1_m = recv_r1
+                            field_r2_m = recv_r2
+                        t_sum = time.perf_counter()
+                        value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
+                        sum_elapsed = time.perf_counter() - t_sum
+                        round_summands[key] = (value, timing, sum_elapsed)
+                        del field_r1_m, field_r2_m
+                        if idx == 0:
+                            del recv_r2
+                        else:
+                            del recv_r1, recv_r2
+                    local_field = None
+                    comm_elapsed = root_comm_elapsed
                 elif is_r1_rank:
                     if rank != 0:
                         comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base)
+                        del local_field
                 else:
                     comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base + 50)
-            comm_elapsed = time.perf_counter() - t_comm
+                    del local_field
+            if rank != 0:
+                comm_elapsed = time.perf_counter() - t_comm
             total_comm_elapsed += comm_elapsed
 
             round_timings = None
@@ -625,7 +644,6 @@ class Corr_3PCF_Multipole(TaskBase):
                 for idx in range(active_count):
                     l_idx, l, m = map(int, round_meta[idx])
                     key = (l_idx, l, m)
-                    field_r1_m, field_r2_m = round_fields[key]
                     if self.verbose_m_progress and l_wall_starts[l] is None:
                         l_wall_starts[l] = time.perf_counter()
                     task_timing = timing_by_task.get(idx, {})
@@ -633,9 +651,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     conv_r2 = task_timing.get(1, (0.0, 0.0))[0]
                     comm_r1 = task_timing.get(0, (0.0, 0.0))[1]
                     comm_r2 = task_timing.get(1, (0.0, 0.0))[1]
-                    t_sum = time.perf_counter()
-                    value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
-                    sum_elapsed = time.perf_counter() - t_sum
+                    value, timing, sum_elapsed = round_summands[key]
                     total_sum_elapsed += sum_elapsed
                     total_h2d += timing["h2d_elapsed_sec"]
                     total_kernel += timing["kernel_elapsed_sec"]
