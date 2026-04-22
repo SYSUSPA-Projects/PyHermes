@@ -43,6 +43,7 @@ def configure(threads=1):
 
 
 def do_wavelet(mode="db2", level=10):
+    """Return sampled scaling-function values for a PyWavelets wavelet."""
     wavelet = pywt.Wavelet(mode)
     _phi, _, _ = wavelet.wavefun(level=level)
     phi_data = _phi[:-1]
@@ -50,6 +51,7 @@ def do_wavelet(mode="db2", level=10):
 
 
 def random_points_box(N, SimBoxL, ndim=3, rng=None, seed=None):
+    """Draw uniformly distributed random points inside a periodic box."""
     if rng is None:
         rng = np.random.default_rng(seed=seed)
     return rng.uniform(0.0, SimBoxL, size=(N, ndim))
@@ -65,6 +67,7 @@ warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
 
 @njit(parallel=True)
 def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
+    """Evaluate a real-space window lookup array from a k-space window kernel."""
     WindowArray = np.zeros((L + 1, L + 1, L + 1))
     for i in prange(L + 1):
         for j in range(L + 1):
@@ -100,9 +103,7 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
     provided_args = kwargs.keys()
     missing_args = [arg for arg in expected_args if arg not in provided_args]
     if missing_args:
-        # raise ValueError(f"Missing keyword arguments: {missing_args}")
         source_code = inspect.getsource(window_function_numba)
-        # logger.error(black.format_str(source_code, mode=black.Mode()))
         logger.error("\n" + source_code)
         logger.error(f"Missing keyword arguments: {missing_args}")
         logger.error(f"Please see the document for details")
@@ -115,6 +116,7 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
 
 @njit(parallel=True)
 def calculate_w_numba(WindowArray):
+    """Fold an octant-symmetric window array into an rFFT-compatible kernel."""
     L = WindowArray.shape[0] - 1
     w = np.zeros((L, L, L // 2 + 1))
     for x in prange(L):
@@ -135,6 +137,7 @@ def calculate_w_numba(WindowArray):
 
 @jit(nopython=True)
 def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
+    """Project weighted particles onto the full 3D scaling-function grid."""
     L = 1 << J
     PhiSupport = phi_data.shape[0] // SampRate
     ScaleFactor = L / SimBoxL
@@ -160,6 +163,7 @@ def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
 
 @jit(nopython=True)
 def int_data(data, ScaleFactor):
+    """Return coarse-grid x-cell indices for positions scaled by ScaleFactor."""
     num = data.shape[0]
     out = np.empty(num, dtype=np.int32)
     for i in range(num):
@@ -170,6 +174,7 @@ def int_data(data, ScaleFactor):
 ## bit opereator in numba
 @jit(nopython=True)
 def bit(array, J, size_bit):
+    """Keep the leading size_bit bits of integer grid coordinates at level J."""
     num = array.shape[0]
     result = np.empty(num, dtype=np.int32)
     shift = J - size_bit
@@ -180,6 +185,7 @@ def bit(array, J, size_bit):
 
 @jit(nopython=True)
 def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024, J=8, SimBoxL=1000.0):
+    """Project weighted particles onto one x-slab plus scaling-function padding."""
     L = 1 << J
     PhiSupport = phi_data.shape[0] // SampRate
     sew_width  = PhiSupport - 1
@@ -209,11 +215,13 @@ def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024,
 
 
 def partition_data_single(origin_data, shrink_data, part):
+    """Select rows from origin_data whose partition labels equal part."""
     dm_part = origin_data[shrink_data == part]
     return dm_part
 
 
 def specialized_convolution_3d(s, w, threads):
+    """Convolve a real 3D field with an rFFT-space kernel."""
     # Run FFt in multi-thread manner
     sc = rfftn(s, workers= threads)
     sc *= w
@@ -222,6 +230,7 @@ def specialized_convolution_3d(s, w, threads):
 
 
 def specialized_convolution_3d_complex(s, w, threads):
+    """Convolve a complex 3D field with a full FFT-space kernel."""
     sc = fftn(s, workers=threads)
     sc *= w
     result_convol3d = ifftn(sc, workers=threads)
@@ -229,6 +238,7 @@ def specialized_convolution_3d_complex(s, w, threads):
 
 
 def power_spectrum(v, k0, k1, N_k, SampRate):
+    """Return the squared magnitude of the sampled 1D Fourier spectrum."""
     s = spectrum_vectorized(v, k0, k1, N_k, SampRate)
     p = np.zeros(N_k + 1, dtype=np.double)
     for i in range(N_k + 1):
@@ -237,6 +247,7 @@ def power_spectrum(v, k0, k1, N_k, SampRate):
 
 
 def spectrum_vectorized(v, k0, k1, N_k, SampRate):
+    """Compute interleaved real/imaginary Fourier samples of a 1D vector."""
     N_x = v.shape[0]
     x0 = 0
     x1 = v.shape[0] / SampRate
@@ -262,6 +273,7 @@ def spectrum_vectorized(v, k0, k1, N_k, SampRate):
 
 @jit(nopython=True)
 def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
+    """Evaluate local scaling-function stencil values around each position."""
     step = np.arange(PhiSupport) * SampRate
     scale_pos = pos * ScaleFactor
     pos_coarse = np.floor(scale_pos).astype(np.int32)
@@ -564,16 +576,19 @@ def estimate_triplet_contrast_particle_centers_legacy(
 
 @njit
 def _k_norm(ki, kj, kk):
+    """Return the Euclidean norm of a 3D k-vector."""
     return math.sqrt(ki * ki + kj * kj + kk * kk)
 
 
 @njit
 def _phase_from_kR(ki, kj, kk, R):
+    """Return the Fourier phase 2*pi*|k|*R."""
     return 2.0 * math.pi * _k_norm(ki, kj, kk) * R
 
 
 @njit
 def _angles_from_k(ki, kj, kk):
+    """Return |k|, polar angle theta, and azimuth phi for a k-vector."""
     k = _k_norm(ki, kj, kk)
     if k == 0.0:
         return 0.0, 0.0, 0.0
@@ -591,6 +606,7 @@ def _angles_from_k(ki, kj, kk):
 
 @njit
 def _factorial_small(n):
+    """Compute n! as float for small nonnegative integer n."""
     out = 1.0
     for i in range(2, n + 1):
         out *= i
@@ -599,6 +615,7 @@ def _factorial_small(n):
 
 @njit
 def spherical_jn_numba(l, x):
+    """Compute spherical Bessel j_l(x) with stable small-x and high-l handling."""
     if l < 0:
         return np.nan
 
@@ -680,6 +697,7 @@ def spherical_jn_numba(l, x):
 
 @njit
 def assoc_legendre_numba(l, m, x):
+    """Compute the associated Legendre function P_l^m(x) for nonnegative m."""
     if l < 0:
         return np.nan
     if m < 0 or m > l:
@@ -713,6 +731,7 @@ def assoc_legendre_numba(l, m, x):
 
 @njit
 def spherical_harmonic_numba(l, m, ki, kj, kk):
+    """Evaluate complex spherical harmonic Y_l^m in the direction of k."""
     if l < 0:
         return np.nan + 0.0j
     if abs(m) > l:
@@ -742,6 +761,7 @@ def spherical_harmonic_numba(l, m, ki, kj, kk):
 
 @njit
 def window_function_legendre_numba(ki, kj, kk, R, l, m):
+    """Evaluate j_l(2*pi*|k|*R) * Y_l^m(khat) with Numba helpers."""
     if l < 0:
         return np.nan + 0.0j
     if abs(m) > l:
@@ -754,6 +774,7 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
 
 
 def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
+    """Evaluate the Legendre multipole window, using fast kernels when available."""
     if use_fast:
         if has_fast_window_function(l, m):
             return window_function_legendre_fast(ki, kj, kk, R, l, m)
@@ -777,6 +798,7 @@ def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
 
 @njit
 def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    """Build a complex FFT-space window array for one Legendre (l, m) mode."""
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
         ii = i % L
@@ -795,12 +817,14 @@ def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
 
 
 def calculate_window_array_legendre(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    """Build a Legendre window array, dispatching to generated fast kernels when possible."""
     if has_fast_window_function(l, m):
         return calculate_window_array_with_lm_fast(L, DeltaXi, PowerPhi, rescaleR, l, m)
     return calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)
 
 
 def cal_gamma(phi_data, PhiSupport, SampRate):
+    """Compute scaling-function triple-overlap weights for GPU summation."""
     gamma = np.zeros((PhiSupport, PhiSupport))
     for l1 in range(PhiSupport):
         for l2 in range(PhiSupport):
@@ -812,6 +836,7 @@ def cal_gamma(phi_data, PhiSupport, SampRate):
 
 @cuda.jit
 def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
+    """Multiply the center field by two convolved fields using Gamma overlaps."""
     lx, ly, lz = cuda.grid(3)
     if lx < L and ly < L and lz < L:
         sum_over_l1 = 0.0 + 0.0j
@@ -842,6 +867,7 @@ REDUCE_THREADS = 256
 
 @cuda.jit
 def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
+    """Reduce a complex device array into per-block real and imaginary sums."""
     shared_real = cuda.shared.array(shape=REDUCE_THREADS, dtype=numba.float64)
     shared_imag = cuda.shared.array(shape=REDUCE_THREADS, dtype=numba.float64)
 
@@ -875,6 +901,7 @@ def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
 
 
 def combine_multipole_m_terms(m_values, l):
+    """Combine nonnegative m summands into one real multipole coefficient."""
     coeff = complex(m_values[0])
     for m in range(1, l + 1):
         coeff += ((-1) ** m) * complex(m_values[m])
@@ -884,12 +911,14 @@ def combine_multipole_m_terms(m_values, l):
 
 
 def _cache_file_path(cache_dir, radius, l, m):
+    """Return the cache path for one radius and Legendre (l, m) field."""
     sign = "m" if m >= 0 else "m_minus"
     suffix = f"{m}" if m >= 0 else f"{-m}"
     return Path(cache_dir) / f"R{radius:g}_l{l}_{sign}{suffix}.npy"
 
 
 def _prepare_legendre_convolution_context(field):
+    """Precompute shared wavelet-spectrum inputs for Legendre convolutions."""
     return {
         "delta_xi": 1.0 / field.L,
         "power_phi": power_spectrum(field.phi_data, 0, field.bandwidth, field.L * field.bandwidth, field.SampRate),
@@ -906,6 +935,7 @@ def _stream_convolution_fields(
     cache_dir="",
     conv_context=None,
 ):
+    """Generate or load convolved fields for selected m values at one radius."""
     if conv_context is None:
         conv_context = _prepare_legendre_convolution_context(field)
     delta_xi = conv_context["delta_xi"]
@@ -932,6 +962,7 @@ def _stream_convolution_fields(
 
 
 def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
+    """Allocate reusable CUDA state for multipole m-term summation."""
     if not cuda.is_available():
         raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
 
@@ -968,6 +999,7 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
 
 
 def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
+    """Compute one complex m summand and return timing diagnostics."""
     t_h2d_start = time.perf_counter()
     data_r1_gpu = cuda.to_device(np.ascontiguousarray(field_r1_m, dtype=np.complex128))
     data_r2_gpu = cuda.to_device(np.ascontiguousarray(field_r2_m, dtype=np.complex128))
@@ -1023,6 +1055,7 @@ def calc_DDD_multipole(
     progress_callback=None,
     m_progress_callback=None,
 ):
+    """Compute DDD Legendre multipoles over l_min..l_max for three fields."""
     if l_min < 0:
         raise ValueError("l_min must be non-negative.")
     if l_max < 0:
