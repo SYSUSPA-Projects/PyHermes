@@ -1,10 +1,10 @@
 import numpy as np
 from numba import njit
-from scipy.special import jn
 
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
+from pyhermes.utils.math_util import jn_numba
 
 
 @njit
@@ -54,7 +54,7 @@ def window_function_gauss_numba(ki, kj, kk, R):
 
 
 @njit
-def window_function_gauss_shell(ki, kj, kk, R1, R2):
+def window_function_gauss_shell_numba(ki, kj, kk, R1, R2):
     """
     Gaussian-damped shell-like window in k-space.
 
@@ -78,7 +78,7 @@ def window_function_gauss_shell(ki, kj, kk, R1, R2):
 
 
 @njit
-def window_function_Tshell(ki, kj, kk, R1, R2):
+def window_function_Tshell_numba(ki, kj, kk, R1, R2):
     """
     Finite-thickness spherical shell window in k-space.
 
@@ -103,7 +103,7 @@ def window_function_Tshell(ki, kj, kk, R1, R2):
 
 
 @njit
-def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
+def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
     """
     Gaussian-derivative wavelet window in k-space.
 
@@ -118,7 +118,8 @@ def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
     return result
 
 
-def window_function_cylinder(ki, kj, kk, R, h):
+@njit
+def window_function_cylinder_numba(ki, kj, kk, R, h):
     """
     Cylindrical top-hat window in k-space.
 
@@ -136,7 +137,7 @@ def window_function_cylinder(ki, kj, kk, R, h):
     if k1 == 0:
         sum_val = 1
     else:
-        sum_val = 2 * jn(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
+        sum_val = 2 * jn_numba(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
     return (sum_val * part1) * np.pi * h * R**2
 
 
@@ -145,10 +146,10 @@ def set_window_function(w_type, verbose=True):
         "shell": window_function_shell_numba,
         "sphere": window_function_sphere_numba,
         "gaussian": window_function_gauss_numba,
-        "gaussian_shell": window_function_gauss_shell,
-        "Tshell": window_function_Tshell,
-        "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet,
-        "cylinder": window_function_cylinder,
+        "gaussian_shell": window_function_gauss_shell_numba,
+        "Tshell": window_function_Tshell_numba,
+        "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
+        "cylinder": window_function_cylinder_numba,
     }
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)

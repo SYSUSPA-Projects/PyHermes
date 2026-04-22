@@ -696,6 +696,148 @@ def spherical_jn_numba(l, x):
 
 
 @njit
+def j0_numba(x):
+    """Compute cylindrical Bessel J_0(x) using Cephes-style approximations."""
+    ax = abs(x)
+    if ax < 8.0:
+        y = x * x
+        ans1 = (
+            57568490574.0
+            + y * (
+                -13362590354.0
+                + y * (651619640.7 + y * (-11214424.18 + y * (77392.33017 + y * -184.9052456)))
+            )
+        )
+        ans2 = (
+            57568490411.0
+            + y * (
+                1029532985.0
+                + y * (9494680.718 + y * (59272.64853 + y * (267.8532712 + y)))
+            )
+        )
+        return ans1 / ans2
+
+    z = 8.0 / ax
+    y = z * z
+    xx = ax - 0.785398164
+    ans1 = (
+        1.0
+        + y * (
+            -0.1098628627e-2
+            + y * (0.2734510407e-4 + y * (-0.2073370639e-5 + y * 0.2093887211e-6))
+        )
+    )
+    ans2 = (
+        -0.1562499995e-1
+        + y * (
+            0.1430488765e-3
+            + y * (-0.6911147651e-5 + y * (0.7621095161e-6 - y * 0.934945152e-7))
+        )
+    )
+    return math.sqrt(0.636619772 / ax) * (math.cos(xx) * ans1 - z * math.sin(xx) * ans2)
+
+
+@njit
+def j1_numba(x):
+    """Compute cylindrical Bessel J_1(x) using Cephes-style approximations."""
+    ax = abs(x)
+    if ax < 8.0:
+        y = x * x
+        ans1 = x * (
+            72362614232.0
+            + y * (
+                -7895059235.0
+                + y * (242396853.1 + y * (-2972611.439 + y * (15704.48260 + y * -30.16036606)))
+            )
+        )
+        ans2 = (
+            144725228442.0
+            + y * (
+                2300535178.0
+                + y * (18583304.74 + y * (99447.43394 + y * (376.9991397 + y)))
+            )
+        )
+        return ans1 / ans2
+
+    z = 8.0 / ax
+    y = z * z
+    xx = ax - 2.356194491
+    ans1 = (
+        1.0
+        + y * (
+            0.183105e-2
+            + y * (-0.3516396496e-4 + y * (0.2457520174e-5 + y * -0.240337019e-6))
+        )
+    )
+    ans2 = (
+        0.04687499995
+        + y * (
+            -0.2002690873e-3
+            + y * (0.8449199096e-5 + y * (-0.88228987e-6 + y * 0.105787412e-6))
+        )
+    )
+    ans = math.sqrt(0.636619772 / ax) * (math.cos(xx) * ans1 - z * math.sin(xx) * ans2)
+    if x < 0.0:
+        ans = -ans
+    return ans
+
+
+@njit
+def jn_numba(n, x):
+    """Compute cylindrical Bessel J_n(x) for integer order n."""
+    order = n
+    sign = 1.0
+    if order < 0:
+        order = -order
+        if order % 2 == 1:
+            sign = -sign
+    if x < 0.0:
+        x = -x
+        if order % 2 == 1:
+            sign = -sign
+
+    if order == 0:
+        return sign * j0_numba(x)
+    if order == 1:
+        return sign * j1_numba(x)
+    if x == 0.0:
+        return 0.0
+
+    tox = 2.0 / x
+    if x > order:
+        bjm = j0_numba(x)
+        bj = j1_numba(x)
+        for j in range(1, order):
+            bjp = j * tox * bj - bjm
+            bjm = bj
+            bj = bjp
+        return sign * bj
+
+    m = 2 * ((order + int(math.sqrt(40.0 * order))) // 2)
+    jsum = False
+    bjp = 0.0
+    ans = 0.0
+    total = 0.0
+    bj = 1.0
+    for j in range(m, 0, -1):
+        bjm = j * tox * bj - bjp
+        bjp = bj
+        bj = bjm
+        if abs(bj) > 1.0e10:
+            bj *= 1.0e-10
+            bjp *= 1.0e-10
+            ans *= 1.0e-10
+            total *= 1.0e-10
+        if jsum:
+            total += bj
+        jsum = not jsum
+        if j == order:
+            ans = bjp
+    total = 2.0 * total - bj
+    return sign * ans / total
+
+
+@njit
 def assoc_legendre_numba(l, m, x):
     """Compute the associated Legendre function P_l^m(x) for nonnegative m."""
     if l < 0:
