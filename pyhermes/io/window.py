@@ -6,6 +6,7 @@ import numpy as np
 from .convols import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils import math_util
+from pyhermes.utils.window_functions import set_window_function
 
 
 class WindowFunc(ConvolsData):
@@ -50,7 +51,7 @@ class WindowFunc(ConvolsData):
         else:
             assert "type" in win_params
             self.type = win_params['type']
-            self.func = math_util.set_window_function(self.type, verbose=False)
+            self.func = set_window_function(self.type, verbose=False)
         self.len_args = win_params['len_args']
         self.rescale_len_args = {k: v * self.L / self.SimBoxL for k, v in self.len_args.items()}
         self.other_args = win_params.get('other_args', {})

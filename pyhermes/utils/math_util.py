@@ -20,16 +20,6 @@ from pyhermes.utils.legendre_fast import (
     has_fast_window_function,
     window_function_legendre_fast,
 )
-from pyhermes.utils.window_functions import (
-    set_window_function,
-    window_function_Tshell,
-    window_function_cylinder,
-    window_function_gauss_direvative_wavalet,
-    window_function_gauss_numba,
-    window_function_gauss_shell,
-    window_function_shell_numba,
-    window_function_sphere_numba,
-)
 
 
 _NUMBA_CONFIGURED = False
