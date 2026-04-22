@@ -20,6 +20,16 @@ from pyhermes.utils.legendre_fast import (
     has_fast_window_function,
     window_function_legendre_fast,
 )
+from pyhermes.utils.window_functions import (
+    set_window_function,
+    window_function_Tshell,
+    window_function_cylinder,
+    window_function_gauss_direvative_wavalet,
+    window_function_gauss_numba,
+    window_function_gauss_shell,
+    window_function_shell_numba,
+    window_function_sphere_numba,
+)
 
 
 _NUMBA_CONFIGURED = False
@@ -61,116 +71,6 @@ warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
 # ---------------------------------------------------------------
 # ------------- ↓ Numerical function for convols ↓ --------------
 # ---------------------------------------------------------------
-
-
-### ↓ Window functions ↓ ###
-@njit
-def window_function_shell_numba(ki, kj, kk, R):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        return 1
-    # Use np.where to handle the k == 0 case
-    Phase = 2 * np.pi * k * R
-    result = np.sin(Phase) / Phase
-    return result
-
-
-@njit
-def window_function_sphere_numba(ki, kj, kk, R):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        # return 4 * np.pi * R**3 / 3
-        return 1
-    # Use np.where to handle the k == 0 case
-    Phase = 2 * np.pi * k * R
-    # result = (np.sin(Phase) - Phase * np.cos(Phase)) / (2 * np.pi**2 * k**3)
-    result = 3 * (np.sin(Phase) - Phase * np.cos(Phase)) / Phase**3
-    return result
-
-
-@njit
-def window_function_gauss_numba(ki, kj, kk, R):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    # Use np.where to handle the k == 0 case
-    Phase = 2 * np.pi * k * R
-    result = np.exp(-(Phase**2) / 2)
-    return result
-
-
-@njit
-def window_function_gauss_shell(ki, kj, kk, R1, R2):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        return 1
-    Phase1 = 2 * np.pi * k * R1
-    Phase2 = 2 * np.pi * k * R2
-    result = (
-        (R2 * R2 * np.cos(Phase1) + R1 * R1 * np.sin(Phase1) / Phase1) / (R1 * R1 + R2 * R2) * np.exp(-(Phase2**2) / 2)
-    )
-    return result
-
-
-@njit
-def window_function_Tshell(ki, kj, kk, R1, R2):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        return 1
-    Phase1 = 2 * np.pi * k * R1
-    Phase2 = 2 * np.pi * k * R2
-    result = (
-        3
-        * (np.sin(Phase2) - Phase2 * np.cos(Phase2) - np.sin(Phase1) + Phase1 * np.cos(Phase1))
-        / (Phase2**3 - Phase1**3)
-    )
-    return result
-
-
-@njit
-def window_function_gauss_direvative_wavalet(ki, kj, kk, R):
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    Phase = 2 * np.pi * k * R
-    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
-    result = norm * Phase**2 * np.exp(-(Phase**2) / 2)
-    return result
-
-
-def window_function_cylinder(ki, kj, kk, R, h):
-    k1 = np.sqrt(ki**2 + kj**2)
-    if kk == 0:
-        part1 = 1
-    else:
-        part1 = np.sin(2 * np.pi * kk * h / 2) / (2 * np.pi * kk * h / 2)
-
-    if k1 == 0:
-        sum_val = 1
-    else:
-        sum_val = 2 * jn(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
-    return (sum_val * part1) * np.pi * h * R**2
-### ↑ Window functions ↑ ###
-
-
-def set_window_function(w_type, verbose=True):
-    w_type_dict = {
-        "shell": window_function_shell_numba,
-        "sphere": window_function_sphere_numba,
-        "gaussian": window_function_gauss_numba,
-        "gaussian_shell": window_function_gauss_shell,
-        "Tshell": window_function_Tshell,
-        "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet,
-        "cylinder": window_function_cylinder,
-    }
-    _mod_name, _func_name = get_fname_info()
-    logger = setup_logger(_mod_name, _func_name)
-    if w_type in w_type_dict:
-        verbose and logger.info(f"Using window function: {w_type}")
-        read_function = w_type_dict[w_type]
-        return read_function
-    else:
-        supported_w_type = ", ".join(w_type_dict.keys())
-        logger.error(f"Unsupported input window function type: {w_type}")
-        logger.error(f"Supported types: {supported_w_type}")
-        logger.error("Please see the document for details")
-        func_util.safe_exit(1)
 
 
 @njit(parallel=True)
