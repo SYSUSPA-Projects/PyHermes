@@ -55,7 +55,7 @@ from pyhermes.utils.corr3pcf_multipoles import (  # noqa: E402
 from pyhermes.utils.legendre_windows import (  # noqa: E402
     calculate_legendre_window_array,
     calculate_legendre_window_array_numba,
-    window_function_legendre,
+    window_function_legendre_reference,
     window_function_legendre_numba,
 )
 from pyhermes.utils.runtime import configure  # noqa: E402
@@ -124,7 +124,7 @@ __all__ = [
     "assoc_legendre_numba",
     "spherical_harmonic_numba",
     "window_function_legendre_numba",
-    "window_function_legendre",
+    "window_function_legendre_reference",
     "calculate_legendre_window_array_numba",
     "calculate_legendre_window_array",
     "cal_gamma",

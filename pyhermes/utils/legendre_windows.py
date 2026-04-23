@@ -7,9 +7,25 @@ from scipy.special import spherical_jn, sph_harm
 from pyhermes.utils.legendre_fast import (
     calculate_fast_legendre_window_array_with_lm,
     has_fast_window_function,
-    window_function_legendre_fast,
 )
 from pyhermes.utils.special_functions import _phase_from_kR, spherical_harmonic_numba, spherical_jn_numba
+
+
+def window_function_legendre_reference(ki, kj, kk, R, l, m):
+    """Evaluate the Legendre multipole window with NumPy/SciPy for validation."""
+    if abs(m) > l:
+        return 0.0 + 0.0j
+
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    if k == 0.0:
+        if l == 0 and m == 0:
+            return 1.0 / np.sqrt(4.0 * np.pi) + 0.0j
+        return 0.0 + 0.0j
+
+    theta = np.arccos(np.clip(kk / k, -1.0, 1.0))
+    phi = np.arctan2(kj, ki)
+    phase = 2.0 * np.pi * k * R
+    return spherical_jn(l, phase) * sph_harm(m, l, phi, theta)
 
 
 @njit
@@ -24,28 +40,6 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
     jl = spherical_jn_numba(l, phase)
     ylm = spherical_harmonic_numba(l, m, ki, kj, kk)
     return jl * ylm
-
-
-def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
-    """Evaluate the Legendre multipole window, using fast kernels when available."""
-    if use_fast:
-        if has_fast_window_function(l, m):
-            return window_function_legendre_fast(ki, kj, kk, R, l, m)
-        return window_function_legendre_numba(ki, kj, kk, R, l, m)
-
-    if abs(m) > l:
-        return 0.0 + 0.0j
-
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0.0:
-        if l == 0 and m == 0:
-            return 1.0 / np.sqrt(4.0 * np.pi) + 0.0j
-        return 0.0 + 0.0j
-
-    theta = np.arccos(np.clip(kk / k, -1.0, 1.0))
-    phi = np.arctan2(kj, ki)
-    phase = 2.0 * np.pi * k * R
-    return spherical_jn(l, phase) * sph_harm(m, l, phi, theta)
 
 
 @njit
