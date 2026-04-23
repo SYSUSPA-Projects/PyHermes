@@ -115,7 +115,6 @@ def _prepare_legendre_convolution_context(field):
     higher-band Legendre window construction may be added later.
     """
     return {
-        "delta_xi": 1.0 / field.L,
         "power_phi": power_spectrum(field.phi_data, 0, 1, field.L, field.SampRate),
     }
 
@@ -133,7 +132,6 @@ def _stream_convolution_fields(
     """Generate or load convolved fields for selected m values at one radius."""
     if conv_context is None:
         conv_context = _prepare_legendre_convolution_context(field)
-    delta_xi = conv_context["delta_xi"]
     power_phi = conv_context["power_phi"]
     rescaleR = radius * field.ScaleFactor
     if m_values is None:
@@ -147,7 +145,7 @@ def _stream_convolution_fields(
             if cache_path.exists():
                 cached = np.load(cache_path)
         if cached is None:
-            window_array = calculate_legendre_window_array(field.L, delta_xi, power_phi, rescaleR, l, m)
+            window_array = calculate_legendre_window_array(field.L, power_phi, rescaleR, l, m)
             cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)

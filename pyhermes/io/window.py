@@ -24,7 +24,6 @@ class WindowFunc(ConvolsData):
             self.bandwidth = int(bandwidth)
             self.SimBoxL = convols_params["SimBoxL"]
             self.SampRate = int(convols_params["SampRate"])
-            self.DeltaXi = 1 / self.L
             self.wavelet_mode = convols_params["wavelet_mode"]
             self.wavelet_level = convols_params["wavelet_level"]
         except Exception as e:
@@ -72,7 +71,6 @@ class WindowFunc(ConvolsData):
         self._window_array = call_calculate_window_array(
             L=self.L,
             bandwidth=self.bandwidth,
-            DeltaXi=self.DeltaXi,
             PowerPhi=self.PowerPhi,
             window_function_numba=self.func,
             **self.window_args,

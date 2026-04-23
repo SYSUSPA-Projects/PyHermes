@@ -12,9 +12,10 @@ from pyhermes.utils.func_util import get_fname_info
 
 
 @njit(parallel=True)
-def calculate_real_window_octant_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
+def calculate_real_window_octant_array_numba(L, bandwidth, PowerPhi, window_function_numba, *args):
     """Evaluate a real-space window lookup array from a k-space window kernel."""
     WindowArray = np.zeros((L + 1, L + 1, L + 1))
+    inv_L = 1.0 / L
     for i in prange(L + 1):
         for j in range(L + 1):
             for k in range(L + 1):
@@ -27,14 +28,17 @@ def calculate_real_window_octant_array_numba(L, bandwidth, DeltaXi, PowerPhi, wi
                                 * PowerPhi[jj * L + j]
                                 * PowerPhi[kk * L + k]
                                 * window_function_numba(
-                                    (ii * L + i) * DeltaXi, (jj * L + j) * DeltaXi, (kk * L + k) * DeltaXi, *args
+                                    (ii * L + i) * inv_L,
+                                    (jj * L + j) * inv_L,
+                                    (kk * L + k) * inv_L,
+                                    *args
                                 )
                             )
                 WindowArray[i, j, k] = temp
     return WindowArray
 
 
-def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, **kwargs):
+def call_calculate_window_array(L, bandwidth, PowerPhi, window_function_numba, **kwargs):
     """Call ``calculate_real_window_octant_array_numba`` with keyword arguments in kernel-signature order."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
@@ -50,7 +54,9 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
         logger.error("Please see the document for details")
         func_util.safe_exit(1)
     ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
-    return calculate_real_window_octant_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
+    return calculate_real_window_octant_array_numba(
+        L, bandwidth, PowerPhi, window_function_numba, *ordered_args
+    )
 
 
 @njit(parallel=True)
