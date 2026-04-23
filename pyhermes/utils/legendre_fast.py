@@ -1272,7 +1272,7 @@ def window_function_legendre_fast(ki, kj, kk, R, l, m):
 
 
 @njit
-def calculate_window_array_numba_full(L, DeltaXi, PowerPhi, rescaleR, window_function_numba):
+def calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, window_function_numba):
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
         for j in range(-L, L):
@@ -1287,7 +1287,7 @@ def calculate_window_array_numba_full(L, DeltaXi, PowerPhi, rescaleR, window_fun
     return window_array
 
 
-def calculate_window_array_with_lm_fast(L, DeltaXi, PowerPhi, rescaleR, l, m):
+def calculate_fast_legendre_window_array_with_lm(L, DeltaXi, PowerPhi, rescaleR, l, m):
     if (l, m) not in WINDOW_FUNCTION_MAPPING:
         raise ValueError(f"Unsupported fast Legendre window for l={l}, m={m}.")
-    return calculate_window_array_numba_full(L, DeltaXi, PowerPhi, rescaleR, WINDOW_FUNCTION_MAPPING[(l, m)])
+    return calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, WINDOW_FUNCTION_MAPPING[(l, m)])

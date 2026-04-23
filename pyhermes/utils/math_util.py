@@ -26,7 +26,7 @@ warnings.warn(
 
 from pyhermes.utils.convolution import (  # noqa: E402
     calculate_w_numba,
-    calculate_window_array_numba,
+    calculate_real_window_octant_array_numba,
     call_calculate_window_array,
     specialized_convolution_3d,
     specialized_convolution_3d_complex,
@@ -53,8 +53,8 @@ from pyhermes.utils.corr3pcf_multipoles import (  # noqa: E402
     reduce_complex_sum_kernel,
 )
 from pyhermes.utils.legendre_windows import (  # noqa: E402
-    calculate_window_array_legendre,
-    calculate_window_array_legendre_numba,
+    calculate_legendre_window_array,
+    calculate_legendre_window_array_numba,
     window_function_legendre,
     window_function_legendre_numba,
 )
@@ -93,7 +93,7 @@ __all__ = [
     "configure",
     "do_wavelet",
     "random_points_box",
-    "calculate_window_array_numba",
+    "calculate_real_window_octant_array_numba",
     "call_calculate_window_array",
     "calculate_w_numba",
     "scaling_function_numba",
@@ -125,8 +125,8 @@ __all__ = [
     "spherical_harmonic_numba",
     "window_function_legendre_numba",
     "window_function_legendre",
-    "calculate_window_array_legendre_numba",
-    "calculate_window_array_legendre",
+    "calculate_legendre_window_array_numba",
+    "calculate_legendre_window_array",
     "cal_gamma",
     "compute_3d_result_gpu",
     "REDUCE_THREADS",

@@ -8,7 +8,7 @@ import numpy as np
 from numba import cuda
 
 from pyhermes.utils.convolution import specialized_convolution_3d_complex
-from pyhermes.utils.legendre_windows import calculate_window_array_legendre
+from pyhermes.utils.legendre_windows import calculate_legendre_window_array
 from pyhermes.utils.wavelet_grid import power_spectrum
 
 
@@ -141,7 +141,7 @@ def _stream_convolution_fields(
             if cache_path.exists():
                 cached = np.load(cache_path)
         if cached is None:
-            window_array = calculate_window_array_legendre(field.L, delta_xi, power_phi, rescaleR, l, m)
+            window_array = calculate_legendre_window_array(field.L, delta_xi, power_phi, rescaleR, l, m)
             cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)

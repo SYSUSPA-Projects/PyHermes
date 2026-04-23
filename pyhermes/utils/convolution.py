@@ -12,7 +12,7 @@ from pyhermes.utils.func_util import get_fname_info
 
 
 @njit(parallel=True)
-def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
+def calculate_real_window_octant_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *args):
     """Evaluate a real-space window lookup array from a k-space window kernel."""
     WindowArray = np.zeros((L + 1, L + 1, L + 1))
     for i in prange(L + 1):
@@ -35,7 +35,7 @@ def calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_functio
 
 
 def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, **kwargs):
-    """Call ``calculate_window_array_numba`` with keyword arguments in kernel-signature order."""
+    """Call ``calculate_real_window_octant_array_numba`` with keyword arguments in kernel-signature order."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     sig = inspect.signature(window_function_numba)
@@ -50,7 +50,7 @@ def call_calculate_window_array(L, bandwidth, DeltaXi, PowerPhi, window_function
         logger.error("Please see the document for details")
         func_util.safe_exit(1)
     ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
-    return calculate_window_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
+    return calculate_real_window_octant_array_numba(L, bandwidth, DeltaXi, PowerPhi, window_function_numba, *ordered_args)
 
 
 @njit(parallel=True)

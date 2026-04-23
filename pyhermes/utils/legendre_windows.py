@@ -5,7 +5,7 @@ from numba import njit
 from scipy.special import spherical_jn, sph_harm
 
 from pyhermes.utils.legendre_fast import (
-    calculate_window_array_with_lm_fast,
+    calculate_fast_legendre_window_array_with_lm,
     has_fast_window_function,
     window_function_legendre_fast,
 )
@@ -49,7 +49,7 @@ def window_function_legendre(ki, kj, kk, R, l, m, use_fast=True):
 
 
 @njit
-def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
+def calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
     """Build a complex FFT-space window array for one Legendre (l, m) mode."""
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
@@ -68,8 +68,8 @@ def calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
     return window_array
 
 
-def calculate_window_array_legendre(L, DeltaXi, PowerPhi, rescaleR, l, m):
+def calculate_legendre_window_array(L, DeltaXi, PowerPhi, rescaleR, l, m):
     """Build a Legendre window array, dispatching to generated fast kernels when possible."""
     if has_fast_window_function(l, m):
-        return calculate_window_array_with_lm_fast(L, DeltaXi, PowerPhi, rescaleR, l, m)
-    return calculate_window_array_legendre_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)
+        return calculate_fast_legendre_window_array_with_lm(L, DeltaXi, PowerPhi, rescaleR, l, m)
+    return calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)
