@@ -48,7 +48,7 @@ class Counting(TaskBase):
             return {
                 "kind": "ConvolsData",
                 "L": value.L,
-                "SimBoxL": value.SimBoxL,
+                "box_size": value.box_size,
                 "wavelet_mode": value.wavelet_mode,
                 "wavelet_level": value.wavelet_level,
             }
@@ -187,8 +187,8 @@ class Counting(TaskBase):
             end_time1 = time.perf_counter()
             
             # --- generate random positions on each rank ---
-            # assume positions are uniform in the simulation box [0, SimBoxL)
-            pos = random_points_box(_local_n_tasks, _local_convols.SimBoxL, seed=self.seed + rank)
+            # assume positions are uniform in the simulation box [0, box_size)
+            pos = random_points_box(_local_n_tasks, _local_convols.box_size, seed=self.seed + rank)
             # --- evaluate number density at positions ---
             _data_local = _local_convols.n_at_pos(pos).astype(np.float64, copy=False)
 

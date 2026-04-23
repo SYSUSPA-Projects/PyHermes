@@ -23,9 +23,9 @@ Core field-construction parameters
 
 - ``J``:
   multiresolution level. The field size is ``L = 2^J``.
-- ``SampRate``:
-  sampling rate used for the wavelet/scaling-function construction.
-- ``SimBoxL``:
+- ``phi_resolution``:
+  number of samples used to tabulate ``phi``, the wavelet scaling function.
+- ``box_size``:
   physical side length of the simulation box.
 - ``wavelet_mode``:
   wavelet family name, such as ``"db2"``.

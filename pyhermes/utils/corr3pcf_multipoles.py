@@ -12,37 +12,37 @@ from pyhermes.utils.legendre_windows import calculate_legendre_window_array
 from pyhermes.utils.wavelet_grid import power_spectrum
 
 
-def cal_gamma(phi_data, PhiSupport, SampRate):
+def cal_gamma(phi_array, phi_support, phi_resolution):
     """Compute scaling-function triple-overlap weights for GPU summation."""
-    gamma = np.zeros((PhiSupport, PhiSupport))
-    for l1 in range(PhiSupport):
-        for l2 in range(PhiSupport):
-            rolled_phi1 = np.roll(phi_data, l1 * SampRate)
-            rolled_phi2 = np.roll(phi_data, l2 * SampRate)
-            gamma[l1, l2] = np.sum(phi_data * rolled_phi1 * rolled_phi2) / SampRate
+    gamma = np.zeros((phi_support, phi_support))
+    for l1 in range(phi_support):
+        for l2 in range(phi_support):
+            rolled_phi1 = np.roll(phi_array, l1 * phi_resolution)
+            rolled_phi2 = np.roll(phi_array, l2 * phi_resolution)
+            gamma[l1, l2] = np.sum(phi_array * rolled_phi1 * rolled_phi2) / phi_resolution
     return gamma
 
 
 @cuda.jit
-def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, PhiSupport):
+def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, phi_support):
     """Multiply the center field by two convolved fields using Gamma overlaps."""
     lx, ly, lz = cuda.grid(3)
     if lx < L and ly < L and lz < L:
         sum_over_l1 = 0.0 + 0.0j
-        for l1x in range(PhiSupport):
+        for l1x in range(phi_support):
             index_l1x = (lx - l1x) % L
-            for l1y in range(PhiSupport):
+            for l1y in range(phi_support):
                 index_l1y = (ly - l1y) % L
-                for l1z in range(PhiSupport):
+                for l1z in range(phi_support):
                     index_l1z = (lz - l1z) % L
                     sum_over_l2 = 0.0 + 0.0j
-                    for l2x in range(PhiSupport):
+                    for l2x in range(phi_support):
                         index_l2x = (lx - l2x) % L
                         res_y = 0.0 + 0.0j
-                        for l2y in range(PhiSupport):
+                        for l2y in range(phi_support):
                             index_l2y = (ly - l2y) % L
                             res_z = 0.0 + 0.0j
-                            for l2z in range(PhiSupport):
+                            for l2z in range(phi_support):
                                 index_l2z = (lz - l2z) % L
                                 res_z += Gamma[l1z, l2z] * data_R2[index_l2x, index_l2y, index_l2z]
                             res_y += Gamma[l1y, l2y] * res_z
@@ -115,7 +115,7 @@ def _prepare_legendre_convolution_context(field):
     higher-band Legendre window construction may be added later.
     """
     return {
-        "power_phi": power_spectrum(field.phi_data, 0, 1, field.L, field.SampRate),
+        "phi_fourier_power": power_spectrum(field.phi_array, 0, 1, field.L, field.phi_resolution),
     }
 
 
@@ -132,8 +132,8 @@ def _stream_convolution_fields(
     """Generate or load convolved fields for selected m values at one radius."""
     if conv_context is None:
         conv_context = _prepare_legendre_convolution_context(field)
-    power_phi = conv_context["power_phi"]
-    rescaleR = radius * field.ScaleFactor
+    phi_fourier_power = conv_context["phi_fourier_power"]
+    rescaleR = radius * field.scale_factor
     if m_values is None:
         m_values = range(-l, l + 1)
     m_fields = []
@@ -145,7 +145,7 @@ def _stream_convolution_fields(
             if cache_path.exists():
                 cached = np.load(cache_path)
         if cached is None:
-            window_array = calculate_legendre_window_array(field.L, power_phi, rescaleR, l, m)
+            window_array = calculate_legendre_window_array(field.L, phi_fourier_power, rescaleR, l, m)
             cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -160,7 +160,7 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
         raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
 
     cuda.select_device(int(gpu_device_id))
-    gamma = np.ascontiguousarray(cal_gamma(field1.phi_data, field1.PhiSupport, field1.SampRate), dtype=np.float64)
+    gamma = np.ascontiguousarray(cal_gamma(field1.phi_array, field1.phi_support, field1.phi_resolution), dtype=np.float64)
     gamma_gpu = cuda.to_device(gamma)
     data_gpu = cuda.to_device(np.ascontiguousarray(field1.epsilon, dtype=np.float64))
     result_gpu = cuda.device_array(field1.epsilon.shape, dtype=np.complex128)
@@ -187,7 +187,7 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
         "partial_real_gpu": partial_real_gpu,
         "partial_imag_gpu": partial_imag_gpu,
         "L": field1.L,
-        "PhiSupport": field1.PhiSupport,
+        "phi_support": field1.phi_support,
     }
 
 
@@ -206,7 +206,7 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
         gpu_context["gamma_gpu"],
         gpu_context["result_gpu"],
         gpu_context["L"],
-        gpu_context["PhiSupport"],
+        gpu_context["phi_support"],
     )
     cuda.synchronize()
     kernel_elapsed = time.perf_counter() - t_kernel_start

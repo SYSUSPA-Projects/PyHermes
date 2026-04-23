@@ -48,8 +48,8 @@ Use the shipped example config:
          format: "generic_pos"
          weight_key: "no_weight"
       fout_path: "./output/quijote_sfc.pkl"
-      SampRate: 1024
-      SimBoxL: 1000
+      phi_resolution: 1024
+      box_size: 1000
       wavelet_mode: "db2"
       wavelet_level: 10
 
@@ -156,9 +156,9 @@ Key parameters
   particle weight field name, or ``no_weight``
 - ``fout_path``:
   output path for the serialized coefficient field
-- ``SampRate``:
-  sampling rate used in field construction
-- ``SimBoxL``:
+- ``phi_resolution``:
+  number of samples used to tabulate ``phi``, the wavelet scaling function
+- ``box_size``:
   simulation box side length
 - ``wavelet_mode`` and ``wavelet_level``:
   wavelet settings

@@ -188,7 +188,7 @@ class Corr_2PCF(TaskBase):
             return {
                 "kind": "ConvolsData",
                 "L": value.L,
-                "SimBoxL": value.SimBoxL,
+                "box_size": value.box_size,
                 "wavelet_mode": value.wavelet_mode,
                 "wavelet_level": value.wavelet_level,
             }

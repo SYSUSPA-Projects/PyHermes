@@ -12,7 +12,7 @@ from pyhermes.utils.wavelet_grid import n_at_pos_numba, phi_at_pos_numba
 
 
 class ConvolsData(HermesData):
-    _REQUIRED_ARGV = ("J", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
+    _REQUIRED_ARGV = ("J", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level")
 
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
@@ -222,7 +222,7 @@ class ConvolsData(HermesData):
         return read_particle_data(self.fin_path, self.fin_format)['pos']
     
     def phi_at_pos(self, pos):
-        return phi_at_pos_numba(pos, self.phi_data, self.ScaleFactor, self.SampRate, self.PhiSupport)
+        return phi_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
     
     def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
         """
@@ -231,8 +231,8 @@ class ConvolsData(HermesData):
         normalize:
             True  -> return the normalized/grid-space nx (as in n_at_pos_numba)
             False -> return scaled output:
-                     if physical: nx * N_particles * ScaleFactor**3
-                     else:        nx * N_particles
+                     if physical: nx * particle_count * scale_factor**3
+                     else:        nx * particle_count
         physical:
             Only used when normalize is False.
         """
@@ -244,9 +244,9 @@ class ConvolsData(HermesData):
 
         npos = pos.shape[0]
         nx = np.empty(npos, dtype=np.float64)
-        pos_scaled = pos * self.ScaleFactor
+        pos_scaled = pos * self.scale_factor
         n_at_pos_numba(
-            nx, pos_scaled, epsilon, self.phi_data, self.L, self.SampRate, self.PhiSupport
+            nx, pos_scaled, epsilon, self.phi_array, self.L, self.phi_resolution, self.phi_support
         )
 
         if normalize:
@@ -254,7 +254,7 @@ class ConvolsData(HermesData):
         else:
             nx /= self.NormFactor
             if physical:
-                return nx * (self.ScaleFactor ** 3)
+                return nx * (self.scale_factor ** 3)
             else:
                 return nx
 

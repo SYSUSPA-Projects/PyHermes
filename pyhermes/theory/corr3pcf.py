@@ -63,10 +63,10 @@ def compute_triplet_product_mc(
 ):
     """Dispatch the 3PCF Monte Carlo kernel for the chosen center definition."""
     kwargs_common = {
-        "phi_data": convols_meta.phi_data,
+        "phi_array": convols_meta.phi_array,
         "L": convols_meta.L,
-        "SampRate": convols_meta.SampRate,
-        "PhiSupport": convols_meta.PhiSupport,
+        "phi_resolution": convols_meta.phi_resolution,
+        "phi_support": convols_meta.phi_support,
         "seed_base_rot": seed_base_rot,
         "theta_index": theta_index,
     }
@@ -291,7 +291,7 @@ class Corr_3PCF(TaskBase):
             return {
                 "kind": "ConvolsData",
                 "L": value.L,
-                "SimBoxL": value.SimBoxL,
+                "box_size": value.box_size,
                 "wavelet_mode": value.wavelet_mode,
                 "wavelet_level": value.wavelet_level,
             }
@@ -754,7 +754,7 @@ class Corr_3PCF(TaskBase):
                 self.rho = None
 
             if self.particle_pos1 is not None:
-                self.logger.info(f"Particle leg 1 ready | source={particle_pos1_source} | N_particles={self.particle_pos1.shape[0]}")
+                self.logger.info(f"Particle leg 1 ready | source={particle_pos1_source} | particle_count={self.particle_pos1.shape[0]}")
             elif self.center != "particle":
                 self.particle_pos1 = None
 
@@ -765,7 +765,7 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.convols_info1 = None
 
             if self.random_pos1 is not None:
-                self.logger.info(f"Random leg 1 centers ready | source={random_pos1_source} | N_particles={self.random_pos1.shape[0]}")
+                self.logger.info(f"Random leg 1 centers ready | source={random_pos1_source} | particle_count={self.random_pos1.shape[0]}")
             elif self.center != "particle":
                 self.random_pos1 = None
 
@@ -1015,12 +1015,12 @@ class Corr_3PCF(TaskBase):
                         self.logger.error("At least one ConvolsData input is required to define geometry for center='particle'.")
                         func_util.safe_exit(1)
                     if self.particle_pos1 is not None:
-                        pos_all = self.particle_pos1 * geometry_ref.ScaleFactor
+                        pos_all = self.particle_pos1 * geometry_ref.scale_factor
                     else:
-                        pos_all = _local_convols1.get_particle_data() * _local_convols1.ScaleFactor
+                        pos_all = _local_convols1.get_particle_data() * _local_convols1.scale_factor
                     Nall = pos_all.shape[0]
                     if self.random_pos1 is not None:
-                        pos_all_random1 = self.random_pos1 * geometry_ref.ScaleFactor
+                        pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         Nall_random1 = pos_all_random1.shape[0]
                     else:
                         pos_all_random1 = None
@@ -1046,7 +1046,7 @@ class Corr_3PCF(TaskBase):
                     counts = None
                 n_local = int(comm.scatter(counts, root=0))
                 seed_center_rank = self.base_seed + 1000003 * (rank + 1)
-                pos_local = random_points_box(N=n_local, SimBoxL=_local_convols1.L, seed=seed_center_rank)
+                pos_local = random_points_box(N=n_local, box_size=_local_convols1.L, seed=seed_center_rank)
             else:
                 pos_local = self._scatter_positions(pos_all)
                 if self.random_pos1 is not None:
@@ -1067,8 +1067,8 @@ class Corr_3PCF(TaskBase):
                 self._particle_delta_fields = (delta_field2, delta_field3)
             else:
                 self._particle_delta_fields = None
-            self.r12_scaled = self.r12 * geometry_ref.ScaleFactor
-            self.r13_scaled = self.r13 * geometry_ref.ScaleFactor
+            self.r12_scaled = self.r12 * geometry_ref.scale_factor
+            self.r13_scaled = self.r13 * geometry_ref.scale_factor
             seed_base_rot = self.base_seed + 1
 
             if rank == 0:

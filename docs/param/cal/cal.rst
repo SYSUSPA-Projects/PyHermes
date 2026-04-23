@@ -7,8 +7,8 @@ Convols
 -------
 
 - ``J``: multiresolution level used for the field representation
-- ``SampRate``: sampling rate
-- ``SimBoxL``: simulation box size
+- ``phi_resolution``: number of samples used to tabulate ``phi``, the wavelet scaling function
+- ``box_size``: simulation box size
 - ``wavelet_mode``: wavelet family
 - ``wavelet_level``: wavelet decomposition depth
 

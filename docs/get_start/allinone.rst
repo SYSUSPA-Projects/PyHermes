@@ -22,8 +22,8 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
          path: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
          format: "generic_pos"
       fout_path: "./output/quijote_sfc.pkl"
-      SampRate: 1024
-      SimBoxL: 1000
+      phi_resolution: 1024
+      box_size: 1000
       wavelet_mode: "db2"
       wavelet_level: 10
 

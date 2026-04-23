@@ -22,8 +22,8 @@ class WindowFunc(ConvolsData):
         try:
             self.L = 1 << int(convols_params['J'])
             self.bandwidth = int(bandwidth)
-            self.SimBoxL = convols_params["SimBoxL"]
-            self.SampRate = int(convols_params["SampRate"])
+            self.box_size = convols_params["box_size"]
+            self.phi_resolution = int(convols_params["phi_resolution"])
             self.wavelet_mode = convols_params["wavelet_mode"]
             self.wavelet_level = convols_params["wavelet_level"]
         except Exception as e:
@@ -33,17 +33,17 @@ class WindowFunc(ConvolsData):
         self.input_params = {
             **dict(win_params),
             "J": int(convols_params["J"]),
-            "SimBoxL": self.SimBoxL,
-            "SampRate": self.SampRate,
+            "box_size": self.box_size,
+            "phi_resolution": self.phi_resolution,
             "wavelet_mode": self.wavelet_mode,
             "wavelet_level": self.wavelet_level,
             "bandwidth": self.bandwidth,
         }
-        phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
-        self.PowerPhi = power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
-        if not isinstance(self.PowerPhi, np.ndarray):
+        phi_array = do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.phi_fourier_power = power_spectrum(phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution)
+        if not isinstance(self.phi_fourier_power, np.ndarray):
             if self.rank == 0:
-                self.logger.error("WindowFunc requires PowerPhi to be a numpy.ndarray.")
+                self.logger.error("WindowFunc requires phi_fourier_power to be a numpy.ndarray.")
             func_util.safe_exit(1)
         if self.L <= 0 or self.bandwidth <= 0:
             if self.rank == 0:
@@ -60,7 +60,7 @@ class WindowFunc(ConvolsData):
             self.type = win_params['type']
             self.func = set_window_function(self.type, verbose=False)
         self.len_args = win_params['len_args']
-        self.rescale_len_args = {k: v * self.L / self.SimBoxL for k, v in self.len_args.items()}
+        self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
         self.other_args = win_params.get('other_args', {})
         self.window_args = dict(self.rescale_len_args)
         self.window_args.update(self.other_args)
@@ -71,7 +71,7 @@ class WindowFunc(ConvolsData):
         self._window_array = call_calculate_window_array(
             L=self.L,
             bandwidth=self.bandwidth,
-            PowerPhi=self.PowerPhi,
+            phi_fourier_power=self.phi_fourier_power,
             window_function_numba=self.func,
             **self.window_args,
         )

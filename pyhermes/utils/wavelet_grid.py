@@ -14,23 +14,23 @@ def do_wavelet(mode="db2", level=10):
     return _phi[:-1]
 
 
-def random_points_box(N, SimBoxL, ndim=3, rng=None, seed=None):
+def random_points_box(N, box_size, ndim=3, rng=None, seed=None):
     """Draw uniformly distributed random points inside a periodic box."""
     if rng is None:
         rng = np.random.default_rng(seed=seed)
-    return rng.uniform(0.0, SimBoxL, size=(N, ndim))
+    return rng.uniform(0.0, box_size, size=(N, ndim))
 
 
 @njit
-def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
+def scaling_function_numba(p, w, phi_array, phi_resolution=1024, J=8, box_size=1000.0):
     """Project weighted particles onto the full 3D scaling-function grid."""
     L = 1 << J
-    PhiSupport = phi_data.shape[0] // SampRate
-    ScaleFactor = L / SimBoxL
-    step = np.arange(PhiSupport, dtype=np.int32) * SampRate
-    scale_p = p[:, :3] * ScaleFactor
+    phi_support = phi_array.shape[0] // phi_resolution
+    scale_factor = L / box_size
+    step = np.arange(phi_support, dtype=np.int32) * phi_resolution
+    scale_p = p[:, :3] * scale_factor
     p_coarse = np.floor(scale_p).astype(np.int32)
-    p_finer = ((scale_p - p_coarse) * SampRate).astype(np.int32)
+    p_finer = ((scale_p - p_coarse) * phi_resolution).astype(np.int32)
     total = p.shape[0]
     s = np.zeros((L, L, L), dtype=np.float64)
     w = w.astype(np.float64)
@@ -38,22 +38,22 @@ def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
         ww = w[num]
         cx, cy, cz = p_coarse[num, 0], p_coarse[num, 1], p_coarse[num, 2]
         fx, fy, fz = p_finer[num, 0], p_finer[num, 1], p_finer[num, 2]
-        for i in range(PhiSupport):
-            phix = ww * phi_data[fx + step[i]]
-            for j in range(PhiSupport):
-                phixy = phix * phi_data[fy + step[j]]
-                for k in range(PhiSupport):
-                    s[cx - i, cy - j, cz - k] += phixy * phi_data[fz + step[k]]
+        for i in range(phi_support):
+            phix = ww * phi_array[fx + step[i]]
+            for j in range(phi_support):
+                phixy = phix * phi_array[fy + step[j]]
+                for k in range(phi_support):
+                    s[cx - i, cy - j, cz - k] += phixy * phi_array[fz + step[k]]
     return s
 
 
 @njit
-def int_data(data, ScaleFactor):
-    """Return coarse-grid x-cell indices for positions scaled by ScaleFactor."""
+def int_data(data, scale_factor):
+    """Return coarse-grid x-cell indices for positions scaled by scale_factor."""
     num = data.shape[0]
     out = np.empty(num, dtype=np.int32)
     for i in range(num):
-        out[i] = int(np.floor(data[i, 0] * ScaleFactor))
+        out[i] = int(np.floor(data[i, 0] * scale_factor))
     return out
 
 
@@ -69,16 +69,16 @@ def bit(array, J, size_bit):
 
 
 @njit
-def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024, J=8, SimBoxL=1000.0):
+def scaling_function_numba_part(part, p, w, phi_array, core_width, phi_resolution=1024, J=8, box_size=1000.0):
     """Project weighted particles onto one x-slab plus scaling-function padding."""
     L = 1 << J
-    PhiSupport = phi_data.shape[0] // SampRate
-    sew_width = PhiSupport - 1
-    ScaleFactor = L / SimBoxL
-    step = np.arange(PhiSupport, dtype=np.int32) * SampRate
-    scale_p = p[:, :3] * ScaleFactor
+    phi_support = phi_array.shape[0] // phi_resolution
+    sew_width = phi_support - 1
+    scale_factor = L / box_size
+    step = np.arange(phi_support, dtype=np.int32) * phi_resolution
+    scale_p = p[:, :3] * scale_factor
     p_coarse = np.floor(scale_p).astype(np.int32)
-    p_finer = ((scale_p - p_coarse) * SampRate).astype(np.int32)
+    p_finer = ((scale_p - p_coarse) * phi_resolution).astype(np.int32)
     total = p.shape[0]
     expand_x = core_width + 2 * sew_width
     s = np.zeros((expand_x, L, L), dtype=np.float64)
@@ -88,14 +88,14 @@ def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024,
         ww = w[num]
         cx, cy, cz = p_coarse[num, 0], p_coarse[num, 1], p_coarse[num, 2]
         fx, fy, fz = p_finer[num, 0], p_finer[num, 1], p_finer[num, 2]
-        for i in range(PhiSupport):
-            phix = ww * phi_data[fx + step[i]]
+        for i in range(phi_support):
+            phix = ww * phi_array[fx + step[i]]
             x_local = (cx - i) - base + sew_width
-            for j in range(PhiSupport):
-                phixy = phix * phi_data[fy + step[j]]
+            for j in range(phi_support):
+                phixy = phix * phi_array[fy + step[j]]
                 y = cy - j
-                for k in range(PhiSupport):
-                    s[x_local, y, cz - k] += phixy * phi_data[fz + step[k]]
+                for k in range(phi_support):
+                    s[x_local, y, cz - k] += phixy * phi_array[fz + step[k]]
     return s
 
 
@@ -104,20 +104,20 @@ def partition_data_single(origin_data, shrink_data, part):
     return origin_data[shrink_data == part]
 
 
-def power_spectrum(v, k0, k1, N_k, SampRate):
+def power_spectrum(v, k0, k1, N_k, phi_resolution):
     """Return the squared magnitude of the sampled 1D Fourier spectrum."""
-    s = spectrum_vectorized(v, k0, k1, N_k, SampRate)
+    s = spectrum_vectorized(v, k0, k1, N_k, phi_resolution)
     p = np.zeros(N_k + 1, dtype=np.double)
     for i in range(N_k + 1):
         p[i] = s[2 * i] ** 2 + s[2 * i + 1] ** 2
     return p
 
 
-def spectrum_vectorized(v, k0, k1, N_k, SampRate):
+def spectrum_vectorized(v, k0, k1, N_k, phi_resolution):
     """Compute interleaved real/imaginary Fourier samples of a 1D vector."""
     N_x = v.shape[0]
     x0 = 0
-    x1 = v.shape[0] / SampRate
+    x1 = v.shape[0] / phi_resolution
     Delta_x = (x1 - x0) / N_x
     Delta_k = (k1 - k0) / N_k
     x = np.arange(N_x) * Delta_x
@@ -132,27 +132,27 @@ def spectrum_vectorized(v, k0, k1, N_k, SampRate):
 
 
 @njit
-def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
+def phi_at_pos_numba(pos, phi_array, scale_factor, phi_resolution, phi_support):
     """Evaluate local scaling-function stencil values around each position."""
-    step = np.arange(PhiSupport) * SampRate
-    scale_pos = pos * ScaleFactor
+    step = np.arange(phi_support) * phi_resolution
+    scale_pos = pos * scale_factor
     pos_coarse = np.floor(scale_pos).astype(np.int32)
-    pos_finer = ((scale_pos - pos_coarse) * SampRate).astype(np.int32)
+    pos_finer = ((scale_pos - pos_coarse) * phi_resolution).astype(np.int32)
     total = scale_pos.shape[0]
-    phi_local = np.zeros((total, PhiSupport, PhiSupport, PhiSupport), dtype=np.float64)
+    phi_local = np.zeros((total, phi_support, phi_support, phi_support), dtype=np.float64)
     for num in range(total):
         fx, fy, fz = pos_finer[num]
-        for i in range(PhiSupport):
-            phix = phi_data[fx + step[i]]
-            for j in range(PhiSupport):
-                phixy = phix * phi_data[fy + step[j]]
-                for k in range(PhiSupport):
-                    phi_local[num, -i, -j, -k] = phixy * phi_data[fz + step[k]]
+        for i in range(phi_support):
+            phix = phi_array[fx + step[i]]
+            for j in range(phi_support):
+                phixy = phix * phi_array[fy + step[j]]
+                for k in range(phi_support):
+                    phi_local[num, -i, -j, -k] = phixy * phi_array[fz + step[k]]
     return pos_coarse, phi_local
 
 
 @njit
-def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupport,
+def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_array, L, phi_resolution, phi_support,
                    dx=0.0, dy=0.0, dz=0.0):
     """Evaluate normalized ``n(x)`` on scaled grid positions, with optional offsets."""
     Lmask = L - 1
@@ -167,20 +167,20 @@ def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_data, L, SampRate, PhiSupp
         yc = int(math.floor(sy))
         zc = int(math.floor(sz))
 
-        xf = int((sx - xc) * SampRate)
-        yf = int((sy - yc) * SampRate)
-        zf = int((sz - zc) * SampRate)
+        xf = int((sx - xc) * phi_resolution)
+        yf = int((sy - yc) * phi_resolution)
+        zf = int((sz - zc) * phi_resolution)
 
         acc = 0.0
-        for i in range(PhiSupport):
+        for i in range(phi_support):
             xi = (xc - i) & Lmask
-            phix = phi_data[xf + i * SampRate]
-            for j in range(PhiSupport):
+            phix = phi_array[xf + i * phi_resolution]
+            for j in range(phi_support):
                 yi = (yc - j) & Lmask
-                phiy = phi_data[yf + j * SampRate]
-                for k in range(PhiSupport):
+                phiy = phi_array[yf + j * phi_resolution]
+                for k in range(phi_support):
                     zi = (zc - k) & Lmask
-                    phiz = phi_data[zf + k * SampRate]
+                    phiz = phi_array[zf + k * phi_resolution]
                     acc += epsilon[xi, yi, zi] * phix * phiy * phiz
 
         n_output[idx] = acc

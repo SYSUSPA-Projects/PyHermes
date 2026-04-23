@@ -55,7 +55,7 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
 
 
 @njit
-def calculate_legendre_window_array_numba(L, PowerPhi, rescaleR, l, m):
+def calculate_legendre_window_array_numba(L, phi_fourier_power, rescaleR, l, m):
     """
     Build a complex full-FFT Legendre window array with the generic kernel.
 
@@ -68,19 +68,19 @@ def calculate_legendre_window_array_numba(L, PowerPhi, rescaleR, l, m):
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     inv_L = 1.0 / L
     for i in range(-L, L):
-        pi = PowerPhi[abs(i)]
+        pi = phi_fourier_power[abs(i)]
         for j in range(-L, L):
-            pij = pi * PowerPhi[abs(j)]
+            pij = pi * phi_fourier_power[abs(j)]
             for k in range(-L, L):
                 window_array[i, j, k] += (
                     pij
-                    * PowerPhi[abs(k)]
+                    * phi_fourier_power[abs(k)]
                     * window_function_legendre_numba(i * inv_L, j * inv_L, k * inv_L, rescaleR, l, m)
                 )
     return window_array
 
 
-def calculate_legendre_window_array(L, PowerPhi, rescaleR, l, m, use_fast=True):
+def calculate_legendre_window_array(L, phi_fourier_power, rescaleR, l, m, use_fast=True):
     """
     Build a production Legendre window array for one ``(l, m)`` mode.
 
@@ -90,5 +90,5 @@ def calculate_legendre_window_array(L, PowerPhi, rescaleR, l, m, use_fast=True):
     validation and backend comparisons.
     """
     if use_fast and has_fast_window_function(l, m):
-        return calculate_fast_legendre_window_array_with_lm(L, PowerPhi, rescaleR, l, m)
-    return calculate_legendre_window_array_numba(L, PowerPhi, rescaleR, l, m)
+        return calculate_fast_legendre_window_array_with_lm(L, phi_fourier_power, rescaleR, l, m)
+    return calculate_legendre_window_array_numba(L, phi_fourier_power, rescaleR, l, m)

@@ -1282,7 +1282,7 @@ def window_function_legendre_fast(ki, kj, kk, R, l, m):
 
 
 @njit
-def calculate_fast_legendre_window_array_numba(L, PowerPhi, rescaleR, window_function_fast):
+def calculate_fast_legendre_window_array_numba(L, phi_fourier_power, rescaleR, window_function_fast):
     """
     Build a complex full-FFT Legendre window array with a preselected fast kernel.
 
@@ -1295,19 +1295,19 @@ def calculate_fast_legendre_window_array_numba(L, PowerPhi, rescaleR, window_fun
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     inv_L = 1.0 / L
     for i in range(-L, L):
-        pi = PowerPhi[abs(i)]
+        pi = phi_fourier_power[abs(i)]
         for j in range(-L, L):
-            pij = pi * PowerPhi[abs(j)]
+            pij = pi * phi_fourier_power[abs(j)]
             for k in range(-L, L):
                 window_array[i, j, k] += (
                     pij
-                    * PowerPhi[abs(k)]
+                    * phi_fourier_power[abs(k)]
                     * window_function_fast(i * inv_L, j * inv_L, k * inv_L, rescaleR)
                 )
     return window_array
 
 
-def calculate_fast_legendre_window_array_with_lm(L, PowerPhi, rescaleR, l, m):
+def calculate_fast_legendre_window_array_with_lm(L, phi_fourier_power, rescaleR, l, m):
     """
     Build a fast Legendre window array for a supported ``(l, m)`` mode.
 
@@ -1318,4 +1318,4 @@ def calculate_fast_legendre_window_array_with_lm(L, PowerPhi, rescaleR, l, m):
     """
     if (l, m) not in WINDOW_FUNCTION_MAPPING:
         raise ValueError(f"Unsupported fast Legendre window for l={l}, m={m}.")
-    return calculate_fast_legendre_window_array_numba(L, PowerPhi, rescaleR, WINDOW_FUNCTION_MAPPING[(l, m)])
+    return calculate_fast_legendre_window_array_numba(L, phi_fourier_power, rescaleR, WINDOW_FUNCTION_MAPPING[(l, m)])

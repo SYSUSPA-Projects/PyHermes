@@ -145,7 +145,7 @@ class Corr_3PCF_Multipole(TaskBase):
             return {
                 "kind": "ConvolsData",
                 "L": getattr(value, "L", value.epsilon.shape[0] if value.epsilon is not None else None),
-                "SimBoxL": getattr(value, "SimBoxL", None),
+                "box_size": getattr(value, "box_size", None),
                 "wavelet_mode": getattr(value, "wavelet_mode", None),
                 "wavelet_level": getattr(value, "wavelet_level", None),
             }

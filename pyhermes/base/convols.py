@@ -41,8 +41,8 @@ class Convols(TaskBase):
         self.fin_format    = self.fin['format']
         self.fin_wei_key   = self.fin['weight_key']
         self.fout_path     = self.task_params['fout_path']
-        self.SampRate      = int(self.task_params['SampRate'])
-        self.SimBoxL       = self.task_params['SimBoxL']
+        self.phi_resolution      = int(self.task_params['phi_resolution'])
+        self.box_size       = self.task_params['box_size']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
         self.threads       = int(self.task_params['threads'])
@@ -55,8 +55,8 @@ class Convols(TaskBase):
         self.task_params['threads'] = self.threads
         self.task_params['J'] = self.J
         self.task_params['fout_path'] = self.fout_path
-        self.task_params['SampRate'] = self.SampRate
-        self.task_params['SimBoxL'] = self.SimBoxL
+        self.task_params['phi_resolution'] = self.phi_resolution
+        self.task_params['box_size'] = self.box_size
         self.task_params['wavelet_mode'] = self.wavelet_mode
         self.task_params['wavelet_level'] = self.wavelet_level
         self.task_params['particle_pos'] = self.particle_pos
@@ -91,12 +91,12 @@ class Convols(TaskBase):
         fin_source_desc = self._resolve_fin_source()
         if self.particle_pos is not None:
             p_pos = self.particle_pos
-            self.N_particles = p_pos.shape[0]
+            self.particle_count = p_pos.shape[0]
             if self.particle_weight is None:
                 self.logger.info(
-                    f"No particle_weight provided; using unit weights for {self.N_particles} particles."
+                    f"No particle_weight provided; using unit weights for {self.particle_count} particles."
                 )
-                p_wei = np.ones(self.N_particles, dtype=np.float32)
+                p_wei = np.ones(self.particle_count, dtype=np.float32)
                 self.fin_wei_key = 'no_weight'
             else:
                 p_wei = self.particle_weight
@@ -104,9 +104,9 @@ class Convols(TaskBase):
             source_desc = "custom particle_pos array"
         else:
             p_dict_all = read_particle_data(self.fin_path, self.fin_format)
-            p_pos, self.N_particles = p_dict_all['pos'], p_dict_all['size']
+            p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']
             if self.fin_format == 'generic_pos':
-                p_wei = np.ones(self.N_particles, dtype=np.float32)
+                p_wei = np.ones(self.particle_count, dtype=np.float32)
                 self.fin_wei_key = 'no_weight'
             elif self.fin_format == 'generic_pos_weight':
                 p_wei = p_dict_all['weight']
@@ -114,7 +114,7 @@ class Convols(TaskBase):
             else:
                 _key = self.fin_wei_key
                 if _key is None or _key == 'no_weight':
-                    p_wei = np.ones(self.N_particles, dtype=np.float32)
+                    p_wei = np.ones(self.particle_count, dtype=np.float32)
                     self.fin_wei_key = 'no_weight'
                 elif _key in p_dict_all:
                     p_wei = p_dict_all[_key]
@@ -124,7 +124,7 @@ class Convols(TaskBase):
                         f"Weight key '{_key}' not found in particle data. Calculating without weight. "
                         f"Available keys: {list(p_dict_all.keys())}. Use weight_key='no_weight' if no weighting is desired."
                     )
-                    p_wei = np.ones(self.N_particles, dtype=np.float32)
+                    p_wei = np.ones(self.particle_count, dtype=np.float32)
                     self.fin_wei_key = 'no_weight'
             source_desc = f"file={fin_source_desc} format={self.fin_format}"
 
@@ -135,15 +135,15 @@ class Convols(TaskBase):
             )
             func_util.safe_exit(1)
         if np.isscalar(p_wei):
-            self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {self.N_particles}.")
-            p_wei = np.full(self.N_particles, p_wei, dtype=np.float32)
+            self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {self.particle_count}.")
+            p_wei = np.full(self.particle_count, p_wei, dtype=np.float32)
         if not isinstance(p_wei, np.ndarray):
             self.logger.error(f"Wrong input of particle weight! 'particle_weight' must be a numpy array, but got type={type(p_wei)}.")
             func_util.safe_exit(1)
-        if not (p_wei.ndim == 1 and p_wei.shape[0] == self.N_particles):
+        if not (p_wei.ndim == 1 and p_wei.shape[0] == self.particle_count):
             self.logger.error(
                 f"Wrong input of particle weight! 'particle_weight' must have shape (N,), "
-                f"but got shape={getattr(p_wei, 'shape', None)} while N={self.N_particles}."
+                f"but got shape={getattr(p_wei, 'shape', None)} while N={self.particle_count}."
             )
             func_util.safe_exit(1)
         return p_pos, p_wei.astype(np.float32, copy=False), source_desc
@@ -159,25 +159,25 @@ class Convols(TaskBase):
             self.particle_weight = particle_weight
         self._sync_runtime_options()
         self.convols_data = ConvolsData(threads=self.threads)
-        self.phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.phi_array = do_wavelet(self.wavelet_mode, self.wavelet_level)
         _PhiStart = 0
-        _PhiEnd = self.phi_data.shape[0] // self.SampRate
-        self.PhiSupport = _PhiEnd - _PhiStart
+        _PhiEnd = self.phi_array.shape[0] // self.phi_resolution
+        self.phi_support = _PhiEnd - _PhiStart
         self.core_width = self.L // self.size
-        self.ScaleFactor = self.L / self.SimBoxL
+        self.scale_factor = self.L / self.box_size
         if self.rank == 0:
             self.logger.info("Preparing Convols input fields ...")
             self.logger.info(
-                f"J={self.J}, L={self.L}, SimBoxL={self.SimBoxL}, SampRate={self.SampRate}, "
+                f"J={self.J}, L={self.L}, box_size={self.box_size}, phi_resolution={self.phi_resolution}, "
                 f"wavelet_mode={self.wavelet_mode}, wavelet_level={self.wavelet_level}"
             )
             if self.size != 1 and (self.size & (self.size - 1)) != 0:
                 self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                 func_util.safe_exit(1)
             p_pos, p_wei, source_desc = self._load_particle_input()
-            self.NormFactor = 1 / self.N_particles
+            self.NormFactor = 1 / self.particle_count
             self.logger.info(
-                f"Input particles ready | source={source_desc} | N_particles={self.N_particles} | weight_key={self.fin_wei_key}"
+                f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin_wei_key}"
             )
             self._prepared_particle_pos = p_pos
             self._prepared_particle_weight = p_wei
@@ -204,15 +204,15 @@ class Convols(TaskBase):
                 _epsilon = scaling_function_numba(
                     p=p_pos,
                     w=p_wei,
-                    phi_data=self.phi_data,
-                    SampRate=self.SampRate,
+                    phi_array=self.phi_array,
+                    phi_resolution=self.phi_resolution,
                     J=self.J,
-                    SimBoxL=self.SimBoxL
+                    box_size=self.box_size
                 )
             elif rank == 0:
                 self.logger.info("Multi-process mode")
                 self.logger.info("Start partition ... ")
-                p_pos_in = int_data(p_pos, self.ScaleFactor)
+                p_pos_in = int_data(p_pos, self.scale_factor)
                 _shrink_p_pos_in = bit(p_pos_in, self.J, int(np.log2(self.size)))
                 time_start = time.perf_counter()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=self.size_local) as executor:
@@ -228,13 +228,13 @@ class Convols(TaskBase):
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for partition data: {time_end - time_start:.4f} sec")
                 p_pos_sub, p_wei_sub = shrink_list[0]
-                self.all_s = np.zeros((self.size, self.L // self.size + 2 * (self.PhiSupport - 1), self.L, self.L))
+                self.all_s = np.zeros((self.size, self.L // self.size + 2 * (self.phi_support - 1), self.L, self.L))
                 for i in range(1, self.size):
                     comm.send((shrink_list[i][0].shape, shrink_list[i][1].shape[0]), dest=i)
                     comm.Send(shrink_list[i][0], dest=i)
                     comm.Send(shrink_list[i][1], dest=i)
             else:
-                self.N_particles = 0
+                self.particle_count = 0
                 self.all_s = None
                 shrink_list = None
                 shape_pos, n_wei = comm.recv(source=0)
@@ -250,32 +250,32 @@ class Convols(TaskBase):
                     part       = rank,
                     p          = p_pos_sub,
                     w          = p_wei_sub,
-                    phi_data   = self.phi_data,
+                    phi_array   = self.phi_array,
                     core_width = self.core_width,
-                    SampRate   = self.SampRate,
+                    phi_resolution   = self.phi_resolution,
                     J          = self.J,
-                    SimBoxL    = self.SimBoxL
+                    box_size    = self.box_size
                     )
                 comm.Gather(_s_part, self.all_s, root=0)
                 if rank == 0:
-                    _epsilon = self.sew_up(self.all_s, self.size, self.L,self.PhiSupport)
+                    _epsilon = self.sew_up(self.all_s, self.size, self.L,self.phi_support)
             if rank == 0:
                 _convols_info = {
                     "fin_path"      : self.fin_path,
                     "fin_format"    : self.fin_format,
                     "fin_weight_key": self.fin_wei_key,
-                    "N_particles"   : self.N_particles,
+                    "particle_count"   : self.particle_count,
                     "J"             : self.J,
-                    "SampRate"      : self.SampRate,
-                    "SimBoxL"       : self.SimBoxL,
+                    "phi_resolution"      : self.phi_resolution,
+                    "box_size"       : self.box_size,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "L"             : self.L,
                     "V"             : self.L ** 3,
-                    "ScaleFactor"   : self.ScaleFactor,
+                    "scale_factor"   : self.scale_factor,
                     "NormFactor"    : self.NormFactor,
-                    "PhiSupport"    : self.PhiSupport,
-                    "phi_data"      : self.phi_data
+                    "phi_support"    : self.phi_support,
+                    "phi_array"      : self.phi_array
                 }
                 self.convols_data.convols_info = dict(_convols_info)
                 self.convols_data.format_convols_params()
@@ -297,9 +297,9 @@ class Convols(TaskBase):
         else:
             return self.convols_data
 
-    def sew_up(self, all_s, size, L, PhiSupport):
+    def sew_up(self, all_s, size, L, phi_support):
         sew_s = np.zeros((L, L, L))
-        sew_width = PhiSupport - 1
+        sew_width = phi_support - 1
         for part in range(1, size - 1):
             sew_s[-sew_width+part*self.core_width:(part+1)*self.core_width+sew_width] += all_s[part]
         sew_s[-sew_width:] += all_s[0][:sew_width]

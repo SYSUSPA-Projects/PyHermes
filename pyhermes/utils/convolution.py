@@ -12,7 +12,7 @@ from pyhermes.utils.func_util import get_fname_info
 
 
 @njit(parallel=True)
-def calculate_real_window_octant_array_numba(L, bandwidth, PowerPhi, window_function_numba, *args):
+def calculate_real_window_octant_array_numba(L, bandwidth, phi_fourier_power, window_function_numba, *args):
     """Evaluate a real-space window lookup array from a k-space window kernel."""
     WindowArray = np.zeros((L + 1, L + 1, L + 1))
     inv_L = 1.0 / L
@@ -24,9 +24,9 @@ def calculate_real_window_octant_array_numba(L, bandwidth, PowerPhi, window_func
                     for jj in range(bandwidth):
                         for kk in range(bandwidth):
                             temp += (
-                                PowerPhi[ii * L + i]
-                                * PowerPhi[jj * L + j]
-                                * PowerPhi[kk * L + k]
+                                phi_fourier_power[ii * L + i]
+                                * phi_fourier_power[jj * L + j]
+                                * phi_fourier_power[kk * L + k]
                                 * window_function_numba(
                                     (ii * L + i) * inv_L,
                                     (jj * L + j) * inv_L,
@@ -38,7 +38,7 @@ def calculate_real_window_octant_array_numba(L, bandwidth, PowerPhi, window_func
     return WindowArray
 
 
-def call_calculate_window_array(L, bandwidth, PowerPhi, window_function_numba, **kwargs):
+def call_calculate_window_array(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
     """Call ``calculate_real_window_octant_array_numba`` with keyword arguments in kernel-signature order."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
@@ -55,7 +55,7 @@ def call_calculate_window_array(L, bandwidth, PowerPhi, window_function_numba, *
         func_util.safe_exit(1)
     ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
     return calculate_real_window_octant_array_numba(
-        L, bandwidth, PowerPhi, window_function_numba, *ordered_args
+        L, bandwidth, phi_fourier_power, window_function_numba, *ordered_args
     )
 
 

@@ -3,8 +3,8 @@
 	"Convols": {
 		"J"              : 8,
 		"fout_path"      : "",
-		"SampRate"       : 1024,
-		"SimBoxL"        : 1000,
+		"phi_resolution"       : 1024,
+		"box_size"        : 1000,
 		"wavelet_mode"   : "db2",
 		"wavelet_level"  : 10,
 		"threads"        : 1,

@@ -68,7 +68,7 @@ def estimate_triplet_product_particle_centers(
     R1_scaled, R2_scaled, mu,
     centers_scaled, n_rot,
     R, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
+    phi_array, L, phi_resolution, phi_support,
     seed_base_rot=-1, theta_index=-1
 ):
     """Estimate DDD using object positions as triangle centers."""
@@ -88,8 +88,8 @@ def estimate_triplet_product_particle_centers(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
         for i in range(npos):
             s += n2[i] * n3[i]
@@ -102,7 +102,7 @@ def estimate_triplet_product_box_random_centers(
     R1_scaled, R2_scaled, mu,
     centers_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
+    phi_array, L, phi_resolution, phi_support,
     seed_base_rot=-1, theta_index=-1
 ):
     """Estimate DDD by averaging over uniform random centers in the periodic box."""
@@ -113,7 +113,7 @@ def estimate_triplet_product_box_random_centers(
     n2 = np.empty(npos, dtype=np.float64)
     n3 = np.empty(npos, dtype=np.float64)
 
-    n_at_pos_numba(n1, centers_scaled, epsilon1, phi_data, L, SampRate, PhiSupport)
+    n_at_pos_numba(n1, centers_scaled, epsilon1, phi_array, L, phi_resolution, phi_support)
     total_sum = 0.0
 
     for irot in range(n_rot):
@@ -129,8 +129,8 @@ def estimate_triplet_product_box_random_centers(
 
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
 
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
 
         s = 0.0
         for i in range(npos):
@@ -145,7 +145,7 @@ def estimate_triplet_contrast_particle_centers_legacy(
     R1_scaled, R2_scaled, mu,
     pos_scaled, rand_scaled, n_rot,
     R, epsilon2, epsilon3,
-    phi_data, L, SampRate, PhiSupport,
+    phi_array, L, phi_resolution, phi_support,
     seed=-1
 ):
     """Estimate the legacy DDD_RDD control-variate quantity."""
@@ -164,10 +164,10 @@ def estimate_triplet_contrast_particle_centers_legacy(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
-        n_at_pos_numba(n2, pos_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n3, pos_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
-        n_at_pos_numba(n20, rand_scaled, epsilon2, phi_data, L, SampRate, PhiSupport, x2, y2, z2)
-        n_at_pos_numba(n30, rand_scaled, epsilon3, phi_data, L, SampRate, PhiSupport, x3, y3, z3)
+        n_at_pos_numba(n2, pos_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n3, pos_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        n_at_pos_numba(n20, rand_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n30, rand_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
         for i in range(npos):
             s += n2[i] * n3[i] - n20[i] * n30[i]
