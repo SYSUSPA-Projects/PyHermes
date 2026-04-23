@@ -59,8 +59,8 @@ def calculate_w_numba(WindowArray):
     L = WindowArray.shape[0] - 1
     w = np.zeros((L, L, L // 2 + 1))
     for x in prange(L):
-        for y in prange(L):
-            for z in prange(L // 2 + 1):
+        for y in range(L):
+            for z in range(L // 2 + 1):
                 w[x, y, z] = (
                     WindowArray[x, y, z]
                     + WindowArray[L - x, y, z]

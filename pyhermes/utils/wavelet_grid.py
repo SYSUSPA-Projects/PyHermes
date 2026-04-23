@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 import pywt
-from numba import jit, njit
+from numba import njit
 
 
 def do_wavelet(mode="db2", level=10):
@@ -21,7 +21,7 @@ def random_points_box(N, SimBoxL, ndim=3, rng=None, seed=None):
     return rng.uniform(0.0, SimBoxL, size=(N, ndim))
 
 
-@jit(nopython=True)
+@njit
 def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
     """Project weighted particles onto the full 3D scaling-function grid."""
     L = 1 << J
@@ -47,7 +47,7 @@ def scaling_function_numba(p, w, phi_data, SampRate=1024, J=8, SimBoxL=1000.0):
     return s
 
 
-@jit(nopython=True)
+@njit
 def int_data(data, ScaleFactor):
     """Return coarse-grid x-cell indices for positions scaled by ScaleFactor."""
     num = data.shape[0]
@@ -57,7 +57,7 @@ def int_data(data, ScaleFactor):
     return out
 
 
-@jit(nopython=True)
+@njit
 def bit(array, J, size_bit):
     """Keep the leading size_bit bits of integer grid coordinates at level J."""
     num = array.shape[0]
@@ -68,7 +68,7 @@ def bit(array, J, size_bit):
     return result
 
 
-@jit(nopython=True)
+@njit
 def scaling_function_numba_part(part, p, w, phi_data, core_width, SampRate=1024, J=8, SimBoxL=1000.0):
     """Project weighted particles onto one x-slab plus scaling-function padding."""
     L = 1 << J
@@ -131,7 +131,7 @@ def spectrum_vectorized(v, k0, k1, N_k, SampRate):
     return s
 
 
-@jit(nopython=True)
+@njit
 def phi_at_pos_numba(pos, phi_data, ScaleFactor, SampRate, PhiSupport):
     """Evaluate local scaling-function stencil values around each position."""
     step = np.arange(PhiSupport) * SampRate
