@@ -4,8 +4,14 @@ import copy
 import numpy as np
 
 from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData
-from pyhermes.utils import func_util, math_util
+from pyhermes.utils import func_util
+from pyhermes.utils.corr3pcf_kernels import (
+    estimate_triplet_product_box_random_centers,
+    estimate_triplet_product_particle_centers,
+    third_side_from_mu,
+)
 from pyhermes.utils.mpi_util import MPI
+from pyhermes.utils.wavelet_grid import random_points_box
 from pyhermes.pipeline import TaskBase
 
 from .corr2pcf import compute_pair_product_at_radius
@@ -71,7 +77,7 @@ def compute_triplet_product_mc(
     if center == "box_random":
         if eps1 is None:
             raise ValueError("eps1 must be provided when center='box_random'.")
-        return math_util.estimate_triplet_product_box_random_centers(
+        return estimate_triplet_product_box_random_centers(
             r12_scaled, r13_scaled, mu,
             pos_scaled, n_rot,
             eps1, eps2, eps3,
@@ -81,7 +87,7 @@ def compute_triplet_product_mc(
     if center == "particle":
         if rho1 is None:
             raise ValueError("rho1 must be provided when center='particle'.")
-        return math_util.estimate_triplet_product_particle_centers(
+        return estimate_triplet_product_particle_centers(
             r12_scaled, r13_scaled, mu,
             pos_scaled, n_rot,
             rho1, eps2, eps3,
@@ -959,7 +965,7 @@ class Corr_3PCF(TaskBase):
                 _local_convols3,
                 _local_random2,
                 _local_random3,
-                math_util.third_side_from_mu(self.r12, self.r13, mu_arr),
+                third_side_from_mu(self.r12, self.r13, mu_arr),
             )
             rr23_cache = pair_cache["xi23"]["rr"]
             timing["xi23"] = time.perf_counter() - t_pair
@@ -1040,7 +1046,7 @@ class Corr_3PCF(TaskBase):
                     counts = None
                 n_local = int(comm.scatter(counts, root=0))
                 seed_center_rank = self.base_seed + 1000003 * (rank + 1)
-                pos_local = math_util.random_points_box(N=n_local, SimBoxL=_local_convols1.L, seed=seed_center_rank)
+                pos_local = random_points_box(N=n_local, SimBoxL=_local_convols1.L, seed=seed_center_rank)
             else:
                 pos_local = self._scatter_positions(pos_all)
                 if self.random_pos1 is not None:
@@ -1100,7 +1106,7 @@ class Corr_3PCF(TaskBase):
 
             for it, mu in enumerate(mu_arr):
                 t_theta_start = time.perf_counter() if rank == 0 else None
-                r23_value = math_util.third_side_from_mu(self.r12, self.r13, mu)
+                r23_value = third_side_from_mu(self.r12, self.r13, mu)
                 if self.center == "box_random":
                     self._compute_random_center_theta(
                         mu, r23_value, pos_local, seed_base_rot, it,
@@ -1148,7 +1154,7 @@ class Corr_3PCF(TaskBase):
 
                 self.corr3pcf_data.mu = mu_arr
                 self.corr3pcf_data.theta = theta_arr
-                self.corr3pcf_data.r23 = math_util.third_side_from_mu(self.r12, self.r13, mu_arr)
+                self.corr3pcf_data.r23 = third_side_from_mu(self.r12, self.r13, mu_arr)
                 self.corr3pcf_data.ddd = global_results.get("ddd")
                 self.corr3pcf_data.rrr = global_results.get("rrr")
                 self.corr3pcf_data.d_delta_dd = global_results.get("d_delta_dd")

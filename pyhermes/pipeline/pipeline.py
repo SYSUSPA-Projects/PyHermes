@@ -1,7 +1,7 @@
 import pickle
 
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
+from pyhermes.utils.runtime import configure
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger
 from pyhermes.param.parambase import ParamBase
@@ -54,7 +54,7 @@ class TaskBase(object):
         if threads is not None:
             self.threads = max(1, int(threads))
             self.task_params['threads'] = self.threads
-            math_util.configure(threads=self.threads)
+            configure(threads=self.threads)
         if self.rank == 0:
             if blank_line:
                 print("")

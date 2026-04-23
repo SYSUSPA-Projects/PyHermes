@@ -15,26 +15,13 @@ import warnings
 from numba.core.errors import NumbaExperimentalFeatureWarning
 
 warnings.filterwarnings("ignore", category=NumbaExperimentalFeatureWarning)
-
-_NUMBA_CONFIGURED = False
-_NUMBA_THREADS = None
-
-
-def configure(threads=1):
-    """
-    Configure Numba threads for this process.
-
-    Re-applying with the same value is a no-op; changing the value updates
-    the current runtime setting.
-    """
-    global _NUMBA_CONFIGURED, _NUMBA_THREADS
-    requested_threads = max(1, int(threads))
-    if _NUMBA_CONFIGURED and _NUMBA_THREADS == requested_threads:
-        return
-    from numba import get_num_threads, set_num_threads
-    set_num_threads(requested_threads)
-    _NUMBA_THREADS = int(get_num_threads())
-    _NUMBA_CONFIGURED = True
+warnings.warn(
+    "pyhermes.utils.math_util is deprecated and will be removed in a future release. "
+    "Import from pyhermes.utils.runtime, wavelet_grid, convolution, special_functions, "
+    "legendre_windows, corr3pcf_kernels, or corr3pcf_multipoles instead.",
+    FutureWarning,
+    stacklevel=2,
+)
 
 
 from pyhermes.utils.convolution import (  # noqa: E402
@@ -71,6 +58,7 @@ from pyhermes.utils.legendre_windows import (  # noqa: E402
     window_function_legendre,
     window_function_legendre_numba,
 )
+from pyhermes.utils.runtime import configure  # noqa: E402
 from pyhermes.utils.special_functions import (  # noqa: E402
     _angles_from_k,
     _factorial_small,

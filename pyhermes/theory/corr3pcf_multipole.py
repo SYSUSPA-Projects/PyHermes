@@ -7,7 +7,9 @@ from mpi4py import MPI
 
 from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFMultipoleData
 from pyhermes.pipeline import TaskBase
-from pyhermes.utils import func_util, math_util
+from pyhermes.utils import corr3pcf_multipoles as multipole_util
+from pyhermes.utils import func_util
+from pyhermes.utils.special_functions import solve_multipoles_from_ratio
 
 
 PRODUCT_RULES = {
@@ -505,7 +507,7 @@ class Corr_3PCF_Multipole(TaskBase):
         )
 
         log_l_progress, log_m_progress = self._log_helpers(product_name)
-        l_arr, multipole_l, timing_info = math_util.calc_DDD_multipole(
+        l_arr, multipole_l, timing_info = multipole_util.calc_DDD_multipole(
             fields[0], fields[1], fields[2],
             self.r12, self.r13, self.l_min, self.l_max,
             gpu_device_id=self.gpu_device_id,
@@ -565,9 +567,9 @@ class Corr_3PCF_Multipole(TaskBase):
         pair_idx = rank if rank < n_pairs else rank - n_pairs
         is_r1_rank = rank < n_pairs
 
-        conv_context_r1 = math_util._prepare_legendre_convolution_context(field2) if is_r1_rank else None
-        conv_context_r2 = math_util._prepare_legendre_convolution_context(field3) if not is_r1_rank else None
-        gpu_context = math_util._prepare_multipole_gpu_context(field1, gpu_device_id=self.gpu_device_id) if rank == 0 else None
+        conv_context_r1 = multipole_util._prepare_legendre_convolution_context(field2) if is_r1_rank else None
+        conv_context_r2 = multipole_util._prepare_legendre_convolution_context(field3) if not is_r1_rank else None
+        gpu_context = multipole_util._prepare_multipole_gpu_context(field1, gpu_device_id=self.gpu_device_id) if rank == 0 else None
 
         task_list = []
         l_arr = np.arange(self.l_min, self.l_max + 1, dtype=np.int32)
@@ -604,11 +606,11 @@ class Corr_3PCF_Multipole(TaskBase):
             if pair_idx < active_count:
                 _, l, m = local_meta
                 if is_r1_rank:
-                    local_field = math_util._stream_convolution_fields(
+                    local_field = multipole_util._stream_convolution_fields(
                         field2, self.r12, int(l), threads=self.threads, m_values=[int(m)], conv_context=conv_context_r1
                     )[0]
                 else:
-                    local_field = math_util._stream_convolution_fields(
+                    local_field = multipole_util._stream_convolution_fields(
                         field3, self.r13, int(l), threads=self.threads, m_values=[-int(m)], conv_context=conv_context_r2
                     )[0]
             conv_elapsed = time.perf_counter() - t_conv
@@ -641,7 +643,7 @@ class Corr_3PCF_Multipole(TaskBase):
                             field_r1_m = recv_r1
                             field_r2_m = recv_r2
                         t_sum = time.perf_counter()
-                        value, timing = math_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
+                        value, timing = multipole_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
                         sum_elapsed = time.perf_counter() - t_sum
                         round_summands[key] = (value, timing, sum_elapsed)
                         del field_r1_m, field_r2_m
@@ -715,7 +717,7 @@ class Corr_3PCF_Multipole(TaskBase):
                             completed_m_tasks=completed_m_tasks, total_m_tasks=total_m_tasks,
                         )
                     if done_per_l[l] == l + 1:
-                        multipole_l[l_idx] = math_util.combine_multipole_m_terms(m_storage[l], l)
+                        multipole_l[l_idx] = multipole_util.combine_multipole_m_terms(m_storage[l], l)
                         progress = (completed_m_tasks / total_m_tasks) * 100.0
                         if self.verbose_profile:
                             self.logger.info(
@@ -841,7 +843,7 @@ class Corr_3PCF_Multipole(TaskBase):
         if delta_ddd_l is None or rrr_l is None:
             self.logger.error("zeta_l requires both delta_ddd_l and rrr_l.")
             func_util.safe_exit(1)
-        zeta_l, _, cond_m = math_util.solve_multipoles_from_ratio(delta_ddd_l, rrr_l, self.l_max)
+        zeta_l, _, cond_m = solve_multipoles_from_ratio(delta_ddd_l, rrr_l, self.l_max)
         self.corr3pcf_multipole_data.zeta_l = zeta_l
         self.logger.info(f"zeta_l solved from multipole ratio | mixing matrix cond={cond_m:.3e}")
 

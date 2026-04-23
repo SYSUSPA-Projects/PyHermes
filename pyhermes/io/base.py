@@ -3,7 +3,7 @@ import pickle
 import numpy as np
 
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
+from pyhermes.utils.runtime import configure
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
 from pyhermes.io import handle_PATHorURL, check_fout
@@ -21,7 +21,7 @@ class HermesData(object):
         # Set numba threads
         if threads:
             self.threads = max(1, int(threads))
-            math_util.configure(threads=self.threads)
+            configure(threads=self.threads)
         else:
             self.threads = None
 

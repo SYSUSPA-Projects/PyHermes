@@ -5,7 +5,8 @@ import numpy as np
 
 from .convols import ConvolsData
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
+from pyhermes.utils.convolution import call_calculate_window_array, calculate_w_numba
+from pyhermes.utils.wavelet_grid import do_wavelet, power_spectrum
 from pyhermes.utils.window_functions import set_window_function
 
 
@@ -32,8 +33,8 @@ class WindowFunc(ConvolsData):
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
-        phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
-        self.PowerPhi = math_util.power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
+        phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.PowerPhi = power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
         if not isinstance(self.PowerPhi, np.ndarray):
             if self.rank == 0:
                 self.logger.error("WindowFunc requires PowerPhi to be a numpy.ndarray.")
@@ -43,7 +44,7 @@ class WindowFunc(ConvolsData):
                 self.logger.error(f"Invalid L/bandwidth: L={self.L}, bandwidth={self.bandwidth}. Must be > 0.")
             func_util.safe_exit(1)
         # There is NO DEFAULT window!!!
-        # Missing `type` will raise an error in math_util.
+        # Missing `type` will raise an error in set_window_function.
         self.window_params = dict(win_params)
         if "func" in win_params:
             self.type = win_params.get('type', None) or "custom"
@@ -61,7 +62,7 @@ class WindowFunc(ConvolsData):
         self.w_kernel = None
     
     def _build_window_array(self):
-        self._window_array = math_util.call_calculate_window_array(
+        self._window_array = call_calculate_window_array(
             L=self.L,
             bandwidth=self.bandwidth,
             DeltaXi=self.DeltaXi,
@@ -72,7 +73,7 @@ class WindowFunc(ConvolsData):
 
     def _build_kernel(self):
         self._build_window_array()
-        self.w_kernel = math_util.calculate_w_numba(self._window_array)
+        self.w_kernel = calculate_w_numba(self._window_array)
 
     def as_array(self):
         if self.w_kernel is None:

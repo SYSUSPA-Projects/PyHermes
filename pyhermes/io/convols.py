@@ -7,7 +7,8 @@ import numpy as np
 from .base import HermesData
 from .funcs import read_particle_data
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
+from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.wavelet_grid import n_at_pos_numba, phi_at_pos_numba
 
 
 class ConvolsData(HermesData):
@@ -70,7 +71,7 @@ class ConvolsData(HermesData):
         if a.ndim != 3 or b.ndim != 3:
             if self.rank == 0:
                 self.logger.error(
-                    f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
+                    f"specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
                 )
             func_util.safe_exit(1)
         # Window is calculated through rfft, so here to match half dimension
@@ -84,7 +85,7 @@ class ConvolsData(HermesData):
                     "(signal @ window). "
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
-        conv = math_util.specialized_convolution_3d(
+        conv = specialized_convolution_3d(
             a, b, threads=self.threads
         )
 
@@ -221,14 +222,14 @@ class ConvolsData(HermesData):
         return read_particle_data(self.fin_path, self.fin_format)['pos']
     
     def phi_at_pos(self, pos):
-        return math_util.phi_at_pos(pos, self.phi_data, self.ScaleFactor, self.SampRate, self.PhiSupport)
+        return phi_at_pos_numba(pos, self.phi_data, self.ScaleFactor, self.SampRate, self.PhiSupport)
     
     def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
         """
         Evaluate number density n(x) at positions.
 
         normalize:
-            True  -> return the normalized/grid-space nx (as in math_util.n_at_pos_numba)
+            True  -> return the normalized/grid-space nx (as in n_at_pos_numba)
             False -> return scaled output:
                      if physical: nx * N_particles * ScaleFactor**3
                      else:        nx * N_particles
@@ -244,7 +245,7 @@ class ConvolsData(HermesData):
         npos = pos.shape[0]
         nx = np.empty(npos, dtype=np.float64)
         pos_scaled = pos * self.ScaleFactor
-        math_util.n_at_pos_numba(
+        n_at_pos_numba(
             nx, pos_scaled, epsilon, self.phi_data, self.L, self.SampRate, self.PhiSupport
         )
 

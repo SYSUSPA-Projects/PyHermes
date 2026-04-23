@@ -8,7 +8,14 @@ from pyhermes.io import ConvolsData
 from pyhermes.io import read_particle_data
 from pyhermes.io.funcs import dl_rich_pbar
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
+from pyhermes.utils.wavelet_grid import (
+    bit,
+    do_wavelet,
+    int_data,
+    partition_data_single,
+    scaling_function_numba,
+    scaling_function_numba_part,
+)
 from pyhermes.pipeline import TaskBase
 
 
@@ -154,7 +161,7 @@ class Convols(TaskBase):
             self.particle_weight = particle_weight
         self._sync_runtime_options()
         self.convols_data = ConvolsData(threads=self.threads)
-        self.phi_data = math_util.do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
         _PhiStart = 0
         _PhiEnd = self.phi_data.shape[0] // self.SampRate
         self.PhiSupport = _PhiEnd - _PhiStart
@@ -196,7 +203,7 @@ class Convols(TaskBase):
             if rank == 0 and self.size == 1:
                 self.logger.info("Single process mode")
                 time_start = time.perf_counter()
-                _epsilon = math_util.scaling_function_numba(
+                _epsilon = scaling_function_numba(
                     p=p_pos,
                     w=p_wei,
                     phi_data=self.phi_data,
@@ -207,14 +214,14 @@ class Convols(TaskBase):
             elif rank == 0:
                 self.logger.info("Multi-process mode")
                 self.logger.info("Start partition ... ")
-                p_pos_in = math_util.int_data(p_pos, self.ScaleFactor)
-                _shrink_p_pos_in = math_util.bit(p_pos_in, self.J, int(np.log2(self.size)))
+                p_pos_in = int_data(p_pos, self.ScaleFactor)
+                _shrink_p_pos_in = bit(p_pos_in, self.J, int(np.log2(self.size)))
                 time_start = time.perf_counter()
                 with concurrent.futures.ThreadPoolExecutor(max_workers=self.size_local) as executor:
                     shrink_list = list(
                         executor.map(
                             lambda num: (
-                                np.ascontiguousarray(math_util.partition_data_single(p_pos, _shrink_p_pos_in, num)),
+                                np.ascontiguousarray(partition_data_single(p_pos, _shrink_p_pos_in, num)),
                                 np.ascontiguousarray(p_wei[_shrink_p_pos_in == num], dtype=np.float32)
                             ),
                             range(self.size)
@@ -241,7 +248,7 @@ class Convols(TaskBase):
                 comm.Barrier()
                 rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
                 time_start = time.perf_counter()
-                _s_part = math_util.scaling_function_numba_part(
+                _s_part = scaling_function_numba_part(
                     part       = rank,
                     p          = p_pos_sub,
                     w          = p_wei_sub,

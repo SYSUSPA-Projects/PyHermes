@@ -115,9 +115,10 @@ Workflow E. Low-Level Building Blocks
 -------------------------------------
 
 At the lowest level, you can work directly with prepared fields, explicit
-center positions, and the low-level Monte Carlo kernels in ``math_util``. This
-is the most flexible route, but it assumes you want to manage normalization,
-windows, and estimator bookkeeping yourself.
+center positions, and the low-level Monte Carlo kernels in
+``pyhermes.utils.corr3pcf_kernels``. This is the most flexible route, but it
+assumes you want to manage normalization, windows, and estimator bookkeeping
+yourself.
 
 Output
 ------
