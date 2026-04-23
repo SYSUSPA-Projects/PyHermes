@@ -26,7 +26,6 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
       SimBoxL: 1000
       wavelet_mode: "db2"
       wavelet_level: 10
-      bandwidth: 1
 
    Counting:
       N_randoms: 1000000

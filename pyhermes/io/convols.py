@@ -12,7 +12,7 @@ from pyhermes.utils.wavelet_grid import n_at_pos_numba, phi_at_pos_numba
 
 
 class ConvolsData(HermesData):
-    _REQUIRED_ARGV = ("J", "bandwidth", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
+    _REQUIRED_ARGV = ("J", "SimBoxL", "SampRate", "wavelet_mode", "wavelet_level")
 
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)

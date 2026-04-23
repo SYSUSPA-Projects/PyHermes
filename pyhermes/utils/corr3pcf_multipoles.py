@@ -107,10 +107,16 @@ def _cache_file_path(cache_dir, radius, l, m):
 
 
 def _prepare_legendre_convolution_context(field):
-    """Precompute shared wavelet-spectrum inputs for Legendre convolutions."""
+    """
+    Precompute shared wavelet-spectrum inputs for Legendre convolutions.
+
+    Legendre multipole windows currently use only the base Fourier band,
+    equivalent to ``bandwidth=1`` in the real-window builder. Support for
+    higher-band Legendre window construction may be added later.
+    """
     return {
         "delta_xi": 1.0 / field.L,
-        "power_phi": power_spectrum(field.phi_data, 0, field.bandwidth, field.L * field.bandwidth, field.SampRate),
+        "power_phi": power_spectrum(field.phi_data, 0, 1, field.L, field.SampRate),
     }
 
 

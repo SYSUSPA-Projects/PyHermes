@@ -52,7 +52,6 @@ Use the shipped example config:
       SimBoxL: 1000
       wavelet_mode: "db2"
       wavelet_level: 10
-      bandwidth: 1
 
 Then run:
 
@@ -163,8 +162,6 @@ Key parameters
   simulation box side length
 - ``wavelet_mode`` and ``wavelet_level``:
   wavelet settings
-- ``bandwidth``:
-  bandwidth control used by the algorithm
 
 Notes
 -----

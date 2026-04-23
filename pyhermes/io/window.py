@@ -11,7 +11,7 @@ from pyhermes.utils.window_functions import set_window_function
 
 
 class WindowFunc(ConvolsData):
-    def __init__(self, win_params, convols_params, threads=1):
+    def __init__(self, win_params, convols_params, bandwidth=1, threads=1):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
         missing = [k for k in self._REQUIRED_ARGV if k not in convols_params]
@@ -23,7 +23,7 @@ class WindowFunc(ConvolsData):
         self.input_params.update(convols_params)
         try:
             self.L = 1 << int(convols_params['J'])
-            self.bandwidth = int(convols_params["bandwidth"])
+            self.bandwidth = int(bandwidth)
             self.SimBoxL = convols_params["SimBoxL"]
             self.SampRate = int(convols_params["SampRate"])
             self.DeltaXi = 1 / self.L
@@ -33,6 +33,7 @@ class WindowFunc(ConvolsData):
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
+        self.input_params["bandwidth"] = self.bandwidth
         phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
         self.PowerPhi = power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
         if not isinstance(self.PowerPhi, np.ndarray):

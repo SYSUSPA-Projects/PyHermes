@@ -45,7 +45,6 @@ class Convols(TaskBase):
         self.SimBoxL       = self.task_params['SimBoxL']
         self.wavelet_mode  = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
-        self.bandwidth     = self.task_params['bandwidth']
         self.threads       = int(self.task_params['threads'])
         self.particle_pos = self.task_params['particle_pos']
         self.particle_weight = self.task_params['particle_weight']
@@ -60,7 +59,6 @@ class Convols(TaskBase):
         self.task_params['SimBoxL'] = self.SimBoxL
         self.task_params['wavelet_mode'] = self.wavelet_mode
         self.task_params['wavelet_level'] = self.wavelet_level
-        self.task_params['bandwidth'] = self.bandwidth
         self.task_params['particle_pos'] = self.particle_pos
         self.task_params['particle_weight'] = self.particle_weight
         base_fin = copy.deepcopy(self.task_params.get('fin', {}))
@@ -171,7 +169,7 @@ class Convols(TaskBase):
             self.logger.info("Preparing Convols input fields ...")
             self.logger.info(
                 f"J={self.J}, L={self.L}, SimBoxL={self.SimBoxL}, SampRate={self.SampRate}, "
-                f"wavelet_mode={self.wavelet_mode}, wavelet_level={self.wavelet_level}, bandwidth={self.bandwidth}"
+                f"wavelet_mode={self.wavelet_mode}, wavelet_level={self.wavelet_level}"
             )
             if self.size != 1 and (self.size & (self.size - 1)) != 0:
                 self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
@@ -270,7 +268,6 @@ class Convols(TaskBase):
                     "J"             : self.J,
                     "SampRate"      : self.SampRate,
                     "SimBoxL"       : self.SimBoxL,
-                    "bandwidth"     : self.bandwidth,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "L"             : self.L,

@@ -9,4 +9,3 @@ Convols:
    SimBoxL: 1000
    wavelet_mode: "db2"
    wavelet_level: 10
-   bandwidth: 1

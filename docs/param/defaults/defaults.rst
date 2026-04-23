@@ -31,8 +31,6 @@ Core field-construction parameters
   wavelet family name, such as ``"db2"``.
 - ``wavelet_level``:
   level used in the wavelet decomposition.
-- ``bandwidth``:
-  bandwidth control parameter used by the field-construction pipeline.
 - ``threads``:
   CPU threads per MPI rank.
 

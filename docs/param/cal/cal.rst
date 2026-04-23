@@ -11,7 +11,6 @@ Convols
 - ``SimBoxL``: simulation box size
 - ``wavelet_mode``: wavelet family
 - ``wavelet_level``: wavelet decomposition depth
-- ``bandwidth``: bandwidth control parameter
 
 Counting
 --------
