@@ -53,14 +53,11 @@ def calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
     """Build a complex FFT-space window array for one Legendre (l, m) mode."""
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
-        ii = i % L
         pi = PowerPhi[abs(i)]
         for j in range(-L, L):
-            jj = j % L
             pij = pi * PowerPhi[abs(j)]
             for k in range(-L, L):
-                kk = k % L
-                window_array[ii, jj, kk] += (
+                window_array[i, j, k] += (
                     pij
                     * PowerPhi[abs(k)]
                     * window_function_legendre_numba(i * DeltaXi, j * DeltaXi, k * DeltaXi, rescaleR, l, m)

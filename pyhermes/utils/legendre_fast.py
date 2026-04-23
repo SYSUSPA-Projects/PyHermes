@@ -1275,15 +1275,15 @@ def window_function_legendre_fast(ki, kj, kk, R, l, m):
 def calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, window_function_numba):
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
+        pi = PowerPhi[abs(i)]
         for j in range(-L, L):
+            pij = pi * PowerPhi[abs(j)]
             for k in range(-L, L):
-                temp = (
-                    PowerPhi[np.abs(i)]
-                    * PowerPhi[np.abs(j)]
-                    * PowerPhi[np.abs(k)]
+                window_array[i, j, k] += (
+                    pij
+                    * PowerPhi[abs(k)]
                     * window_function_numba(i * DeltaXi, j * DeltaXi, k * DeltaXi, rescaleR)
                 )
-                window_array[i, j, k] += temp
     return window_array
 
 
