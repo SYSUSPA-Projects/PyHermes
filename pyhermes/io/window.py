@@ -19,8 +19,6 @@ class WindowFunc(ConvolsData):
             if self.rank == 0:
                 self.logger.error(f"WindowFunc missing required keys: {missing}")
             func_util.safe_exit(1)
-        self.input_params = dict(win_params)
-        self.input_params.update(convols_params)
         try:
             self.L = 1 << int(convols_params['J'])
             self.bandwidth = int(bandwidth)
@@ -33,7 +31,15 @@ class WindowFunc(ConvolsData):
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
-        self.input_params["bandwidth"] = self.bandwidth
+        self.input_params = {
+            **dict(win_params),
+            "J": int(convols_params["J"]),
+            "SimBoxL": self.SimBoxL,
+            "SampRate": self.SampRate,
+            "wavelet_mode": self.wavelet_mode,
+            "wavelet_level": self.wavelet_level,
+            "bandwidth": self.bandwidth,
+        }
         phi_data = do_wavelet(self.wavelet_mode, self.wavelet_level)
         self.PowerPhi = power_spectrum(phi_data, 0, self.bandwidth, self.L * self.bandwidth, self.SampRate)
         if not isinstance(self.PowerPhi, np.ndarray):
