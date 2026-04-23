@@ -64,21 +64,17 @@ class WindowFunc(ConvolsData):
         self.other_args = win_params.get('other_args', {})
         self.window_args = dict(self.rescale_len_args)
         self.window_args.update(self.other_args)
-        self._window_array = None
         self.w_kernel = None
-    
-    def _build_window_array(self):
-        self._window_array = build_real_window_octant_array(
+
+    def _build_kernel(self):
+        _window_array = build_real_window_octant_array(
             L=self.L,
             bandwidth=self.bandwidth,
             phi_fourier_power=self.phi_fourier_power,
             window_function_numba=self.func,
             **self.window_args,
         )
-
-    def _build_kernel(self):
-        self._build_window_array()
-        self.w_kernel = fold_octant_window_to_rfft_kernel(self._window_array)
+        self.w_kernel = fold_octant_window_to_rfft_kernel(_window_array)
 
     def as_array(self):
         if self.w_kernel is None:
