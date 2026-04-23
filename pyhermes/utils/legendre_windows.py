@@ -12,7 +12,13 @@ from pyhermes.utils.special_functions import _phase_from_kR, spherical_harmonic_
 
 
 def window_function_legendre_reference(ki, kj, kk, R, l, m):
-    """Evaluate the Legendre multipole window with NumPy/SciPy for validation."""
+    """
+    Evaluate one Legendre multipole window value with NumPy/SciPy.
+
+    This is a reference implementation for validation and diagnostics. It is
+    not used by the production window-array builders, which use either Numba
+    generic kernels or explicit fast kernels.
+    """
     if abs(m) > l:
         return 0.0 + 0.0j
 
@@ -30,7 +36,13 @@ def window_function_legendre_reference(ki, kj, kk, R, l, m):
 
 @njit
 def window_function_legendre_numba(ki, kj, kk, R, l, m):
-    """Evaluate j_l(2*pi*|k|*R) * Y_l^m(khat) with Numba helpers."""
+    """
+    Evaluate one generic Legendre multipole window value with Numba helpers.
+
+    The returned value is ``j_l(2*pi*|k|*R) * Y_l^m(khat)``. This generic path
+    supports arbitrary valid ``(l, m)`` values, but is slower than the explicit
+    kernels in ``legendre_fast`` for the supported low-order modes.
+    """
     if l < 0:
         return np.nan + 0.0j
     if abs(m) > l:
@@ -44,7 +56,15 @@ def window_function_legendre_numba(ki, kj, kk, R, l, m):
 
 @njit
 def calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
-    """Build a complex FFT-space window array for one Legendre (l, m) mode."""
+    """
+    Build a complex full-FFT Legendre window array with the generic kernel.
+
+    The array has shape ``(L, L, L)`` and is intended for complex full-FFT
+    convolution. It intentionally mirrors
+    ``calculate_fast_legendre_window_array_numba`` while calling the generic
+    ``window_function_legendre_numba`` directly; keeping the kernels separate
+    avoids dispatch overhead inside the ``O(L^3)`` loop.
+    """
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
         pi = PowerPhi[abs(i)]
@@ -59,8 +79,15 @@ def calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m):
     return window_array
 
 
-def calculate_legendre_window_array(L, DeltaXi, PowerPhi, rescaleR, l, m):
-    """Build a Legendre window array, dispatching to generated fast kernels when possible."""
-    if has_fast_window_function(l, m):
+def calculate_legendre_window_array(L, DeltaXi, PowerPhi, rescaleR, l, m, use_fast=True):
+    """
+    Build a production Legendre window array for one ``(l, m)`` mode.
+
+    By default, supported low-order modes are sent to the explicit fast kernels
+    in ``legendre_fast``; all other modes use the generic Numba implementation.
+    Set ``use_fast=False`` to force the generic path, which is useful for
+    validation and backend comparisons.
+    """
+    if use_fast and has_fast_window_function(l, m):
         return calculate_fast_legendre_window_array_with_lm(L, DeltaXi, PowerPhi, rescaleR, l, m)
     return calculate_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, l, m)

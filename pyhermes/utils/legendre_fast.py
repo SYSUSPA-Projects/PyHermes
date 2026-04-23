@@ -1,3 +1,5 @@
+"""Explicit fast Legendre multipole window kernels for low-order modes (l<=7)."""
+
 import numpy as np
 from numba import njit
 
@@ -1262,17 +1264,34 @@ WINDOW_FUNCTION_MAPPING = {
 
 
 def has_fast_window_function(l, m):
+    """Return whether an explicit fast window kernel is available for ``(l, m)``."""
     return (l, m) in WINDOW_FUNCTION_MAPPING
 
 
 def window_function_legendre_fast(ki, kj, kk, R, l, m):
+    """
+    Evaluate one Legendre multipole window value with an explicit fast kernel.
+
+    Only ``(l, m)`` pairs present in ``WINDOW_FUNCTION_MAPPING`` are supported.
+    Use ``window_function_legendre_numba`` in ``legendre_windows`` for the
+    generic arbitrary-order fallback.
+    """
     if (l, m) not in WINDOW_FUNCTION_MAPPING:
         raise ValueError(f"Unsupported fast Legendre window for l={l}, m={m}.")
     return WINDOW_FUNCTION_MAPPING[(l, m)](ki, kj, kk, R)
 
 
 @njit
-def calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, window_function_numba):
+def calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, window_function_fast):
+    """
+    Build a complex full-FFT Legendre window array with a preselected fast kernel.
+
+    ``window_function_fast`` must be one of the explicit low-order kernels in
+    this module, with signature ``(ki, kj, kk, R)``. This function intentionally
+    mirrors ``calculate_legendre_window_array_numba`` instead of sharing one
+    generic builder, so the inner ``O(L^3)`` loop can call the fixed-signature
+    fast kernel directly.
+    """
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     for i in range(-L, L):
         pi = PowerPhi[abs(i)]
@@ -1282,12 +1301,20 @@ def calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, w
                 window_array[i, j, k] += (
                     pij
                     * PowerPhi[abs(k)]
-                    * window_function_numba(i * DeltaXi, j * DeltaXi, k * DeltaXi, rescaleR)
+                    * window_function_fast(i * DeltaXi, j * DeltaXi, k * DeltaXi, rescaleR)
                 )
     return window_array
 
 
 def calculate_fast_legendre_window_array_with_lm(L, DeltaXi, PowerPhi, rescaleR, l, m):
+    """
+    Build a fast Legendre window array for a supported ``(l, m)`` mode.
+
+    This is a small dispatcher from ``(l, m)`` to the corresponding explicit
+    kernel in ``WINDOW_FUNCTION_MAPPING``. It raises ``ValueError`` when no fast
+    kernel exists; callers that want automatic fallback should use
+    ``calculate_legendre_window_array`` from ``legendre_windows``.
+    """
     if (l, m) not in WINDOW_FUNCTION_MAPPING:
         raise ValueError(f"Unsupported fast Legendre window for l={l}, m={m}.")
     return calculate_fast_legendre_window_array_numba(L, DeltaXi, PowerPhi, rescaleR, WINDOW_FUNCTION_MAPPING[(l, m)])
