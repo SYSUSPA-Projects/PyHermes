@@ -25,9 +25,9 @@ warnings.warn(
 
 
 from pyhermes.utils.convolution import (  # noqa: E402
-    calculate_w_numba,
+    build_real_window_octant_array,
     calculate_real_window_octant_array_numba,
-    call_calculate_window_array,
+    fold_octant_window_to_rfft_kernel,
     specialized_convolution_3d,
     specialized_convolution_3d_complex,
 )
@@ -94,8 +94,8 @@ __all__ = [
     "do_wavelet",
     "random_points_box",
     "calculate_real_window_octant_array_numba",
-    "call_calculate_window_array",
-    "calculate_w_numba",
+    "build_real_window_octant_array",
+    "fold_octant_window_to_rfft_kernel",
     "scaling_function_numba",
     "int_data",
     "bit",

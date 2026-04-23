@@ -5,7 +5,7 @@ import numpy as np
 
 from .convols import ConvolsData
 from pyhermes.utils import func_util
-from pyhermes.utils.convolution import call_calculate_window_array, calculate_w_numba
+from pyhermes.utils.convolution import build_real_window_octant_array, fold_octant_window_to_rfft_kernel
 from pyhermes.utils.wavelet_grid import do_wavelet, power_spectrum
 from pyhermes.utils.window_functions import set_window_function
 
@@ -68,7 +68,7 @@ class WindowFunc(ConvolsData):
         self.w_kernel = None
     
     def _build_window_array(self):
-        self._window_array = call_calculate_window_array(
+        self._window_array = build_real_window_octant_array(
             L=self.L,
             bandwidth=self.bandwidth,
             phi_fourier_power=self.phi_fourier_power,
@@ -78,7 +78,7 @@ class WindowFunc(ConvolsData):
 
     def _build_kernel(self):
         self._build_window_array()
-        self.w_kernel = calculate_w_numba(self._window_array)
+        self.w_kernel = fold_octant_window_to_rfft_kernel(self._window_array)
 
     def as_array(self):
         if self.w_kernel is None:

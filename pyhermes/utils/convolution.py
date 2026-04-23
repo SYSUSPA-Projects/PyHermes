@@ -38,8 +38,8 @@ def calculate_real_window_octant_array_numba(L, bandwidth, phi_fourier_power, wi
     return WindowArray
 
 
-def call_calculate_window_array(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
-    """Call ``calculate_real_window_octant_array_numba`` with keyword arguments in kernel-signature order."""
+def build_real_window_octant_array(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
+    """Build an octant-symmetric real-window lookup array from keyword arguments."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     sig = inspect.signature(window_function_numba)
@@ -60,7 +60,7 @@ def call_calculate_window_array(L, bandwidth, phi_fourier_power, window_function
 
 
 @njit(parallel=True)
-def calculate_w_numba(WindowArray):
+def fold_octant_window_to_rfft_kernel(WindowArray):
     """Fold an octant-symmetric window array into an rFFT-compatible kernel."""
     L = WindowArray.shape[0] - 1
     w = np.zeros((L, L, L // 2 + 1))
