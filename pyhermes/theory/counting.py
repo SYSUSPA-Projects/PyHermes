@@ -25,7 +25,7 @@ class Counting(TaskBase):
     def format_params(self):
         # Parameters from json or input
         self.convols_data     = self.task_params.get('convols_data', '')
-        self.N_randoms        = int(self.task_params['N_randoms'])
+        self.random_count     = int(self.task_params['random_count'])
         self.seed             = int(self.task_params['seed'])
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
@@ -36,7 +36,7 @@ class Counting(TaskBase):
         self.threads = max(1, int(self.threads))
         self.task_params = {
             'convols_data': self.convols_data,
-            'N_randoms': self.N_randoms,
+            'random_count': self.random_count,
             'seed': self.seed,
             'window': self._serialize_window_input(self.window),
             'threads': self.threads,
@@ -72,7 +72,7 @@ class Counting(TaskBase):
     def _current_task_params_snapshot(self):
         params = {}
         params['convols_data'] = self._serialize_convols_input(self.convols_data)
-        params['N_randoms'] = self.N_randoms
+        params['random_count'] = self.random_count
         params['seed'] = self.seed
         params['window'] = self._serialize_window_input(self.window)
         params['threads'] = self.threads
@@ -90,7 +90,7 @@ class Counting(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Counting input field ...")
             self.logger.info(
-                f"N_randoms={self.N_randoms}, seed={self.seed}, threads={self.threads}"
+                f"random_count={self.random_count}, seed={self.seed}, threads={self.threads}"
             )
             if convols_data is not None:
                 if isinstance(convols_data, str):
@@ -159,13 +159,13 @@ class Counting(TaskBase):
             if not self._fields_prepared:
                 self.prepare_input_fields()
             # Naïve optimization scheme for average-MPI
-            base_tasks = self.N_randoms // size
-            extra_tasks = self.N_randoms % size
+            base_tasks = self.random_count // size
+            extra_tasks = self.random_count % size
             if extra_tasks > 0:
                 rank == 0 and self.logger.info("Naïve optimization scheme for average-MPI is adopted")
                 total_padded_tasks = (base_tasks + 1) * size 
             else:
-                total_padded_tasks = self.N_randoms
+                total_padded_tasks = self.random_count
             _local_n_tasks = total_padded_tasks // size
             # The convols data now only loaded to rank0
             convols_info_serialized = None
@@ -204,9 +204,9 @@ class Counting(TaskBase):
             comm.Gather(_data_local, _data_all, root=0)
 
             if rank == 0:
-                if total_padded_tasks != self.N_randoms:
-                    self.logger.info(f"Padding tasks: computed {total_padded_tasks} samples, keeping {self.N_randoms}.")
-                self.counting_data.nx = _data_all[:self.N_randoms]
+                if total_padded_tasks != self.random_count:
+                    self.logger.info(f"Padding tasks: computed {total_padded_tasks} samples, keeping {self.random_count}.")
+                self.counting_data.nx = _data_all[:self.random_count]
 
             end_time2 = time.perf_counter()
             rank == 0 and self.logger.info(f"The time for counting is: {end_time2 - end_time1:.4f} sec")            

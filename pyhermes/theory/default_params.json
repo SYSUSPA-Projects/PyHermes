@@ -2,7 +2,7 @@
 	"enable_default_param": true, // do not change this
 	"Counting": {
 		"convols_data": "",
-		"N_randoms": 1000000,
+		"random_count": 1000000,
 		"seed": 42,
 		"window": {
 			"type": "",
