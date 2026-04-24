@@ -1,7 +1,7 @@
 """Explicit fast Legendre multipole window kernels for low-order modes (l<=7)."""
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 
 @njit
@@ -1281,7 +1281,7 @@ def window_function_legendre_fast(ki, kj, kk, R, l, m):
     return WINDOW_FUNCTION_MAPPING[(l, m)](ki, kj, kk, R)
 
 
-@njit
+@njit(parallel=True)
 def calculate_fast_legendre_window_array_numba(L, phi_fourier_power, rescaleR, window_function_fast):
     """
     Build a complex full-FFT Legendre window array with a preselected fast kernel.
@@ -1294,15 +1294,36 @@ def calculate_fast_legendre_window_array_numba(L, phi_fourier_power, rescaleR, w
     """
     window_array = np.zeros((L, L, L), dtype=np.complex128)
     inv_L = 1.0 / L
-    for i in range(-L, L):
-        pi = phi_fourier_power[abs(i)]
-        for j in range(-L, L):
-            pij = pi * phi_fourier_power[abs(j)]
-            for k in range(-L, L):
-                window_array[i, j, k] += (
-                    pij
-                    * phi_fourier_power[abs(k)]
-                    * window_function_fast(i * inv_L, j * inv_L, k * inv_L, rescaleR)
+    for x in prange(L):
+        i0 = x - L
+        i1 = x
+        pi0 = phi_fourier_power[L - x]
+        pi1 = phi_fourier_power[x]
+        ki0 = i0 * inv_L
+        ki1 = i1 * inv_L
+        for y in range(L):
+            j0 = y - L
+            j1 = y
+            pj0 = phi_fourier_power[L - y]
+            pj1 = phi_fourier_power[y]
+            kj0 = j0 * inv_L
+            kj1 = j1 * inv_L
+            for z in range(L):
+                k0 = z - L
+                k1 = z
+                pk0 = phi_fourier_power[L - z]
+                pk1 = phi_fourier_power[z]
+                kk0 = k0 * inv_L
+                kk1 = k1 * inv_L
+                window_array[x, y, z] = (
+                    pi0 * pj0 * pk0 * window_function_fast(ki0, kj0, kk0, rescaleR)
+                    + pi0 * pj0 * pk1 * window_function_fast(ki0, kj0, kk1, rescaleR)
+                    + pi0 * pj1 * pk0 * window_function_fast(ki0, kj1, kk0, rescaleR)
+                    + pi0 * pj1 * pk1 * window_function_fast(ki0, kj1, kk1, rescaleR)
+                    + pi1 * pj0 * pk0 * window_function_fast(ki1, kj0, kk0, rescaleR)
+                    + pi1 * pj0 * pk1 * window_function_fast(ki1, kj0, kk1, rescaleR)
+                    + pi1 * pj1 * pk0 * window_function_fast(ki1, kj1, kk0, rescaleR)
+                    + pi1 * pj1 * pk1 * window_function_fast(ki1, kj1, kk1, rescaleR)
                 )
     return window_array
 
