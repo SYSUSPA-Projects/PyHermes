@@ -216,17 +216,19 @@ class ConvolsData(HermesData):
         return new
     
     def get_particle_data(self):
-        if getattr(self, "particle_data_path", ""):
-            return self.get_particle_dataset()["pos"]
-        fin = getattr(self, "fin", {})
-        if not fin.get("path", ""):
-            self.logger.error("Input particle path is not specified.")
-            func_util.safe_exit(1)
-        return read_particle_data(fin["path"], fin["format"])['pos']
+        particle_data_path = getattr(self, "particle_data_path", "")
+        if particle_data_path:
+            with np.load(particle_data_path) as particle_data:
+                if "pos" not in particle_data or "weight" not in particle_data:
+                    self.logger.error(
+                        f"Particle dataset '{particle_data_path}' must contain 'pos' and 'weight' arrays."
+                    )
+                    func_util.safe_exit(1)
+                return {
+                    "pos": particle_data["pos"],
+                    "weight": particle_data["weight"],
+                }
 
-    def get_particle_weight(self):
-        if getattr(self, "particle_data_path", ""):
-            return self.get_particle_dataset()["weight"]
         fin = getattr(self, "fin", {})
         if not fin.get("path", ""):
             self.logger.error("Input particle path is not specified.")
@@ -234,31 +236,18 @@ class ConvolsData(HermesData):
         particle_data = read_particle_data(fin["path"], fin["format"])
         weight_key = fin.get("weight_key", "unit")
         if weight_key == "unit":
-            return np.ones(particle_data["size"], dtype=np.float32)
-        if weight_key in particle_data:
-            return particle_data[weight_key]
-        self.logger.error(
-            f"Weight key '{weight_key}' not found in particle data. Available keys: {list(particle_data.keys())}."
-        )
-        func_util.safe_exit(1)
-
-    def get_particle_dataset(self):
-        particle_data_path = getattr(self, "particle_data_path", "")
-        if not particle_data_path:
-            return {
-                "pos": self.get_particle_data(),
-                "weight": self.get_particle_weight(),
-            }
-        with np.load(particle_data_path) as particle_data:
-            if "pos" not in particle_data or "weight" not in particle_data:
-                self.logger.error(
-                    f"Particle dataset '{particle_data_path}' must contain 'pos' and 'weight' arrays."
-                )
-                func_util.safe_exit(1)
-            return {
-                "pos": particle_data["pos"],
-                "weight": particle_data["weight"],
-            }
+            weight = np.ones(particle_data["size"], dtype=np.float32)
+        elif weight_key in particle_data:
+            weight = particle_data[weight_key]
+        else:
+            self.logger.error(
+                f"Weight key '{weight_key}' not found in particle data. Available keys: {list(particle_data.keys())}."
+            )
+            func_util.safe_exit(1)
+        return {
+            "pos": particle_data["pos"],
+            "weight": weight,
+        }
     
     def phi_at_pos(self, pos):
         return phi_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)

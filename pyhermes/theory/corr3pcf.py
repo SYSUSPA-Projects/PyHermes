@@ -53,9 +53,11 @@ PRODUCT_INPUT_FLAGS = {
 
 
 def compute_triplet_product_mc(
-    r12_scaled, r13_scaled, mu, pos_scaled, n_rot,
+    r12_scaled, r13_scaled, mu, center_scaled, n_rot,
     convols_meta, convols_data2, convols_data3,
     center="box_random",
+    center_weight=None,
+    center_weight_sum=None,
     seed_base_rot=-1,
     theta_index=-1,
     eps1=None,
@@ -79,17 +81,27 @@ def compute_triplet_product_mc(
             raise ValueError("eps1 must be provided when center='box_random'.")
         return estimate_triplet_product_box_random_centers(
             r12_scaled, r13_scaled, mu,
-            pos_scaled, n_rot,
+            center_scaled, n_rot,
             eps1, eps2, eps3,
             **kwargs_common,
         )
 
     if center == "particle":
         if rho1 is None:
-            raise ValueError("rho1 must be provided when center='particle'.")
+            rho1 = 1 / convols_meta.L ** 3
+        if center_scaled.shape[0] == 0:
+            return 0.0
+        if center_weight is None:
+            center_weight = np.ones(center_scaled.shape[0], dtype=np.float64)
+        if center_weight.shape[0] != center_scaled.shape[0]:
+            raise ValueError("center_weight must have the same length as center_scaled.")
+        if center_weight_sum is None:
+            center_weight_sum = float(np.sum(center_weight))
+        if center_weight_sum <= 0.0:
+            raise ValueError("Particle-center weights must have a positive sum.")
         return estimate_triplet_product_particle_centers(
             r12_scaled, r13_scaled, mu,
-            pos_scaled, n_rot,
+            center_scaled, center_weight, center_weight_sum, n_rot,
             rho1, eps2, eps3,
             **kwargs_common,
         )
@@ -113,6 +125,7 @@ class Corr_3PCF(TaskBase):
         self.threads = max(1, int(self.threads))
         self.task_params["threads"] = self.threads
         self.task_params["products"] = copy.deepcopy(self.products)
+        self.task_params["particle_weight1"] = self.particle_weight1
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
@@ -122,7 +135,9 @@ class Corr_3PCF(TaskBase):
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
         self.particle_pos1 = self.task_params.get("particle_pos1", None)
+        self.particle_weight1 = self.task_params.get("particle_weight1", None)
         self.random_pos1 = self.task_params.get("random_pos1", None)
+        self.random_weight1 = None
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -321,6 +336,11 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.particle_pos1)
             params["particle_pos1"] = {"kind": "particle_pos1", "shape": tuple(arr.shape)}
+        if self.particle_weight1 is None:
+            params["particle_weight1"] = None
+        else:
+            arr = np.asarray(self.particle_weight1)
+            params["particle_weight1"] = {"kind": "particle_weight1", "shape": tuple(arr.shape)}
         if self.random_pos1 is None:
             params["random_pos1"] = None
         else:
@@ -452,15 +472,33 @@ class Corr_3PCF(TaskBase):
             )
         return np.ascontiguousarray(arr, dtype=np.float64)
 
-    def _resolve_pos1_array(self, provided_pos, fallback_field, label, explicit_name):
+    def _normalize_particle_weight(self, value, npos, label="particle_weight1"):
+        """Normalize center weights to a contiguous positive-sum float64 array."""
+        if value is None:
+            arr = np.ones(npos, dtype=np.float64)
+        else:
+            arr = np.asarray(value, dtype=np.float64)
+            if arr.ndim != 1 or arr.shape[0] != npos:
+                raise ValueError(f"{label} must be a 1D array with length {npos}, got shape {arr.shape}.")
+            arr = np.ascontiguousarray(arr, dtype=np.float64)
+        if float(np.sum(arr)) <= 0.0:
+            raise ValueError(f"{label} must have a positive sum.")
+        return arr
+
+    def _resolve_pos1_array(self, provided_pos, provided_weight, fallback_field, label, explicit_name):
         """Resolve leg-1 center coordinates from explicit arrays or from a ConvolsData source."""
         pos_arr = self._normalize_particle_data(provided_pos)
         if pos_arr is not None:
-            return pos_arr, f"provided {explicit_name}"
+            weight_arr = self._normalize_particle_weight(provided_weight, pos_arr.shape[0])
+            return pos_arr, weight_arr, f"provided {explicit_name}"
         if fallback_field is None:
-            return None, None
+            return None, None, None
         try:
-            return self._normalize_particle_data(fallback_field.get_particle_data()), f"from {label}.get_particle_data()"
+            particle_data = fallback_field.get_particle_data()
+            pos_arr = self._normalize_particle_data(particle_data["pos"])
+            raw_weight = provided_weight if provided_weight is not None else particle_data["weight"]
+            weight_arr = self._normalize_particle_weight(raw_weight, pos_arr.shape[0], label=f"{label} particle weight")
+            return pos_arr, weight_arr, f"from {label}.get_particle_data()"
         except Exception:
             self.logger.error(
                 f"For center='particle', {label} could not provide usable particle coordinates. "
@@ -471,7 +509,7 @@ class Corr_3PCF(TaskBase):
     def _resolve_runtime_inputs(
         self,
         convols_data1, convols_data2, convols_data3,
-        particle_pos1, random_pos1, random1, random2, random3,
+        particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
         window1, window2, window3,
     ):
         """Apply shared-input fallbacks right before preparation/run-time use."""
@@ -483,6 +521,8 @@ class Corr_3PCF(TaskBase):
             convols_data3 = self.convols_data3 if self.convols_data3 not in (None, "") else self.convols_data
         if particle_pos1 is None:
             particle_pos1 = self.particle_pos1
+        if particle_weight1 is None:
+            particle_weight1 = self.particle_weight1
         if random_pos1 is None:
             random_pos1 = self.random_pos1
         if random1 is None:
@@ -499,7 +539,7 @@ class Corr_3PCF(TaskBase):
             window3 = self.window3 if self.window3 is not None else self.window
         return (
             convols_data1, convols_data2, convols_data3,
-            particle_pos1, random_pos1, random1, random2, random3,
+            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
             window1, window2, window3,
         )
 
@@ -556,13 +596,35 @@ class Corr_3PCF(TaskBase):
         comm.Scatterv([sendbuf, counts3, displs3, MPI.DOUBLE], recvbuf, root=0)
         return recvbuf.reshape(n_local, 3)
 
+    def _scatter_weights(self, weight_all):
+        """Scatter a rank-0 1D weight array into rank-local chunks."""
+        comm = self.comm
+        rank = self.rank
+        size = comm.Get_size()
+        if rank == 0:
+            n_all = weight_all.shape[0]
+            counts = np.full(size, n_all // size, dtype=np.int64)
+            counts[: (n_all % size)] += 1
+            displs = np.zeros(size, dtype=np.int64)
+            displs[1:] = np.cumsum(counts[:-1])
+            sendbuf = np.ascontiguousarray(weight_all, dtype=np.float64)
+        else:
+            counts = sendbuf = displs = None
+        n_local = int(comm.scatter(counts, root=0))
+        recvbuf = np.empty(n_local, dtype=np.float64)
+        comm.Scatterv([sendbuf, counts, displs, MPI.DOUBLE], recvbuf, root=0)
+        return recvbuf
+
     def calc_pair_product(self, radius, field1, field2):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
         return compute_pair_product_at_radius(radius, field1, field2)
 
-    def _compute_rrr_value(self, mu, r23_value, center, pos_local, seed_base_rot, theta_index, random1, random2, random3, rr23_cache=None):
+    def _compute_rrr_value(
+        self, mu, r23_value, center, pos_local, seed_base_rot, theta_index,
+        random1, random2, random3, rr23_cache=None, center_weight=None, center_weight_sum=None
+    ):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
         n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
         if n_uniform >= 2:
@@ -587,6 +649,8 @@ class Corr_3PCF(TaskBase):
             random2,
             random3,
             center=center,
+            center_weight=center_weight,
+            center_weight_sum=center_weight_sum,
             seed_base_rot=seed_base_rot,
             theta_index=theta_index,
             eps1=random1.epsilon,
@@ -594,7 +658,7 @@ class Corr_3PCF(TaskBase):
         )
 
     def _configure_particle_center_leg1(
-        self, expanded_products, particle_pos1_arr, random_pos1_arr, data_legs, random_legs, window1
+        self, expanded_products, particle_pos1_arr, particle_weight1_arr, random_pos1_arr, data_legs, random_legs, window1
     ):
         """Resolve particle-center leg-1 state for data centers, random centers, and warnings."""
         leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
@@ -623,18 +687,19 @@ class Corr_3PCF(TaskBase):
                     random1_base = "uniform"
                     break
 
-        particle_pos1, particle_pos1_source = (
+        particle_pos1, particle_weight1, particle_pos1_source = (
             self._resolve_pos1_array(
-                particle_pos1_arr, leg1_base, "convols_data1", "particle_pos1"
-            ) if (expanded_products & {"ddd", "d_delta_dd"}) else (None, None)
+                particle_pos1_arr, particle_weight1_arr, leg1_base, "convols_data1", "particle_pos1"
+            ) if (expanded_products & {"ddd", "d_delta_dd"}) else (None, None, None)
         )
-        random_pos1, random_pos1_source = (
+        random_pos1, random_weight1, random_pos1_source = (
             self._resolve_pos1_array(
                 random_pos1_arr,
+                None,
                 random1_base if isinstance(random1_base, ConvolsData) else None,
                 "random1",
                 "random_pos1",
-            ) if "r_delta_dd" in expanded_products else (None, None)
+            ) if "r_delta_dd" in expanded_products else (None, None, None)
         )
 
         if window1 is not None:
@@ -646,8 +711,10 @@ class Corr_3PCF(TaskBase):
             "data_legs": data_legs,
             "random_legs": random_legs,
             "particle_pos1": particle_pos1,
+            "particle_weight1": particle_weight1,
             "particle_pos1_source": particle_pos1_source,
             "random_pos1": random_pos1,
+            "random_weight1": random_weight1,
             "random_pos1_source": random_pos1_source,
         }
 
@@ -657,6 +724,7 @@ class Corr_3PCF(TaskBase):
         convols_data2=None,
         convols_data3=None,
         particle_pos1=None,
+        particle_weight1=None,
         random_pos1=None,
         random1=None,
         random2=None,
@@ -671,17 +739,18 @@ class Corr_3PCF(TaskBase):
         self._resolve_angle_sampling()
         (
             convols_data1, convols_data2, convols_data3,
-            particle_pos1, random_pos1, random1, random2, random3,
+            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
             window1, window2, window3,
         ) = self._resolve_runtime_inputs(
             convols_data1, convols_data2, convols_data3,
-            particle_pos1, random_pos1, random1, random2, random3,
+            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
             window1, window2, window3,
         )
 
         needs_data, needs_random = self._required_input_flags()
         expanded_products = set(self._expanded_products())
         particle_pos1_arr = self._normalize_particle_data(particle_pos1)
+        particle_weight1_arr = None if particle_weight1 is None else np.asarray(particle_weight1, dtype=np.float64)
         random_pos1_arr = self._normalize_particle_data(random_pos1)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         use_random_pos1 = self.center == "particle" and random_pos1_arr is not None
@@ -722,17 +791,20 @@ class Corr_3PCF(TaskBase):
 
             if self.center == "particle":
                 leg1_ctx = self._configure_particle_center_leg1(
-                    expanded_products, particle_pos1_arr, random_pos1_arr, data_legs, random_legs, window1
+                    expanded_products, particle_pos1_arr, particle_weight1_arr, random_pos1_arr, data_legs, random_legs, window1
                 )
                 data_legs = leg1_ctx["data_legs"]
                 random_legs = leg1_ctx["random_legs"]
                 self.particle_pos1 = leg1_ctx["particle_pos1"]
+                self.particle_weight1 = leg1_ctx["particle_weight1"]
                 self.random_pos1 = leg1_ctx["random_pos1"]
+                self.random_weight1 = leg1_ctx["random_weight1"]
                 particle_pos1_source = leg1_ctx["particle_pos1_source"]
                 random_pos1_source = leg1_ctx["random_pos1_source"]
             else:
                 particle_pos1_source = None
                 random_pos1_source = None
+                self.random_weight1 = None
 
             # All ConvolsData inputs, including random legs, must agree on the
             # same geometry and wavelet metadata before any mixed statistics are valid.
@@ -754,7 +826,11 @@ class Corr_3PCF(TaskBase):
                 self.rho = None
 
             if self.particle_pos1 is not None:
-                self.logger.info(f"Particle leg 1 ready | source={particle_pos1_source} | particle_count={self.particle_pos1.shape[0]}")
+                weight_sum = float(np.sum(self.particle_weight1))
+                self.logger.info(
+                    f"Particle leg 1 ready | source={particle_pos1_source} | "
+                    f"particle_count={self.particle_pos1.shape[0]} | weight_sum={weight_sum:.6e}"
+                )
             elif self.center != "particle":
                 self.particle_pos1 = None
 
@@ -897,7 +973,8 @@ class Corr_3PCF(TaskBase):
             )
 
     def _compute_particle_center_theta(
-        self, mu, r23_value, pos_local_data, pos_local_random1, seed_base_rot, theta_index,
+        self, mu, r23_value, pos_local_data, weight_local_data, weight_sum_local_data,
+        pos_local_random1, weight_local_random1, weight_sum_local_random1, seed_base_rot, theta_index,
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
@@ -907,20 +984,23 @@ class Corr_3PCF(TaskBase):
             local_results["ddd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
-                center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
+                seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
             )
         if "rrr" in local_results:
             local_results["rrr"][theta_index] = self._compute_rrr_value(
                 mu, r23_value, "particle", pos_local_random1, seed_base_rot, theta_index,
-                _local_random1, _local_random2, _local_random3, rr23_cache=None
+                _local_random1, _local_random2, _local_random3, rr23_cache=None,
+                center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
             local_results["d_delta_dd"][theta_index] = compute_triplet_product_mc(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
-                center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
+                seed_base_rot=seed_base_rot, theta_index=theta_index,
                 rho1=rho,
             )
         if "r_delta_dd" in local_results:
@@ -933,7 +1013,8 @@ class Corr_3PCF(TaskBase):
                 local_results["r_delta_dd"][theta_index] = compute_triplet_product_mc(
                     self.r12_scaled, self.r13_scaled, mu, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
-                    center="particle", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                    center="particle", center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
+                    seed_base_rot=seed_base_rot, theta_index=theta_index,
                     rho1=rho,
                 )
 
@@ -1016,24 +1097,33 @@ class Corr_3PCF(TaskBase):
                         func_util.safe_exit(1)
                     if self.particle_pos1 is not None:
                         pos_all = self.particle_pos1 * geometry_ref.scale_factor
+                        weight_all = self.particle_weight1
                     else:
-                        pos_all = _local_convols1.get_particle_data() * _local_convols1.scale_factor
+                        particle_data = _local_convols1.get_particle_data()
+                        pos_all = particle_data["pos"] * _local_convols1.scale_factor
+                        weight_all = particle_data["weight"]
                     Nall = pos_all.shape[0]
                     if self.random_pos1 is not None:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
+                        weight_all_random1 = self.random_weight1
                         Nall_random1 = pos_all_random1.shape[0]
                     else:
                         pos_all_random1 = None
+                        weight_all_random1 = None
                         Nall_random1 = None
                 else:
                     pos_all = None
+                    weight_all = None
                     Nall = None
                     pos_all_random1 = None
+                    weight_all_random1 = None
                     Nall_random1 = None
             else:
                 pos_all = None
+                weight_all = None
                 Nall = None
                 pos_all_random1 = None
+                weight_all_random1 = None
                 Nall_random1 = None
             mu_arr = self.mu_arr
             theta_arr = self.theta_arr
@@ -1049,13 +1139,38 @@ class Corr_3PCF(TaskBase):
                 pos_local = random_points_box(N=n_local, box_size=_local_convols1.L, seed=seed_center_rank)
             else:
                 pos_local = self._scatter_positions(pos_all)
+                weight_local = self._scatter_weights(weight_all)
                 if self.random_pos1 is not None:
                     pos_local_random1 = self._scatter_positions(pos_all_random1)
+                    weight_local_random1 = self._scatter_weights(weight_all_random1)
                 else:
                     pos_local_random1 = None
+                    weight_local_random1 = None
 
             npos_local = pos_local.shape[0]
             npos_total = comm.allreduce(npos_local, op=MPI.SUM)
+            if self.center == "particle":
+                weight_sum_local = float(np.sum(weight_local))
+                weight_sum_total = comm.allreduce(weight_sum_local, op=MPI.SUM)
+                if weight_sum_total <= 0.0:
+                    self.logger.error("Particle-center weights must have a positive global sum.")
+                    func_util.safe_exit(1)
+                if weight_local_random1 is not None:
+                    weight_sum_local_random1 = float(np.sum(weight_local_random1))
+                    weight_sum_total_random1 = comm.allreduce(weight_sum_local_random1, op=MPI.SUM)
+                    if weight_sum_total_random1 <= 0.0:
+                        self.logger.error("Random particle-center weights must have a positive global sum.")
+                        func_util.safe_exit(1)
+                else:
+                    weight_sum_local_random1 = weight_sum_local
+                    weight_sum_total_random1 = weight_sum_total
+            else:
+                weight_local = None
+                weight_sum_local = None
+                weight_sum_total = None
+                weight_local_random1 = None
+                weight_sum_local_random1 = None
+                weight_sum_total_random1 = None
             geometry_ref = self._find_geometry_reference(_local_convols1, _local_convols2, _local_convols3)
             if geometry_ref is None:
                 self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
@@ -1115,7 +1230,12 @@ class Corr_3PCF(TaskBase):
                     )
                 else:
                     self._compute_particle_center_theta(
-                        mu, r23_value, pos_local, pos_local_random1 if pos_local_random1 is not None else pos_local, seed_base_rot, it,
+                        mu, r23_value,
+                        pos_local, weight_local, weight_sum_local,
+                        pos_local_random1 if pos_local_random1 is not None else pos_local,
+                        weight_local_random1 if weight_local_random1 is not None else weight_local,
+                        weight_sum_local_random1,
+                        seed_base_rot, it,
                         local_results, _local_convols2, _local_convols3,
                         _local_random1, _local_random2, _local_random3
                     )
@@ -1129,10 +1249,18 @@ class Corr_3PCF(TaskBase):
 
             global_results = {}
             for key, arr in local_results.items():
-                local_weighted = arr * npos_local
+                if self.center == "particle" and key in {"ddd", "d_delta_dd"}:
+                    local_weighted = arr * weight_sum_local
+                    normalizer = weight_sum_total
+                elif self.center == "particle" and key in {"rrr", "r_delta_dd"}:
+                    local_weighted = arr * weight_sum_local_random1
+                    normalizer = weight_sum_total_random1
+                else:
+                    local_weighted = arr * npos_local
+                    normalizer = npos_total
                 global_weighted = np.empty_like(arr)
                 comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
-                global_results[key] = global_weighted / npos_total
+                global_results[key] = global_weighted / normalizer
 
             if rank == 0:
                 t_loop_end = time.perf_counter()

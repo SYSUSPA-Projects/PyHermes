@@ -66,8 +66,8 @@ def generate_triangle_offsets(R1, R2, mu, phi, costheta1, alpha):
 @njit
 def estimate_triplet_product_particle_centers(
     R1_scaled, R2_scaled, mu,
-    centers_scaled, n_rot,
-    R, epsilon2, epsilon3,
+    center_scaled, center_weight, center_weight_sum, n_rot,
+    rho1, epsilon2, epsilon3,
     phi_array, L, phi_resolution, phi_support,
     seed_base_rot=-1, theta_index=-1
 ):
@@ -88,13 +88,13 @@ def estimate_triplet_product_particle_centers(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        n_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
         for i in range(npos):
-            s += n2[i] * n3[i]
+            s += center_weight[i] * n2[i] * n3[i]
         total_sum += s
-    return R * total_sum / (n_rot * npos)
+    return rho1 * total_sum / (n_rot * center_weight_sum)
 
 
 @njit
