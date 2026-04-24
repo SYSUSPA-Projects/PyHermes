@@ -11,6 +11,8 @@ Convols
 - ``box_size``: simulation box size
 - ``wavelet_mode``: wavelet family
 - ``wavelet_level``: wavelet decomposition depth
+- ``save_particle_data``: save particle positions and weights to a companion ``.npz`` file
+- ``particle_data_path``: optional companion particle-data path; derived from ``fout_path`` when empty
 
 Counting
 --------

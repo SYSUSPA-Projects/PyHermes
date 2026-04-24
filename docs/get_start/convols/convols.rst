@@ -48,6 +48,8 @@ Use the shipped example config:
          format: "generic_pos"
          weight_key: "no_weight"
       fout_path: "./output/quijote_sfc.pkl"
+      save_particle_data: false
+      particle_data_path: ""
       phi_resolution: 1024
       box_size: 1000
       wavelet_mode: "db2"
@@ -156,6 +158,10 @@ Key parameters
   particle weight field name, or ``no_weight``
 - ``fout_path``:
   output path for the serialized coefficient field
+- ``save_particle_data``:
+  whether to save particle positions and weights to a companion ``.npz`` file
+- ``particle_data_path``:
+  optional companion particle-data path; if empty, PyHermes derives it from ``fout_path``
 - ``phi_resolution``:
   number of samples used to tabulate ``phi``, the wavelet scaling function
 - ``box_size``:

@@ -42,6 +42,11 @@ Particle input parameters
   instead of reading particle positions from file.
 - ``particle_weight``:
   optional in-memory particle weights. If omitted, unit weights are assumed.
+- ``save_particle_data``:
+  whether to save particle positions and weights to a companion ``.npz`` file.
+- ``particle_data_path``:
+  optional companion particle-data path. If empty, PyHermes derives it from
+  ``fout_path``.
 - ``fin.path``:
   local path to the particle catalog.
 - ``fin.url``:

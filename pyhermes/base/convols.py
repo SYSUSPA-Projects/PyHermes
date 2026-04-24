@@ -1,6 +1,7 @@
 import time
 import concurrent.futures
 import copy
+import os
 
 import numpy as np
 
@@ -30,8 +31,6 @@ class Convols(TaskBase):
         self.format_params()
         self.convols_data = None
         self._fields_prepared = False
-        self._prepared_particle_pos = None
-        self._prepared_particle_weight = None
 
     def format_params(self):
         self.J             = self.task_params['J']
@@ -48,6 +47,8 @@ class Convols(TaskBase):
         self.threads       = int(self.task_params['threads'])
         self.particle_pos = self.task_params['particle_pos']
         self.particle_weight = self.task_params['particle_weight']
+        self.save_particle_data = bool(self.task_params['save_particle_data'])
+        self.particle_data_path = self.task_params['particle_data_path']
         self.L             = 1 << self.J
 
     def _sync_runtime_options(self):
@@ -61,6 +62,8 @@ class Convols(TaskBase):
         self.task_params['wavelet_level'] = self.wavelet_level
         self.task_params['particle_pos'] = self.particle_pos
         self.task_params['particle_weight'] = self.particle_weight
+        self.task_params['save_particle_data'] = self.save_particle_data
+        self.task_params['particle_data_path'] = self.particle_data_path
         base_fin = copy.deepcopy(self.task_params.get('fin', {}))
         if self.fin is None:
             self.fin = base_fin
@@ -148,6 +151,31 @@ class Convols(TaskBase):
             func_util.safe_exit(1)
         return p_pos, p_wei.astype(np.float32, copy=False), source_desc
 
+    def _resolve_particle_data_path(self):
+        if self.particle_data_path:
+            return self.particle_data_path
+        if self.fout_path:
+            base, _ext = os.path.splitext(self.fout_path)
+            return f"{base}_particles.npz"
+        self.logger.error(
+            "save_particle_data=True requires either 'particle_data_path' or 'fout_path' "
+            "so PyHermes can choose where to save the particle dataset."
+        )
+        func_util.safe_exit(1)
+
+    def _save_particle_dataset(self):
+        particle_data_path = self._resolve_particle_data_path()
+        output_dir = os.path.dirname(particle_data_path)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
+        np.savez(
+            particle_data_path,
+            pos=np.ascontiguousarray(self.particle_pos, dtype=np.float32),
+            weight=np.ascontiguousarray(self.particle_weight, dtype=np.float32),
+        )
+        self.particle_data_path = particle_data_path
+        self.logger.info(f"Saved particle positions and weights to {particle_data_path}")
+
     def prepare_input_fields(self, particle_pos=None, particle_weight=None, fin=None):
         if fin is not None:
             merged_fin = copy.deepcopy(self.fin)
@@ -173,18 +201,20 @@ class Convols(TaskBase):
                 self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                 func_util.safe_exit(1)
             p_pos, p_wei, source_desc = self._load_particle_input()
+            self.particle_pos = p_pos
+            self.particle_weight = p_wei
             self.norm_factor = 1 / self.particle_count
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin_wei_key}"
             )
-            self._prepared_particle_pos = p_pos
-            self._prepared_particle_weight = p_wei
+            if self.save_particle_data:
+                self._save_particle_dataset()
         else:
-            self._prepared_particle_pos = None
-            self._prepared_particle_weight = None
+            self.particle_pos = None
+            self.particle_weight = None
         self._fields_prepared = True
 
-    def run(self, save_result=True, return_pData=False, overwrite=False):
+    def run(self, save_result=True, overwrite=False):
         try:
             comm = self.comm
             rank = self.rank
@@ -194,8 +224,8 @@ class Convols(TaskBase):
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            p_pos = self._prepared_particle_pos
-            p_wei = self._prepared_particle_weight
+            p_pos = self.particle_pos
+            p_wei = self.particle_weight
             if rank == 0 and self.size == 1:
                 self.logger.info("Single process mode")
                 time_start = time.perf_counter()
@@ -272,6 +302,8 @@ class Convols(TaskBase):
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
                     "norm_factor"    : self.norm_factor,
+                    "particle_data_path": self.particle_data_path if self.save_particle_data else "",
+                    "particle_data_format": "npz" if self.save_particle_data else "",
                     "phi_support"    : self.phi_support,
                     "phi_array"      : self.phi_array
                 }
@@ -290,10 +322,7 @@ class Convols(TaskBase):
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
-        if return_pData:
-            return self.convols_data, p_pos
-        else:
-            return self.convols_data
+        return self.convols_data
 
     def sew_up(self, all_s, size, L, phi_support):
         sew_s = np.zeros((L, L, L))

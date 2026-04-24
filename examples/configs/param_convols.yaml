@@ -5,6 +5,8 @@ Convols:
       path: "./data/quijote10000.bin"
       format: "generic_pos"
    fout_path: "./output/quijote_sfc.pkl"
+   save_particle_data: false
+   particle_data_path: ""
    phi_resolution: 1024
    box_size: 1000
    wavelet_mode: "db2"

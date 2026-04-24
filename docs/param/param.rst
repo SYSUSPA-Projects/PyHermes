@@ -35,6 +35,8 @@ Minimal example
          path: "./data.bin"
          format: "generic_pos"
       fout_path: "./output/convols.pkl"
+      save_particle_data: false
+      particle_data_path: ""
 
    Corr_2PCF:
       convols_data_path: "./output/convols.pkl"

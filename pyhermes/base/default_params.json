@@ -10,6 +10,8 @@
 		"threads"        : 1,
 		"particle_pos"   : null,
 		"particle_weight": null,
+		"save_particle_data": false,
+		"particle_data_path": "",
 		"fin": {
 			"path"      : "",
 			"url"       : "",
