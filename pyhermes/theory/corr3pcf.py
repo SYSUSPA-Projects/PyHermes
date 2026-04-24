@@ -52,7 +52,7 @@ PRODUCT_INPUT_FLAGS = {
 }
 
 
-def compute_triplet_product_mc(
+def estimate_triplet_product_with_sampled_centers(
     r12_scaled, r13_scaled, mu, center_scaled, n_rot,
     convols_meta, convols_data2, convols_data3,
     center="box_random",
@@ -63,7 +63,7 @@ def compute_triplet_product_mc(
     eps1=None,
     rho1=None,
 ):
-    """Dispatch the 3PCF Monte Carlo kernel for the chosen center definition."""
+    """Estimate a triplet product using either box-random or particle centers."""
     kwargs_common = {
         "phi_array": convols_meta.phi_array,
         "L": convols_meta.L,
@@ -126,6 +126,7 @@ class Corr_3PCF(TaskBase):
         self.task_params["threads"] = self.threads
         self.task_params["products"] = copy.deepcopy(self.products)
         self.task_params["particle_weight1"] = self.particle_weight1
+        self.task_params["random_weight1"] = self.random_weight1
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
@@ -147,7 +148,7 @@ class Corr_3PCF(TaskBase):
         if self.random3 in (None, ""):
             self.random3 = self.random
         self.random_pos1 = self.task_params.get("random_pos1", None)
-        self.random_weight1 = None
+        self.random_weight1 = self.task_params.get("random_weight1", None)
 
         window = self.task_params.get("window", None)
         self.window = window if (window and (window.get("type") or window.get("func"))) else None
@@ -349,6 +350,11 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.random_pos1)
             params["random_pos1"] = {"kind": "random_pos1", "shape": tuple(arr.shape)}
+        if self.random_weight1 is None:
+            params["random_weight1"] = None
+        else:
+            arr = np.asarray(self.random_weight1)
+            params["random_weight1"] = {"kind": "random_weight1", "shape": tuple(arr.shape)}
         params["window"] = self._serialize_window_input(self.window)
         params["window1"] = self._serialize_window_input(self.window1)
         params["window2"] = self._serialize_window_input(self.window2)
@@ -508,7 +514,7 @@ class Corr_3PCF(TaskBase):
     def _resolve_runtime_inputs(
         self,
         convols_data1, convols_data2, convols_data3,
-        particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
+        particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
         window1, window2, window3,
     ):
         """Apply shared-input fallbacks right before preparation/run-time use."""
@@ -522,14 +528,16 @@ class Corr_3PCF(TaskBase):
             particle_pos1 = self.particle_pos1
         if particle_weight1 is None:
             particle_weight1 = self.particle_weight1
-        if random_pos1 is None:
-            random_pos1 = self.random_pos1
         if random1 is None:
             random1 = self.random1 if self.random1 not in (None, "") else self.random
         if random2 is None:
             random2 = self.random2 if self.random2 not in (None, "") else self.random
         if random3 is None:
             random3 = self.random3 if self.random3 not in (None, "") else self.random
+        if random_pos1 is None:
+            random_pos1 = self.random_pos1
+        if random_weight1 is None:
+            random_weight1 = self.random_weight1
         if window1 is None:
             window1 = self.window1 if self.window1 is not None else self.window
         if window2 is None:
@@ -537,8 +545,8 @@ class Corr_3PCF(TaskBase):
         if window3 is None:
             window3 = self.window3 if self.window3 is not None else self.window
         return (
-            convols_data1, convols_data2, convols_data3,
-            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
+            convols_data1, convols_data2, convols_data3, particle_pos1, particle_weight1, 
+            random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         )
 
@@ -638,7 +646,7 @@ class Corr_3PCF(TaskBase):
         if isinstance(random3, (float, int, np.floating)):
             rr12 = self.calc_pair_product(self.r12, random1, random2)
             return self._field_density(random3) * rr12
-        return compute_triplet_product_mc(
+        return estimate_triplet_product_with_sampled_centers(
             self.r12_scaled,
             self.r13_scaled,
             mu,
@@ -657,7 +665,9 @@ class Corr_3PCF(TaskBase):
         )
 
     def _configure_particle_center_leg1(
-        self, expanded_products, particle_pos1_arr, particle_weight1_arr, random_pos1_arr, data_legs, random_legs, window1
+        self, expanded_products, particle_pos1_arr, particle_weight1_arr,
+        random1, random2, random3, random_pos1_arr, random_weight1_arr,
+        data_legs, random_legs, window1
     ):
         """Resolve particle-center leg-1 state for data centers, random centers, and warnings."""
         leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
@@ -694,7 +704,7 @@ class Corr_3PCF(TaskBase):
         random_pos1, random_weight1, random_pos1_source = (
             self._resolve_pos1_array(
                 random_pos1_arr,
-                None,
+                random_weight1_arr,
                 random1_base if isinstance(random1_base, ConvolsData) else None,
                 "random1",
                 "random_pos1",
@@ -724,10 +734,11 @@ class Corr_3PCF(TaskBase):
         convols_data3=None,
         particle_pos1=None,
         particle_weight1=None,
-        random_pos1=None,
         random1=None,
         random2=None,
         random3=None,
+        random_pos1=None,
+        random_weight1=None,
         window1=None,
         window2=None,
         window3=None,
@@ -738,11 +749,11 @@ class Corr_3PCF(TaskBase):
         self._resolve_angle_sampling()
         (
             convols_data1, convols_data2, convols_data3,
-            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
+            particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         ) = self._resolve_runtime_inputs(
             convols_data1, convols_data2, convols_data3,
-            particle_pos1, particle_weight1, random_pos1, random1, random2, random3,
+            particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         )
 
@@ -751,6 +762,7 @@ class Corr_3PCF(TaskBase):
         particle_pos1_arr = self._normalize_particle_data(particle_pos1)
         particle_weight1_arr = None if particle_weight1 is None else np.asarray(particle_weight1, dtype=np.float64)
         random_pos1_arr = self._normalize_particle_data(random_pos1)
+        random_weight1_arr = None if random_weight1 is None else np.asarray(random_weight1, dtype=np.float64)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         use_random_pos1 = self.center == "particle" and random_pos1_arr is not None
         if needs_random and all(x in (None, "") for x in [random1, random2, random3]) and not use_random_pos1:
@@ -790,7 +802,9 @@ class Corr_3PCF(TaskBase):
 
             if self.center == "particle":
                 leg1_ctx = self._configure_particle_center_leg1(
-                    expanded_products, particle_pos1_arr, particle_weight1_arr, random_pos1_arr, data_legs, random_legs, window1
+                    expanded_products, particle_pos1_arr, particle_weight1_arr,
+                    random1, random2, random3, random_pos1_arr, random_weight1_arr,
+                    data_legs, random_legs, window1
                 )
                 data_legs = leg1_ctx["data_legs"]
                 random_legs = leg1_ctx["random_legs"]
@@ -840,9 +854,14 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.convols_info1 = None
 
             if self.random_pos1 is not None:
-                self.logger.info(f"Random leg 1 centers ready | source={random_pos1_source} | particle_count={self.random_pos1.shape[0]}")
+                weight_sum = float(np.sum(self.random_weight1))
+                self.logger.info(
+                    f"Random leg 1 centers ready | source={random_pos1_source} | "
+                    f"particle_count={self.random_pos1.shape[0]} | weight_sum={weight_sum:.6e}"
+                )
             elif self.center != "particle":
                 self.random_pos1 = None
+                self.random_weight1 = None
 
             self._prepare_random_legs(data_legs, random_legs)
 
@@ -949,7 +968,7 @@ class Corr_3PCF(TaskBase):
     ):
         """Compute theta-local products for the box-random center mode."""
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = compute_triplet_product_mc(
+            local_results["ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, _local_convols2, _local_convols3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -959,7 +978,7 @@ class Corr_3PCF(TaskBase):
             field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
             field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
             field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
-            local_results["delta_ddd"][theta_index] = compute_triplet_product_mc(
+            local_results["delta_ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
                 center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
@@ -980,7 +999,7 @@ class Corr_3PCF(TaskBase):
         """Compute theta-local products for the particle-center mode."""
         rho = self._shared_density()
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = compute_triplet_product_mc(
+            local_results["ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
@@ -995,7 +1014,7 @@ class Corr_3PCF(TaskBase):
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
-            local_results["d_delta_dd"][theta_index] = compute_triplet_product_mc(
+            local_results["d_delta_dd"][theta_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
@@ -1009,7 +1028,7 @@ class Corr_3PCF(TaskBase):
                 pass
             else:
                 field2, field3 = self._particle_delta_fields
-                local_results["r_delta_dd"][theta_index] = compute_triplet_product_mc(
+                local_results["r_delta_dd"][theta_index] = estimate_triplet_product_with_sampled_centers(
                     self.r12_scaled, self.r13_scaled, mu, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
                     center="particle", center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
