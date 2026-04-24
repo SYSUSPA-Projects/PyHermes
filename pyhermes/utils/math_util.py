@@ -75,11 +75,8 @@ from pyhermes.utils.special_functions import (  # noqa: E402
     spherical_jn_numba,
 )
 from pyhermes.utils.wavelet_grid import (  # noqa: E402
-    bit,
     do_wavelet,
-    int_data,
     n_at_pos_numba,
-    partition_data_single,
     phi_at_pos_numba,
     power_spectrum,
     random_points_box,
@@ -97,10 +94,7 @@ __all__ = [
     "build_real_window_octant_array",
     "fold_octant_window_to_rfft_kernel",
     "scaling_function_numba",
-    "int_data",
-    "bit",
     "scaling_function_numba_part",
-    "partition_data_single",
     "specialized_convolution_3d",
     "specialized_convolution_3d_complex",
     "power_spectrum",

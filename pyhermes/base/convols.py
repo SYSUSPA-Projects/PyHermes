@@ -1,5 +1,4 @@
 import time
-import concurrent.futures
 import copy
 import os
 
@@ -10,14 +9,56 @@ from pyhermes.io import read_particle_data
 from pyhermes.io.funcs import dl_rich_pbar
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
-    bit,
     do_wavelet,
-    int_data,
-    partition_data_single,
     scaling_function_numba,
     scaling_function_numba_part,
 )
 from pyhermes.pipeline import TaskBase
+
+
+def _partition_particles_by_x_slab(p_pos, p_wei, scale_factor, J, size):
+    size_bit = int(np.log2(size))
+    slab_labels = np.floor(p_pos[:, 0] * scale_factor).astype(np.int64) >> (J - size_bit)
+    valid = (slab_labels >= 0) & (slab_labels < size)
+
+    slab_labels = slab_labels[valid].astype(np.intp, copy=False)
+    p_pos = p_pos[valid]
+    p_wei = p_wei[valid]
+
+    order = np.argsort(slab_labels, kind="stable")
+    slab_labels = slab_labels[order]
+    p_pos = p_pos[order]
+    p_wei = p_wei[order]
+
+    counts = np.bincount(slab_labels, minlength=size)[:size]
+    split_points = np.cumsum(counts)[:-1]
+    pos_parts = np.split(p_pos, split_points)
+    wei_parts = np.split(p_wei, split_points)
+    return [
+        (
+            np.ascontiguousarray(pos_part),
+            np.ascontiguousarray(wei_part, dtype=np.float32),
+        )
+        for pos_part, wei_part in zip(pos_parts, wei_parts)
+    ]
+
+
+def _add_slab_to_epsilon(epsilon, slab, part, size, core_width, phi_support):
+    sew_width = phi_support - 1
+    if sew_width == 0:
+        start = part * core_width
+        epsilon[start:start + core_width] += slab[:core_width]
+        return
+    if part == 0:
+        epsilon[-sew_width:] += slab[:sew_width]
+        epsilon[:core_width + sew_width] += slab[sew_width:core_width + 2 * sew_width]
+    elif part == size - 1:
+        epsilon[-(core_width + sew_width):] += slab[:core_width + sew_width]
+        epsilon[:sew_width] += slab[-sew_width:]
+    else:
+        start = -sew_width + part * core_width
+        stop = (part + 1) * core_width + sew_width
+        epsilon[start:stop] += slab
 
 
 
@@ -236,30 +277,24 @@ class Convols(TaskBase):
             elif rank == 0:
                 self.logger.info("Multi-process mode")
                 self.logger.info("Start partition ... ")
-                p_pos_in = int_data(p_pos, self.scale_factor)
-                _shrink_p_pos_in = bit(p_pos_in, self.J, int(np.log2(self.size)))
                 time_start = time.perf_counter()
-                with concurrent.futures.ThreadPoolExecutor(max_workers=self.size_local) as executor:
-                    shrink_list = list(
-                        executor.map(
-                            lambda num: (
-                                np.ascontiguousarray(partition_data_single(p_pos, _shrink_p_pos_in, num)),
-                                np.ascontiguousarray(p_wei[_shrink_p_pos_in == num], dtype=np.float32)
-                            ),
-                            range(self.size)
-                        )
-                    )
+                shrink_list = _partition_particles_by_x_slab(
+                    p_pos=p_pos,
+                    p_wei=p_wei,
+                    scale_factor=self.scale_factor,
+                    J=self.J,
+                    size=self.size,
+                )
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for partition data: {time_end - time_start:.4f} sec")
                 p_pos_sub, p_wei_sub = shrink_list[0]
-                self.all_s = np.zeros((self.size, self.L // self.size + 2 * (self.phi_support - 1), self.L, self.L))
                 for i in range(1, self.size):
                     comm.send((shrink_list[i][0].shape, shrink_list[i][1].shape[0]), dest=i)
                     comm.Send(shrink_list[i][0], dest=i)
                     comm.Send(shrink_list[i][1], dest=i)
+                    shrink_list[i] = None
             else:
                 self.particle_count = 0
-                self.all_s = None
                 shrink_list = None
                 shape_pos, n_wei = comm.recv(source=0)
                 p_pos_sub = np.empty(shape_pos, dtype=np.float32)
@@ -280,9 +315,20 @@ class Convols(TaskBase):
                     J          = self.J,
                     box_size    = self.box_size
                     )
-                comm.Gather(_s_part, self.all_s, root=0)
                 if rank == 0:
-                    _epsilon = self.sew_up(self.all_s, self.size, self.L,self.phi_support)
+                    _epsilon = np.zeros((self.L, self.L, self.L), dtype=np.float64)
+                    _add_slab_to_epsilon(
+                        _epsilon, _s_part, rank, self.size, self.core_width, self.phi_support
+                    )
+                    recv_shape = _s_part.shape
+                    for source in range(1, self.size):
+                        recv_slab = np.empty(recv_shape, dtype=np.float64)
+                        comm.Recv(recv_slab, source=source)
+                        _add_slab_to_epsilon(
+                            _epsilon, recv_slab, source, self.size, self.core_width, self.phi_support
+                        )
+                else:
+                    comm.Send(_s_part, dest=0)
             if rank == 0:
                 _convols_info = {
                     "fin"           : copy.deepcopy(self.fin),
@@ -317,14 +363,3 @@ class Convols(TaskBase):
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
         return self.convols_data
-
-    def sew_up(self, all_s, size, L, phi_support):
-        sew_s = np.zeros((L, L, L))
-        sew_width = phi_support - 1
-        for part in range(1, size - 1):
-            sew_s[-sew_width+part*self.core_width:(part+1)*self.core_width+sew_width] += all_s[part]
-        sew_s[-sew_width:] += all_s[0][:sew_width]
-        sew_s[:self.core_width+sew_width] += all_s[0][sew_width:self.core_width+sew_width+sew_width]
-        sew_s[-(self.core_width+sew_width):] += all_s[-1][:self.core_width+sew_width]
-        sew_s[:sew_width] += all_s[-1][-sew_width:]
-        return sew_s

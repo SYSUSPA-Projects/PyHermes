@@ -22,8 +22,7 @@ def random_points_box(N, box_size, ndim=3, rng=None, seed=None):
 
 
 @njit
-def scaling_function_numba(p, w, phi_array, phi_resolution=1024, J=8, box_size=1000.0):
-    """Project weighted particles onto the full 3D scaling-function grid."""
+def _scaling_function_numba_impl(p, w, phi_array, output_x, base_x, x_offset, phi_resolution, J, box_size):
     L = 1 << J
     phi_support = phi_array.shape[0] // phi_resolution
     scale_factor = L / box_size
@@ -32,7 +31,7 @@ def scaling_function_numba(p, w, phi_array, phi_resolution=1024, J=8, box_size=1
     p_coarse = np.floor(scale_p).astype(np.int32)
     p_finer = ((scale_p - p_coarse) * phi_resolution).astype(np.int32)
     total = p.shape[0]
-    s = np.zeros((L, L, L), dtype=np.float64)
+    s = np.zeros((output_x, L, L), dtype=np.float64)
     w = w.astype(np.float64)
     for num in range(total):
         ww = w[num]
@@ -40,68 +39,33 @@ def scaling_function_numba(p, w, phi_array, phi_resolution=1024, J=8, box_size=1
         fx, fy, fz = p_finer[num, 0], p_finer[num, 1], p_finer[num, 2]
         for i in range(phi_support):
             phix = ww * phi_array[fx + step[i]]
+            x_local = (cx - i) - base_x + x_offset
             for j in range(phi_support):
                 phixy = phix * phi_array[fy + step[j]]
                 for k in range(phi_support):
-                    s[cx - i, cy - j, cz - k] += phixy * phi_array[fz + step[k]]
+                    s[x_local, cy - j, cz - k] += phixy * phi_array[fz + step[k]]
     return s
 
 
 @njit
-def int_data(data, scale_factor):
-    """Return coarse-grid x-cell indices for positions scaled by scale_factor."""
-    num = data.shape[0]
-    out = np.empty(num, dtype=np.int32)
-    for i in range(num):
-        out[i] = int(np.floor(data[i, 0] * scale_factor))
-    return out
-
-
-@njit
-def bit(array, J, size_bit):
-    """Keep the leading size_bit bits of integer grid coordinates at level J."""
-    num = array.shape[0]
-    result = np.empty(num, dtype=np.int32)
-    shift = J - size_bit
-    for i in range(num):
-        result[i] = array[i] >> shift
-    return result
+def scaling_function_numba(p, w, phi_array, phi_resolution=1024, J=8, box_size=1000.0):
+    """Project weighted particles onto the full 3D scaling-function grid."""
+    L = 1 << J
+    return _scaling_function_numba_impl(
+        p, w, phi_array, L, 0, 0, phi_resolution, J, box_size
+    )
 
 
 @njit
 def scaling_function_numba_part(part, p, w, phi_array, core_width, phi_resolution=1024, J=8, box_size=1000.0):
     """Project weighted particles onto one x-slab plus scaling-function padding."""
-    L = 1 << J
     phi_support = phi_array.shape[0] // phi_resolution
     sew_width = phi_support - 1
-    scale_factor = L / box_size
-    step = np.arange(phi_support, dtype=np.int32) * phi_resolution
-    scale_p = p[:, :3] * scale_factor
-    p_coarse = np.floor(scale_p).astype(np.int32)
-    p_finer = ((scale_p - p_coarse) * phi_resolution).astype(np.int32)
-    total = p.shape[0]
     expand_x = core_width + 2 * sew_width
-    s = np.zeros((expand_x, L, L), dtype=np.float64)
-    w = w.astype(np.float64)
     base = part * core_width
-    for num in range(total):
-        ww = w[num]
-        cx, cy, cz = p_coarse[num, 0], p_coarse[num, 1], p_coarse[num, 2]
-        fx, fy, fz = p_finer[num, 0], p_finer[num, 1], p_finer[num, 2]
-        for i in range(phi_support):
-            phix = ww * phi_array[fx + step[i]]
-            x_local = (cx - i) - base + sew_width
-            for j in range(phi_support):
-                phixy = phix * phi_array[fy + step[j]]
-                y = cy - j
-                for k in range(phi_support):
-                    s[x_local, y, cz - k] += phixy * phi_array[fz + step[k]]
-    return s
-
-
-def partition_data_single(origin_data, shrink_data, part):
-    """Select rows from origin_data whose partition labels equal part."""
-    return origin_data[shrink_data == part]
+    return _scaling_function_numba_impl(
+        p, w, phi_array, expand_x, base, sew_width, phi_resolution, J, box_size
+    )
 
 
 def power_spectrum(v, k0, k1, N_k, phi_resolution):
