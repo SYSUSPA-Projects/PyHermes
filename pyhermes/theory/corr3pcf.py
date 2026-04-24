@@ -136,8 +136,6 @@ class Corr_3PCF(TaskBase):
         self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
         self.particle_pos1 = self.task_params.get("particle_pos1", None)
         self.particle_weight1 = self.task_params.get("particle_weight1", None)
-        self.random_pos1 = self.task_params.get("random_pos1", None)
-        self.random_weight1 = None
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -148,9 +146,8 @@ class Corr_3PCF(TaskBase):
             self.random2 = self.random
         if self.random3 in (None, ""):
             self.random3 = self.random
-
-        self.fout_path = self.task_params["fout_path"]
-        self.threads = int(self.task_params["threads"])
+        self.random_pos1 = self.task_params.get("random_pos1", None)
+        self.random_weight1 = None
 
         window = self.task_params.get("window", None)
         self.window = window if (window and (window.get("type") or window.get("func"))) else None
@@ -178,7 +175,9 @@ class Corr_3PCF(TaskBase):
         self.center = self.task_params["center"]
         self.n_box_centers = int(self.task_params["n_box_centers"])
         self.base_seed = int(self.task_params["base_seed"])
+        self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "Q"))
+        self.fout_path = self.task_params["fout_path"]
 
     def _normalize_products(self, products):
         """Normalize requested products and validate them against the current center mode."""
@@ -341,21 +340,19 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.particle_weight1)
             params["particle_weight1"] = {"kind": "particle_weight1", "shape": tuple(arr.shape)}
+        params["random"] = self._serialize_convols_input(self.random)
+        params["random1"] = self._serialize_convols_input(self.random1)
+        params["random2"] = self._serialize_convols_input(self.random2)
+        params["random3"] = self._serialize_convols_input(self.random3)
         if self.random_pos1 is None:
             params["random_pos1"] = None
         else:
             arr = np.asarray(self.random_pos1)
             params["random_pos1"] = {"kind": "random_pos1", "shape": tuple(arr.shape)}
-        params["random"] = self._serialize_convols_input(self.random)
-        params["random1"] = self._serialize_convols_input(self.random1)
-        params["random2"] = self._serialize_convols_input(self.random2)
-        params["random3"] = self._serialize_convols_input(self.random3)
         params["window"] = self._serialize_window_input(self.window)
         params["window1"] = self._serialize_window_input(self.window1)
         params["window2"] = self._serialize_window_input(self.window2)
         params["window3"] = self._serialize_window_input(self.window3)
-        params["fout_path"] = self.fout_path
-        params["threads"] = self.threads
         params["r12"] = self.r12
         params["r13"] = self.r13
         params["angle_param"] = self.angle_param
@@ -371,7 +368,9 @@ class Corr_3PCF(TaskBase):
         params["center"] = self.center
         params["n_box_centers"] = self.n_box_centers
         params["base_seed"] = self.base_seed
+        params["threads"] = self.threads
         params["products"] = copy.deepcopy(self.products)
+        params["fout_path"] = self.fout_path
         return params
 
     def _resolve_base_convols(self, leg_idx, provided_convols, cache):

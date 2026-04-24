@@ -33,33 +33,22 @@ class Convols(TaskBase):
         self._fields_prepared = False
 
     def format_params(self):
-        self.J             = self.task_params['J']
-        self.fin           = copy.deepcopy(self.task_params['fin'])
-        self.fout_path     = self.task_params['fout_path']
-        self.phi_resolution      = int(self.task_params['phi_resolution'])
-        self.box_size       = self.task_params['box_size']
-        self.wavelet_mode  = self.task_params['wavelet_mode']
-        self.wavelet_level = self.task_params['wavelet_level']
-        self.threads       = int(self.task_params['threads'])
+        self.fin = copy.deepcopy(self.task_params['fin'])
         self.particle_pos = self.task_params['particle_pos']
         self.particle_weight = self.task_params['particle_weight']
+        self.box_size = self.task_params['box_size']
+        self.J = self.task_params['J']
+        self.L = 1 << self.J
+        self.wavelet_mode = self.task_params['wavelet_mode']
+        self.wavelet_level = self.task_params['wavelet_level']
+        self.phi_resolution = int(self.task_params['phi_resolution'])
         self.save_particle_data = bool(self.task_params['save_particle_data'])
         self.particle_data_path = self.task_params['particle_data_path']
-        self.L             = 1 << self.J
+        self.threads = int(self.task_params['threads'])
+        self.fout_path = self.task_params['fout_path']
 
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
-        self.task_params['threads'] = self.threads
-        self.task_params['J'] = self.J
-        self.task_params['fout_path'] = self.fout_path
-        self.task_params['phi_resolution'] = self.phi_resolution
-        self.task_params['box_size'] = self.box_size
-        self.task_params['wavelet_mode'] = self.wavelet_mode
-        self.task_params['wavelet_level'] = self.wavelet_level
-        self.task_params['particle_pos'] = self.particle_pos
-        self.task_params['particle_weight'] = self.particle_weight
-        self.task_params['save_particle_data'] = self.save_particle_data
-        self.task_params['particle_data_path'] = self.particle_data_path
         base_fin = copy.deepcopy(self.task_params.get('fin', {}))
         if self.fin is None:
             self.fin = base_fin
@@ -69,7 +58,20 @@ class Convols(TaskBase):
             self.fin = merged_fin
         self.fin.setdefault("url", "")
         self.fin.setdefault("weight_key", "unit")
-        self.task_params['fin'] = copy.deepcopy(self.fin)
+        self.task_params = {
+            'fin': copy.deepcopy(self.fin),
+            'particle_pos': self.particle_pos,
+            'particle_weight': self.particle_weight,
+            'box_size': self.box_size,
+            'J': self.J,
+            'wavelet_mode': self.wavelet_mode,
+            'wavelet_level': self.wavelet_level,
+            'phi_resolution': self.phi_resolution,
+            'save_particle_data': self.save_particle_data,
+            'particle_data_path': self.particle_data_path,
+            'threads': self.threads,
+            'fout_path': self.fout_path,
+        }
         self.L = 1 << self.J
         self.sync_runtime_options(context="Convols runtime configuration")
 
@@ -285,15 +287,15 @@ class Convols(TaskBase):
                 _convols_info = {
                     "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
-                    "J"             : self.J,
-                    "phi_resolution"      : self.phi_resolution,
                     "box_size"       : self.box_size,
-                    "wavelet_mode"  : self.wavelet_mode,
-                    "wavelet_level" : self.wavelet_level,
+                    "J"             : self.J,
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
                     "norm_factor"    : self.norm_factor,
+                    "wavelet_mode"  : self.wavelet_mode,
+                    "wavelet_level" : self.wavelet_level,
+                    "phi_resolution"      : self.phi_resolution,
                     "particle_data_path": self.particle_data_path if self.save_particle_data else "",
                     "particle_data_format": "npz" if self.save_particle_data else "",
                     "phi_support"    : self.phi_support,

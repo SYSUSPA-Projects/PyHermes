@@ -50,7 +50,6 @@ class Corr_3PCF_Multipole(TaskBase):
         self.random1 = self._fallback_random(self.random1)
         self.random2 = self._fallback_random(self.random2)
         self.random3 = self._fallback_random(self.random3)
-        self.fout_path = self.task_params["fout_path"]
 
         window = self.task_params.get("window", None)
         self.window = window if (isinstance(window, dict) and window.get("type")) else None
@@ -77,6 +76,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.reference_convols = None
         self._last_product_profile = None
         self._role_layout_logged = False
+        self.fout_path = self.task_params["fout_path"]
 
     def _fallback_random(self, value):
         return self.random if value is None or value == "" else value
@@ -179,20 +179,20 @@ class Corr_3PCF_Multipole(TaskBase):
             "window1": self._serialize_window_input(self.window1),
             "window2": self._serialize_window_input(self.window2),
             "window3": self._serialize_window_input(self.window3),
-            "fout_path": self.fout_path,
-            "threads": self.threads,
             "r12": self.r12,
             "r13": self.r13,
             "l_min": self.l_min,
             "l_max": self.l_max,
             "gpu_device_id": self.gpu_device_id,
-            "products": copy.deepcopy(self.products),
-            "expanded_products": self._expanded_products(),
             "execution_mode": self.execution_mode,
             "cache_multipole_fields": self.cache_multipole_fields,
             "cache_dir": self.cache_dir,
             "verbose_m_progress": self.verbose_m_progress,
             "verbose_profile": self.verbose_profile,
+            "threads": self.threads,
+            "products": copy.deepcopy(self.products),
+            "expanded_products": self._expanded_products(),
+            "fout_path": self.fout_path,
         }
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):

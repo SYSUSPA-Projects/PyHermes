@@ -75,8 +75,7 @@ class Corr_2PCF(TaskBase):
             self.random1 = self.random
         if self.random2 in (None, ""):
             self.random2 = self.random
-        self.fout_path = self.task_params['fout_path']
-        self.threads = int(self.task_params['threads'])
+
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
         for i in range(1, 3):
@@ -90,12 +89,15 @@ class Corr_2PCF(TaskBase):
             self.pair_window_params = copy.deepcopy(pair_window_params)
         else:
             self.pair_window_params = {"type": "shell", "len_args": {"R": None}, "other_args": {}}
+
         self.r = copy.deepcopy(self.task_params['r'])
         self.r_arr = None
         self.r_min = None
         self.r_max = None
         self.n_r = None
+        self.threads = int(self.task_params['threads'])
         self.products = self._normalize_products(self.task_params.get('products', 'xi'))
+        self.fout_path = self.task_params['fout_path']
 
     def _normalize_products(self, products):
         if isinstance(products, str):
@@ -217,9 +219,6 @@ class Corr_2PCF(TaskBase):
         params['window'] = self._serialize_window_input(self.window)
         params['window1'] = self._serialize_window_input(self.window1)
         params['window2'] = self._serialize_window_input(self.window2)
-        params['fout_path'] = self.fout_path
-        params['threads'] = self.threads
-        params['products'] = copy.deepcopy(self.products)
         params['pair_window'] = copy.deepcopy(
             self.pair_window if self.pair_window is not None else self.pair_window_params
         )
@@ -227,6 +226,9 @@ class Corr_2PCF(TaskBase):
         params['r_min'] = self.r_min
         params['r_max'] = self.r_max
         params['n_r'] = self.n_r
+        params['threads'] = self.threads
+        params['products'] = copy.deepcopy(self.products)
+        params['fout_path'] = self.fout_path
         return params
 
     def _describe_pair_window(self, pair_window):

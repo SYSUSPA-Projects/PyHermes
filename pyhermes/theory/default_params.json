@@ -1,16 +1,16 @@
 {
 	"enable_default_param": true, // do not change this
 	"Counting": {
-		"seed": 42,
-		"N_randoms": 1000000,
 		"convols_data": "",
-		"fout_path": "",
+		"N_randoms": 1000000,
+		"seed": 42,
 		"window": {
 			"type": "",
 			"len_args": {},
 			"other_args": {}
 		},
-		"threads": 1
+		"threads": 1,
+		"fout_path": ""
 	},
 	"Corr_2PCF": {
 		"convols_data": "",
@@ -19,7 +19,6 @@
 		"random": null,
 		"random1": "",
 		"random2": "",
-		"fout_path": "",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -47,8 +46,9 @@
 			"r_max": 150.0,
 			"n_r": 30
 		},
+		"threads": 1,
 		"products": "xi",
-		"threads": 1
+		"fout_path": ""
 	},
 	"Corr_3PCF": {
 		"convols_data": "",
@@ -62,7 +62,6 @@
 		"random2": "",
 		"random3": "",
 		"random_pos1": null,
-		"fout_path": "",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -98,10 +97,11 @@
 		},
 		"n_rot": 100,
 		"center": "box_random",
-		"products": "Q",
 		"n_box_centers": 5000000,
 		"base_seed": 42,
-		"threads": 1
+		"threads": 1,
+		"products": "Q",
+		"fout_path": ""
 	},
 	"Corr_3PCF_Multipole": {
 		"convols_data": "",
@@ -112,7 +112,6 @@
 		"random1": "",
 		"random2": "",
 		"random3": "",
-		"fout_path": "",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -138,12 +137,13 @@
 		"l_min": 0,
 		"l_max": 4,
 		"gpu_device_id": 0,
-		"products": "zeta_l",
 		"execution_mode": "serial",
 		"cache_multipole_fields": false,
 		"cache_dir": "",
 		"verbose_m_progress": false,
 		"verbose_profile": false,
-		"threads": 1
+		"threads": 1,
+		"products": "zeta_l",
+		"fout_path": ""
 	}
 }

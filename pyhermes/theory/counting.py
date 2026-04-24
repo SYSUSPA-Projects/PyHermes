@@ -24,21 +24,24 @@ class Counting(TaskBase):
 
     def format_params(self):
         # Parameters from json or input
+        self.convols_data     = self.task_params.get('convols_data', '')
         self.N_randoms        = int(self.task_params['N_randoms'])
         self.seed             = int(self.task_params['seed'])
-        self.convols_data     = self.task_params.get('convols_data', '')
-        self.threads          = int(self.task_params['threads'])
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
+        self.threads          = int(self.task_params['threads'])
         self.fout_path      = self.task_params['fout_path']
 
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
-        self.task_params['threads'] = self.threads
-        self.task_params['N_randoms'] = self.N_randoms
-        self.task_params['seed'] = self.seed
-        self.task_params['convols_data'] = self.convols_data
-        self.task_params['fout_path'] = self.fout_path
+        self.task_params = {
+            'convols_data': self.convols_data,
+            'N_randoms': self.N_randoms,
+            'seed': self.seed,
+            'window': self._serialize_window_input(self.window),
+            'threads': self.threads,
+            'fout_path': self.fout_path,
+        }
         self.sync_runtime_options(context="Counting runtime configuration", blank_line=True)
 
     def _serialize_convols_input(self, value):
@@ -68,9 +71,9 @@ class Counting(TaskBase):
 
     def _current_task_params_snapshot(self):
         params = {}
+        params['convols_data'] = self._serialize_convols_input(self.convols_data)
         params['N_randoms'] = self.N_randoms
         params['seed'] = self.seed
-        params['convols_data'] = self._serialize_convols_input(self.convols_data)
         params['window'] = self._serialize_window_input(self.window)
         params['threads'] = self.threads
         params['fout_path'] = self.fout_path
