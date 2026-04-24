@@ -9,7 +9,7 @@ from numba import cuda
 
 from pyhermes.utils.convolution import specialized_convolution_3d_complex
 from pyhermes.utils.legendre_windows import calculate_legendre_window_array
-from pyhermes.utils.wavelet_grid import power_spectrum
+from pyhermes.utils.wavelet_grid import fourier_power_spectrum
 
 
 def cal_gamma(phi_array, phi_support, phi_resolution):
@@ -115,7 +115,7 @@ def _prepare_legendre_convolution_context(field):
     higher-band Legendre window construction may be added later.
     """
     return {
-        "phi_fourier_power": power_spectrum(field.phi_array, 0, 1, field.L, field.phi_resolution),
+        "phi_fourier_power": fourier_power_spectrum(field.phi_array, 0, 1, field.L, field.phi_resolution),
     }
 
 

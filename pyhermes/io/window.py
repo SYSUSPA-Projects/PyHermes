@@ -6,7 +6,7 @@ import numpy as np
 from .convols import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import build_real_window_octant_array, fold_octant_window_to_rfft_kernel
-from pyhermes.utils.wavelet_grid import do_wavelet, power_spectrum
+from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_function
 from pyhermes.utils.window_functions import set_window_function
 
 
@@ -39,8 +39,10 @@ class WindowFunc(ConvolsData):
             "wavelet_level": self.wavelet_level,
             "bandwidth": self.bandwidth,
         }
-        phi_array = do_wavelet(self.wavelet_mode, self.wavelet_level)
-        self.phi_fourier_power = power_spectrum(phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution)
+        phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
+        self.phi_fourier_power = fourier_power_spectrum(
+            phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution
+        )
         if not isinstance(self.phi_fourier_power, np.ndarray):
             if self.rank == 0:
                 self.logger.error("WindowFunc requires phi_fourier_power to be a numpy.ndarray.")

@@ -5,7 +5,7 @@ import math
 import numpy as np
 from numba import njit
 
-from pyhermes.utils.wavelet_grid import n_at_pos_numba
+from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba
 
 
 def third_side(r1, r2, theta):
@@ -88,8 +88,8 @@ def estimate_triplet_product_particle_centers(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
-        n_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        interpolate_grid_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        interpolate_grid_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
         for i in range(npos):
             s += center_weight[i] * n2[i] * n3[i]
@@ -113,7 +113,7 @@ def estimate_triplet_product_box_random_centers(
     n2 = np.empty(npos, dtype=np.float64)
     n3 = np.empty(npos, dtype=np.float64)
 
-    n_at_pos_numba(n1, center_scaled, epsilon1, phi_array, L, phi_resolution, phi_support)
+    interpolate_grid_at_pos_numba(n1, center_scaled, epsilon1, phi_array, L, phi_resolution, phi_support)
     total_sum = 0.0
 
     for irot in range(n_rot):
@@ -129,8 +129,8 @@ def estimate_triplet_product_box_random_centers(
 
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
 
-        n_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        interpolate_grid_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        interpolate_grid_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
 
         s = 0.0
         for i in range(npos):
@@ -164,10 +164,10 @@ def estimate_triplet_contrast_particle_centers_legacy(
         costheta1 = 2.0 * b - 1.0
         alpha = two_pi * c
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
-        n_at_pos_numba(n2, pos_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n3, pos_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
-        n_at_pos_numba(n20, rand_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n30, rand_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        interpolate_grid_at_pos_numba(n2, pos_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        interpolate_grid_at_pos_numba(n3, pos_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        interpolate_grid_at_pos_numba(n20, rand_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        interpolate_grid_at_pos_numba(n30, rand_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
         for i in range(npos):
             s += n2[i] * n3[i] - n20[i] * n30[i]

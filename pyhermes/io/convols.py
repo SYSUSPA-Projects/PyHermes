@@ -8,7 +8,7 @@ from .base import HermesData
 from .funcs import read_particle_data
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
-from pyhermes.utils.wavelet_grid import n_at_pos_numba, phi_at_pos_numba
+from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
 class ConvolsData(HermesData):
@@ -250,14 +250,14 @@ class ConvolsData(HermesData):
         }
     
     def phi_at_pos(self, pos):
-        return phi_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
+        return scaling_stencil_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
     
     def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
         """
         Evaluate number density n(x) at positions.
 
         normalize:
-            True  -> return the normalized/grid-space nx (as in n_at_pos_numba)
+            True  -> return the normalized/grid-space nx (as in interpolate_grid_at_pos_numba)
             False -> return scaled output:
                      if physical: nx * particle_count * scale_factor**3
                      else:        nx * particle_count
@@ -273,7 +273,7 @@ class ConvolsData(HermesData):
         npos = pos.shape[0]
         nx = np.empty(npos, dtype=np.float64)
         pos_scaled = pos * self.scale_factor
-        n_at_pos_numba(
+        interpolate_grid_at_pos_numba(
             nx, pos_scaled, epsilon, self.phi_array, self.L, self.phi_resolution, self.phi_support
         )
 

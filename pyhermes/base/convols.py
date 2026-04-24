@@ -9,9 +9,9 @@ from pyhermes.io import read_particle_data
 from pyhermes.io.funcs import dl_rich_pbar
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
-    do_wavelet,
-    scaling_function_numba,
-    scaling_function_numba_part,
+    project_scaling_grid_numba,
+    project_scaling_slab_numba,
+    sample_scaling_function,
 )
 from pyhermes.pipeline import TaskBase
 
@@ -224,7 +224,7 @@ class Convols(TaskBase):
             self.particle_weight = particle_weight
         self._sync_runtime_options()
         self.convols_data = ConvolsData(threads=self.threads)
-        self.phi_array = do_wavelet(self.wavelet_mode, self.wavelet_level)
+        self.phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
         self.phi_support = self.phi_array.shape[0] // self.phi_resolution
         self.core_width = self.L // self.size
         self.scale_factor = self.L / self.box_size
@@ -266,9 +266,9 @@ class Convols(TaskBase):
             if rank == 0 and self.size == 1:
                 self.logger.info("Single process mode")
                 time_start = time.perf_counter()
-                _epsilon = scaling_function_numba(
-                    p=p_pos,
-                    w=p_wei,
+                _epsilon = project_scaling_grid_numba(
+                    positions=p_pos,
+                    weights=p_wei,
                     phi_array=self.phi_array,
                     phi_resolution=self.phi_resolution,
                     J=self.J,
@@ -305,10 +305,10 @@ class Convols(TaskBase):
                 comm.Barrier()
                 rank == 0 and self.logger.info("Start to calculate scaling coefficient... ")
                 time_start = time.perf_counter()
-                _s_part = scaling_function_numba_part(
-                    part       = rank,
-                    p          = p_pos_sub,
-                    w          = p_wei_sub,
+                _s_part = project_scaling_slab_numba(
+                    slab_index = rank,
+                    positions  = p_pos_sub,
+                    weights    = p_wei_sub,
                     phi_array   = self.phi_array,
                     core_width = self.core_width,
                     phi_resolution   = self.phi_resolution,
