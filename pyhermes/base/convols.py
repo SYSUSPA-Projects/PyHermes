@@ -160,9 +160,7 @@ class Convols(TaskBase):
         self._sync_runtime_options()
         self.convols_data = ConvolsData(threads=self.threads)
         self.phi_array = do_wavelet(self.wavelet_mode, self.wavelet_level)
-        _PhiStart = 0
-        _PhiEnd = self.phi_array.shape[0] // self.phi_resolution
-        self.phi_support = _PhiEnd - _PhiStart
+        self.phi_support = self.phi_array.shape[0] // self.phi_resolution
         self.core_width = self.L // self.size
         self.scale_factor = self.L / self.box_size
         if self.rank == 0:
