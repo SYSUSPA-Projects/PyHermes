@@ -72,7 +72,7 @@ def estimate_triplet_product_particle_centers(
     seed_base_rot=-1, theta_index=-1
 ):
     """Estimate DDD using object positions as triangle centers."""
-    npos = centers_scaled.shape[0]
+    npos = center_scaled.shape[0]
     two_pi = 2.0 * math.pi
     n2 = np.empty(npos, dtype=np.float64)
     n3 = np.empty(npos, dtype=np.float64)
@@ -100,20 +100,20 @@ def estimate_triplet_product_particle_centers(
 @njit
 def estimate_triplet_product_box_random_centers(
     R1_scaled, R2_scaled, mu,
-    centers_scaled, n_rot,
+    center_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
     phi_array, L, phi_resolution, phi_support,
     seed_base_rot=-1, theta_index=-1
 ):
     """Estimate DDD by averaging over uniform random centers in the periodic box."""
-    npos = centers_scaled.shape[0]
+    npos = center_scaled.shape[0]
     two_pi = 2.0 * math.pi
 
     n1 = np.empty(npos, dtype=np.float64)
     n2 = np.empty(npos, dtype=np.float64)
     n3 = np.empty(npos, dtype=np.float64)
 
-    n_at_pos_numba(n1, centers_scaled, epsilon1, phi_array, L, phi_resolution, phi_support)
+    n_at_pos_numba(n1, center_scaled, epsilon1, phi_array, L, phi_resolution, phi_support)
     total_sum = 0.0
 
     for irot in range(n_rot):
@@ -129,8 +129,8 @@ def estimate_triplet_product_box_random_centers(
 
         x2, y2, z2, x3, y3, z3 = generate_triangle_offsets(R1_scaled, R2_scaled, mu, phi, costheta1, alpha)
 
-        n_at_pos_numba(n2, centers_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
-        n_at_pos_numba(n3, centers_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
+        n_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
+        n_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
 
         s = 0.0
         for i in range(npos):
