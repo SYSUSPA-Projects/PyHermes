@@ -7,7 +7,7 @@ import numpy as np
 
 from pyhermes.io import CountingData, ConvolsData, WindowFunc
 from pyhermes.utils import func_util
-from pyhermes.utils.wavelet_grid import random_points_box
+from pyhermes.utils.sampling import random_points_box
 from pyhermes.pipeline import TaskBase
 
 

@@ -14,15 +14,6 @@ def sample_scaling_function(wavelet_name="db2", level=10):
     return phi_values[:-1]
 
 
-def random_points_box(count=None, box_size=None, ndim=3, rng=None, seed=None, N=None):
-    """Draw uniformly distributed random points inside a periodic box."""
-    if count is None:
-        count = N
-    if rng is None:
-        rng = np.random.default_rng(seed=seed)
-    return rng.uniform(0.0, box_size, size=(count, ndim))
-
-
 @njit
 def _project_scaling_grid_impl(
         positions,

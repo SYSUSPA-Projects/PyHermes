@@ -11,7 +11,7 @@ from pyhermes.utils.corr3pcf_kernels import (
     third_side_from_mu,
 )
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.utils.wavelet_grid import random_points_box
+from pyhermes.utils.sampling import random_points_box
 from pyhermes.pipeline import TaskBase
 
 from .corr2pcf import compute_pair_product_at_radius
