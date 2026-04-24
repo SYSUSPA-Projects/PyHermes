@@ -149,7 +149,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a * b
-        new.convols_info['NormFactor'] = self.NormFactor * other.NormFactor
+        new.convols_info['norm_factor'] = self.norm_factor * other.norm_factor
         new.format_convols_params()
         return new
 
@@ -252,7 +252,7 @@ class ConvolsData(HermesData):
         if normalize:
             return nx
         else:
-            nx /= self.NormFactor
+            nx /= self.norm_factor
             if physical:
                 return nx * (self.scale_factor ** 3)
             else:
@@ -262,7 +262,7 @@ class ConvolsData(HermesData):
         if normlize:
             return self.epsilon
         else:
-            return self.epsilon / self.NormFactor
+            return self.epsilon / self.norm_factor
 
     def format_convols_params(self):
         missing = [k for k in self._REQUIRED_ARGV if k not in self.convols_info]

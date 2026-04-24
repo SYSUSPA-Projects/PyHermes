@@ -173,7 +173,7 @@ class Convols(TaskBase):
                 self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                 func_util.safe_exit(1)
             p_pos, p_wei, source_desc = self._load_particle_input()
-            self.NormFactor = 1 / self.particle_count
+            self.norm_factor = 1 / self.particle_count
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin_wei_key}"
             )
@@ -271,7 +271,7 @@ class Convols(TaskBase):
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "NormFactor"    : self.NormFactor,
+                    "norm_factor"    : self.norm_factor,
                     "phi_support"    : self.phi_support,
                     "phi_array"      : self.phi_array
                 }
@@ -279,7 +279,7 @@ class Convols(TaskBase):
                 self.convols_data.format_convols_params()
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
-                self.convols_data.epsilon = _epsilon * self.NormFactor
+                self.convols_data.epsilon = _epsilon * self.norm_factor
                 if save_result and self.fout_path:
                     self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
         except Exception as e:
