@@ -46,7 +46,7 @@ Use the shipped example config:
          path: "./data/quijote10000.bin"
          url: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
          format: "generic_pos"
-         weight_key: "no_weight"
+         weight_key: "unit"
       fout_path: "./output/quijote_sfc.pkl"
       save_particle_data: false
       particle_data_path: ""
@@ -98,7 +98,7 @@ adjust a few runtime attributes:
    convols_task.fin = {
        "path": "./quijote10000.bin",
        "format": "generic_pos",
-       "weight_key": "no_weight",
+       "weight_key": "unit",
    }
    convols_task.prepare_input_fields()
    convols = convols_task.run(save_result=False)
@@ -155,7 +155,7 @@ Key parameters
 - ``fin.format``:
   particle format such as ``generic_pos``
 - ``fin.weight_key``:
-  particle weight field name, or ``no_weight``
+  particle weight field name, or ``unit``
 - ``fout_path``:
   output path for the serialized coefficient field
 - ``save_particle_data``:

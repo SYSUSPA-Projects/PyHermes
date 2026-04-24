@@ -218,21 +218,29 @@ class ConvolsData(HermesData):
     def get_particle_data(self):
         if getattr(self, "particle_data_path", ""):
             return self.get_particle_dataset()["pos"]
-        if not self.fin_path:
+        fin = getattr(self, "fin", {})
+        if not fin.get("path", ""):
             self.logger.error("Input particle path is not specified.")
             func_util.safe_exit(1)
-        return read_particle_data(self.fin_path, self.fin_format)['pos']
+        return read_particle_data(fin["path"], fin["format"])['pos']
 
     def get_particle_weight(self):
         if getattr(self, "particle_data_path", ""):
             return self.get_particle_dataset()["weight"]
-        if not self.fin_path:
+        fin = getattr(self, "fin", {})
+        if not fin.get("path", ""):
             self.logger.error("Input particle path is not specified.")
             func_util.safe_exit(1)
-        particle_data = read_particle_data(self.fin_path, self.fin_format)
-        if "weight" in particle_data:
-            return particle_data["weight"]
-        return np.ones(particle_data["size"], dtype=np.float32)
+        particle_data = read_particle_data(fin["path"], fin["format"])
+        weight_key = fin.get("weight_key", "unit")
+        if weight_key == "unit":
+            return np.ones(particle_data["size"], dtype=np.float32)
+        if weight_key in particle_data:
+            return particle_data[weight_key]
+        self.logger.error(
+            f"Weight key '{weight_key}' not found in particle data. Available keys: {list(particle_data.keys())}."
+        )
+        func_util.safe_exit(1)
 
     def get_particle_dataset(self):
         particle_data_path = getattr(self, "particle_data_path", "")

@@ -16,7 +16,7 @@
 			"path"      : "",
 			"url"       : "",
 			"format"    : "generic_pos",
-			"weight_key": "no_weight"
+			"weight_key": "unit"
 		}
 	}
 }

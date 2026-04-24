@@ -35,10 +35,6 @@ class Convols(TaskBase):
     def format_params(self):
         self.J             = self.task_params['J']
         self.fin           = copy.deepcopy(self.task_params['fin'])
-        self.fin_path      = self.fin['path']
-        self.fin_url       = self.fin.get('url', '')
-        self.fin_format    = self.fin['format']
-        self.fin_wei_key   = self.fin['weight_key']
         self.fout_path     = self.task_params['fout_path']
         self.phi_resolution      = int(self.task_params['phi_resolution'])
         self.box_size       = self.task_params['box_size']
@@ -71,24 +67,23 @@ class Convols(TaskBase):
             merged_fin = base_fin
             merged_fin.update(self.fin)
             self.fin = merged_fin
+        self.fin.setdefault("url", "")
+        self.fin.setdefault("weight_key", "unit")
         self.task_params['fin'] = copy.deepcopy(self.fin)
-        self.fin_path = self.fin['path']
-        self.fin_url = self.fin.get('url', '')
-        self.fin_format = self.fin['format']
-        self.fin_wei_key = self.fin['weight_key']
         self.L = 1 << self.J
         self.sync_runtime_options(context="Convols runtime configuration")
 
     def _resolve_fin_source(self):
-        if self.fin_url:
-            if not self.fin_path:
+        fin_url = self.fin.get("url", "")
+        input_path = self.fin["path"]
+        if fin_url:
+            if not input_path:
                 self.logger.error("When 'fin.url' is provided, 'fin.path' must also be provided as the local download target.")
                 func_util.safe_exit(1)
-            downloaded_path = dl_rich_pbar(self.fin_url, output_path=self.fin_path)
-            self.fin_path = downloaded_path
+            downloaded_path = dl_rich_pbar(fin_url, output_path=input_path)
             self.fin['path'] = downloaded_path
-            return f"url={self.fin_url} -> path={downloaded_path}"
-        return f"path={self.fin_path}"
+            return f"url={fin_url} -> path={downloaded_path}"
+        return f"path={input_path}"
 
     def _load_particle_input(self):
         fin_source_desc = self._resolve_fin_source()
@@ -100,36 +95,35 @@ class Convols(TaskBase):
                     f"No particle_weight provided; using unit weights for {self.particle_count} particles."
                 )
                 p_wei = np.ones(self.particle_count, dtype=np.float32)
-                self.fin_wei_key = 'no_weight'
+                self.fin["weight_key"] = "unit"
             else:
                 p_wei = self.particle_weight
-                self.fin_wei_key = 'weight comes from custom input array'
+                self.fin["weight_key"] = "custom"
             source_desc = "custom particle_pos array"
         else:
-            p_dict_all = read_particle_data(self.fin_path, self.fin_format)
+            input_format = self.fin["format"]
+            p_dict_all = read_particle_data(self.fin["path"], input_format)
             p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']
-            if self.fin_format == 'generic_pos':
+            if input_format == 'generic_pos':
                 p_wei = np.ones(self.particle_count, dtype=np.float32)
-                self.fin_wei_key = 'no_weight'
-            elif self.fin_format == 'generic_pos_weight':
+                self.fin["weight_key"] = "unit"
+            elif input_format == 'generic_pos_weight':
                 p_wei = p_dict_all['weight']
-                self.fin_wei_key = 'weight'
+                self.fin["weight_key"] = "weight"
             else:
-                _key = self.fin_wei_key
-                if _key is None or _key == 'no_weight':
+                _key = self.fin["weight_key"]
+                if _key == 'unit':
                     p_wei = np.ones(self.particle_count, dtype=np.float32)
-                    self.fin_wei_key = 'no_weight'
                 elif _key in p_dict_all:
                     p_wei = p_dict_all[_key]
-                    self.fin_wei_key = [_key]
                 else:
                     self.logger.warning(
                         f"Weight key '{_key}' not found in particle data. Calculating without weight. "
-                        f"Available keys: {list(p_dict_all.keys())}. Use weight_key='no_weight' if no weighting is desired."
+                        f"Available keys: {list(p_dict_all.keys())}. Use weight_key='unit' if unit weighting is desired."
                     )
                     p_wei = np.ones(self.particle_count, dtype=np.float32)
-                    self.fin_wei_key = 'no_weight'
-            source_desc = f"file={fin_source_desc} format={self.fin_format}"
+                    self.fin["weight_key"] = "unit"
+            source_desc = f"file={fin_source_desc} format={input_format}"
 
         if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
             self.logger.error(
@@ -205,7 +199,7 @@ class Convols(TaskBase):
             self.particle_weight = p_wei
             self.norm_factor = 1 / self.particle_count
             self.logger.info(
-                f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin_wei_key}"
+                f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin['weight_key']}"
             )
             if self.save_particle_data:
                 self._save_particle_dataset()
@@ -289,9 +283,7 @@ class Convols(TaskBase):
                     _epsilon = self.sew_up(self.all_s, self.size, self.L,self.phi_support)
             if rank == 0:
                 _convols_info = {
-                    "fin_path"      : self.fin_path,
-                    "fin_format"    : self.fin_format,
-                    "fin_weight_key": self.fin_wei_key,
+                    "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
                     "J"             : self.J,
                     "phi_resolution"      : self.phi_resolution,

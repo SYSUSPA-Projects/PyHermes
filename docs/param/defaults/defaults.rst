@@ -55,7 +55,7 @@ Particle input parameters
 - ``fin.format``:
   particle file format, for example ``generic_pos``.
 - ``fin.weight_key``:
-  particle weight field name, or ``no_weight`` if unweighted counts are desired.
+  particle weight field name, or ``unit`` if unweighted counts are desired.
 
 Output
 ^^^^^^

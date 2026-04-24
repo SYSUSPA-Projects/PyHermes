@@ -96,9 +96,9 @@ def handle_PATHorURL(f_in):
         f_in = dl_rich_pbar(_url)
     return f_in
 
-def check_fin(fin_path):
+def check_fin(f_in):
     url_pattern = re.compile(r'^(http|https)://', re.IGNORECASE)
-    if url_pattern.match(fin_path):
+    if url_pattern.match(f_in):
         return '_url_'
     else:
         return
