@@ -4,7 +4,7 @@ import math
 
 import numpy as np
 import pywt
-from numba import njit
+from numba import njit, prange
 
 
 def do_wavelet(mode="db2", level=10):
@@ -95,7 +95,7 @@ def spectrum_vectorized(v, k0, k1, N_k, phi_resolution):
     return s
 
 
-@njit
+@njit(parallel=True)
 def phi_at_pos_numba(pos, phi_array, scale_factor, phi_resolution, phi_support):
     """Evaluate local scaling-function stencil values around each position."""
     step = np.arange(phi_support) * phi_resolution
@@ -104,7 +104,7 @@ def phi_at_pos_numba(pos, phi_array, scale_factor, phi_resolution, phi_support):
     pos_finer = ((scale_pos - pos_coarse) * phi_resolution).astype(np.int32)
     total = scale_pos.shape[0]
     phi_local = np.zeros((total, phi_support, phi_support, phi_support), dtype=np.float64)
-    for num in range(total):
+    for num in prange(total):
         fx, fy, fz = pos_finer[num]
         for i in range(phi_support):
             phix = phi_array[fx + step[i]]
@@ -115,14 +115,14 @@ def phi_at_pos_numba(pos, phi_array, scale_factor, phi_resolution, phi_support):
     return pos_coarse, phi_local
 
 
-@njit
+@njit(parallel=True)
 def n_at_pos_numba(n_output, pos_scaled, epsilon, phi_array, L, phi_resolution, phi_support,
                    dx=0.0, dy=0.0, dz=0.0):
     """Evaluate normalized ``n(x)`` on scaled grid positions, with optional offsets."""
     Lmask = L - 1
     n = pos_scaled.shape[0]
 
-    for idx in range(n):
+    for idx in prange(n):
         sx = pos_scaled[idx, 0] + dx
         sy = pos_scaled[idx, 1] + dy
         sz = pos_scaled[idx, 2] + dz
