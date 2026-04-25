@@ -63,7 +63,6 @@ def generate_triangle_offsets(R1, R2, mu, phi, costheta1, alpha):
     return x2, y2, z2, x3, y3, z3
 
 
-# @njit(parallel=True)
 @njit
 def estimate_triplet_product_particle_centers(
     R1_scaled, R2_scaled, mu,
@@ -98,7 +97,6 @@ def estimate_triplet_product_particle_centers(
     return rho1 * total_sum / (n_rot * center_weight_sum)
 
 
-# @njit(parallel=True)
 @njit
 def estimate_triplet_product_box_random_centers(
     R1_scaled, R2_scaled, mu,
@@ -146,11 +144,11 @@ def estimate_triplet_product_box_random_centers(
 def estimate_triplet_contrast_particle_centers_legacy(
     R1_scaled, R2_scaled, mu,
     pos_scaled, rand_scaled, n_rot,
-    R, epsilon2, epsilon3,
+    rho1, epsilon2, epsilon3,
     phi_array, L, phi_resolution, phi_support,
     seed=-1
 ):
-    """Estimate the legacy DDD_RDD control-variate quantity."""
+    """Estimate the legacy delta_ddd control-variate quantity."""
     if seed >= 0:
         np.random.seed(seed)
     npos = pos_scaled.shape[0]
@@ -174,4 +172,4 @@ def estimate_triplet_contrast_particle_centers_legacy(
         for i in range(npos):
             s += n2[i] * n3[i] - n20[i] * n30[i]
         total_sum += s
-    return R * total_sum / (n_rot * npos)
+    return rho1 * total_sum / (n_rot * npos)
