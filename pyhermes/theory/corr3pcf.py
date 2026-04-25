@@ -1096,6 +1096,72 @@ class Corr_3PCF(TaskBase):
             timing["xi23"] = time.perf_counter() - t_pair
         return pair_cache, rr23_cache, timing
 
+    def _root_geometry_reference(self):
+        """Find a prepared rank-0 field that can define geometry and scaling."""
+        return self._find_geometry_reference(
+            getattr(self, "convols_data1", None),
+            getattr(self, "convols_data2", None),
+            getattr(self, "convols_data3", None),
+            getattr(self, "random1", None),
+            getattr(self, "random2", None),
+            getattr(self, "random3", None),
+        )
+
+    def _main_loop_products(self, expanded_products, defer_rrr_to_rr23):
+        """Return products that need explicit theta-loop evaluation."""
+        loop_products = [
+            key for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"]
+            if key in expanded_products
+        ]
+        if defer_rrr_to_rr23 and "rrr" in loop_products:
+            loop_products.remove("rrr")
+        if self.center == "particle" and "delta_ddd" in loop_products:
+            loop_products.remove("delta_ddd")
+        if (
+            self.center == "particle"
+            and self.random_pos1 is None
+            and isinstance(getattr(self, "random1", None), (float, int, np.floating))
+            and "r_delta_dd" in loop_products
+        ):
+            loop_products.remove("r_delta_dd")
+        return loop_products
+
+    def _product_field_requirements(self, product):
+        """Return data/random legs needed by one explicit theta-loop product."""
+        if self.center == "box_random":
+            if product == "ddd":
+                return {1, 2, 3}, set()
+            if product == "delta_ddd":
+                return {1, 2, 3}, {1, 2, 3}
+            if product == "rrr":
+                return set(), {1, 2, 3}
+        else:
+            if product == "ddd":
+                return {2, 3}, set()
+            if product == "d_delta_dd":
+                return {2, 3}, {2, 3}
+            if product == "r_delta_dd":
+                return {2, 3}, {2, 3}
+            if product == "rrr":
+                return set(), {1, 2, 3}
+        raise ValueError(f"Unsupported explicit 3PCF product '{product}' for center='{self.center}'.")
+
+    def _broadcast_product_runtime(self, product):
+        """Broadcast only the fields needed by one product."""
+        data_legs, random_legs = self._product_field_requirements(product)
+        local_data = {}
+        local_random = {}
+        for idx in sorted(data_legs):
+            local_data[idx] = self._broadcast_field(getattr(self, f"convols_data{idx}"))
+        for idx in sorted(random_legs):
+            local_random[idx] = self._broadcast_field(getattr(self, f"random{idx}"))
+        return local_data, local_random
+
+    def _release_product_runtime(self):
+        """Drop product-local cached fields held on the task instance."""
+        self.meta_convols = None
+        self._particle_delta_fields = None
+
     ### Full estimator execution ###
 
     def run(self, save_result=True, overwrite=False):
@@ -1114,39 +1180,39 @@ class Corr_3PCF(TaskBase):
             self.rho = comm.bcast(self.rho, root=0)
 
             expanded_products = self._expanded_products()
-            expanded_products_set = set(expanded_products)
-            needs_data, needs_random = self._required_input_flags()
-            needs_signal_leg1 = not (self.center == "particle" and self.convols_data1 is None)
-
-            _local_convols1 = self._broadcast_field(self.convols_data1) if (needs_data and needs_signal_leg1) else None
-            _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
-            _local_convols3 = self._broadcast_field(self.convols_data3) if needs_data else None
-            _local_random1 = self._broadcast_field(self.random1) if needs_random else None
-            _local_random2 = self._broadcast_field(self.random2) if needs_random else None
-            _local_random3 = self._broadcast_field(self.random3) if needs_random else None
-            defer_rrr_to_rr23 = (
-                "rrr" in expanded_products
-                and "xi23" in expanded_products
-                and isinstance(_local_random1, (float, int, np.floating))
-                and self.random_pos1 is None
-            )
+            if rank == 0:
+                defer_rrr_to_rr23 = (
+                    "rrr" in expanded_products
+                    and "xi23" in expanded_products
+                    and isinstance(self.random1, (float, int, np.floating))
+                    and self.random_pos1 is None
+                )
+                loop_products = self._main_loop_products(expanded_products, defer_rrr_to_rr23)
+            else:
+                defer_rrr_to_rr23 = None
+                loop_products = None
+            defer_rrr_to_rr23 = comm.bcast(defer_rrr_to_rr23, root=0)
+            loop_products = comm.bcast(loop_products, root=0)
 
             snapshot = self._current_task_params_snapshot()
             self.corr3pcf_data.corr3pcf_info = snapshot
             self.corr3pcf_data.task_params = snapshot
 
             if rank == 0:
+                geometry_ref = self._root_geometry_reference()
+                if geometry_ref is None:
+                    self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
+                    func_util.safe_exit(1)
                 if self.center == "particle":
-                    geometry_ref = self._find_geometry_reference(_local_convols1, _local_convols2, _local_convols3)
-                    if geometry_ref is None:
-                        self.logger.error("At least one ConvolsData input is required to define geometry for center='particle'.")
-                        func_util.safe_exit(1)
                     if self.particle_pos1 is not None:
                         pos_all = self.particle_pos1 * geometry_ref.scale_factor
                         weight_all = self.particle_weight1
                     else:
-                        particle_data = _local_convols1.get_particle_data()
-                        pos_all = particle_data["pos"] * _local_convols1.scale_factor
+                        if self.convols_data1 is None:
+                            self.logger.error("particle centers require particle_pos1 or a usable convols_data1 source.")
+                            func_util.safe_exit(1)
+                        particle_data = self.convols_data1.get_particle_data()
+                        pos_all = particle_data["pos"] * self.convols_data1.scale_factor
                         weight_all = particle_data["weight"]
                     Nall = pos_all.shape[0]
                     if self.random_pos1 is not None:
@@ -1173,6 +1239,10 @@ class Corr_3PCF(TaskBase):
                 Nall_random1 = None
             mu_arr = self.mu_arr
             theta_arr = self.theta_arr
+            geometry_L = comm.bcast(geometry_ref.L if rank == 0 else None, root=0)
+            geometry_scale_factor = comm.bcast(geometry_ref.scale_factor if rank == 0 else None, root=0)
+            self.r12_scaled = self.r12 * geometry_scale_factor
+            self.r13_scaled = self.r13 * geometry_scale_factor
 
             if self.center == "box_random":
                 if rank == 0:
@@ -1182,7 +1252,7 @@ class Corr_3PCF(TaskBase):
                     counts = None
                 n_local = int(comm.scatter(counts, root=0))
                 seed_center_rank = self.base_seed + 1000003 * (rank + 1)
-                pos_local = random_points_box(N=n_local, box_size=_local_convols1.L, seed=seed_center_rank)
+                pos_local = random_points_box(N=n_local, box_size=geometry_L, seed=seed_center_rank)
             else:
                 pos_local = self._scatter_positions(pos_all)
                 weight_local = self._scatter_weights(weight_all)
@@ -1217,19 +1287,6 @@ class Corr_3PCF(TaskBase):
                 weight_local_random1 = None
                 weight_sum_local_random1 = None
                 weight_sum_total_random1 = None
-            geometry_ref = self._find_geometry_reference(_local_convols1, _local_convols2, _local_convols3)
-            if geometry_ref is None:
-                self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
-                func_util.safe_exit(1)
-            self.meta_convols = geometry_ref
-            if self.center == "particle" and expanded_products_set & {"d_delta_dd", "r_delta_dd"}:
-                delta_field2 = self._compute_delta_field(_local_convols2, _local_random2)
-                delta_field3 = self._compute_delta_field(_local_convols3, _local_random3)
-                self._particle_delta_fields = (delta_field2, delta_field3)
-            else:
-                self._particle_delta_fields = None
-            self.r12_scaled = self.r12 * geometry_ref.scale_factor
-            self.r13_scaled = self.r13 * geometry_ref.scale_factor
             seed_base_rot = self.base_seed + 1
 
             if rank == 0:
@@ -1237,68 +1294,71 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"total_centers={npos_total}, each rank has n_local={npos_local} centers")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
-                loop_products = [key for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"] if key in expanded_products]
-                if defer_rrr_to_rr23 and "rrr" in loop_products:
-                    loop_products.remove("rrr")
-                if self.center == "particle" and "delta_ddd" in loop_products:
-                    loop_products.remove("delta_ddd")
-                if (
-                    self.center == "particle"
-                    and self.random_pos1 is None
-                    and isinstance(_local_random1, (float, int, np.floating))
-                    and "r_delta_dd" in loop_products
-                ):
-                    loop_products.remove("r_delta_dd")
                 self.logger.info(f"Main 3PCF loop products: {loop_products}")
 
-            local_results = {
-                key: np.zeros(mu_arr.shape[0], dtype=np.float64)
-                for key in ["ddd", "delta_ddd", "d_delta_dd", "r_delta_dd", "rrr"]
-                if key in expanded_products
-                and not (key == "rrr" and defer_rrr_to_rr23)
-                and not (self.center == "particle" and key == "delta_ddd")
-                and not (
-                    self.center == "particle"
-                    and key == "r_delta_dd"
-                    and self.random_pos1 is None
-                    and isinstance(_local_random1, (float, int, np.floating))
-                )
-            }
+            global_results = {}
+            for product in loop_products:
+                if rank == 0:
+                    t_product_start = time.perf_counter()
+                    self.logger.info(f"Computing product '{product}' ...")
 
-            for it, mu in enumerate(mu_arr):
-                t_theta_start = time.perf_counter() if rank == 0 else None
-                r23_value = third_side_from_mu(self.r12, self.r13, mu)
-                if self.center == "box_random":
-                    self._compute_random_center_theta(
-                        mu, r23_value, pos_local, seed_base_rot, it,
-                        local_results, _local_convols1, _local_convols2, _local_convols3,
-                        _local_random1, _local_random2, _local_random3
-                    )
-                else:
-                    self._compute_particle_center_theta(
-                        mu, r23_value,
-                        pos_local, weight_local, weight_sum_local,
-                        pos_local_random1 if pos_local_random1 is not None else pos_local,
-                        weight_local_random1 if weight_local_random1 is not None else weight_local,
-                        weight_sum_local_random1,
-                        seed_base_rot, it,
-                        local_results, _local_convols2, _local_convols3,
-                        _local_random1, _local_random2, _local_random3
+                local_data, local_random = self._broadcast_product_runtime(product)
+                self.meta_convols = self._find_geometry_reference(
+                    *local_data.values(),
+                    *local_random.values(),
+                )
+                if self.center == "particle" and product in {"d_delta_dd", "r_delta_dd"}:
+                    delta_field2 = self._compute_delta_field(local_data[2], local_random[2])
+                    delta_field3 = self._compute_delta_field(local_data[3], local_random[3])
+                    self._particle_delta_fields = (delta_field2, delta_field3)
+                    self.meta_convols = self._find_geometry_reference(delta_field2, delta_field3, self.meta_convols)
+                elif self.center == "box_random" and product == "delta_ddd":
+                    self.meta_convols = self._find_geometry_reference(local_data.get(1), local_data.get(2), local_data.get(3))
+                elif self.meta_convols is None:
+                    self.meta_convols = self._find_geometry_reference(
+                        local_data.get(1), local_data.get(2), local_data.get(3),
+                        local_random.get(1), local_random.get(2), local_random.get(3),
                     )
 
                 if rank == 0:
-                    elapsed_theta = time.perf_counter() - t_theta_start
-                    self.logger.info(
-                        f" theta[{it + 1:02d}/{self.n_theta}] done | theta={theta_arr[it]:.5f} rad | mu={mu:.5f} | "
-                        f"elapsed={elapsed_theta:.2f} sec"
-                    )
+                    self.logger.info(f"Product '{product}' setup time: {time.perf_counter() - t_product_start:.4f} sec")
 
-            global_results = {}
-            for key, arr in local_results.items():
-                if self.center == "particle" and key in {"ddd", "d_delta_dd"}:
+                local_results = {product: np.zeros(mu_arr.shape[0], dtype=np.float64)}
+                for it, mu in enumerate(mu_arr):
+                    t_theta_start = time.perf_counter() if rank == 0 else None
+                    r23_value = third_side_from_mu(self.r12, self.r13, mu)
+                    if self.center == "box_random":
+                        self._compute_random_center_theta(
+                            mu, r23_value, pos_local, seed_base_rot, it,
+                            local_results,
+                            local_data.get(1), local_data.get(2), local_data.get(3),
+                            local_random.get(1), local_random.get(2), local_random.get(3),
+                        )
+                    else:
+                        self._compute_particle_center_theta(
+                            mu, r23_value,
+                            pos_local, weight_local, weight_sum_local,
+                            pos_local_random1 if pos_local_random1 is not None else pos_local,
+                            weight_local_random1 if weight_local_random1 is not None else weight_local,
+                            weight_sum_local_random1,
+                            seed_base_rot, it,
+                            local_results,
+                            local_data.get(2), local_data.get(3),
+                            local_random.get(1), local_random.get(2), local_random.get(3),
+                        )
+
+                    if rank == 0:
+                        elapsed_theta = time.perf_counter() - t_theta_start
+                        self.logger.info(
+                            f" product={product} | theta[{it + 1:02d}/{self.n_theta}] done | "
+                            f"theta={theta_arr[it]:.5f} rad | mu={mu:.5f} | elapsed={elapsed_theta:.2f} sec"
+                        )
+
+                arr = local_results[product]
+                if self.center == "particle" and product in {"ddd", "d_delta_dd"}:
                     local_weighted = arr * weight_sum_local
                     normalizer = weight_sum_total
-                elif self.center == "particle" and key in {"rrr", "r_delta_dd"}:
+                elif self.center == "particle" and product in {"rrr", "r_delta_dd"}:
                     local_weighted = arr * weight_sum_local_random1
                     normalizer = weight_sum_total_random1
                 else:
@@ -1306,7 +1366,11 @@ class Corr_3PCF(TaskBase):
                     normalizer = npos_total
                 global_weighted = np.empty_like(arr)
                 comm.Allreduce(local_weighted, global_weighted, op=MPI.SUM)
-                global_results[key] = global_weighted / normalizer
+                global_results[product] = global_weighted / normalizer
+                if rank == 0:
+                    self.logger.info(f"Product '{product}' finished in {time.perf_counter() - t_product_start:.4f} sec")
+                del local_results, local_data, local_random
+                self._release_product_runtime()
 
             if rank == 0:
                 t_loop_end = time.perf_counter()
@@ -1315,8 +1379,8 @@ class Corr_3PCF(TaskBase):
 
                 pair_cache, rr23_cache, pair_timing = self._compute_pair_cache(
                     expanded_products, mu_arr,
-                    _local_convols1, _local_convols2, _local_convols3,
-                    _local_random1, _local_random2, _local_random3
+                    self.convols_data1, self.convols_data2, self.convols_data3,
+                    self.random1, self.random2, self.random3
                 )
 
                 pair_timing_parts = []
@@ -1340,19 +1404,16 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.xi23 = pair_cache.get("xi23", {}).get("xi")
 
                 if "rrr" in expanded_products and self.corr3pcf_data.rrr is None:
-                    rho1 = self._field_density(_local_random1)
-                    if rr23_cache is not None and isinstance(_local_random1, (float, int, np.floating)):
+                    rho1 = self._field_density(self.random1)
+                    if rr23_cache is not None and isinstance(self.random1, (float, int, np.floating)):
                         self.corr3pcf_data.rrr = rho1 * rr23_cache
                         self.logger.info("Computed rrr from pair cache and random1 density.")
                     else:
-                        self.corr3pcf_data.rrr = np.array([
-                            self._compute_rrr_value(th, r23, self.center, pos_local, seed_base_rot, i, _local_random1, _local_random2, _local_random3, rr23_cache=None)
-                            for i, (th, r23) in enumerate(zip(theta_arr, self.corr3pcf_data.r23))
-                        ], dtype=np.float64)
-                        self.logger.info("Computed rrr from explicit random-field evaluation.")
+                        self.logger.error("rrr was requested but no loop result or pair-cache shortcut is available.")
+                        func_util.safe_exit(1)
 
                 if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
-                    if self.random_pos1 is None and isinstance(_local_random1, (float, int, np.floating)):
+                    if self.random_pos1 is None and isinstance(self.random1, (float, int, np.floating)):
                         self.corr3pcf_data.r_delta_dd = self.corr3pcf_data.rrr * self.corr3pcf_data.xi23
                     self.logger.info("Computed r_delta_dd from xi23 and rrr for particle center with uniform random leg 1.")
 
