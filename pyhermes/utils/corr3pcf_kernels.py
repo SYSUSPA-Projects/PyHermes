@@ -3,7 +3,7 @@
 import math
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba
 
@@ -63,7 +63,7 @@ def generate_triangle_offsets(R1, R2, mu, phi, costheta1, alpha):
     return x2, y2, z2, x3, y3, z3
 
 
-@njit
+@njit(parallel=True)
 def estimate_triplet_product_particle_centers(
     R1_scaled, R2_scaled, mu,
     center_scaled, center_weight, center_weight_sum, n_rot,
@@ -91,13 +91,13 @@ def estimate_triplet_product_particle_centers(
         interpolate_grid_at_pos_numba(n2, center_scaled, epsilon2, phi_array, L, phi_resolution, phi_support, x2, y2, z2)
         interpolate_grid_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
         s = 0.0
-        for i in range(npos):
+        for i in prange(npos):
             s += center_weight[i] * n2[i] * n3[i]
         total_sum += s
     return rho1 * total_sum / (n_rot * center_weight_sum)
 
 
-@njit
+@njit(parallel=True)
 def estimate_triplet_product_box_random_centers(
     R1_scaled, R2_scaled, mu,
     center_scaled, n_rot,
@@ -133,7 +133,7 @@ def estimate_triplet_product_box_random_centers(
         interpolate_grid_at_pos_numba(n3, center_scaled, epsilon3, phi_array, L, phi_resolution, phi_support, x3, y3, z3)
 
         s = 0.0
-        for i in range(npos):
+        for i in prange(npos):
             s += n1[i] * n2[i] * n3[i]
         total_sum += s
 
