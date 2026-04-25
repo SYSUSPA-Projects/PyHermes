@@ -148,7 +148,7 @@ def estimate_triplet_contrast_particle_centers_legacy(
     phi_array, L, phi_resolution, phi_support,
     seed=-1
 ):
-    """Estimate the legacy delta_ddd control-variate quantity."""
+    """Estimate the legacy d_delta_dd control-variate quantity."""
     if seed >= 0:
         np.random.seed(seed)
     npos = pos_scaled.shape[0]
