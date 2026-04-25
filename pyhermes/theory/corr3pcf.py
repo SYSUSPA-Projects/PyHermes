@@ -17,6 +17,8 @@ from pyhermes.pipeline import TaskBase
 from .corr2pcf import compute_pair_product_at_radius
 
 
+### Product dependency metadata ###
+
 # Product expansion rules are kept in one place so the runtime logic only needs
 # to consume an expanded execution plan instead of duplicating dependency checks.
 PRODUCT_RULES = {
@@ -51,6 +53,8 @@ PRODUCT_INPUT_FLAGS = {
     "Q": (True, True),
 }
 
+
+### Shared triplet estimator dispatch ###
 
 def estimate_triplet_product_with_sampled_centers(
     r12_scaled, r13_scaled, mu, center_scaled, n_rot,
@@ -111,6 +115,8 @@ def estimate_triplet_product_with_sampled_centers(
 
 class Corr_3PCF(TaskBase):
     """Three-point correlation estimator with box-random and particle-center modes."""
+
+    ### Construction and user parameter normalization ###
 
     def __init__(self, param_task=None):
         if param_task is None:
@@ -179,6 +185,8 @@ class Corr_3PCF(TaskBase):
         self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "Q"))
         self.fout_path = self.task_params["fout_path"]
+
+    ### Product planning and angle sampling ###
 
     def _normalize_products(self, products):
         """Normalize requested products and validate them against the current center mode."""
@@ -295,6 +303,8 @@ class Corr_3PCF(TaskBase):
         self.mu_min = float(np.min(self.mu_arr))
         self.mu_max = float(np.max(self.mu_arr))
 
+    ### Task snapshot serialization ###
+
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
             return value
@@ -378,6 +388,8 @@ class Corr_3PCF(TaskBase):
         params["products"] = copy.deepcopy(self.products)
         params["fout_path"] = self.fout_path
         return params
+
+    ### Input resolution and field preparation helpers ###
 
     def _resolve_base_convols(self, leg_idx, provided_convols, cache):
         """Resolve one signal leg from a path, shared fallback, or ConvolsData instance."""
@@ -466,6 +478,8 @@ class Corr_3PCF(TaskBase):
                 return candidate
         return None
 
+    ### Center coordinate and weight handling ###
+
     def _normalize_particle_data(self, value):
         """Normalize explicit center positions to a contiguous (N, 3) float64 array."""
         if value is None:
@@ -510,6 +524,8 @@ class Corr_3PCF(TaskBase):
                 f"Please provide {explicit_name} explicitly."
             )
             func_util.safe_exit(1)
+
+    ### Runtime input fallbacks and MPI data movement ###
 
     def _resolve_runtime_inputs(
         self,
@@ -622,6 +638,8 @@ class Corr_3PCF(TaskBase):
         comm.Scatterv([sendbuf, counts, displs, MPI.DOUBLE], recvbuf, root=0)
         return recvbuf
 
+    ### Low-order pair and random-product shortcuts ###
+
     def calc_pair_product(self, radius, field1, field2):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
@@ -726,6 +744,8 @@ class Corr_3PCF(TaskBase):
             "random_weight1": random_weight1,
             "random_pos1_source": random_pos1_source,
         }
+
+    ### High-level preparation pipeline ###
 
     def prepare_input_fields(
         self,
@@ -873,6 +893,8 @@ class Corr_3PCF(TaskBase):
             self.corr3pcf_data.task_params = snapshot
         self._fields_prepared = True
 
+    ### 2PCF-derived caches and leg finalization ###
+
     def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
         """Compute RR, delta_DD, and xi for one pair radius."""
         rr = self.calc_pair_product(radius, random_a, random_b)
@@ -961,6 +983,8 @@ class Corr_3PCF(TaskBase):
                 setattr(self, f"random{i}", final_random)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
+    ### Theta-local triplet kernels ###
+
     def _compute_random_center_theta(
         self, mu, r23_value, pos_local, seed_base_rot, theta_index,
         local_results, _local_convols1, _local_convols2, _local_convols3,
@@ -1036,6 +1060,8 @@ class Corr_3PCF(TaskBase):
                     rho1=rho,
                 )
 
+    ### Post-loop pair cache computation ###
+
     def _compute_pair_cache(
         self, expanded_products, mu_arr,
         _local_convols1, _local_convols2, _local_convols3,
@@ -1069,6 +1095,8 @@ class Corr_3PCF(TaskBase):
             rr23_cache = pair_cache["xi23"]["rr"]
             timing["xi23"] = time.perf_counter() - t_pair
         return pair_cache, rr23_cache, timing
+
+    ### Full estimator execution ###
 
     def run(self, save_result=True, overwrite=False):
         """Execute the full 3PCF workflow, including center generation and post-processing."""
