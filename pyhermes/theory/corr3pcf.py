@@ -1188,11 +1188,14 @@ class Corr_3PCF(TaskBase):
                     and self.random_pos1 is None
                 )
                 loop_products = self._main_loop_products(expanded_products, defer_rrr_to_rr23)
+                has_random_pos1 = self.random_pos1 is not None
             else:
                 defer_rrr_to_rr23 = None
                 loop_products = None
+                has_random_pos1 = None
             defer_rrr_to_rr23 = comm.bcast(defer_rrr_to_rr23, root=0)
             loop_products = comm.bcast(loop_products, root=0)
+            has_random_pos1 = comm.bcast(has_random_pos1, root=0)
 
             snapshot = self._current_task_params_snapshot()
             self.corr3pcf_data.corr3pcf_info = snapshot
@@ -1215,7 +1218,7 @@ class Corr_3PCF(TaskBase):
                         pos_all = particle_data["pos"] * self.convols_data1.scale_factor
                         weight_all = particle_data["weight"]
                     Nall = pos_all.shape[0]
-                    if self.random_pos1 is not None:
+                    if has_random_pos1:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         weight_all_random1 = self.random_weight1
                         Nall_random1 = pos_all_random1.shape[0]
@@ -1256,7 +1259,7 @@ class Corr_3PCF(TaskBase):
             else:
                 pos_local = self._scatter_positions(pos_all)
                 weight_local = self._scatter_weights(weight_all)
-                if self.random_pos1 is not None:
+                if has_random_pos1:
                     pos_local_random1 = self._scatter_positions(pos_all_random1)
                     weight_local_random1 = self._scatter_weights(weight_all_random1)
                 else:
@@ -1413,7 +1416,7 @@ class Corr_3PCF(TaskBase):
                         func_util.safe_exit(1)
 
                 if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
-                    if self.random_pos1 is None and isinstance(self.random1, (float, int, np.floating)):
+                    if not has_random_pos1 and isinstance(self.random1, (float, int, np.floating)):
                         self.corr3pcf_data.r_delta_dd = self.corr3pcf_data.rrr * self.corr3pcf_data.xi23
                     self.logger.info("Computed r_delta_dd from xi23 and rrr for particle center with uniform random leg 1.")
 
