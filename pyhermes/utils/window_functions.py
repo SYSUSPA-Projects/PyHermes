@@ -119,7 +119,7 @@ def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
 
 
 @njit
-def window_function_cylinder_numba(ki, kj, kk, R, h):
+def window_function_cylinder_numba(ki, kj, kk, R, H):
     """
     Cylindrical top-hat window in k-space.
 
@@ -128,16 +128,18 @@ def window_function_cylinder_numba(ki, kj, kk, R, h):
     W(k; R, h) = (2*J1(q_perp)/q_perp) * (sin(q_z)/q_z),
     with the corresponding factors set to 1 when q_perp = 0 or q_z = 0.
     """
-    k1 = np.sqrt(ki**2 + kj**2)
+    k_perp = np.sqrt(ki**2 + kj**2)
+    q_perp = 2.0 * np.pi * k_perp * R
+    q_z = np.pi * kk * H
     if kk == 0:
         part1 = 1
     else:
-        part1 = np.sin(2 * np.pi * kk * h / 2) / (2 * np.pi * kk * h / 2)
+        part1 = np.sin(q_z) / q_z
 
-    if k1 == 0:
+    if k_perp == 0:
         sum_val = 1
     else:
-        sum_val = 2 * jn_numba(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
+        sum_val = 2 * jn_numba(1, q_perp) / q_perp
     return sum_val * part1
 
 
