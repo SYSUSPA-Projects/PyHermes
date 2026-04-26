@@ -1263,29 +1263,22 @@ class Corr_3PCF(TaskBase):
                         particle_data = self.convols_data1.get_particle_data()
                         pos_all = particle_data["pos"] * self.convols_data1.scale_factor
                         weight_all = particle_data["weight"]
-                    Nall = pos_all.shape[0]
                     if has_random_pos1:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         weight_all_random1 = self.random_weight1
-                        Nall_random1 = pos_all_random1.shape[0]
                     else:
                         pos_all_random1 = None
                         weight_all_random1 = None
-                        Nall_random1 = None
                 else:
                     pos_all = None
                     weight_all = None
-                    Nall = None
                     pos_all_random1 = None
                     weight_all_random1 = None
-                    Nall_random1 = None
             else:
                 pos_all = None
                 weight_all = None
-                Nall = None
                 pos_all_random1 = None
                 weight_all_random1 = None
-                Nall_random1 = None
             mu_arr = self.mu_arr
             theta_arr = self.theta_arr
             geometry_L = comm.bcast(geometry_ref.L if rank == 0 else None, root=0)
