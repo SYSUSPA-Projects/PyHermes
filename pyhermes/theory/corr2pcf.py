@@ -635,7 +635,7 @@ class Corr_2PCF(TaskBase):
                 total_tasks = len(tasks)
                 report_interval = max(1, total_tasks // 10)
                 next_report_threshold = 0
-                requests = [comm.irecv(source=r, tag=r) for r in range(size)]
+                requests = [None] + [comm.irecv(source=r, tag=r) for r in range(1, size)]
                 count_all = False
             else:
                 task_sub_arrs = None
@@ -693,9 +693,12 @@ class Corr_2PCF(TaskBase):
                 local_tasks.append((s_idx, mu_idx))
                 local_completed += 1
                 if local_completed % local_report_interval == 0:
-                    comm.isend(local_completed, dest=0, tag=rank)
+                    if rank == 0:
+                        arr_complete[0] = local_completed
+                    else:
+                        comm.isend(local_completed, dest=0, tag=rank)
                 if rank == 0:
-                    for r, req in enumerate(requests):
+                    for r, req in enumerate(requests[1:], start=1):
                         status = req.test()
                         # Check whether the data is received
                         if status[0]: 
@@ -713,6 +716,25 @@ class Corr_2PCF(TaskBase):
                         if global_completed == total_tasks:
                             count_all = True
             comm.Barrier()
+            if rank == 0:
+                arr_complete[0] = local_completed
+                for r, req in enumerate(requests[1:], start=1):
+                    status = req.test()
+                    if status[0]:
+                        arr_complete[r] = status[1]
+                    else:
+                        if hasattr(req, "cancel"):
+                            req.cancel()
+                        elif hasattr(req, "Cancel"):
+                            req.Cancel()
+                        if hasattr(req, "wait"):
+                            req.wait()
+                        elif hasattr(req, "Wait"):
+                            req.Wait()
+                if hasattr(comm, "Iprobe"):
+                    for source in range(1, size):
+                        while comm.Iprobe(source=source, tag=source):
+                            arr_complete[source] = comm.recv(source=source, tag=source)
             # Gathering to rank0
             gathered_xi = comm.gather(local_xi, root=0)
             gathered_dd = comm.gather(local_dd, root=0)
