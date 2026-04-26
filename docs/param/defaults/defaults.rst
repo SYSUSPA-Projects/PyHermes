@@ -187,5 +187,9 @@ Notes
            R: 20
         other_args: {}
 
+  For finite shell windows, use descriptive length names:
+  ``Tshell`` expects ``R_in`` and ``R_out``; ``gaussian_shell`` expects
+  ``R_shell`` and ``R_smooth``.
+
 - In most workflows, you only need to override a small subset of the defaults.
   The rest can safely remain untouched.

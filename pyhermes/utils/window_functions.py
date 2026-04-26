@@ -6,23 +6,7 @@ from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
 from pyhermes.utils.special_functions import jn_numba
 
-
-@njit
-def window_function_shell_numba(ki, kj, kk, R):
-    """
-    Thin spherical-shell window in k-space.
-
-    Let k = sqrt(ki^2 + kj^2 + kk^2) and q = 2*pi*k*R.
-    W(k; R) = sin(q) / q, with W(0; R) = 1.
-    """
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        return 1
-    Phase = 2 * np.pi * k * R
-    result = np.sin(Phase) / Phase
-    return result
-
-
+# Isotropic windows.
 @njit
 def window_function_sphere_numba(ki, kj, kk, R):
     """
@@ -54,95 +38,84 @@ def window_function_gauss_numba(ki, kj, kk, R):
 
 
 @njit
-def window_function_gauss_shell_numba(ki, kj, kk, R1, R2):
+def window_function_shell_numba(ki, kj, kk, R):
     """
-    Gaussian-damped shell-like window in k-space.
+    Thin spherical-shell window in k-space.
 
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q1 = 2*pi*k*R1,
-    and q2 = 2*pi*k*R2.
-    W(k; R1, R2) =
-        ((R2^2*cos(q1) + R1^2*sin(q1)/q1) / (R1^2 + R2^2))
-        * exp(-q2^2 / 2),
-    with W(0; R1, R2) = 1.
+    Let k = sqrt(ki^2 + kj^2 + kk^2) and q = 2*pi*k*R.
+    W(k; R) = sin(q) / q, with W(0; R) = 1.
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         return 1
-    Phase1 = 2 * np.pi * k * R1
-    Phase2 = 2 * np.pi * k * R2
-    result = (
-        (R2 * R2 * np.cos(Phase1) + R1 * R1 * np.sin(Phase1) / Phase1) / (R1 * R1 + R2 * R2)
-        * np.exp(-(Phase2**2) / 2)
-    )
+    Phase = 2 * np.pi * k * R
+    result = np.sin(Phase) / Phase
     return result
 
-
 @njit
-def window_function_Tshell_numba(ki, kj, kk, R1, R2):
+def window_function_Tshell_numba(ki, kj, kk, R_in, R_out):
     """
     Finite-thickness spherical shell window in k-space.
 
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q1 = 2*pi*k*R1,
-    and q2 = 2*pi*k*R2.
-    W(k; R1, R2) =
-        3 * (sin(q2) - q2*cos(q2) - sin(q1) + q1*cos(q1))
-        / (q2^3 - q1^3),
-    with W(0; R1, R2) = 1.
+    ``R_in`` and ``R_out`` are the inner and outer shell radii.
+
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q_in = 2*pi*k*R_in,
+    and q_out = 2*pi*k*R_out.
+    W(k; R_in, R_out) =
+        3 * (sin(q_out) - q_out*cos(q_out) - sin(q_in) + q_in*cos(q_in))
+        / (q_out^3 - q_in^3),
+    with W(0; R_in, R_out) = 1.
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         return 1
-    Phase1 = 2 * np.pi * k * R1
-    Phase2 = 2 * np.pi * k * R2
+    phase_in = 2 * np.pi * k * R_in
+    phase_out = 2 * np.pi * k * R_out
     result = (
         3
-        * (np.sin(Phase2) - Phase2 * np.cos(Phase2) - np.sin(Phase1) + Phase1 * np.cos(Phase1))
-        / (Phase2**3 - Phase1**3)
+        * (
+            np.sin(phase_out)
+            - phase_out * np.cos(phase_out)
+            - np.sin(phase_in)
+            + phase_in * np.cos(phase_in)
+        )
+        / (phase_out**3 - phase_in**3)
     )
     return result
 
 
 @njit
-def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
+def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     """
-    Gaussian-derivative wavelet window in k-space.
+    Gaussian-damped shell-like window in k-space.
 
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
-    A(R) = 2^(7/4) / sqrt(15) * (2*pi)^(3/4) * R^(3/2).
-    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
+    ``R_shell`` sets the shell-like oscillation scale, and ``R_smooth`` sets
+    the Gaussian damping scale.
+
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q_shell = 2*pi*k*R_shell,
+    and q_smooth = 2*pi*k*R_smooth.
+    W(k; R_shell, R_smooth) =
+        ((R_smooth^2*cos(q_shell) + R_shell^2*sin(q_shell)/q_shell)
+        / (R_shell^2 + R_smooth^2)) * exp(-q_smooth^2 / 2),
+    with W(0; R_shell, R_smooth) = 1.
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
-    Phase = 2 * np.pi * k * R
-    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
-    result = norm * Phase**2 * np.exp(-(Phase**2) / 2)
+    if k == 0:
+        return 1
+    phase_shell = 2 * np.pi * k * R_shell
+    phase_smooth = 2 * np.pi * k * R_smooth
+    result = (
+        (
+            R_smooth * R_smooth * np.cos(phase_shell)
+            + R_shell * R_shell * np.sin(phase_shell) / phase_shell
+        )
+        / (R_shell * R_shell + R_smooth * R_smooth)
+        * np.exp(-(phase_smooth**2) / 2)
+    )
     return result
 
 
-@njit
-def window_function_cylinder_numba(ki, kj, kk, R, H):
-    """
-    Cylindrical top-hat window in k-space.
-
-    Let k_perp = sqrt(ki^2 + kj^2), q_perp = 2*pi*k_perp*R,
-    and q_z = 2*pi*kk*h/2.
-    W(k; R, h) = (2*J1(q_perp)/q_perp) * (sin(q_z)/q_z),
-    with the corresponding factors set to 1 when q_perp = 0 or q_z = 0.
-    """
-    k_perp = np.sqrt(ki**2 + kj**2)
-    q_perp = 2.0 * np.pi * k_perp * R
-    q_z = np.pi * kk * H
-    if kk == 0:
-        part1 = 1
-    else:
-        part1 = np.sin(q_z) / q_z
-
-    if k_perp == 0:
-        sum_val = 1
-    else:
-        sum_val = 2 * jn_numba(1, q_perp) / q_perp
-    return sum_val * part1
-
-
+# Anisotropic windows.
 @njit
 def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     """
@@ -175,25 +148,88 @@ def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     return jn_numba(0, q_perp) * np.cos(q_parallel)
 
 
+@njit
+def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
+    """
+    Cylindrical top-hat window in k-space with a configurable line of sight.
+
+    ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
+    should be passed via ``other_args`` because it is dimensionless. ``R`` and
+    ``H`` are lengths and should be passed via ``len_args``.
+
+    Let k_parallel = k dot n, k_perp = sqrt(|k|^2 - k_parallel^2),
+    q_perp = 2*pi*k_perp*R, and q_parallel = 2*pi*k_parallel*H/2.
+    W(k; R, H) = (2*J1(q_perp)/q_perp) * (sin(q_parallel)/q_parallel),
+    with the corresponding factors set to 1 when q_perp = 0 or q_parallel = 0.
+    """
+    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
+    if norm == 0.0:
+        return np.nan
+    nx = nx / norm
+    ny = ny / norm
+    nz = nz / norm
+
+    k_parallel = ki * nx + kj * ny + kk * nz
+    k2 = ki * ki + kj * kj + kk * kk
+    k_perp2 = k2 - k_parallel * k_parallel
+
+    if k_perp2 < 0.0:
+        k_perp2 = 0.0
+
+    k_perp = np.sqrt(k_perp2)
+    q_perp = 2.0 * np.pi * k_perp * R
+    q_parallel = np.pi * k_parallel * H
+
+    if q_parallel == 0.0:
+        part_parallel = 1.0
+    else:
+        part_parallel = np.sin(q_parallel) / q_parallel
+
+    if q_perp == 0.0:
+        part_perp = 1.0
+    else:
+        part_perp = 2.0 * jn_numba(1, q_perp) / q_perp
+    return part_perp * part_parallel
+
+
+# Special-purpose windows.
+@njit
+def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
+    """
+    Gaussian-derivative wavelet window in k-space.
+
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
+    A(R) = 2^(7/4) / sqrt(15) * (2*pi)^(3/4) * R^(3/2).
+    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
+    """
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    Phase = 2 * np.pi * k * R
+    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
+    result = norm * Phase**2 * np.exp(-(Phase**2) / 2)
+    return result
+
+
+WINDOW_TYPE_DICT = {
+    "sphere": window_function_sphere_numba,
+    "gaussian": window_function_gauss_numba,
+    "shell": window_function_shell_numba,
+    "Tshell": window_function_Tshell_numba,
+    "gaussian_shell": window_function_gauss_shell_numba,
+    "ring": window_function_ring_numba,
+    "cylinder": window_function_cylinder_numba,
+    "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
+}
+
+
 def set_window_function(w_type, verbose=True):
-    w_type_dict = {
-        "shell": window_function_shell_numba,
-        "sphere": window_function_sphere_numba,
-        "gaussian": window_function_gauss_numba,
-        "gaussian_shell": window_function_gauss_shell_numba,
-        "Tshell": window_function_Tshell_numba,
-        "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
-        "cylinder": window_function_cylinder_numba,
-        "ring": window_function_ring_numba,
-    }
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    if w_type in w_type_dict:
+    if w_type in WINDOW_TYPE_DICT:
         verbose and logger.info(f"Using window function: {w_type}")
-        read_function = w_type_dict[w_type]
+        read_function = WINDOW_TYPE_DICT[w_type]
         return read_function
 
-    supported_w_type = ", ".join(w_type_dict.keys())
+    supported_w_type = ", ".join(WINDOW_TYPE_DICT.keys())
     logger.error(f"Unsupported input window function type: {w_type}")
     logger.error(f"Supported types: {supported_w_type}")
     logger.error("Please see the document for details")

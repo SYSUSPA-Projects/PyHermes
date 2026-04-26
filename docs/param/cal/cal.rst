@@ -22,6 +22,19 @@ Counting
 - ``window.len_args``: scale parameters for the window
 - ``seed``: random seed
 
+Window Parameter Names
+----------------------
+
+Window dictionaries pass ``len_args`` directly to the selected window function.
+Common radial windows use the following length parameters:
+
+- ``sphere``, ``gaussian``, ``shell``: ``R``
+- ``Tshell``: ``R_in`` and ``R_out`` for the inner and outer shell radii
+- ``gaussian_shell``: ``R_shell`` for the shell-like oscillation scale and
+  ``R_smooth`` for the Gaussian damping scale
+- ``ring`` and ``cylinder``: ``R`` and ``H``; optional line-of-sight components
+  ``nx``, ``ny``, and ``nz`` belong in ``other_args``
+
 Corr_2PCF
 ---------
 
