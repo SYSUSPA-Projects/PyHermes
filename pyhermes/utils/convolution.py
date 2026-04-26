@@ -38,8 +38,7 @@ def calculate_real_window_octant_array_numba(L, bandwidth, phi_fourier_power, wi
     return WindowArray
 
 
-def build_real_window_octant_array(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
-    """Build an octant-symmetric real-window lookup array from keyword arguments."""
+def _ordered_window_args(window_function_numba, kwargs):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     sig = inspect.signature(window_function_numba)
@@ -60,7 +59,108 @@ def build_real_window_octant_array(L, bandwidth, phi_fourier_power, window_funct
         kwargs[arg] if arg in kwargs else params[arg].default
         for arg in expected_args
     ]
+    return ordered_args
+
+
+def build_real_window_octant_array(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
+    """Build an octant-symmetric real-window lookup array from keyword arguments."""
+    ordered_args = _ordered_window_args(window_function_numba, kwargs)
     return calculate_real_window_octant_array_numba(
+        L, bandwidth, phi_fourier_power, window_function_numba, *ordered_args
+    )
+
+
+@njit(parallel=True)
+def calculate_real_window_rfft_kernel_numba(L, bandwidth, phi_fourier_power, window_function_numba, *args):
+    """Evaluate a real rFFT-space window kernel without assuming octant symmetry."""
+    w = np.zeros((L, L, L // 2 + 1))
+    inv_L = 1.0 / L
+    for x in prange(L):
+        x_mirror = L - x
+        for y in range(L):
+            y_mirror = L - y
+            for z in range(L // 2 + 1):
+                z_mirror = L - z
+                temp = 0.0
+                for ii in range(bandwidth):
+                    x_pos_idx = ii * L + x
+                    x_neg_idx = ii * L + x_mirror
+                    x_pos = x_pos_idx * inv_L
+                    x_neg = -x_neg_idx * inv_L
+                    for jj in range(bandwidth):
+                        y_pos_idx = jj * L + y
+                        y_neg_idx = jj * L + y_mirror
+                        y_pos = y_pos_idx * inv_L
+                        y_neg = -y_neg_idx * inv_L
+                        for kk in range(bandwidth):
+                            z_pos_idx = kk * L + z
+                            z_neg_idx = kk * L + z_mirror
+                            z_pos = z_pos_idx * inv_L
+                            z_neg = -z_neg_idx * inv_L
+
+                            phi_x_pos = phi_fourier_power[x_pos_idx]
+                            phi_x_neg = phi_fourier_power[x_neg_idx]
+                            phi_y_pos = phi_fourier_power[y_pos_idx]
+                            phi_y_neg = phi_fourier_power[y_neg_idx]
+                            phi_z_pos = phi_fourier_power[z_pos_idx]
+                            phi_z_neg = phi_fourier_power[z_neg_idx]
+
+                            temp += (
+                                phi_x_pos
+                                * phi_y_pos
+                                * phi_z_pos
+                                * window_function_numba(x_pos, y_pos, z_pos, *args)
+                            )
+                            temp += (
+                                phi_x_neg
+                                * phi_y_pos
+                                * phi_z_pos
+                                * window_function_numba(x_neg, y_pos, z_pos, *args)
+                            )
+                            temp += (
+                                phi_x_pos
+                                * phi_y_neg
+                                * phi_z_pos
+                                * window_function_numba(x_pos, y_neg, z_pos, *args)
+                            )
+                            temp += (
+                                phi_x_pos
+                                * phi_y_pos
+                                * phi_z_neg
+                                * window_function_numba(x_pos, y_pos, z_neg, *args)
+                            )
+                            temp += (
+                                phi_x_neg
+                                * phi_y_neg
+                                * phi_z_pos
+                                * window_function_numba(x_neg, y_neg, z_pos, *args)
+                            )
+                            temp += (
+                                phi_x_neg
+                                * phi_y_pos
+                                * phi_z_neg
+                                * window_function_numba(x_neg, y_pos, z_neg, *args)
+                            )
+                            temp += (
+                                phi_x_pos
+                                * phi_y_neg
+                                * phi_z_neg
+                                * window_function_numba(x_pos, y_neg, z_neg, *args)
+                            )
+                            temp += (
+                                phi_x_neg
+                                * phi_y_neg
+                                * phi_z_neg
+                                * window_function_numba(x_neg, y_neg, z_neg, *args)
+                            )
+                w[x, y, z] = temp
+    return w
+
+
+def build_real_window_rfft_kernel(L, bandwidth, phi_fourier_power, window_function_numba, **kwargs):
+    """Build a real rFFT-space kernel without assuming per-axis mirror symmetry."""
+    ordered_args = _ordered_window_args(window_function_numba, kwargs)
+    return calculate_real_window_rfft_kernel_numba(
         L, bandwidth, phi_fourier_power, window_function_numba, *ordered_args
     )
 

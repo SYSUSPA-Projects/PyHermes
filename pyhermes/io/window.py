@@ -5,7 +5,11 @@ import numpy as np
 
 from .convols import ConvolsData
 from pyhermes.utils import func_util
-from pyhermes.utils.convolution import build_real_window_octant_array, fold_octant_window_to_rfft_kernel
+from pyhermes.utils.convolution import (
+    build_real_window_octant_array,
+    build_real_window_rfft_kernel,
+    fold_octant_window_to_rfft_kernel,
+)
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_function
 from pyhermes.utils.window_functions import set_window_function
 
@@ -68,7 +72,33 @@ class WindowFunc(ConvolsData):
         self.window_args.update(self.other_args)
         self.w_kernel = None
 
+    def _requires_full_rfft_kernel(self):
+        if self.type not in ("ring", "cylinder"):
+            return False
+        nx = float(self.other_args.get("nx", 0.0))
+        ny = float(self.other_args.get("ny", 0.0))
+        nz = float(self.other_args.get("nz", 1.0))
+        los = np.array([nx, ny, nz], dtype=np.float64)
+        norm = np.linalg.norm(los)
+        if norm == 0.0:
+            return True
+        los = np.abs(los / norm)
+        return not (
+            np.isclose(los[0], 1.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 0.0)
+            or np.isclose(los[0], 0.0) and np.isclose(los[1], 1.0) and np.isclose(los[2], 0.0)
+            or np.isclose(los[0], 0.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 1.0)
+        )
+
     def _build_kernel(self):
+        if self._requires_full_rfft_kernel():
+            self.w_kernel = build_real_window_rfft_kernel(
+                L=self.L,
+                bandwidth=self.bandwidth,
+                phi_fourier_power=self.phi_fourier_power,
+                window_function_numba=self.func,
+                **self.window_args,
+            )
+            return
         _window_array = build_real_window_octant_array(
             L=self.L,
             bandwidth=self.bandwidth,
