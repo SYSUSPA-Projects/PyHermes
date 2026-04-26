@@ -8,6 +8,7 @@ from pyhermes.io import WindowFunc
 from pyhermes.io import ConvolsData
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
+from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.pipeline import TaskBase
 
 
@@ -46,29 +47,51 @@ def _los_to_vector(los):
     return tuple(float(v) for v in arr)
 
 
-def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None):
+def _pair_window_params_for_sample(s, mu, pair_window):
     if pair_window is None:
-        pair_window_params = {"type": "shell", "len_args": {"R": s}, "other_args": {}}
+        params = {"type": "shell", "len_args": {"R": s}, "other_args": {}}
     else:
         if not isinstance(pair_window, dict):
             raise TypeError(
                 f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
             )
-        pair_window_params = copy.deepcopy(pair_window)
-        pair_window_params.setdefault("len_args", {})
-        if pair_window_params.get("type") == "ring":
+        params = copy.deepcopy(pair_window)
+        params.setdefault("len_args", {})
+        if params.get("type") == "ring":
             if mu is None:
                 raise ValueError("Corr_2PCF mode='smu' ring pair_window requires a mu value.")
-            pair_window_params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
-            pair_window_params["len_args"]["H"] = s * mu
+            params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
+            params["len_args"]["H"] = s * mu
         else:
-            pair_window_params["len_args"]["R"] = s
+            params["len_args"]["R"] = s
+    return params
+
+
+def _pair_product_with_window(field1, field2, pair_window_obj, threads):
+    if field2 is None:
+        field2 = field1
+    if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
+        return _field_density(field1) * _field_density(field2)
+    conv = specialized_convolution_3d(field1.epsilon, pair_window_obj.as_array(), threads=threads)
+    return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
+
+
+def _field_density(field):
+    if isinstance(field, (float, int, np.floating)):
+        return float(field)
+    if isinstance(field, ConvolsData):
+        return 1.0 / field.V
+    raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
+
+
+def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None):
+    if convols_data2 is None:
+        convols_data2 = convols_data1
+    if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
+        return _field_density(convols_data1) * _field_density(convols_data2)
+    pair_window_params = _pair_window_params_for_sample(s, mu, pair_window)
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
-    if convols_data2:
-        res = convols_data1 @ pair_window_obj * convols_data2
-    else:
-        res = convols_data1 @ pair_window_obj * convols_data1
-    return res.as_array().mean()
+    return _pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
 
 
 class Corr_2PCF(TaskBase):
@@ -407,11 +430,7 @@ class Corr_2PCF(TaskBase):
         func_util.safe_exit(1)
 
     def _field_density(self, field):
-        if isinstance(field, (float, int, np.floating)):
-            return float(field)
-        if isinstance(field, ConvolsData):
-            return 1.0 / field.V
-        raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
+        return _field_density(field)
 
     def _resolve_window(self, leg_idx, base_convols, provided_window):
         if provided_window is None:
@@ -448,6 +467,66 @@ class Corr_2PCF(TaskBase):
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
         return compute_pair_product_at_smu(s, mu, field1, field2, pair_window=pair_window)
+
+    def _build_pair_window_for_sample(self, s, mu, reference_field):
+        pair_window_params = _pair_window_params_for_sample(s, mu, self.pair_window)
+        return WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
+
+    def _reference_pair_field(self, *fields):
+        for field in fields:
+            if isinstance(field, ConvolsData):
+                return field
+        return None
+
+    def _delta_field(self, data_field, random_field):
+        if isinstance(random_field, (float, int, np.floating)):
+            return data_field - self._field_density(random_field)
+        return data_field - random_field
+
+    def _compute_products_for_sample(
+        self,
+        s,
+        mu,
+        expanded_products,
+        field1,
+        field2,
+        random1,
+        random2,
+        delta1,
+        delta2,
+    ):
+        reference_field = self._reference_pair_field(field1, field2, random1, random2, delta1, delta2)
+        pair_window_obj = None
+
+        def product(a, b):
+            nonlocal pair_window_obj
+            if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
+                return self._field_density(a) * self._field_density(b)
+            if pair_window_obj is None:
+                pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
+            return _pair_product_with_window(a, b, pair_window_obj, self.threads)
+
+        values = {
+            "dd": None,
+            "dr": None,
+            "rd": None,
+            "delta_dd": None,
+            "rr": None,
+            "xi": None,
+        }
+        if "dd" in expanded_products:
+            values["dd"] = product(field1, field2)
+        if "dr" in expanded_products:
+            values["dr"] = product(field1, random2)
+        if "rd" in expanded_products:
+            values["rd"] = product(random1, field2)
+        if "delta_dd" in expanded_products:
+            values["delta_dd"] = product(delta1, delta2)
+        if "rr" in expanded_products:
+            values["rr"] = product(random1, random2)
+        if "xi" in expanded_products:
+            values["xi"] = values["delta_dd"] / values["rr"]
+        return values
 
 
     def prepare_input_fields(
@@ -607,6 +686,11 @@ class Corr_2PCF(TaskBase):
             _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
             _local_random1 = self._broadcast_field(self.random1) if needs_random else None
             _local_random2 = self._broadcast_field(self.random2) if needs_random else None
+            _local_delta1 = None
+            _local_delta2 = None
+            if "delta_dd" in expanded_products:
+                _local_delta1 = self._delta_field(_local_convols1, _local_random1)
+                _local_delta2 = self._delta_field(_local_convols2, _local_random2)
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -658,38 +742,23 @@ class Corr_2PCF(TaskBase):
                 mu_idx = int(task[1])
                 s_value = float(task[2])
                 mu_value = None if mu_idx < 0 else float(task[3])
-                dd_value = None
-                dr_value = None
-                rd_value = None
-                delta_dd_value = None
-                rr_value = None
-                xi_value = None
-                if 'dd' in expanded_products:
-                    dd_value = self.calc_pair_product(s_value, _local_convols1, _local_convols2, mu=mu_value, pair_window=self.pair_window)
-                if 'dr' in expanded_products:
-                    dr_value = self.calc_pair_product(s_value, _local_convols1, _local_random2, mu=mu_value, pair_window=self.pair_window)
-                if 'rd' in expanded_products:
-                    rd_value = self.calc_pair_product(s_value, _local_random1, _local_convols2, mu=mu_value, pair_window=self.pair_window)
-                if 'delta_dd' in expanded_products:
-                    if isinstance(_local_random1, (float, int, np.floating)):
-                        field1 = _local_convols1 - self._field_density(_local_random1)
-                    else:
-                        field1 = _local_convols1 - _local_random1
-                    if isinstance(_local_random2, (float, int, np.floating)):
-                        field2 = _local_convols2 - self._field_density(_local_random2)
-                    else:
-                        field2 = _local_convols2 - _local_random2
-                    delta_dd_value = self.calc_pair_product(s_value, field1, field2, mu=mu_value, pair_window=self.pair_window)
-                if 'rr' in expanded_products:
-                    rr_value = self.calc_pair_product(s_value, _local_random1, _local_random2, mu=mu_value, pair_window=self.pair_window)
-                if 'xi' in expanded_products:
-                    xi_value = delta_dd_value / rr_value
-                local_dd.append(dd_value)
-                local_dr.append(dr_value)
-                local_rd.append(rd_value)
-                local_delta_dd.append(delta_dd_value)
-                local_rr.append(rr_value)
-                local_xi.append(xi_value)
+                values = self._compute_products_for_sample(
+                    s_value,
+                    mu_value,
+                    expanded_products,
+                    _local_convols1,
+                    _local_convols2,
+                    _local_random1,
+                    _local_random2,
+                    _local_delta1,
+                    _local_delta2,
+                )
+                local_dd.append(values["dd"])
+                local_dr.append(values["dr"])
+                local_rd.append(values["rd"])
+                local_delta_dd.append(values["delta_dd"])
+                local_rr.append(values["rr"])
+                local_xi.append(values["xi"])
                 local_tasks.append((s_idx, mu_idx))
                 local_completed += 1
                 if local_completed % local_report_interval == 0:
