@@ -46,14 +46,20 @@ def build_real_window_octant_array(L, bandwidth, phi_fourier_power, window_funct
     params = sig.parameters
     expected_args = list(params.keys())[3:]
     provided_args = kwargs.keys()
-    missing_args = [arg for arg in expected_args if arg not in provided_args]
+    missing_args = [
+        arg for arg in expected_args
+        if arg not in provided_args and params[arg].default is inspect.Parameter.empty
+    ]
     if missing_args:
         source_code = inspect.getsource(window_function_numba)
         logger.error("\n" + source_code)
         logger.error(f"Missing keyword arguments: {missing_args}")
         logger.error("Please see the document for details")
         func_util.safe_exit(1)
-    ordered_args = [kwargs[arg] for arg in expected_args if arg in kwargs]
+    ordered_args = [
+        kwargs[arg] if arg in kwargs else params[arg].default
+        for arg in expected_args
+    ]
     return calculate_real_window_octant_array_numba(
         L, bandwidth, phi_fourier_power, window_function_numba, *ordered_args
     )

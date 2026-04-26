@@ -141,6 +141,38 @@ def window_function_cylinder_numba(ki, kj, kk, R, h):
     return sum_val * part1
 
 
+@njit
+def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
+    """
+    Thin ring-pair window in k-space with a configurable line of sight.
+
+    ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
+    should be passed via
+    ``other_args`` because it is dimensionless. ``R`` and ``H`` are lengths and
+    should be passed via ``len_args``.
+    """
+    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
+    if norm == 0.0:
+        return np.nan
+    nx = nx / norm
+    ny = ny / norm
+    nz = nz / norm
+
+    k_parallel = ki * nx + kj * ny + kk * nz
+    k2 = ki * ki + kj * kj + kk * kk
+    k_perp2 = k2 - k_parallel * k_parallel
+
+    if k_perp2 < 0.0:
+        k_perp2 = 0.0
+
+    k_perp = np.sqrt(k_perp2)
+
+    q_perp = 2.0 * np.pi * k_perp * R
+    q_parallel = 2.0 * np.pi * k_parallel * H
+
+    return jn_numba(0, q_perp) * np.cos(q_parallel)
+
+
 def set_window_function(w_type, verbose=True):
     w_type_dict = {
         "shell": window_function_shell_numba,
@@ -150,6 +182,7 @@ def set_window_function(w_type, verbose=True):
         "Tshell": window_function_Tshell_numba,
         "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
         "cylinder": window_function_cylinder_numba,
+        "ring": window_function_ring_numba,
     }
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
