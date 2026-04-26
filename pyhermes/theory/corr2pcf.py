@@ -83,11 +83,20 @@ class Corr_2PCF(TaskBase):
         self._fields_prepared = False
 
     def _sync_runtime_options(self):
+        self.mode = str(self.mode).strip().lower()
+        if self.mode not in ("s", "smu"):
+            raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
+        self.los_vector = _los_to_vector(self.los)
+        self._sync_sampling_attribute_overrides()
+        if self._pair_window_from_default and self.pair_window is None:
+            self.pair_window_params = self._default_pair_window()
         self.threads = max(1, int(self.threads))
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['mode'] = self.mode
         self.task_params['los'] = copy.deepcopy(self.los)
+        self.task_params['s'] = copy.deepcopy(self.s)
+        self.task_params['mu'] = copy.deepcopy(self.mu)
         self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
@@ -118,8 +127,10 @@ class Corr_2PCF(TaskBase):
         pair_window_params = self.task_params.get('pair_window', None)
         if pair_window_params and pair_window_params.get('type'):
             self.pair_window_params = copy.deepcopy(pair_window_params)
+            self._pair_window_from_default = False
         else:
             self.pair_window_params = self._default_pair_window()
+            self._pair_window_from_default = True
 
         self.s = copy.deepcopy(self.task_params['s'])
         self.mu = copy.deepcopy(self.task_params.get('mu', {"mu_min": 0.0, "mu_max": 1.0, "n_mu": 20}))
@@ -144,6 +155,18 @@ class Corr_2PCF(TaskBase):
                 "other_args": {"nx": nx, "ny": ny, "nz": nz},
             }
         return {"type": "shell", "len_args": {"R": None}, "other_args": {}}
+
+    def _sync_sampling_attribute_overrides(self):
+        if isinstance(self.s, dict):
+            for attr in ("s_min", "s_max", "n_s"):
+                value = getattr(self, attr, None)
+                if value is not None:
+                    self.s[attr] = value
+        if isinstance(self.mu, dict):
+            for attr in ("mu_min", "mu_max", "n_mu"):
+                value = getattr(self, attr, None)
+                if value is not None:
+                    self.mu[attr] = value
 
     def _normalize_products(self, products):
         if isinstance(products, str):
