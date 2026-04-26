@@ -793,7 +793,16 @@ class Corr_3PCF(TaskBase):
         random_weight1_arr = None if random_weight1 is None else np.asarray(random_weight1, dtype=np.float64)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         use_random_pos1 = self.center == "particle" and random_pos1_arr is not None
-        if needs_random and all(x in (None, "") for x in [random1, random2, random3]) and not use_random_pos1:
+        missing_random_inputs = (
+            needs_random
+            and all(x in (None, "") for x in [random1, random2, random3])
+            and not use_random_pos1
+        )
+        missing_random_inputs = self.comm.bcast(
+            missing_random_inputs if self.rank == 0 else None,
+            root=0,
+        )
+        if missing_random_inputs:
             self.logger.error(
                 "Random-related products were requested, but no random inputs were provided. "
                 "Please set shared 'random', leg-specific 'random1/2/3', or 'random_pos1' when appropriate."
