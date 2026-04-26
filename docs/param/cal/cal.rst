@@ -25,9 +25,10 @@ Counting
 Corr_2PCF
 ---------
 
-- ``r_min``: minimum separation
-- ``r_max``: maximum separation
-- ``n_r``: number of radial bins
+- ``s_min``: minimum separation
+- ``s_max``: maximum separation
+- ``n_s``: number of sampled separations
+- ``mode``: ``s`` for ``xi(s)`` or ``smu`` for ``xi(s, mu)``
 - ``window``, ``window1``, ``window2``: optional window definitions for custom
   smoothing behavior
 

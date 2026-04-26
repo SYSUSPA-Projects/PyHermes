@@ -35,16 +35,21 @@
 			"other_args": {}
 		},
 		"pair_window": {
-			"type": "shell",
-			"len_args": {
-				"R": null
-			},
+			"type": "",
+			"len_args": {},
 			"other_args": {}
 		},
-		"r": {
-			"r_min": 1.0,
-			"r_max": 150.0,
-			"n_r": 30
+		"mode": "s",
+		"los": "z",
+		"s": {
+			"s_min": 1.0,
+			"s_max": 150.0,
+			"n_s": 30
+		},
+		"mu": {
+			"mu_min": 0.0,
+			"mu_max": 1.0,
+			"n_mu": 20
 		},
 		"threads": 1,
 		"products": "xi",

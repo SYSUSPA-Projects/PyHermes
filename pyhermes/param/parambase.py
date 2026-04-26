@@ -158,6 +158,8 @@ class ParamBase(object):
     def _is_type_compatible(self, full_key, default_value, new_value):
         if isinstance(new_value, type(default_value)):
             return True
+        if isinstance(default_value, (int, float)) and isinstance(new_value, (int, float)):
+            return True
         # Some fields intentionally support either a single string or a list of strings.
         if full_key.endswith(".products"):
             default_ok = isinstance(default_value, (str, list, tuple))
@@ -168,13 +170,13 @@ class ParamBase(object):
         if full_key.endswith(".random"):
             return default_value is None and isinstance(new_value, str)
         # Angle sampling specs accept either dict configs or explicit arrays/lists.
-        if full_key.endswith(".theta") or full_key.endswith(".mu"):
+        if full_key.endswith(".theta") or full_key.endswith(".mu") or full_key.endswith(".s"):
             default_ok = isinstance(default_value, (dict, list, tuple))
             new_ok = isinstance(new_value, (dict, list, tuple))
             return default_ok and new_ok
-        if full_key.endswith(".r"):
-            default_ok = isinstance(default_value, (dict, list, tuple))
-            new_ok = isinstance(new_value, (dict, list, tuple))
+        if full_key.endswith(".los"):
+            default_ok = isinstance(default_value, (str, list, tuple))
+            new_ok = isinstance(new_value, (str, list, tuple))
             return default_ok and new_ok
         return False
     

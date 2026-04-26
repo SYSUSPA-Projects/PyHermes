@@ -95,13 +95,17 @@ Corr_2PCF
   optional leg-specific smoothing windows.
 - ``pair_window``:
   kernel template used in the pair-correlation measurement itself. By default,
-  this is a shell window with runtime ``R`` injection.
-- ``r_min`` and ``r_max``:
-  minimum and maximum pair separation.
-- ``n_r``:
-  number of sampled radii.
-- ``field_mode``:
-  either ``delta`` or ``raw``.
+  ``mode: s`` uses a shell window and ``mode: smu`` uses a ring window.
+- ``mode``:
+  ``s`` for isotropic ``xi(s)`` or ``smu`` for ``xi(s, mu)``.
+- ``los``:
+  line-of-sight direction for ``smu`` mode; use ``x``, ``y``, ``z``, or a
+  length-3 vector.
+- ``s``:
+  pair-separation sampling specification.
+- ``mu``:
+  angular sampling specification for ``smu`` mode. For the default ring window,
+  ``0 <= mu <= 1`` is sufficient.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:

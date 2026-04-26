@@ -14,7 +14,7 @@ from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.sampling import random_points_box
 from pyhermes.pipeline import TaskBase
 
-from .corr2pcf import compute_pair_product_at_radius
+from .corr2pcf import compute_pair_product_at_smu
 
 
 ### Product dependency metadata ###
@@ -652,7 +652,7 @@ class Corr_3PCF(TaskBase):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
-        return compute_pair_product_at_radius(radius, field1, field2)
+        return compute_pair_product_at_smu(radius, None, field1, field2)
 
     def _compute_rrr_value(
         self, mu, r23_value, center, pos_local, seed_base_rot, theta_index,

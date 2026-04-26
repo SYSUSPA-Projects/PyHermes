@@ -41,9 +41,11 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
    Corr_2PCF:
       convols_data_path: "./output/quijote_sfc.pkl"
       fout_path: "./output/quijote_2pcf.pkl"
-      r_min: 1.0
-      r_max: 150.0
-      n_r: 30
+      mode: "s"
+      s:
+         s_min: 1.0
+         s_max: 150.0
+         n_s: 30
 
    Corr_3PCF:
       convols_data_path: "./output/quijote_sfc.pkl"

@@ -47,7 +47,9 @@ class HermesData(object):
                         extra_str = '2PCF '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')
                         self._load_corr2pcf(f_in)
-                        self.logger.info(f'r: Num = {self.r.shape[0]}, Min = {self.r.min():.4g}, Max = {self.r.max():.4g}')
+                        self.logger.info(f's: Num = {self.s.shape[0]}, Min = {self.s.min():.4g}, Max = {self.s.max():.4g}')
+                        if getattr(self, "mu", None) is not None:
+                            self.logger.info(f'mu: Num = {self.mu.shape[0]}, Min = {self.mu.min():.4g}, Max = {self.mu.max():.4g}')
                         products = [key for key in ['dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi'] if getattr(self, key) is not None]
                         self.logger.info(f'Products loaded: {products}')
                     elif read_3pcf:
