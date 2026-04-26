@@ -125,7 +125,7 @@ def window_function_cylinder_numba(ki, kj, kk, R, h):
 
     Let k_perp = sqrt(ki^2 + kj^2), q_perp = 2*pi*k_perp*R,
     and q_z = 2*pi*kk*h/2.
-    W(k; R, h) = pi*h*R^2 * (2*J1(q_perp)/q_perp) * (sin(q_z)/q_z),
+    W(k; R, h) = (2*J1(q_perp)/q_perp) * (sin(q_z)/q_z),
     with the corresponding factors set to 1 when q_perp = 0 or q_z = 0.
     """
     k1 = np.sqrt(ki**2 + kj**2)
@@ -138,7 +138,7 @@ def window_function_cylinder_numba(ki, kj, kk, R, h):
         sum_val = 1
     else:
         sum_val = 2 * jn_numba(1, 2 * np.pi * k1 * R) / (2 * np.pi * k1 * R)
-    return (sum_val * part1) * np.pi * h * R**2
+    return sum_val * part1
 
 
 def set_window_function(w_type, verbose=True):
