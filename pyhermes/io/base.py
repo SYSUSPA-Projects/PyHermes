@@ -61,7 +61,7 @@ class HermesData(object):
                             f"mu: Num = {self.mu.shape[0]}, Min = {self.mu.min():.4g}, Max = {self.mu.max():.4g}"
                         )
                         products = [
-                            key for key in ['ddd', 'rrr', 'd_delta_dd', 'r_delta_dd', 'delta_ddd', 'xi12', 'xi13', 'xi23', 'zeta', 'Q']
+                            key for key in ['ddd', 'rrr', 'd_delta_dd', 'r_delta_dd', 'delta_ddd', 'xi12', 'xi13', 'xi23', 'zeta', 'zeta_H', 'Q']
                             if getattr(self, key) is not None
                         ]
                         self.logger.info(f'Products loaded: {products}')

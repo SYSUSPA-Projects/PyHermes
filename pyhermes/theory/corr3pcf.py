@@ -23,16 +23,18 @@ from .corr2pcf import compute_pair_product_at_radius
 # to consume an expanded execution plan instead of duplicating dependency checks.
 PRODUCT_RULES = {
     "box_random": {
-        "allowed": {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"},
+        "allowed": {"ddd", "rrr", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "zeta_H", "Q"},
         "deps": {
-            "Q": ["zeta", "xi12", "xi13", "xi23"],
+            "Q": ["zeta", "zeta_H"],
+            "zeta_H": ["xi12", "xi13", "xi23"],
             "zeta": ["delta_ddd", "rrr"],
         },
     },
     "particle": {
-        "allowed": {"ddd", "rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "Q"},
+        "allowed": {"ddd", "rrr", "d_delta_dd", "r_delta_dd", "delta_ddd", "xi12", "xi13", "xi23", "zeta", "zeta_H", "Q"},
         "deps": {
-            "Q": ["zeta", "xi12", "xi13", "xi23"],
+            "Q": ["zeta", "zeta_H"],
+            "zeta_H": ["xi12", "xi13", "xi23"],
             "zeta": ["delta_ddd", "rrr"],
             "delta_ddd": ["d_delta_dd", "r_delta_dd"],
         },
@@ -50,6 +52,7 @@ PRODUCT_INPUT_FLAGS = {
     "xi13": (True, True),
     "xi23": (True, True),
     "zeta": (True, True),
+    "zeta_H": (True, True),
     "Q": (True, True),
 }
 
@@ -206,7 +209,12 @@ class Corr_3PCF(TaskBase):
             if not isinstance(item, str):
                 raise TypeError("Each product name must be a string.")
             raw_name = item.strip()
-            name = "Q" if raw_name.upper() == "Q" else raw_name.lower()
+            if raw_name.upper() == "Q":
+                name = "Q"
+            elif raw_name.lower() == "zeta_h":
+                name = "zeta_H"
+            else:
+                name = raw_name.lower()
             if name not in allowed:
                 raise ValueError(f"Unsupported product '{item}' for center='{self.center}'. Allowed values are {sorted(allowed)}.")
             if name not in normalized:
@@ -691,10 +699,10 @@ class Corr_3PCF(TaskBase):
         leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
         random1_base = next((base for i, base, _, _ in random_legs if i == 1), None)
 
-        if particle_pos1_arr is not None and (expanded_products & {"xi12", "xi13", "Q"}) and leg1_base is None:
+        if particle_pos1_arr is not None and (expanded_products & {"xi12", "xi13", "zeta_H", "Q"}) and leg1_base is None:
             self.logger.error(
                 "particle_pos1 can replace convols_data1 only for particle-center products that do not require "
-                "xi12/xi13/Q. Please provide convols_data1 as well if those products are requested."
+                "xi12/xi13/zeta_H/Q. Please provide convols_data1 as well if those products are requested."
             )
             func_util.safe_exit(1)
         if particle_pos1_arr is not None and leg1_base is not None:
@@ -792,7 +800,7 @@ class Corr_3PCF(TaskBase):
             )
             func_util.safe_exit(1)
         requires_signal_leg1 = needs_data and (
-            not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "Q"})
+            not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "zeta_H", "Q"})
         )
 
         if self.rank == 0:
@@ -1489,12 +1497,15 @@ class Corr_3PCF(TaskBase):
                 if "zeta" in expanded_products:
                     self.corr3pcf_data.zeta = self.corr3pcf_data.delta_ddd / self.corr3pcf_data.rrr
                     self.logger.info("Computed zeta from delta_ddd and rrr.")
-                if "Q" in expanded_products:
+                if "zeta_H" in expanded_products:
                     xi12 = self.corr3pcf_data.xi12
                     xi13 = self.corr3pcf_data.xi13
                     xi23 = self.corr3pcf_data.xi23
-                    self.corr3pcf_data.Q = self.corr3pcf_data.zeta / (xi12 * xi13 + xi12 * xi23 + xi13 * xi23)
-                    self.logger.info("Computed Q from zeta and xi12/xi13/xi23.")
+                    self.corr3pcf_data.zeta_H = xi12 * xi13 + xi12 * xi23 + xi13 * xi23
+                    self.logger.info("Computed zeta_H from xi12/xi13/xi23.")
+                if "Q" in expanded_products:
+                    self.corr3pcf_data.Q = self.corr3pcf_data.zeta / self.corr3pcf_data.zeta_H
+                    self.logger.info("Computed Q from zeta and zeta_H.")
 
                 t_end = time.perf_counter()
                 self.logger.info(f"The time for 3PCF: {t_end - t_start:.4f} sec")

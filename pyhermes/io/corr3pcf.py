@@ -22,6 +22,7 @@ class Corr3PCFData(HermesData):
         self.xi13                = None
         self.xi23                = None
         self.zeta                = None
+        self.zeta_H              = None
         self.Q                   = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
@@ -69,6 +70,7 @@ class Corr3PCFData(HermesData):
             self.d_delta_dd = dataset.get('d_delta_dd', dataset.get('pdelta_ddd'))
             self.r_delta_dd = dataset.get('r_delta_dd')
             self.delta_ddd = dataset.get('delta_ddd')
+            self.zeta_H = dataset.get('zeta_H')
             # Assign the dictionary from the file to self.corr3pcf_info
             for i in range(1, 4):
                 _convols_info = dataset.get(f'convols_info{i}')
@@ -110,6 +112,7 @@ class Corr3PCFData(HermesData):
             'xi13': self.xi13,
             'xi23': self.xi23,
             'zeta': self.zeta,
+            'zeta_H': self.zeta_H,
             'Q': self.Q  # Include the actual data
         }
         # Save the dataset to the specified file
