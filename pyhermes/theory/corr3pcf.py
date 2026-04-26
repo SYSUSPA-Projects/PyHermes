@@ -1162,6 +1162,52 @@ class Corr_3PCF(TaskBase):
         self.meta_convols = None
         self._particle_delta_fields = None
 
+    def _product_center_summary(
+        self,
+        product,
+        npos_total,
+        npos_local,
+        npos_total_random1,
+        npos_local_random1,
+        weight_sum_total,
+        weight_sum_total_random1,
+    ):
+        """Describe the center sample used by one explicit theta-loop product."""
+        if self.center == "box_random":
+            return {
+                "source": "box_random",
+                "total": npos_total,
+                "local": npos_local,
+                "weight_sum": None,
+            }
+        if product in {"rrr", "r_delta_dd"}:
+            return {
+                "source": "random1",
+                "total": npos_total_random1,
+                "local": npos_local_random1,
+                "weight_sum": weight_sum_total_random1,
+            }
+        return {
+            "source": "particle1",
+            "total": npos_total,
+            "local": npos_local,
+            "weight_sum": weight_sum_total,
+        }
+
+    def _product_field_summary(self, product):
+        """Describe the second and third fields sampled by one product."""
+        if self.center == "box_random":
+            if product == "delta_ddd":
+                return "delta2=D2-R2", "delta3=D3-R3"
+            if product == "rrr":
+                return "random2=R2", "random3=R3"
+            return "data2=D2", "data3=D3"
+        if product in {"d_delta_dd", "r_delta_dd"}:
+            return "delta2=D2-R2", "delta3=D3-R3"
+        if product == "rrr":
+            return "random2=R2", "random3=R3"
+        return "data2=D2", "data3=D3"
+
     ### Full estimator execution ###
 
     def run(self, save_result=True, overwrite=False):
@@ -1280,9 +1326,13 @@ class Corr_3PCF(TaskBase):
                     if weight_sum_total_random1 <= 0.0:
                         self.logger.error("Random particle-center weights must have a positive global sum.")
                         func_util.safe_exit(1)
+                    npos_local_random1 = pos_local_random1.shape[0]
+                    npos_total_random1 = comm.allreduce(npos_local_random1, op=MPI.SUM)
                 else:
                     weight_sum_local_random1 = weight_sum_local
                     weight_sum_total_random1 = weight_sum_total
+                    npos_local_random1 = npos_local
+                    npos_total_random1 = npos_total
             else:
                 weight_local = None
                 weight_sum_local = None
@@ -1290,11 +1340,12 @@ class Corr_3PCF(TaskBase):
                 weight_local_random1 = None
                 weight_sum_local_random1 = None
                 weight_sum_total_random1 = None
+                npos_local_random1 = None
+                npos_total_random1 = None
             seed_base_rot = self.base_seed + 1
 
             if rank == 0:
                 self.logger.info("Start to calculate 3PCF (pos-parallel) ...")
-                self.logger.info(f"total_centers={npos_total}, each rank has n_local={npos_local} centers")
                 t_start = time.perf_counter()
                 self.logger.info(f"Pre-3PCF setup time: {t_start - t0:.4f} sec")
                 self.logger.info(f"Main 3PCF loop products: {loop_products}")
@@ -1303,7 +1354,25 @@ class Corr_3PCF(TaskBase):
             for product in loop_products:
                 if rank == 0:
                     t_product_start = time.perf_counter()
-                    self.logger.info(f"Computing product '{product}' ...")
+                    center_summary = self._product_center_summary(
+                        product,
+                        npos_total,
+                        npos_local,
+                        npos_total_random1,
+                        npos_local_random1,
+                        weight_sum_total,
+                        weight_sum_total_random1,
+                    )
+                    weight_text = ""
+                    if center_summary["weight_sum"] is not None:
+                        weight_text = f" | weight_sum={center_summary['weight_sum']:.6e}"
+                    field2_text, field3_text = self._product_field_summary(product)
+                    self.logger.info(
+                        f"Computing product '{product}' | centers={center_summary['source']} | "
+                        f"field2={field2_text} | field3={field3_text} | "
+                        f"total_centers={center_summary['total']} | local_centers_rank0={center_summary['local']}"
+                        f"{weight_text}"
+                    )
 
                 local_data, local_random = self._broadcast_product_runtime(product)
                 self.meta_convols = self._find_geometry_reference(
