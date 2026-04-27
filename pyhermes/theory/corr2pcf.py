@@ -616,6 +616,7 @@ class Corr_2PCF(TaskBase):
             if base_field == "uniform":
                 signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
                 rho = 1.0 / signal_ref.V
+                self._record_memory_convols_info(leg_idx, signal_ref)
                 return rho, f"{source_desc} | rho={rho:.5e}"
         else:
             raise ValueError(f"Unsupported memory leg kind: {kind}")
@@ -626,7 +627,12 @@ class Corr_2PCF(TaskBase):
         else:
             final_field = base_field.copy()
             final_field.format_convols_params()
+        self._record_memory_convols_info(leg_idx, final_field)
         return final_field, f"{source_desc} | window={window_desc}"
+
+    def _record_memory_convols_info(self, leg_idx, field):
+        if self.rank == 0 and isinstance(field, ConvolsData):
+            setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(field.convols_info))
 
     def _prepare_memory_product_fields(self, product):
         base_convols_cache = {}
