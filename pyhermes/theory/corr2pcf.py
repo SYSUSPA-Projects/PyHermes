@@ -385,6 +385,24 @@ class Corr_2PCF(TaskBase):
             return f"pair_window dict | {func_util.describe_window_action(pair_window)} | runtime separation follows current s"
         return "pair_window dict | default window with runtime separation s"
 
+    def _compact_window_desc(self, win):
+        if win is None:
+            return "window=none"
+        if isinstance(win, dict):
+            args = win.get("len_args", {})
+            if args:
+                return f"window={win.get('type', 'custom')} {args}"
+            return f"window={win.get('type', 'custom')}"
+        if isinstance(win, WindowFunc):
+            args = getattr(win, "len_args", {})
+            if args:
+                return f"window={getattr(win, 'type', 'custom')} {args}"
+            return f"window={getattr(win, 'type', 'custom')}"
+        return "window=custom"
+
+    def _memory_leg_desc(self, source_desc, leg_idx):
+        return f"{source_desc}, {self._compact_window_desc(getattr(self, f'window{leg_idx}'))}"
+
     def _describe_random_input(self, value):
         if value == "uniform":
             return "uniform random density"
@@ -617,7 +635,7 @@ class Corr_2PCF(TaskBase):
                 signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
                 rho = 1.0 / signal_ref.V
                 self._record_memory_convols_info(leg_idx, signal_ref)
-                return rho, f"{source_desc} | rho={rho:.5e}"
+                return rho, f"{source_desc}, rho={rho:.5e}"
         else:
             raise ValueError(f"Unsupported memory leg kind: {kind}")
 
@@ -628,7 +646,7 @@ class Corr_2PCF(TaskBase):
             final_field = base_field.copy()
             final_field.format_convols_params()
         self._record_memory_convols_info(leg_idx, final_field)
-        return final_field, f"{source_desc} | window={window_desc}"
+        return final_field, self._memory_leg_desc(source_desc, leg_idx)
 
     def _record_memory_convols_info(self, leg_idx, field):
         if self.rank == 0 and isinstance(field, ConvolsData):
@@ -669,7 +687,11 @@ class Corr_2PCF(TaskBase):
                 logger=self.logger,
                 label=f"Corr_2PCF memory product '{product}' input fields",
             )
-        self.logger.info(f"Memory product {product} fields ready | leg1={desc1} | leg2={desc2}")
+        self.logger.info(
+            f"Memory product {product} fields ready:\n"
+            f"  leg1: {desc1}\n"
+            f"  leg2: {desc2}"
+        )
         return field1, field2
 
     def _compute_single_product_for_sample(self, s, mu, field1, field2):
