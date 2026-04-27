@@ -53,6 +53,9 @@
 		},
 		"threads": 1,
 		"products": "xi",
+		"memory_strategy": "speed",
+		"pair_window_cache": false,
+		"pair_window_cache_dir": "",
 		"fout_path": ""
 	},
 	"Corr_3PCF": {

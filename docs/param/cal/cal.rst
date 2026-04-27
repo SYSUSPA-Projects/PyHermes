@@ -44,6 +44,12 @@ Corr_2PCF
 - ``mode``: ``s`` for ``xi(s)`` or ``smu`` for ``xi(s, mu)``
 - ``window``, ``window1``, ``window2``: optional window definitions for custom
   smoothing behavior
+- ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
+  windows across products; ``memory`` computes product groups sequentially to
+  reduce peak memory
+- ``pair_window_cache``: optional disk cache for pair-window kernels, most
+  useful with ``memory_strategy: memory``
+- ``pair_window_cache_dir``: directory for cached pair-window kernels
 
 Corr_3PCF
 ---------

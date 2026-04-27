@@ -1,6 +1,9 @@
 import time
 import pickle
 import copy
+import hashlib
+import json
+import os
 
 import numpy as np
 
@@ -45,6 +48,12 @@ def _los_to_vector(los):
     if np.linalg.norm(arr) == 0.0:
         raise ValueError("Corr_2PCF 'los' vector must be non-zero.")
     return tuple(float(v) for v in arr)
+
+
+def _parse_bool(value):
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
 
 
 def _pair_window_params_for_sample(s, mu, pair_window):
@@ -114,12 +123,19 @@ class Corr_2PCF(TaskBase):
         if self._pair_window_from_default and self.pair_window is None:
             self.pair_window_params = self._default_pair_window()
         self.threads = max(1, int(self.threads))
+        self.memory_strategy = str(self.memory_strategy).strip().lower()
+        if self.memory_strategy not in ("speed", "memory"):
+            raise ValueError("Corr_2PCF memory_strategy must be either 'speed' or 'memory'.")
+        self.pair_window_cache = _parse_bool(self.pair_window_cache)
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['mode'] = self.mode
         self.task_params['los'] = copy.deepcopy(self.los)
         self.task_params['s'] = copy.deepcopy(self.s)
         self.task_params['mu'] = copy.deepcopy(self.mu)
+        self.task_params['memory_strategy'] = self.memory_strategy
+        self.task_params['pair_window_cache'] = self.pair_window_cache
+        self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
         self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
@@ -167,6 +183,9 @@ class Corr_2PCF(TaskBase):
         self.n_mu = None
         self.threads = int(self.task_params['threads'])
         self.products = self._normalize_products(self.task_params.get('products', 'xi'))
+        self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
+        self.pair_window_cache = _parse_bool(self.task_params.get("pair_window_cache", False))
+        self.pair_window_cache_dir = self.task_params.get("pair_window_cache_dir", "")
         self.fout_path = self.task_params['fout_path']
 
     def _default_pair_window(self):
@@ -355,6 +374,9 @@ class Corr_2PCF(TaskBase):
             params['n_mu'] = self.n_mu
         params['threads'] = self.threads
         params['products'] = copy.deepcopy(self.products)
+        params['memory_strategy'] = self.memory_strategy
+        params['pair_window_cache'] = self.pair_window_cache
+        params['pair_window_cache_dir'] = self.pair_window_cache_dir
         params['fout_path'] = self.fout_path
         return params
 
@@ -470,7 +492,34 @@ class Corr_2PCF(TaskBase):
 
     def _build_pair_window_for_sample(self, s, mu, reference_field):
         pair_window_params = _pair_window_params_for_sample(s, mu, self.pair_window)
-        return WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
+        pair_window_obj = WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
+        if self.pair_window_cache:
+            cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
+            if os.path.exists(cache_path):
+                pair_window_obj.w_kernel = np.load(cache_path)
+            else:
+                pair_window_obj.as_array()
+                os.makedirs(os.path.dirname(cache_path), exist_ok=True)
+                np.save(cache_path, pair_window_obj.w_kernel)
+        return pair_window_obj
+
+    def _pair_window_cache_path(self, pair_window_params, reference_field):
+        cache_dir = self.pair_window_cache_dir
+        if not cache_dir:
+            if self.fout_path:
+                cache_dir = os.path.join(os.path.dirname(self.fout_path) or ".", "pair_window_cache")
+            else:
+                cache_dir = ".pyhermes_pair_window_cache"
+        cache_key = {
+            "pair_window": pair_window_params,
+            "convols_info": {
+                key: reference_field.convols_info.get(key)
+                for key in ConvolsData._REQUIRED_ARGV
+            },
+            "bandwidth": getattr(reference_field, "bandwidth", 1),
+        }
+        digest = hashlib.sha1(json.dumps(cache_key, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+        return os.path.join(cache_dir, f"{digest}.npy")
 
     def _reference_pair_field(self, *fields):
         for field in fields:
@@ -527,6 +576,200 @@ class Corr_2PCF(TaskBase):
         if "xi" in expanded_products:
             values["xi"] = values["delta_dd"] / values["rr"]
         return values
+
+    def _make_sampling_tasks(self):
+        if self.mode == "smu":
+            tasks = np.array(
+                [(i, j, self.s_arr[i], self.mu_arr[j]) for i in range(self.n_s) for j in range(self.n_mu)],
+                dtype=np.float64,
+            )
+            result_shape = (self.n_s, self.n_mu)
+        else:
+            tasks = np.array([(i, -1, self.s_arr[i], np.nan) for i in range(self.n_s)], dtype=np.float64)
+            result_shape = (self.n_s,)
+        return tasks, result_shape
+
+    def _build_result_from_gathered(self, gathered_tasks, gathered_values, result_shape):
+        flat_tasks = [item for sublist in gathered_tasks for item in sublist]
+        flat_values = [item for sublist in gathered_values for item in sublist]
+        result = np.empty(result_shape, dtype=np.float64)
+        for (s_idx, mu_idx), value in zip(flat_tasks, flat_values):
+            if self.mode == "smu":
+                result[s_idx, mu_idx] = value
+            else:
+                result[s_idx] = value
+        return result
+
+    def _prepare_memory_leg_field(self, kind, leg_idx, base_convols_cache):
+        if kind == "data":
+            base_field, source_desc = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+        elif kind == "random":
+            base_field, source_desc = self._resolve_random_base(
+                leg_idx, getattr(self, f"random{leg_idx}"), base_convols_cache
+            )
+            if base_field is None:
+                self.logger.error(
+                    f"Missing input for random leg {leg_idx}. Products {self.products} require "
+                    f"'random{leg_idx}' or shared 'random'."
+                )
+                func_util.safe_exit(1)
+            if base_field == "uniform":
+                signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+                rho = 1.0 / signal_ref.V
+                return rho, f"{source_desc} | rho={rho:.5e}"
+        else:
+            raise ValueError(f"Unsupported memory leg kind: {kind}")
+
+        window_obj, window_desc = self._resolve_window(leg_idx, base_field, getattr(self, f"window{leg_idx}"))
+        if window_obj is not None:
+            final_field = base_field @ window_obj
+        else:
+            final_field = base_field.copy()
+            final_field.format_convols_params()
+        return final_field, f"{source_desc} | window={window_desc}"
+
+    def _prepare_memory_product_fields(self, product):
+        base_convols_cache = {}
+        if product == "dd":
+            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
+            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
+        elif product == "dr":
+            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
+            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+        elif product == "rd":
+            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
+            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
+        elif product == "rr":
+            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
+            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+        elif product == "delta_dd":
+            data1, data_desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
+            random1, random_desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
+            data2, data_desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
+            random2, random_desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+            field1 = self._delta_field(data1, random1)
+            field2 = self._delta_field(data2, random2)
+            desc1 = f"delta1=({data_desc1}) - ({random_desc1})"
+            desc2 = f"delta2=({data_desc2}) - ({random_desc2})"
+            del data1, random1, data2, random2
+        else:
+            raise ValueError(f"Unsupported memory product: {product}")
+
+        compat_fields = [field for field in (field1, field2) if isinstance(field, ConvolsData)]
+        if compat_fields:
+            func_util.validate_convols_compatibility(
+                compat_fields,
+                ConvolsData._REQUIRED_ARGV,
+                logger=self.logger,
+                label=f"Corr_2PCF memory product '{product}' input fields",
+            )
+        self.logger.info(f"Memory product {product} fields ready | leg1={desc1} | leg2={desc2}")
+        return field1, field2
+
+    def _compute_single_product_for_sample(self, s, mu, field1, field2):
+        if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
+            return self._field_density(field1) * self._field_density(field2)
+        reference_field = self._reference_pair_field(field1, field2)
+        pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
+        return _pair_product_with_window(field1, field2, pair_window_obj, self.threads)
+
+    def _run_memory_product(self, product, tasks, result_shape):
+        comm = self.comm
+        rank = self.rank
+        size = comm.Get_size()
+        if rank == 0:
+            time_product_start = time.perf_counter()
+            root_field1, root_field2 = self._prepare_memory_product_fields(product)
+            task_sub_arrs = np.array_split(tasks, size)
+        else:
+            root_field1 = None
+            root_field2 = None
+            task_sub_arrs = None
+
+        field1 = self._broadcast_field(root_field1)
+        field2 = self._broadcast_field(root_field2)
+        task_sub_arr = comm.scatter(task_sub_arrs, root=0)
+        local_values = []
+        local_tasks = []
+        for task in task_sub_arr:
+            s_idx = int(task[0])
+            mu_idx = int(task[1])
+            s_value = float(task[2])
+            mu_value = None if mu_idx < 0 else float(task[3])
+            local_values.append(self._compute_single_product_for_sample(s_value, mu_value, field1, field2))
+            local_tasks.append((s_idx, mu_idx))
+
+        gathered_values = comm.gather(local_values, root=0)
+        gathered_tasks = comm.gather(local_tasks, root=0)
+        if rank == 0:
+            result = self._build_result_from_gathered(gathered_tasks, gathered_values, result_shape)
+            self.logger.info(f"Memory product {product} time: {time.perf_counter() - time_product_start:.4f} sec")
+            return result
+        return None
+
+    def _run_memory(self, save_result=True, overwrite=False):
+        try:
+            comm = self.comm
+            rank = self.rank
+            if rank == 0:
+                time_run_1 = time.perf_counter()
+            self.corr2pcf_data = Corr2PCFData(threads=self.threads)
+            self._sync_runtime_options()
+            self._resolve_sampling()
+            self.products = self._normalize_products(self.products)
+            self.pair_window = self._normalize_pair_window(self.pair_window)
+            expanded_products = self._expanded_products()
+            products_to_compute = [product for product in expanded_products if product != "xi"]
+
+            if rank == 0:
+                self.logger.info("Start to calculate 2PCF in memory strategy ...")
+                self.logger.info(self._describe_sampling())
+                self.logger.info(
+                    f"requested_products={self.products}, expanded_products={expanded_products}, "
+                    f"pair_window_cache={self.pair_window_cache}"
+                )
+                self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
+                tasks, result_shape = self._make_sampling_tasks()
+            else:
+                tasks = None
+                result_shape = None
+
+            tasks = comm.bcast(tasks, root=0)
+            result_shape = comm.bcast(result_shape, root=0)
+            results = {}
+            for product in products_to_compute:
+                results[product] = self._run_memory_product(product, tasks, result_shape)
+                comm.Barrier()
+
+            if rank == 0:
+                self.corr2pcf_data.mode = self.mode
+                self.corr2pcf_data.s = self.s_arr.copy()
+                self.corr2pcf_data.mu = None if self.mode == "s" else self.mu_arr.copy()
+                self.corr2pcf_data.dd = results.get("dd") if "dd" in expanded_products else None
+                self.corr2pcf_data.dr = results.get("dr") if "dr" in expanded_products else None
+                self.corr2pcf_data.rd = results.get("rd") if "rd" in expanded_products else None
+                self.corr2pcf_data.delta_dd = results.get("delta_dd") if "delta_dd" in expanded_products else None
+                self.corr2pcf_data.rr = results.get("rr") if "rr" in expanded_products else None
+                if "xi" in expanded_products:
+                    self.corr2pcf_data.xi = self.corr2pcf_data.delta_dd / self.corr2pcf_data.rr
+                else:
+                    self.corr2pcf_data.xi = None
+
+                self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
+                self.corr2pcf_data.task_params = self._current_task_params_snapshot()
+                if save_result:
+                    if self.fout_path:
+                        self.corr2pcf_data.saveflag = True
+                        self.corr2pcf_data.save_corr2pcf(self.fout_path, overwrite=overwrite)
+                    else:
+                        self.logger.warning("No output path provided. The 2PCF result will not be saved.")
+                time_run_2 = time.perf_counter()
+                print("")
+                self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
+        except Exception as e:
+            self.logger.error(f"Error in process {self.rank}: {str(e)}")
+            func_util.safe_exit(1)
+        return self.corr2pcf_data
 
 
     def prepare_input_fields(
@@ -672,6 +915,14 @@ class Corr_2PCF(TaskBase):
         return local_value
 
     def run(self, save_result=True, overwrite=False):
+        self._sync_runtime_options()
+        if self.memory_strategy == "memory":
+            if self._fields_prepared and self.rank == 0:
+                self.logger.warning(
+                    "memory_strategy='memory' is most effective when run() prepares fields itself. "
+                    "Calling prepare_input_fields() beforehand may keep extra fields resident."
+                )
+            return self._run_memory(save_result=save_result, overwrite=overwrite)
         try:
             comm = self.comm
             rank = self.rank

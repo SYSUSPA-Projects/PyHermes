@@ -108,6 +108,17 @@ Corr_2PCF
   ``0 <= mu <= 1`` is sufficient.
 - ``threads``:
   CPU threads per MPI rank.
+- ``memory_strategy``:
+  ``speed`` keeps all required fields resident and reuses each pair window
+  across products at a sampling point. ``memory`` computes product groups in
+  sequence to reduce peak memory, at the cost of rebuilding pair windows.
+- ``pair_window_cache``:
+  optional disk cache for pair-window kernels, useful with
+  ``memory_strategy: memory`` when repeated product groups would otherwise
+  rebuild the same kernels. Disabled by default.
+- ``pair_window_cache_dir``:
+  directory used when ``pair_window_cache`` is enabled. If empty, PyHermes
+  derives a cache directory from ``fout_path``.
 - ``fout_path``:
   output path for the 2PCF result.
 
