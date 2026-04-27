@@ -37,7 +37,8 @@
 		"pair_window": {
 			"type": "",
 			"len_args": {},
-			"other_args": {}
+			"other_args": {},
+			"mapping": ""
 		},
 		"mode": "s",
 		"los": "z",

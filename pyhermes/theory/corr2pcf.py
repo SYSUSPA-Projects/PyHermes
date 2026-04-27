@@ -56,24 +56,32 @@ def _parse_bool(value):
     return bool(value)
 
 
-def _pair_window_params_for_sample(s, mu, pair_window):
-    if pair_window is None:
-        params = {"type": "shell", "len_args": {"R": s}, "other_args": {}}
-    else:
-        if not isinstance(pair_window, dict):
-            raise TypeError(
-                f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
-            )
-        params = copy.deepcopy(pair_window)
-        params.setdefault("len_args", {})
-        if params.get("type") == "ring":
-            if mu is None:
-                raise ValueError("Corr_2PCF mode='smu' ring pair_window requires a mu value.")
-            params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
-            params["len_args"]["H"] = s * mu
-        else:
-            params["len_args"]["R"] = s
+def _mapping_s_to_R(s, mu, pair_window):
+    params = copy.deepcopy(pair_window)
+    params.setdefault("len_args", {})
+    params["len_args"]["R"] = s
     return params
+
+
+def _mapping_smu_to_RH(s, mu, pair_window):
+    if mu is None:
+        raise ValueError("Corr_2PCF mapping='smu_to_RH' requires a mu value.")
+    params = copy.deepcopy(pair_window)
+    params.setdefault("len_args", {})
+    params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
+    params["len_args"]["H"] = s * mu
+    return params
+
+
+PAIR_WINDOW_MAPPING_MODES = {
+    "s_to_R": "s",
+    "smu_to_RH": "smu",
+}
+
+PAIR_WINDOW_MAPPINGS = {
+    "s_to_R": _mapping_s_to_R,
+    "smu_to_RH": _mapping_smu_to_RH,
+}
 
 
 def _pair_product_with_window(field1, field2, pair_window_obj, threads):
@@ -98,7 +106,29 @@ def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_w
         convols_data2 = convols_data1
     if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
         return _field_density(convols_data1) * _field_density(convols_data2)
-    pair_window_params = _pair_window_params_for_sample(s, mu, pair_window)
+    if pair_window is None:
+        pair_window = {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
+    mapping = pair_window.get("mapping")
+    if mapping is None:
+        mapping = "smu_to_RH" if pair_window.get("type") in ("ring", "cylinder") and mu is not None else "s_to_R"
+    if isinstance(mapping, str):
+        if mapping not in PAIR_WINDOW_MAPPINGS:
+            raise ValueError(
+                f"Unsupported pair_window mapping '{mapping}'. "
+                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPINGS)}."
+            )
+        mapper = PAIR_WINDOW_MAPPINGS[mapping]
+    elif callable(mapping):
+        mapper = mapping
+    else:
+        raise TypeError("pair_window mapping must be a string or callable.")
+    pair_window_params = mapper(s, mu, pair_window)
+    if not isinstance(pair_window_params, dict):
+        raise TypeError("pair_window mapping must return a pair_window dictionary.")
+    pair_window_params = copy.deepcopy(pair_window_params)
+    pair_window_params.pop("mapping", None)
+    pair_window_params.setdefault("len_args", {})
+    pair_window_params.setdefault("other_args", {})
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     return _pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
 
@@ -164,7 +194,7 @@ class Corr_2PCF(TaskBase):
         self.los = self.task_params.get("los", "z")
         self.los_vector = _los_to_vector(self.los)
         pair_window_params = self.task_params.get('pair_window', None)
-        if pair_window_params and pair_window_params.get('type'):
+        if pair_window_params and (pair_window_params.get('type') or pair_window_params.get('func') is not None):
             self.pair_window_params = copy.deepcopy(pair_window_params)
             self._pair_window_from_default = False
         else:
@@ -195,8 +225,9 @@ class Corr_2PCF(TaskBase):
                 "type": "ring",
                 "len_args": {"R": None, "H": None},
                 "other_args": {"nx": nx, "ny": ny, "nz": nz},
+                "mapping": "smu_to_RH",
             }
-        return {"type": "shell", "len_args": {"R": None}, "other_args": {}}
+        return {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
 
     def _sync_sampling_attribute_overrides(self):
         if isinstance(self.s, dict):
@@ -254,7 +285,24 @@ class Corr_2PCF(TaskBase):
             normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
         normalized.setdefault("len_args", {})
         normalized.setdefault("other_args", {})
-        if self.mode == "smu" and normalized.get("type") == "ring":
+        if not normalized.get("mapping"):
+            normalized["mapping"] = "smu_to_RH" if self.mode == "smu" else "s_to_R"
+        mapping = normalized.get("mapping")
+        if isinstance(mapping, str):
+            expected_mode = PAIR_WINDOW_MAPPING_MODES.get(mapping)
+            if expected_mode is None:
+                raise ValueError(
+                    f"Unsupported pair_window mapping '{mapping}'. "
+                    f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_MODES)}."
+                )
+            if expected_mode != self.mode:
+                raise ValueError(
+                    f"pair_window mapping '{mapping}' is only valid for mode='{expected_mode}', "
+                    f"got mode='{self.mode}'."
+                )
+        elif not callable(mapping):
+            raise TypeError("pair_window mapping must be a string or callable.")
+        if self.mode == "smu" and normalized.get("type") in ("ring", "cylinder"):
             nx, ny, nz = self.los_vector
             normalized["other_args"].setdefault("nx", nx)
             normalized["other_args"].setdefault("ny", ny)
@@ -382,7 +430,12 @@ class Corr_2PCF(TaskBase):
 
     def _describe_pair_window(self, pair_window):
         if isinstance(pair_window, dict):
-            return f"pair_window dict | {func_util.describe_window_action(pair_window)} | runtime separation follows current s"
+            mapping = pair_window.get("mapping", "custom")
+            mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
+            return (
+                f"pair_window dict | {func_util.describe_window_action(pair_window)} | "
+                f"mapping={mapping_name}"
+            )
         return "pair_window dict | default window with runtime separation s"
 
     def _compact_window_desc(self, win):
@@ -509,7 +562,7 @@ class Corr_2PCF(TaskBase):
         return compute_pair_product_at_smu(s, mu, field1, field2, pair_window=pair_window)
 
     def _build_pair_window_for_sample(self, s, mu, reference_field):
-        pair_window_params = _pair_window_params_for_sample(s, mu, self.pair_window)
+        pair_window_params = self._pair_window_params_for_sample(s, mu, self.pair_window)
         pair_window_obj = WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
         if self.pair_window_cache:
             cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
@@ -538,6 +591,27 @@ class Corr_2PCF(TaskBase):
         }
         digest = hashlib.sha1(json.dumps(cache_key, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         return os.path.join(cache_dir, f"{digest}.npy")
+
+    def _pair_window_params_for_sample(self, s, mu, pair_window):
+        if pair_window is None:
+            pair_window = self._normalize_pair_window(None)
+        elif not isinstance(pair_window, dict):
+            raise TypeError(
+                f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
+            )
+        mapping = pair_window.get("mapping", "smu_to_RH" if self.mode == "smu" else "s_to_R")
+        if isinstance(mapping, str):
+            mapper = PAIR_WINDOW_MAPPINGS[mapping]
+        else:
+            mapper = mapping
+        params = mapper(s, mu, pair_window)
+        if not isinstance(params, dict):
+            raise TypeError("pair_window mapping must return a pair_window dictionary.")
+        params = copy.deepcopy(params)
+        params.pop("mapping", None)
+        params.setdefault("len_args", {})
+        params.setdefault("other_args", {})
+        return params
 
     def _reference_pair_field(self, *fields):
         for field in fields:

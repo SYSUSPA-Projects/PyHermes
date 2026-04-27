@@ -16,6 +16,14 @@ to cover ``0 <= mu <= 1`` because the kernel is symmetric under
 ``mu -> -mu``. In PyHermes these coordinates are sampling points; finite bin
 widths are not represented explicitly by the current pair-window interface.
 
+The pair window uses a ``mapping`` field to convert sampling coordinates into
+window length arguments. ``mode: "s"`` defaults to ``mapping: "s_to_R"``,
+which sets ``R = s``. ``mode: "smu"`` defaults to ``mapping: "smu_to_RH"``,
+which sets ``R = s sqrt(1 - mu^2)`` and ``H = s mu``. Built-in mappings are
+mode-specific: ``s_to_R`` is only valid with ``mode: "s"``, and
+``smu_to_RH`` is only valid with ``mode: "smu"``. Custom pair windows may use
+either built-in mapping or provide a callable mapping in Python.
+
 Workflow Ladder
 ---------------
 
@@ -45,6 +53,7 @@ Use the shipped config:
          len_args:
             R: null
          other_args: {}
+         mapping: "s_to_R"
 
 Then run:
 
@@ -104,7 +113,11 @@ windows:
        k = (ki**2 + kj**2 + kk**2) ** 0.5
        return np.cos(2 * np.pi * k * R)
 
-   pair_win_params = {"func": window_function_cosine_numba, "len_args": {"R": None}}
+   pair_win_params = {
+       "func": window_function_cosine_numba,
+       "len_args": {"R": None},
+       "mapping": "s_to_R",
+   }
 
    corr2pcf_task = Corr_2PCF()
    corr2pcf_task.threads = 8

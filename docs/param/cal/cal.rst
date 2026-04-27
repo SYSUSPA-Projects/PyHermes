@@ -44,6 +44,10 @@ Corr_2PCF
 - ``mode``: ``s`` for ``xi(s)`` or ``smu`` for ``xi(s, mu)``
 - ``window``, ``window1``, ``window2``: optional window definitions for custom
   smoothing behavior
+- ``pair_window.mapping``: coordinate mapping from sampling variables to
+  pair-window length arguments. ``s_to_R`` maps ``R=s`` and is only valid for
+  ``mode: s``; ``smu_to_RH`` maps ``R=s sqrt(1-mu^2)``, ``H=s mu`` and is only
+  valid for ``mode: smu``.
 - ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
   windows across products; ``memory`` computes product groups sequentially to
   reduce peak memory
