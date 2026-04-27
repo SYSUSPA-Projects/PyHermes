@@ -691,13 +691,37 @@ class Corr_2PCF(TaskBase):
         task_sub_arr = comm.scatter(task_sub_arrs, root=0)
         local_values = []
         local_tasks = []
-        for task in task_sub_arr:
-            s_idx = int(task[0])
-            mu_idx = int(task[1])
-            s_value = float(task[2])
-            mu_value = None if mu_idx < 0 else float(task[3])
-            local_values.append(self._compute_single_product_for_sample(s_value, mu_value, field1, field2))
-            local_tasks.append((s_idx, mu_idx))
+        total_tasks = len(tasks)
+        max_local_tasks = max(comm.allgather(len(task_sub_arr)))
+        local_completed = 0
+        step_report_interval = max(1, max_local_tasks // 10)
+        if rank == 0:
+            report_interval = max(1, total_tasks // 10)
+            next_report_threshold = 0
+        for local_idx in range(max_local_tasks):
+            if local_idx < len(task_sub_arr):
+                task = task_sub_arr[local_idx]
+                s_idx = int(task[0])
+                mu_idx = int(task[1])
+                s_value = float(task[2])
+                mu_value = None if mu_idx < 0 else float(task[3])
+                local_values.append(self._compute_single_product_for_sample(s_value, mu_value, field1, field2))
+                local_tasks.append((s_idx, mu_idx))
+                local_completed += 1
+            if (
+                (local_idx + 1) % step_report_interval == 0
+                or local_idx + 1 == max_local_tasks
+            ):
+                gathered_completed = comm.gather(local_completed, root=0)
+                if rank == 0:
+                    global_completed = int(np.sum(gathered_completed))
+                    if (
+                        global_completed >= next_report_threshold
+                        or global_completed == total_tasks
+                    ):
+                        progress = (global_completed / total_tasks) * 100.0
+                        self.logger.info(f"Memory product {product} progress: {progress:6.2f}%")
+                        next_report_threshold += report_interval
 
         gathered_values = comm.gather(local_values, root=0)
         gathered_tasks = comm.gather(local_tasks, root=0)
