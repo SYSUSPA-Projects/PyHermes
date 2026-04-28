@@ -49,6 +49,74 @@ def smu_to_half_plane(corr2pcf_smu, side="right", s_power=2):
     return s_perp, s_par, scaled_xi
 
 
+def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2):
+    """
+    Convert xi(s, mu) sampled on mu in [0, 1] to one quadrant of the
+    (s_perp, s_parallel) plane.
+    """
+    quadrant = _normalize_quadrant_name(quadrant)
+    s, mu, xi = _get_smu_arrays(corr2pcf_smu)
+
+    S, MU = np.meshgrid(s, mu, indexing="ij")
+    s_par = S * MU
+    s_perp = S * np.sqrt(np.maximum(0.0, 1.0 - MU**2))
+
+    if "left" in quadrant:
+        s_perp = -s_perp
+    if "lower" in quadrant:
+        s_par = -s_par
+
+    scaled_xi = (S**s_power) * xi
+    return s_perp, s_par, scaled_xi
+
+
+def _normalize_quadrant_name(name):
+    aliases = {
+        "ul": "upper_left",
+        "upper-left": "upper_left",
+        "upper_left": "upper_left",
+        "top_left": "upper_left",
+        "tl": "upper_left",
+        "ur": "upper_right",
+        "upper-right": "upper_right",
+        "upper_right": "upper_right",
+        "top_right": "upper_right",
+        "tr": "upper_right",
+        "ll": "lower_left",
+        "lower-left": "lower_left",
+        "lower_left": "lower_left",
+        "bottom_left": "lower_left",
+        "bl": "lower_left",
+        "lr": "lower_right",
+        "lower-right": "lower_right",
+        "lower_right": "lower_right",
+        "bottom_right": "lower_right",
+        "br": "lower_right",
+    }
+    try:
+        return aliases[name]
+    except KeyError as exc:
+        raise ValueError(
+            "quadrant must be one of upper_left, upper_right, lower_left, lower_right."
+        ) from exc
+
+
+def _normalize_quadrants(quadrants):
+    if isinstance(quadrants, dict):
+        return {
+            _normalize_quadrant_name(name): corr
+            for name, corr in quadrants.items()
+            if corr is not None
+        }
+    if len(quadrants) != 4:
+        raise ValueError(
+            "quadrants must be a dict or a 4-item sequence ordered as "
+            "(upper_left, upper_right, lower_left, lower_right)."
+        )
+    names = ("upper_left", "upper_right", "lower_left", "lower_right")
+    return {name: corr for name, corr in zip(names, quadrants) if corr is not None}
+
+
 def _combined_vmax(arrays, percentile):
     values = np.concatenate([np.abs(arr).ravel() for arr in arrays])
     values = values[np.isfinite(values)]
@@ -60,7 +128,8 @@ def _combined_vmax(arrays, percentile):
     return float(vmax) if np.isfinite(vmax) and vmax > 0.0 else 1.0
 
 
-def _grid_triangles(n_row, n_col):
+def _grid_triangles(x, y):
+    n_row, n_col = x.shape
     triangles = []
     for i in range(n_row - 1):
         for j in range(n_col - 1):
@@ -68,8 +137,14 @@ def _grid_triangles(n_row, n_col):
             p01 = p00 + 1
             p10 = (i + 1) * n_col + j
             p11 = p10 + 1
-            triangles.append((p00, p10, p11))
-            triangles.append((p00, p11, p01))
+
+            y_mid = 0.25 * (y[i, j] + y[i, j + 1] + y[i + 1, j] + y[i + 1, j + 1])
+            if y_mid < 0.0:
+                triangles.append((p00, p10, p01))
+                triangles.append((p01, p10, p11))
+            else:
+                triangles.append((p00, p10, p11))
+                triangles.append((p00, p11, p01))
     return np.asarray(triangles, dtype=np.int32)
 
 
@@ -79,15 +154,17 @@ def _triangulation(x, y):
     return mtri.Triangulation(
         x.ravel(),
         y.ravel(),
-        triangles=_grid_triangles(*x.shape),
+        triangles=_grid_triangles(x, y),
     )
 
 
 def plot_corr2pcf_smu(
-    corr2pcf1,
+    corr2pcf1=None,
     corr2pcf2=None,
+    quadrants=None,
     label1=None,
     label2=None,
+    quadrant_labels=None,
     title=None,
     figsize=None,
     ax=None,
@@ -101,6 +178,7 @@ def plot_corr2pcf_smu(
     label_fontsize=16,
     tick_fontsize=12,
     title_fontsize=18,
+    text_fontsize=14
 ):
     """
     Plot s**s_power * xi(s_perp, s_parallel).
@@ -108,6 +186,11 @@ def plot_corr2pcf_smu(
     If corr2pcf2 is provided, corr2pcf1 is shown on the left half-plane and
     corr2pcf2 on the right half-plane. If corr2pcf2 is omitted, corr2pcf1 is
     mirrored to show the full plane.
+
+    If quadrants is provided, it should be either a dict keyed by
+    upper_left, upper_right, lower_left, lower_right, or a 4-item sequence in
+    that order. Each quadrant is drawn from one corr2pcf object without
+    mirroring across s_parallel=0.
     """
     import matplotlib.pyplot as plt
 
@@ -121,30 +204,43 @@ def plot_corr2pcf_smu(
     else:
         fig = ax.figure
 
-    x_left, y_left, z_left = smu_to_half_plane(corr2pcf1, side="left", s_power=s_power)
-    if corr2pcf2 is None:
-        x_right, y_right, z_right = smu_to_half_plane(corr2pcf1, side="right", s_power=s_power)
+    if quadrants is None:
+        if corr2pcf1 is None:
+            raise ValueError("corr2pcf1 is required when quadrants is not provided.")
+        x_left, y_left, z_left = smu_to_half_plane(corr2pcf1, side="left", s_power=s_power)
+        if corr2pcf2 is None:
+            x_right, y_right, z_right = smu_to_half_plane(corr2pcf1, side="right", s_power=s_power)
+        else:
+            x_right, y_right, z_right = smu_to_half_plane(corr2pcf2, side="right", s_power=s_power)
+        plot_items = [
+            ("upper_left", x_left, y_left, z_left),
+            ("upper_right", x_right, y_right, z_right),
+        ]
     else:
-        x_right, y_right, z_right = smu_to_half_plane(corr2pcf2, side="right", s_power=s_power)
+        quadrant_map = _normalize_quadrants(quadrants)
+        if not quadrant_map:
+            raise ValueError("quadrants must contain at least one corr2pcf object.")
+        plot_items = []
+        for quadrant in ("upper_left", "upper_right", "lower_left", "lower_right"):
+            corr = quadrant_map.get(quadrant)
+            if corr is None:
+                continue
+            x, y, z = smu_to_quadrant(corr, quadrant=quadrant, s_power=s_power)
+            plot_items.append((quadrant, x, y, z))
 
     if vmax is None:
-        vmax = _combined_vmax([z_left, z_right], percentile)
+        vmax = _combined_vmax([item[3] for item in plot_items], percentile)
     levels = np.linspace(-vmax, vmax, n_levels)
 
-    cf = ax.tricontourf(
-        _triangulation(x_left, y_left),
-        z_left.ravel(),
-        levels=levels,
-        cmap=cmap,
-        extend="both",
-    )
-    ax.tricontourf(
-        _triangulation(x_right, y_right),
-        z_right.ravel(),
-        levels=levels,
-        cmap=cmap,
-        extend="both",
-    )
+    cf = None
+    for _, x, y, z in plot_items:
+        cf = ax.tricontourf(
+            _triangulation(x, y),
+            z.ravel(),
+            levels=levels,
+            cmap=cmap,
+            extend="both",
+        )
 
     cbar = None
     if colorbar:
@@ -155,10 +251,32 @@ def plot_corr2pcf_smu(
         cbar.ax.tick_params(labelsize=tick_fontsize)
 
     ax.axvline(0.0, color="k", lw=0.8, alpha=0.5)
-    if label1:
+    ax.axhline(0.0, color="k", lw=0.8, alpha=0.5)
+    if quadrants is None and label1:
         ax.text(0, 1.02, label1, transform=ax.transAxes, ha="left", va="bottom", fontsize=14)
-    if corr2pcf2 is not None and label2:
+    if quadrants is None and corr2pcf2 is not None and label2:
         ax.text(1, 1.02, label2, transform=ax.transAxes, ha="right", va="bottom", fontsize=14)
+    if quadrants is not None and quadrant_labels:
+        label_positions = {
+            "upper_left": (0.02, 0.98, "left", "top"),
+            "upper_right": (0.98, 0.98, "right", "top"),
+            "lower_left": (0.02, 0.02, "left", "bottom"),
+            "lower_right": (0.98, 0.02, "right", "bottom"),
+        }
+        for name, text in quadrant_labels.items():
+            quadrant = _normalize_quadrant_name(name)
+            if quadrant not in {item[0] for item in plot_items}:
+                continue
+            x_text, y_text, ha, va = label_positions[quadrant]
+            ax.text(
+                x_text,
+                y_text,
+                text,
+                transform=ax.transAxes,
+                ha=ha,
+                va=va,
+                fontsize=text_fontsize,
+            )
 
     ax.set_xlabel(r"$s_\perp$", fontsize=label_fontsize)
     ax.set_ylabel(r"$s_\parallel$", fontsize=label_fontsize)
