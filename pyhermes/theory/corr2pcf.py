@@ -63,13 +63,18 @@ def _mapping_s_to_R(s, mu, pair_window):
     return params
 
 
-def _mapping_smu_to_RH(s, mu, pair_window):
+def _mapping_smu_to_RH(s, mu, pair_window, los_vector=None):
     if mu is None:
         raise ValueError("Corr_2PCF mapping='smu_to_RH' requires a mu value.")
     params = copy.deepcopy(pair_window)
     params.setdefault("len_args", {})
+    params.setdefault("other_args", {})
     params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
     params["len_args"]["H"] = s * mu
+    if los_vector is not None:
+        for key, value in zip(("nx", "ny", "nz"), los_vector):
+            if key in params["other_args"] and params["other_args"][key] is None:
+                params["other_args"][key] = value
     return params
 
 
@@ -601,10 +606,12 @@ class Corr_2PCF(TaskBase):
             )
         mapping = pair_window.get("mapping", "smu_to_RH" if self.mode == "smu" else "s_to_R")
         if isinstance(mapping, str):
-            mapper = PAIR_WINDOW_MAPPINGS[mapping]
+            if mapping == "smu_to_RH":
+                params = _mapping_smu_to_RH(s, mu, pair_window, self.los_vector)
+            else:
+                params = PAIR_WINDOW_MAPPINGS[mapping](s, mu, pair_window)
         else:
-            mapper = mapping
-        params = mapper(s, mu, pair_window)
+            params = mapping(s, mu, pair_window)
         if not isinstance(params, dict):
             raise TypeError("pair_window mapping must return a pair_window dictionary.")
         params = copy.deepcopy(params)

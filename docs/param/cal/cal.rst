@@ -47,7 +47,10 @@ Corr_2PCF
 - ``pair_window.mapping``: coordinate mapping from sampling variables to
   pair-window length arguments. ``s_to_R`` maps ``R=s`` and is only valid for
   ``mode: s``; ``smu_to_RH`` maps ``R=s sqrt(1-mu^2)``, ``H=s mu`` and is only
-  valid for ``mode: smu``.
+  valid for ``mode: smu``. In ``Corr_2PCF`` pair windows, ``None`` may be used
+  as a runtime placeholder; ``smu_to_RH`` also fills ``nx``, ``ny``, and ``nz``
+  from ``los`` when those keys are present in ``other_args`` with value
+  ``None``.
 - ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
   windows across products; ``memory`` computes product groups sequentially to
   reduce peak memory
