@@ -103,6 +103,16 @@ Corr_2PCF
   left unchanged. With ``smu_to_RH``, ``other_args`` entries ``nx``, ``ny``,
   and ``nz`` are filled from ``los`` when those keys are explicitly present
   with value ``None``.
+- ``pair_window.kernel_mode``:
+  kernel construction strategy. ``full_rfft`` evaluates the full real-FFT
+  kernel and is the default for custom windows. ``octant`` uses symmetry
+  folding. ``auto`` folds only for coordinate-axis LOS directions and otherwise
+  uses ``full_rfft``; built-in ``ring``, ``disk``, and ``cylinder`` pair
+  windows default to ``auto``. ``octant`` is safe only when
+  ``W(kx, ky, kz)`` is unchanged by independent sign flips of ``kx``, ``ky``,
+  and ``kz``. Isotropic windows satisfy this automatically; oblique LOS
+  anisotropic windows generally require ``full_rfft``. This is a symmetry test
+  in the FFT grid coordinates, not merely a visual shape-symmetry test.
 - ``mode``:
   ``s`` for isotropic ``xi(s)`` or ``smu`` for ``xi(s, mu)``.
 - ``los``:

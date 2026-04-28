@@ -32,8 +32,9 @@ Common radial windows use the following length parameters:
 - ``Tshell``: ``R_in`` and ``R_out`` for the inner and outer shell radii
 - ``gaussian_shell``: ``R_shell`` for the shell-like oscillation scale and
   ``R_smooth`` for the Gaussian damping scale
-- ``ring`` and ``cylinder``: ``R`` and ``H``; optional line-of-sight components
-  ``nx``, ``ny``, and ``nz`` belong in ``other_args``
+- ``ring``, ``disk``, and ``cylinder``: ``R`` and ``H``; optional
+  line-of-sight components ``nx``, ``ny``, and ``nz`` belong in
+  ``other_args``
 
 Corr_2PCF
 ---------
@@ -51,6 +52,24 @@ Corr_2PCF
   runtime placeholder; fixed numeric values in ``len_args`` are left unchanged.
   ``smu_to_RH`` also fills ``nx``, ``ny``, and ``nz`` from ``los`` when those
   keys are present in ``other_args`` with value ``None``.
+- ``pair_window.kernel_mode``: kernel construction strategy. ``full_rfft``
+  evaluates the full real-FFT kernel and is the default for custom windows.
+  ``octant`` uses symmetry folding and is appropriate only for windows with the
+  required octant symmetries. ``auto`` uses folding for coordinate-axis LOS
+  directions and full real-FFT otherwise; built-in ``ring``, ``disk``, and
+  ``cylinder`` pair windows default to ``auto``.
+  ``octant`` is mathematically safe only when the k-space window is invariant
+  under independent sign flips of all three components:
+  ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
+  Isotropic windows satisfy this condition. Axis-aligned LOS windows can also
+  satisfy it if the parallel dependence is even, for example through ``cos`` or
+  ``sin(q)/q``. Oblique LOS windows such as ``los: [1, 1, 1]`` generally do not
+  satisfy the condition and should use ``full_rfft`` unless the user has proven
+  the required symmetry. This criterion is about symmetry with respect to the
+  FFT grid coordinates, not just the apparent geometric symmetry of the window:
+  for example, a ring with ``los: [1, 1, 0]`` may look symmetric in a rotated
+  coordinate system, but it is not invariant under independent ``kx`` and
+  ``ky`` sign flips in the original grid coordinates.
 - ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
   windows across products; ``memory`` computes product groups sequentially to
   reduce peak memory

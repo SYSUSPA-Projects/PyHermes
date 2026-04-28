@@ -38,7 +38,8 @@
 			"type": "",
 			"len_args": {},
 			"other_args": {},
-			"mapping": ""
+			"mapping": "",
+			"kernel_mode": ""
 		},
 		"mode": "s",
 		"los": "z",

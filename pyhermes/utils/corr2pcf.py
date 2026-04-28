@@ -23,6 +23,9 @@ PRODUCT_INPUT_FLAGS = {
     "xi": (True, True),
 }
 
+ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
+VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
+
 
 def los_to_vector(los):
     if isinstance(los, str):
@@ -56,8 +59,27 @@ def default_pair_window(mode, los_vector):
             "len_args": {"R": None, "H": None},
             "other_args": {"nx": nx, "ny": ny, "nz": nz},
             "mapping": "smu_to_RH",
+            "kernel_mode": "auto",
         }
-    return {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
+    return {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R", "kernel_mode": "octant"}
+
+
+def default_kernel_mode(window_type, has_custom_func=False):
+    if window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:
+        return "auto"
+    if has_custom_func:
+        return "full_rfft"
+    return "octant"
+
+
+def normalize_kernel_mode(kernel_mode):
+    kernel_mode = str(kernel_mode).strip().lower()
+    if kernel_mode not in VALID_KERNEL_MODES:
+        raise ValueError(
+            f"Unsupported kernel_mode '{kernel_mode}'. "
+            f"Supported values are {sorted(VALID_KERNEL_MODES)}."
+        )
+    return kernel_mode
 
 
 def normalize_products(products):
@@ -156,6 +178,8 @@ def describe_pair_window(pair_window, mode, los_vector):
         mapping = pair_window.get("mapping", "custom")
         mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
         parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
+        if pair_window.get("kernel_mode") is not None:
+            parts.append(f"kernel_mode={pair_window.get('kernel_mode')}")
         len_args = pair_window.get("len_args", {})
         other_args = pair_window.get("other_args", {})
         if len_args:
@@ -313,7 +337,7 @@ def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_w
         pair_window = {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
     mapping = pair_window.get("mapping")
     if mapping is None:
-        mapping = "smu_to_RH" if pair_window.get("type") in ("ring", "cylinder") and mu is not None else "s_to_R"
+        mapping = "smu_to_RH" if pair_window.get("type") in ("ring", "disk", "cylinder") and mu is not None else "s_to_R"
     if isinstance(mapping, str):
         if mapping not in PAIR_WINDOW_MAPPINGS:
             raise ValueError(

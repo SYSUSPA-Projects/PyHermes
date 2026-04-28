@@ -33,6 +33,28 @@ value ``None``, those entries are filled from the task ``los`` vector. A
 dictionary used to construct a ``WindowFunc`` directly should instead provide
 fixed numeric values for all window-function arguments.
 
+Built-in anisotropic pair windows include ``ring``, ``disk``, and ``cylinder``.
+They use ``R`` and ``H`` as length arguments and optional ``nx``, ``ny``, and
+``nz`` entries in ``other_args`` for the line-of-sight direction.
+
+``pair_window.kernel_mode`` controls how the window kernel is built. Use
+``full_rfft`` for the full real-FFT kernel, ``octant`` for symmetry folding, or
+``auto`` to fold only when the LOS is aligned with a coordinate axis. Built-in
+``ring``, ``disk``, and ``cylinder`` windows default to ``auto``. Custom
+windows default to ``full_rfft`` unless ``kernel_mode`` is specified.
+
+Use ``octant`` only when the k-space window is invariant under independent
+sign flips of ``kx``, ``ky``, and ``kz``:
+``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
+Isotropic windows satisfy this automatically. Axis-aligned LOS windows may
+also satisfy it when their parallel dependence is even, such as ``cos`` or
+``sin(q)/q`` factors. Oblique LOS windows usually do not satisfy this symmetry,
+so ``full_rfft`` is the safer choice for custom anisotropic windows. The
+criterion is tied to the FFT grid coordinates rather than visual geometric
+symmetry: a ring with ``los: [1, 1, 0]`` can be symmetric in a rotated
+coordinate system while still failing the independent ``kx`` and ``ky`` sign
+flip tests required by ``octant``.
+
 Workflow Ladder
 ---------------
 

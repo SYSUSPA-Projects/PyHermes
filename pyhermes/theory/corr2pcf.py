@@ -14,9 +14,9 @@ from pyhermes.utils import func_util
 from pyhermes.utils.corr2pcf import (
     PAIR_WINDOW_MAPPING_MODES, PAIR_WINDOW_MAPPINGS, PRODUCT_INPUT_FLAGS,
     build_result_from_gathered, compact_window_desc, compute_pair_product_at_smu,
-    default_pair_window, describe_pair_window, describe_products, describe_sampling,
+    default_kernel_mode, default_pair_window, describe_pair_window, describe_products, describe_sampling,
     describe_task_distribution, expand_products, field_density, los_to_vector,
-    make_sampling_tasks, mapping_smu_to_RH, normalize_products, normalize_sampling_array,
+    make_sampling_tasks, mapping_smu_to_RH, normalize_kernel_mode, normalize_products, normalize_sampling_array,
     pair_product_with_window, parse_bool, serialize_convols_input, serialize_window_input,
 )
 from pyhermes.pipeline import TaskBase
@@ -132,6 +132,13 @@ class Corr_2PCF(TaskBase):
             normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
         normalized.setdefault("len_args", {})
         normalized.setdefault("other_args", {})
+        kernel_mode = normalized.get("kernel_mode")
+        if not kernel_mode:
+            kernel_mode = default_kernel_mode(
+                normalized.get("type"),
+                has_custom_func=normalized.get("func") is not None,
+            )
+        normalized["kernel_mode"] = normalize_kernel_mode(kernel_mode)
         if not normalized.get("mapping"):
             normalized["mapping"] = "smu_to_RH" if self.mode == "smu" else "s_to_R"
         mapping = normalized.get("mapping")
@@ -149,7 +156,7 @@ class Corr_2PCF(TaskBase):
                 )
         elif not callable(mapping):
             raise TypeError("pair_window mapping must be a string or callable.")
-        if self.mode == "smu" and normalized.get("type") in ("ring", "cylinder"):
+        if self.mode == "smu" and normalized.get("type") in ("ring", "disk", "cylinder"):
             nx, ny, nz = self.los_vector
             normalized["other_args"].setdefault("nx", nx)
             normalized["other_args"].setdefault("ny", ny)

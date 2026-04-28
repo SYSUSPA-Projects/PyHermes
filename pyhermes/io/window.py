@@ -14,6 +14,10 @@ from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_f
 from pyhermes.utils.window_functions import set_window_function
 
 
+ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
+VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
+
+
 class WindowFunc(ConvolsData):
     def __init__(self, win_params, convols_params, bandwidth=1, threads=1):
         # Initial MPI, logger mess
@@ -58,13 +62,18 @@ class WindowFunc(ConvolsData):
         # There is NO DEFAULT window!!!
         # Missing `type` will raise an error in set_window_function.
         self.window_params = dict(win_params)
-        if "func" in win_params:
+        has_custom_func = "func" in win_params
+        self.has_custom_func = has_custom_func
+        if has_custom_func:
             self.type = win_params.get('type', None) or "custom"
             self.func = win_params["func"]
         else:
             assert "type" in win_params
             self.type = win_params['type']
             self.func = set_window_function(self.type, verbose=False)
+        self.kernel_mode = self._resolve_kernel_mode(win_params, has_custom_func)
+        self.input_params["kernel_mode"] = self.kernel_mode
+        self.window_params["kernel_mode"] = self.kernel_mode
         self.len_args = win_params['len_args']
         self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
         self.other_args = win_params.get('other_args', {})
@@ -72,9 +81,28 @@ class WindowFunc(ConvolsData):
         self.window_args.update(self.other_args)
         self.w_kernel = None
 
-    def _requires_full_rfft_kernel(self):
-        if self.type not in ("ring", "cylinder"):
-            return False
+    def _resolve_kernel_mode(self, win_params, has_custom_func):
+        kernel_mode = win_params.get("kernel_mode", None)
+        if not kernel_mode:
+            if self.type in ANISOTROPIC_AUTO_WINDOW_TYPES:
+                kernel_mode = "auto"
+            elif has_custom_func:
+                kernel_mode = "full_rfft"
+            else:
+                kernel_mode = "octant"
+        kernel_mode = str(kernel_mode).strip().lower()
+        if kernel_mode not in VALID_KERNEL_MODES:
+            raise ValueError(
+                f"Unsupported kernel_mode '{kernel_mode}'. "
+                f"Supported values are {sorted(VALID_KERNEL_MODES)}."
+            )
+        return kernel_mode
+
+    def _los_is_axis_aligned(self):
+        if self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not all(
+            key in self.other_args for key in ("nx", "ny", "nz")
+        ):
+            return not self.has_custom_func
         nx = float(self.other_args.get("nx", 0.0))
         ny = float(self.other_args.get("ny", 0.0))
         nz = float(self.other_args.get("nz", 1.0))
@@ -83,11 +111,18 @@ class WindowFunc(ConvolsData):
         if norm == 0.0:
             return True
         los = np.abs(los / norm)
-        return not (
+        return (
             np.isclose(los[0], 1.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 0.0)
             or np.isclose(los[0], 0.0) and np.isclose(los[1], 1.0) and np.isclose(los[2], 0.0)
             or np.isclose(los[0], 0.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 1.0)
         )
+
+    def _requires_full_rfft_kernel(self):
+        if self.kernel_mode == "full_rfft":
+            return True
+        if self.kernel_mode == "octant":
+            return False
+        return not self._los_is_axis_aligned()
 
     def _build_kernel(self):
         if self._requires_full_rfft_kernel():
