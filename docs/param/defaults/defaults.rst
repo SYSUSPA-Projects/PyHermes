@@ -98,10 +98,11 @@ Corr_2PCF
   ``mode: s`` uses a shell window with ``mapping: s_to_R`` and ``mode: smu``
   uses a ring window with ``mapping: smu_to_RH``. Built-in mappings are
   mode-specific: ``s_to_R`` is only valid with ``mode: s`` and
-  ``smu_to_RH`` is only valid with ``mode: smu``. ``None`` values in
-  ``len_args`` can be filled at runtime by the mapping. With ``smu_to_RH``,
-  ``other_args`` entries ``nx``, ``ny``, and ``nz`` are filled from ``los``
-  when those keys are explicitly present with value ``None``.
+  ``smu_to_RH`` is only valid with ``mode: smu``. Only ``None`` values in
+  ``len_args`` are filled at runtime by the mapping; fixed numeric values are
+  left unchanged. With ``smu_to_RH``, ``other_args`` entries ``nx``, ``ny``,
+  and ``nz`` are filled from ``los`` when those keys are explicitly present
+  with value ``None``.
 - ``mode``:
   ``s`` for isotropic ``xi(s)`` or ``smu`` for ``xi(s, mu)``.
 - ``los``:

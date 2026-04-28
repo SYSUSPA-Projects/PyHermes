@@ -26,11 +26,12 @@ either built-in mapping or provide a callable mapping in Python.
 
 When a pair-window dictionary is passed to ``Corr_2PCF``, ``None`` can be used
 as a runtime placeholder for arguments filled by the mapping. For
-``mapping: "smu_to_RH"``, ``R`` and ``H`` are filled from ``s`` and ``mu``; if
-``other_args`` explicitly contains ``nx``, ``ny``, or ``nz`` with value
-``None``, those entries are filled from the task ``los`` vector. A dictionary
-used to construct a ``WindowFunc`` directly should instead provide fixed
-numeric values for all window-function arguments.
+``mapping: "smu_to_RH"``, ``R`` and ``H`` are filled from ``s`` and ``mu`` only
+when their ``len_args`` entries are ``None``; fixed numeric values are left
+unchanged. If ``other_args`` explicitly contains ``nx``, ``ny``, or ``nz`` with
+value ``None``, those entries are filled from the task ``los`` vector. A
+dictionary used to construct a ``WindowFunc`` directly should instead provide
+fixed numeric values for all window-function arguments.
 
 Workflow Ladder
 ---------------

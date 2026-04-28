@@ -59,7 +59,8 @@ def _parse_bool(value):
 def _mapping_s_to_R(s, mu, pair_window):
     params = copy.deepcopy(pair_window)
     params.setdefault("len_args", {})
-    params["len_args"]["R"] = s
+    if params["len_args"].get("R") is None:
+        params["len_args"]["R"] = s
     return params
 
 
@@ -69,8 +70,10 @@ def _mapping_smu_to_RH(s, mu, pair_window, los_vector=None):
     params = copy.deepcopy(pair_window)
     params.setdefault("len_args", {})
     params.setdefault("other_args", {})
-    params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
-    params["len_args"]["H"] = s * mu
+    if params["len_args"].get("R") is None:
+        params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
+    if params["len_args"].get("H") is None:
+        params["len_args"]["H"] = s * mu
     if los_vector is not None:
         for key, value in zip(("nx", "ny", "nz"), los_vector):
             if key in params["other_args"] and params["other_args"][key] is None:
