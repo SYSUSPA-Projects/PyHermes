@@ -2,6 +2,7 @@ import time
 import pickle
 import copy
 import hashlib
+import inspect
 import json
 import os
 
@@ -311,6 +312,31 @@ PAIR_WINDOW_MAPPINGS = {
 }
 
 
+def call_pair_window_mapping(mapping, s, mu, pair_window, los_vector=None):
+    if los_vector is None:
+        return mapping(s, mu, pair_window)
+
+    try:
+        signature = inspect.signature(mapping)
+    except (TypeError, ValueError):
+        return mapping(s, mu, pair_window)
+
+    params = signature.parameters
+    if "los_vector" in params:
+        return mapping(s, mu, pair_window, los_vector=los_vector)
+
+    positional_kinds = (
+        inspect.Parameter.POSITIONAL_ONLY,
+        inspect.Parameter.POSITIONAL_OR_KEYWORD,
+    )
+    accepts_varargs = any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in params.values())
+    n_positional = sum(param.kind in positional_kinds for param in params.values())
+    if accepts_varargs or n_positional >= 4:
+        return mapping(s, mu, pair_window, los_vector)
+
+    return mapping(s, mu, pair_window)
+
+
 # Pair-product kernels.
 def field_density(field):
     if isinstance(field, (float, int, np.floating)):
@@ -329,7 +355,7 @@ def pair_product_with_window(field1, field2, pair_window_obj, threads):
     return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
 
 
-def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None):
+def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None, los_vector=None):
     if convols_data2 is None:
         convols_data2 = convols_data1
     if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
@@ -350,7 +376,7 @@ def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_w
         mapper = mapping
     else:
         raise TypeError("pair_window mapping must be a string or callable.")
-    pair_window_params = mapper(s, mu, pair_window)
+    pair_window_params = call_pair_window_mapping(mapper, s, mu, pair_window, los_vector)
     if not isinstance(pair_window_params, dict):
         raise TypeError("pair_window mapping must return a pair_window dictionary.")
     pair_window_params = copy.deepcopy(pair_window_params)
@@ -741,12 +767,15 @@ class Corr_2PCF(TaskBase):
             )
         mapping = pair_window.get("mapping", "smu_to_RH" if self.mode == "smu" else "s_to_R")
         if isinstance(mapping, str):
-            if mapping == "smu_to_RH":
-                params = mapping_smu_to_RH(s, mu, pair_window, self.los_vector)
-            else:
-                params = PAIR_WINDOW_MAPPINGS[mapping](s, mu, pair_window)
+            params = call_pair_window_mapping(
+                PAIR_WINDOW_MAPPINGS[mapping],
+                s,
+                mu,
+                pair_window,
+                self.los_vector,
+            )
         else:
-            params = mapping(s, mu, pair_window)
+            params = call_pair_window_mapping(mapping, s, mu, pair_window, self.los_vector)
         if not isinstance(params, dict):
             raise TypeError("pair_window mapping must return a pair_window dictionary.")
         params = copy.deepcopy(params)
