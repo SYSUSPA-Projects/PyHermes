@@ -190,12 +190,12 @@ def describe_pair_window(pair_window, mode, los_vector):
         parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
         if pair_window.get("kernel_mode") is not None:
             parts.append(f"kernel_mode={pair_window.get('kernel_mode')}")
-        len_args = pair_window.get("len_args", {})
-        other_args = pair_window.get("other_args", {})
-        if len_args:
-            parts.append(f"len_args={len_args}")
-        if other_args:
-            parts.append(f"other_args={other_args}")
+        # len_args = pair_window.get("len_args", {})
+        # other_args = pair_window.get("other_args", {})
+        # if len_args:
+        #     parts.append(f"len_args={len_args}")
+        # if other_args:
+        #     parts.append(f"other_args={other_args}")
         pair_los = effective_pair_los(pair_window, mode, los_vector)
         if pair_los is not None:
             parts.append(f"los={pair_los}")
