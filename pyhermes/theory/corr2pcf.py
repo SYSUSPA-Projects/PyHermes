@@ -11,134 +11,15 @@ from pyhermes.io import WindowFunc
 from pyhermes.io import ConvolsData
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
-from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.corr2pcf import (
+    PAIR_WINDOW_MAPPING_MODES, PAIR_WINDOW_MAPPINGS, PRODUCT_INPUT_FLAGS,
+    build_result_from_gathered, compact_window_desc, compute_pair_product_at_smu,
+    default_pair_window, describe_pair_window, describe_products, describe_sampling,
+    describe_task_distribution, expand_products, field_density, los_to_vector,
+    make_sampling_tasks, mapping_smu_to_RH, normalize_products, normalize_sampling_array,
+    pair_product_with_window, parse_bool, serialize_convols_input, serialize_window_input,
+)
 from pyhermes.pipeline import TaskBase
-
-
-PRODUCT_RULES = {
-    "allowed": {"dd", "dr", "rd", "delta_dd", "rr", "xi"},
-    "deps": {
-        "xi": ["delta_dd", "rr"],
-    },
-}
-
-PRODUCT_INPUT_FLAGS = {
-    "dd": (True, False),
-    "dr": (True, True),
-    "rd": (True, True),
-    "delta_dd": (True, True),
-    "rr": (False, True),
-    "xi": (True, True),
-}
-
-
-def _los_to_vector(los):
-    if isinstance(los, str):
-        axis = los.strip().lower()
-        if axis == "x":
-            return (1.0, 0.0, 0.0)
-        if axis == "y":
-            return (0.0, 1.0, 0.0)
-        if axis == "z":
-            return (0.0, 0.0, 1.0)
-        raise ValueError("Corr_2PCF 'los' must be one of 'x', 'y', 'z', or a length-3 array.")
-    arr = np.asarray(los, dtype=np.float64)
-    if arr.shape != (3,):
-        raise ValueError("Corr_2PCF 'los' must be one of 'x', 'y', 'z', or a length-3 array.")
-    if np.linalg.norm(arr) == 0.0:
-        raise ValueError("Corr_2PCF 'los' vector must be non-zero.")
-    return tuple(float(v) for v in arr)
-
-
-def _parse_bool(value):
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "yes", "on")
-    return bool(value)
-
-
-def _mapping_s_to_R(s, mu, pair_window):
-    params = copy.deepcopy(pair_window)
-    params.setdefault("len_args", {})
-    if params["len_args"].get("R") is None:
-        params["len_args"]["R"] = s
-    return params
-
-
-def _mapping_smu_to_RH(s, mu, pair_window, los_vector=None):
-    if mu is None:
-        raise ValueError("Corr_2PCF mapping='smu_to_RH' requires a mu value.")
-    params = copy.deepcopy(pair_window)
-    params.setdefault("len_args", {})
-    params.setdefault("other_args", {})
-    if params["len_args"].get("R") is None:
-        params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
-    if params["len_args"].get("H") is None:
-        params["len_args"]["H"] = s * mu
-    if los_vector is not None:
-        for key, value in zip(("nx", "ny", "nz"), los_vector):
-            if key in params["other_args"] and params["other_args"][key] is None:
-                params["other_args"][key] = value
-    return params
-
-
-PAIR_WINDOW_MAPPING_MODES = {
-    "s_to_R": "s",
-    "smu_to_RH": "smu",
-}
-
-PAIR_WINDOW_MAPPINGS = {
-    "s_to_R": _mapping_s_to_R,
-    "smu_to_RH": _mapping_smu_to_RH,
-}
-
-
-def _pair_product_with_window(field1, field2, pair_window_obj, threads):
-    if field2 is None:
-        field2 = field1
-    if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-        return _field_density(field1) * _field_density(field2)
-    conv = specialized_convolution_3d(field1.epsilon, pair_window_obj.as_array(), threads=threads)
-    return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
-
-
-def _field_density(field):
-    if isinstance(field, (float, int, np.floating)):
-        return float(field)
-    if isinstance(field, ConvolsData):
-        return 1.0 / field.V
-    raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
-
-
-def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None):
-    if convols_data2 is None:
-        convols_data2 = convols_data1
-    if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
-        return _field_density(convols_data1) * _field_density(convols_data2)
-    if pair_window is None:
-        pair_window = {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
-    mapping = pair_window.get("mapping")
-    if mapping is None:
-        mapping = "smu_to_RH" if pair_window.get("type") in ("ring", "cylinder") and mu is not None else "s_to_R"
-    if isinstance(mapping, str):
-        if mapping not in PAIR_WINDOW_MAPPINGS:
-            raise ValueError(
-                f"Unsupported pair_window mapping '{mapping}'. "
-                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPINGS)}."
-            )
-        mapper = PAIR_WINDOW_MAPPINGS[mapping]
-    elif callable(mapping):
-        mapper = mapping
-    else:
-        raise TypeError("pair_window mapping must be a string or callable.")
-    pair_window_params = mapper(s, mu, pair_window)
-    if not isinstance(pair_window_params, dict):
-        raise TypeError("pair_window mapping must return a pair_window dictionary.")
-    pair_window_params = copy.deepcopy(pair_window_params)
-    pair_window_params.pop("mapping", None)
-    pair_window_params.setdefault("len_args", {})
-    pair_window_params.setdefault("other_args", {})
-    pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
-    return _pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
 
 
 class Corr_2PCF(TaskBase):
@@ -156,15 +37,15 @@ class Corr_2PCF(TaskBase):
         self.mode = str(self.mode).strip().lower()
         if self.mode not in ("s", "smu"):
             raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
-        self.los_vector = _los_to_vector(self.los)
+        self.los_vector = los_to_vector(self.los)
         self._sync_sampling_attribute_overrides()
         if self._pair_window_from_default and self.pair_window is None:
-            self.pair_window_params = self._default_pair_window()
+            self.pair_window_params = default_pair_window(self.mode, self.los_vector)
         self.threads = max(1, int(self.threads))
         self.memory_strategy = str(self.memory_strategy).strip().lower()
         if self.memory_strategy not in ("speed", "memory"):
             raise ValueError("Corr_2PCF memory_strategy must be either 'speed' or 'memory'.")
-        self.pair_window_cache = _parse_bool(self.pair_window_cache)
+        self.pair_window_cache = parse_bool(self.pair_window_cache)
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['mode'] = self.mode
@@ -201,13 +82,13 @@ class Corr_2PCF(TaskBase):
         if self.mode not in ("s", "smu"):
             raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
         self.los = self.task_params.get("los", "z")
-        self.los_vector = _los_to_vector(self.los)
+        self.los_vector = los_to_vector(self.los)
         pair_window_params = self.task_params.get('pair_window', None)
         if pair_window_params and (pair_window_params.get('type') or pair_window_params.get('func') is not None):
             self.pair_window_params = copy.deepcopy(pair_window_params)
             self._pair_window_from_default = False
         else:
-            self.pair_window_params = self._default_pair_window()
+            self.pair_window_params = default_pair_window(self.mode, self.los_vector)
             self._pair_window_from_default = True
 
         self.s = copy.deepcopy(self.task_params['s'])
@@ -221,22 +102,11 @@ class Corr_2PCF(TaskBase):
         self.mu_max = None
         self.n_mu = None
         self.threads = int(self.task_params['threads'])
-        self.products = self._normalize_products(self.task_params.get('products', 'xi'))
+        self.products = normalize_products(self.task_params.get('products', 'xi'))
         self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
-        self.pair_window_cache = _parse_bool(self.task_params.get("pair_window_cache", False))
+        self.pair_window_cache = parse_bool(self.task_params.get("pair_window_cache", False))
         self.pair_window_cache_dir = self.task_params.get("pair_window_cache_dir", "")
         self.fout_path = self.task_params['fout_path']
-
-    def _default_pair_window(self):
-        if self.mode == "smu":
-            nx, ny, nz = self.los_vector
-            return {
-                "type": "ring",
-                "len_args": {"R": None, "H": None},
-                "other_args": {"nx": nx, "ny": ny, "nz": nz},
-                "mapping": "smu_to_RH",
-            }
-        return {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
 
     def _sync_sampling_attribute_overrides(self):
         if isinstance(self.s, dict):
@@ -249,38 +119,6 @@ class Corr_2PCF(TaskBase):
                 value = getattr(self, attr, None)
                 if value is not None:
                     self.mu[attr] = value
-
-    def _normalize_products(self, products):
-        if isinstance(products, str):
-            products = [products]
-        elif products is None:
-            products = ['xi']
-        elif not isinstance(products, (list, tuple, set)):
-            raise TypeError(
-                f"Unsupported products input: expected string or array of strings, got {type(products)}."
-            )
-
-        allowed = PRODUCT_RULES["allowed"]
-        normalized = []
-        for item in products:
-            if not isinstance(item, str):
-                raise TypeError("Each product name must be a string.")
-            name = item.strip().lower()
-            if name not in allowed:
-                raise ValueError(f"Unsupported product '{item}'. Allowed values are {sorted(allowed)}.")
-            if name not in normalized:
-                normalized.append(name)
-        return normalized
-
-    def _expanded_products(self):
-        expanded = list(self.products)
-        idx = 0
-        while idx < len(expanded):
-            for dep in PRODUCT_RULES["deps"].get(expanded[idx], []):
-                if dep not in expanded:
-                    expanded.append(dep)
-            idx += 1
-        return expanded
 
     def _normalize_pair_window(self, pair_window):
         if pair_window is None:
@@ -318,57 +156,6 @@ class Corr_2PCF(TaskBase):
             normalized["other_args"].setdefault("nz", nz)
         return normalized
 
-    def _normalize_sampling_array(self, values, name, positive=True):
-        arr = np.asarray(values, dtype=np.float64)
-        if arr.ndim != 1:
-            raise TypeError(f"'{name}' must be a 1D array-like input.")
-        if arr.size == 0:
-            raise ValueError(f"'{name}' must contain at least one sampling point.")
-        if positive and np.any(arr <= 0.0):
-            raise ValueError(f"'{name}' values must be strictly positive.")
-        diffs = np.diff(arr)
-        if np.any(diffs < 0.0) and np.any(diffs > 0.0):
-            raise ValueError(f"'{name}' values must be monotonic.")
-        return np.ascontiguousarray(arr, dtype=np.float64)
-
-    def _describe_sampling(self):
-        base = f"mode={self.mode}, n_s={self.n_s}, s_min={self.s_min}, s_max={self.s_max}"
-        if self.mode == "smu":
-            base += f", n_mu={self.n_mu}, mu_min={self.mu_min}, mu_max={self.mu_max}"
-        if isinstance(self.s, dict) and (self.mode == "s" or isinstance(self.mu, dict)):
-            return base
-        return f"{base}, source=explicit sampling array"
-
-    def _format_product_list(self, products):
-        return "[" + ", ".join(products) + "]"
-
-    def _describe_products(self, expanded_products):
-        computed = [product for product in expanded_products if product != "xi"]
-        derived = ["xi"] if "xi" in expanded_products else []
-        text = (
-            f"Products: requested={self._format_product_list(self.products)} | "
-            f"computed={self._format_product_list(computed)}"
-        )
-        if derived:
-            text += f" | derived={self._format_product_list(derived)}"
-        return text
-
-    def _describe_task_distribution(self, total_tasks, n_ranks):
-        min_tasks = total_tasks // n_ranks
-        max_tasks = min_tasks + (1 if total_tasks % n_ranks else 0)
-        return f"Sampling tasks: total={total_tasks}, ranks={n_ranks}, per_rank={min_tasks}-{max_tasks}"
-
-    def _effective_pair_los(self, pair_window):
-        if self.mode != "smu" or not isinstance(pair_window, dict):
-            return None
-        other_args = pair_window.get("other_args", {})
-        if not all(axis in other_args for axis in ("nx", "ny", "nz")):
-            return None
-        los_values = tuple(other_args.get(axis) for axis in ("nx", "ny", "nz"))
-        if all(value is not None for value in los_values):
-            return los_values
-        return self.los_vector
-
     def _resolve_sampling(self):
         if self.s is None:
             raise ValueError("Corr_2PCF requires 's' to be provided as a dict or array-like input.")
@@ -378,7 +165,7 @@ class Corr_2PCF(TaskBase):
             n_s = int(self.s["n_s"])
             s_arr = np.linspace(s_min, s_max, n_s, dtype=np.float64)
         else:
-            s_arr = self._normalize_sampling_array(self.s, "s")
+            s_arr = normalize_sampling_array(self.s, "s")
         self.s_arr = np.ascontiguousarray(s_arr, dtype=np.float64)
         self.n_s = int(self.s_arr.size)
         self.s_min = float(np.min(self.s_arr))
@@ -393,7 +180,7 @@ class Corr_2PCF(TaskBase):
                 n_mu = int(self.mu["n_mu"])
                 mu_arr = np.linspace(mu_min, mu_max, n_mu, dtype=np.float64)
             else:
-                mu_arr = self._normalize_sampling_array(self.mu, "mu", positive=False)
+                mu_arr = normalize_sampling_array(self.mu, "mu", positive=False)
             self.mu_arr = np.ascontiguousarray(mu_arr, dtype=np.float64)
             self.n_mu = int(self.mu_arr.size)
             self.mu_min = float(np.min(self.mu_arr))
@@ -404,46 +191,17 @@ class Corr_2PCF(TaskBase):
             self.mu_min = None
             self.mu_max = None
 
-    def _serialize_convols_input(self, value):
-        if isinstance(value, str):
-            return value
-        if value == "uniform":
-            return "uniform"
-        if isinstance(value, (float, int, np.floating)):
-            return float(value)
-        if isinstance(value, ConvolsData):
-            return {
-                "kind": "ConvolsData",
-                "L": value.L,
-                "box_size": value.box_size,
-                "wavelet_mode": value.wavelet_mode,
-                "wavelet_level": value.wavelet_level,
-            }
-        return value
-
-    def _serialize_window_input(self, value):
-        if isinstance(value, dict):
-            return copy.deepcopy(value)
-        if isinstance(value, WindowFunc):
-            return {
-                "kind": "WindowFunc",
-                "type": getattr(value, "type", "custom"),
-                "len_args": copy.deepcopy(getattr(value, "len_args", {})),
-                "other_args": copy.deepcopy(getattr(value, "other_args", {})),
-            }
-        return value
-
     def _current_task_params_snapshot(self):
         params = {}
-        params['convols_data'] = self._serialize_convols_input(self.convols_data)
-        params['convols_data1'] = self._serialize_convols_input(self.convols_data1)
-        params['convols_data2'] = self._serialize_convols_input(self.convols_data2)
-        params['random'] = self._serialize_convols_input(self.random)
-        params['random1'] = self._serialize_convols_input(self.random1)
-        params['random2'] = self._serialize_convols_input(self.random2)
-        params['window'] = self._serialize_window_input(self.window)
-        params['window1'] = self._serialize_window_input(self.window1)
-        params['window2'] = self._serialize_window_input(self.window2)
+        params['convols_data'] = serialize_convols_input(self.convols_data)
+        params['convols_data1'] = serialize_convols_input(self.convols_data1)
+        params['convols_data2'] = serialize_convols_input(self.convols_data2)
+        params['random'] = serialize_convols_input(self.random)
+        params['random1'] = serialize_convols_input(self.random1)
+        params['random2'] = serialize_convols_input(self.random2)
+        params['window'] = serialize_window_input(self.window)
+        params['window1'] = serialize_window_input(self.window1)
+        params['window2'] = serialize_window_input(self.window2)
         params['pair_window'] = copy.deepcopy(
             self.pair_window if self.pair_window is not None else self.pair_window_params
         )
@@ -467,51 +225,8 @@ class Corr_2PCF(TaskBase):
         params['fout_path'] = self.fout_path
         return params
 
-    def _describe_pair_window(self, pair_window):
-        if isinstance(pair_window, dict):
-            mapping = pair_window.get("mapping", "custom")
-            mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
-            parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
-            len_args = pair_window.get("len_args", {})
-            other_args = pair_window.get("other_args", {})
-            if len_args:
-                parts.append(f"len_args={len_args}")
-            if other_args:
-                parts.append(f"other_args={other_args}")
-            pair_los = self._effective_pair_los(pair_window)
-            if pair_los is not None:
-                parts.append(f"los={pair_los}")
-            return "Pair window: " + " | ".join(parts)
-        return "Pair window: default shell mapping"
-
-    def _compact_window_desc(self, win):
-        if win is None:
-            return "window=none"
-        if isinstance(win, dict):
-            args = win.get("len_args", {})
-            if args:
-                return f"window={win.get('type', 'custom')} {args}"
-            return f"window={win.get('type', 'custom')}"
-        if isinstance(win, WindowFunc):
-            args = getattr(win, "len_args", {})
-            if args:
-                return f"window={getattr(win, 'type', 'custom')} {args}"
-            return f"window={getattr(win, 'type', 'custom')}"
-        return "window=custom"
-
     def _memory_leg_desc(self, source_desc, leg_idx):
-        return f"{source_desc}, {self._compact_window_desc(getattr(self, f'window{leg_idx}'))}"
-
-    def _describe_random_input(self, value):
-        if value == "uniform":
-            return "uniform random density"
-        if isinstance(value, str):
-            return f"path={value}"
-        if isinstance(value, ConvolsData):
-            return "provided random ConvolsData"
-        if isinstance(value, (float, int, np.floating)):
-            return f"density={float(value):.5e}"
-        return "unset"
+        return f"{source_desc}, {compact_window_desc(getattr(self, f'window{leg_idx}'))}"
 
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
         if provided_convols is not None:
@@ -569,7 +284,7 @@ class Corr_2PCF(TaskBase):
         func_util.safe_exit(1)
 
     def _field_density(self, field):
-        return _field_density(field)
+        return field_density(field)
 
     def _resolve_window(self, leg_idx, base_convols, provided_window):
         if provided_window is None:
@@ -591,7 +306,7 @@ class Corr_2PCF(TaskBase):
     def _required_input_flags(self):
         needs_data = False
         needs_random = False
-        for product in self._expanded_products():
+        for product in expand_products(self.products):
             product_needs_data, product_needs_random = PRODUCT_INPUT_FLAGS[product]
             needs_data = needs_data or product_needs_data
             needs_random = needs_random or product_needs_random
@@ -648,7 +363,7 @@ class Corr_2PCF(TaskBase):
         mapping = pair_window.get("mapping", "smu_to_RH" if self.mode == "smu" else "s_to_R")
         if isinstance(mapping, str):
             if mapping == "smu_to_RH":
-                params = _mapping_smu_to_RH(s, mu, pair_window, self.los_vector)
+                params = mapping_smu_to_RH(s, mu, pair_window, self.los_vector)
             else:
                 params = PAIR_WINDOW_MAPPINGS[mapping](s, mu, pair_window)
         else:
@@ -693,7 +408,7 @@ class Corr_2PCF(TaskBase):
                 return self._field_density(a) * self._field_density(b)
             if pair_window_obj is None:
                 pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
-            return _pair_product_with_window(a, b, pair_window_obj, self.threads)
+            return pair_product_with_window(a, b, pair_window_obj, self.threads)
 
         values = {
             "dd": None,
@@ -716,29 +431,6 @@ class Corr_2PCF(TaskBase):
         if "xi" in expanded_products:
             values["xi"] = values["delta_dd"] / values["rr"]
         return values
-
-    def _make_sampling_tasks(self):
-        if self.mode == "smu":
-            tasks = np.array(
-                [(i, j, self.s_arr[i], self.mu_arr[j]) for i in range(self.n_s) for j in range(self.n_mu)],
-                dtype=np.float64,
-            )
-            result_shape = (self.n_s, self.n_mu)
-        else:
-            tasks = np.array([(i, -1, self.s_arr[i], np.nan) for i in range(self.n_s)], dtype=np.float64)
-            result_shape = (self.n_s,)
-        return tasks, result_shape
-
-    def _build_result_from_gathered(self, gathered_tasks, gathered_values, result_shape):
-        flat_tasks = [item for sublist in gathered_tasks for item in sublist]
-        flat_values = [item for sublist in gathered_values for item in sublist]
-        result = np.empty(result_shape, dtype=np.float64)
-        for (s_idx, mu_idx), value in zip(flat_tasks, flat_values):
-            if self.mode == "smu":
-                result[s_idx, mu_idx] = value
-            else:
-                result[s_idx] = value
-        return result
 
     def _prepare_memory_leg_field(self, kind, leg_idx, base_convols_cache):
         if kind == "data":
@@ -821,7 +513,7 @@ class Corr_2PCF(TaskBase):
             return self._field_density(field1) * self._field_density(field2)
         reference_field = self._reference_pair_field(field1, field2)
         pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
-        return _pair_product_with_window(field1, field2, pair_window_obj, self.threads)
+        return pair_product_with_window(field1, field2, pair_window_obj, self.threads)
 
     def _run_memory_product(self, product, tasks, result_shape):
         comm = self.comm
@@ -877,7 +569,7 @@ class Corr_2PCF(TaskBase):
         gathered_values = comm.gather(local_values, root=0)
         gathered_tasks = comm.gather(local_tasks, root=0)
         if rank == 0:
-            result = self._build_result_from_gathered(gathered_tasks, gathered_values, result_shape)
+            result = build_result_from_gathered(gathered_tasks, gathered_values, result_shape, self.mode)
             if total_tasks == 0:
                 self.logger.info(f"Memory product {product} progress: 100.00%")
             self.logger.info(f"Memory product {product} time: {time.perf_counter() - time_product_start:.4f} sec")
@@ -893,19 +585,24 @@ class Corr_2PCF(TaskBase):
             self.corr2pcf_data = Corr2PCFData(threads=self.threads)
             self._sync_runtime_options()
             self._resolve_sampling()
-            self.products = self._normalize_products(self.products)
+            self.products = normalize_products(self.products)
             self.pair_window = self._normalize_pair_window(self.pair_window)
-            expanded_products = self._expanded_products()
+            expanded_products = expand_products(self.products)
             products_to_compute = [product for product in expanded_products if product != "xi"]
 
             if rank == 0:
-                tasks, result_shape = self._make_sampling_tasks()
+                tasks, result_shape = make_sampling_tasks(self.mode, self.s_arr, self.mu_arr)
                 self.logger.info("Start to calculate 2PCF in memory strategy ...")
-                self.logger.info(self._describe_sampling())
-                self.logger.info(self._describe_products(expanded_products))
-                self.logger.info(self._describe_pair_window(self.pair_window))
+                self.logger.info(
+                    describe_sampling(
+                        self.mode, self.n_s, self.s_min, self.s_max,
+                        self.n_mu, self.mu_min, self.mu_max, self.s, self.mu
+                    )
+                )
+                self.logger.info(describe_products(self.products, expanded_products))
+                self.logger.info(describe_pair_window(self.pair_window, self.mode, self.los_vector))
                 self.logger.info(f"Pair-window cache: enabled={self.pair_window_cache}")
-                self.logger.info(self._describe_task_distribution(len(tasks), comm.Get_size()))
+                self.logger.info(describe_task_distribution(len(tasks), comm.Get_size()))
             else:
                 tasks = None
                 result_shape = None
@@ -961,8 +658,8 @@ class Corr_2PCF(TaskBase):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
         self._resolve_sampling()
-        self.products = self._normalize_products(self.products)
-        expanded_products = self._expanded_products()
+        self.products = normalize_products(self.products)
+        expanded_products = expand_products(self.products)
         if convols_data1 is None:
             convols_data1 = self.convols_data1
         if convols_data2 is None:
@@ -981,9 +678,12 @@ class Corr_2PCF(TaskBase):
         needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
-            self.logger.info(f"{self._describe_sampling()}, threads={self.threads}")
-            self.logger.info(self._describe_products(expanded_products))
-            self.logger.info(self._describe_pair_window(self.pair_window))
+            self.logger.info(
+                f"{describe_sampling(self.mode, self.n_s, self.s_min, self.s_max, self.n_mu, self.mu_min, self.mu_max, self.s, self.mu)}, "
+                f"threads={self.threads}"
+            )
+            self.logger.info(describe_products(self.products, expanded_products))
+            self.logger.info(describe_pair_window(self.pair_window, self.mode, self.los_vector))
             base_convols_cache = {}
             resolved_data_legs = []
             if needs_data:
@@ -1107,7 +807,7 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            expanded_products = self._expanded_products()
+            expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
             _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
             _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
@@ -1143,7 +843,7 @@ class Corr_2PCF(TaskBase):
                 next_report_threshold = report_interval
                 requests = [None] + [comm.irecv(source=r, tag=r) for r in range(1, size)]
                 count_all = False
-                self.logger.info(self._describe_task_distribution(total_tasks, size))
+                self.logger.info(describe_task_distribution(total_tasks, size))
                 self.logger.info("Progress:   0.00%")
             else:
                 task_sub_arrs = None
