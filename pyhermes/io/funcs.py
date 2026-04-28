@@ -106,8 +106,13 @@ def check_fin(f_in):
 def dl_rich_pbar(url, output_path=None):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
+    if output_path and os.path.exists(output_path):
+        logger.info(f"File '{output_path}' already exists. Skipping download.")
+        return output_path
+
     # Get the file size from the response headers
-    response = requests.head(url, allow_redirects=True)
+    response = requests.head(url, allow_redirects=True, timeout=30)
+    response.raise_for_status()
     total_size = int(response.headers.get('content-length', 0))
     content_disposition = response.headers.get('content-disposition')
     if not output_path:
@@ -115,12 +120,12 @@ def dl_rich_pbar(url, output_path=None):
             output_path = content_disposition.split("filename=")[-1].strip('"')
         else:
             output_path = os.path.basename(url)
+        if os.path.exists(output_path):
+            logger.info(f"File '{output_path}' already exists. Skipping download.")
+            return output_path
     output_dir = os.path.dirname(output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
-    if os.path.exists(output_path):
-        logger.info(f"File '{output_path}' already exists. Skipping download.")
-        return output_path
     # Use Progress to customize the progress bar style
     logger.info(f"Downloading file from '{url}'")
     with Progress(
@@ -133,7 +138,8 @@ def dl_rich_pbar(url, output_path=None):
     ) as progress:
         task = progress.add_task(f"Downloading {os.path.basename(output_path)}...", total=total_size)
         # Download the file and update the progress bar
-        with requests.get(url, stream=True) as r, open(output_path, 'wb') as f:
+        with requests.get(url, stream=True, timeout=30) as r, open(output_path, 'wb') as f:
+            r.raise_for_status()
             for chunk in r.iter_content(chunk_size=1024):
                 f.write(chunk)
                 # Update the progress bar by advancing the number of downloaded bytes
