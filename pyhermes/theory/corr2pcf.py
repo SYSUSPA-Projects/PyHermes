@@ -152,7 +152,7 @@ class Corr_2PCF(TaskBase):
         self.pair_window = None
         self._fields_prepared = False
 
-    def _sync_runtime_options(self):
+    def _sync_runtime_options(self, log_runtime=True):
         self.mode = str(self.mode).strip().lower()
         if self.mode not in ("s", "smu"):
             raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
@@ -174,7 +174,8 @@ class Corr_2PCF(TaskBase):
         self.task_params['memory_strategy'] = self.memory_strategy
         self.task_params['pair_window_cache'] = self.pair_window_cache
         self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
-        self.sync_runtime_options(context="Corr_2PCF runtime configuration")
+        if log_runtime:
+            self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
         self.convols_data = self.task_params.get('convols_data', '')
@@ -333,10 +334,40 @@ class Corr_2PCF(TaskBase):
     def _describe_sampling(self):
         base = f"mode={self.mode}, n_s={self.n_s}, s_min={self.s_min}, s_max={self.s_max}"
         if self.mode == "smu":
-            base += f", n_mu={self.n_mu}, mu_min={self.mu_min}, mu_max={self.mu_max}, los={self.los_vector}"
+            base += f", n_mu={self.n_mu}, mu_min={self.mu_min}, mu_max={self.mu_max}"
         if isinstance(self.s, dict) and (self.mode == "s" or isinstance(self.mu, dict)):
             return base
         return f"{base}, source=explicit sampling array"
+
+    def _format_product_list(self, products):
+        return "[" + ", ".join(products) + "]"
+
+    def _describe_products(self, expanded_products):
+        computed = [product for product in expanded_products if product != "xi"]
+        derived = ["xi"] if "xi" in expanded_products else []
+        text = (
+            f"Products: requested={self._format_product_list(self.products)} | "
+            f"computed={self._format_product_list(computed)}"
+        )
+        if derived:
+            text += f" | derived={self._format_product_list(derived)}"
+        return text
+
+    def _describe_task_distribution(self, total_tasks, n_ranks):
+        min_tasks = total_tasks // n_ranks
+        max_tasks = min_tasks + (1 if total_tasks % n_ranks else 0)
+        return f"Sampling tasks: total={total_tasks}, ranks={n_ranks}, per_rank={min_tasks}-{max_tasks}"
+
+    def _effective_pair_los(self, pair_window):
+        if self.mode != "smu" or not isinstance(pair_window, dict):
+            return None
+        other_args = pair_window.get("other_args", {})
+        if not all(axis in other_args for axis in ("nx", "ny", "nz")):
+            return None
+        los_values = tuple(other_args.get(axis) for axis in ("nx", "ny", "nz"))
+        if all(value is not None for value in los_values):
+            return los_values
+        return self.los_vector
 
     def _resolve_sampling(self):
         if self.s is None:
@@ -440,11 +471,18 @@ class Corr_2PCF(TaskBase):
         if isinstance(pair_window, dict):
             mapping = pair_window.get("mapping", "custom")
             mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
-            return (
-                f"pair_window dict | {func_util.describe_window_action(pair_window)} | "
-                f"mapping={mapping_name}"
-            )
-        return "pair_window dict | default window with runtime separation s"
+            parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
+            len_args = pair_window.get("len_args", {})
+            other_args = pair_window.get("other_args", {})
+            if len_args:
+                parts.append(f"len_args={len_args}")
+            if other_args:
+                parts.append(f"other_args={other_args}")
+            pair_los = self._effective_pair_los(pair_window)
+            if pair_los is not None:
+                parts.append(f"los={pair_los}")
+            return "Pair window: " + " | ".join(parts)
+        return "Pair window: default shell mapping"
 
     def _compact_window_desc(self, win):
         if win is None:
@@ -809,7 +847,8 @@ class Corr_2PCF(TaskBase):
         step_report_interval = max(1, max_local_tasks // 10)
         if rank == 0:
             report_interval = max(1, total_tasks // 10)
-            next_report_threshold = 0
+            next_report_threshold = report_interval
+            self.logger.info(f"Memory product {product} progress:   0.00%")
         for local_idx in range(max_local_tasks):
             if local_idx < len(task_sub_arr):
                 task = task_sub_arr[local_idx]
@@ -839,6 +878,8 @@ class Corr_2PCF(TaskBase):
         gathered_tasks = comm.gather(local_tasks, root=0)
         if rank == 0:
             result = self._build_result_from_gathered(gathered_tasks, gathered_values, result_shape)
+            if total_tasks == 0:
+                self.logger.info(f"Memory product {product} progress: 100.00%")
             self.logger.info(f"Memory product {product} time: {time.perf_counter() - time_product_start:.4f} sec")
             return result
         return None
@@ -858,14 +899,13 @@ class Corr_2PCF(TaskBase):
             products_to_compute = [product for product in expanded_products if product != "xi"]
 
             if rank == 0:
+                tasks, result_shape = self._make_sampling_tasks()
                 self.logger.info("Start to calculate 2PCF in memory strategy ...")
                 self.logger.info(self._describe_sampling())
-                self.logger.info(
-                    f"requested_products={self.products}, expanded_products={expanded_products}, "
-                    f"pair_window_cache={self.pair_window_cache}"
-                )
-                self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
-                tasks, result_shape = self._make_sampling_tasks()
+                self.logger.info(self._describe_products(expanded_products))
+                self.logger.info(self._describe_pair_window(self.pair_window))
+                self.logger.info(f"Pair-window cache: enabled={self.pair_window_cache}")
+                self.logger.info(self._describe_task_distribution(len(tasks), comm.Get_size()))
             else:
                 tasks = None
                 result_shape = None
@@ -942,8 +982,8 @@ class Corr_2PCF(TaskBase):
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(f"{self._describe_sampling()}, threads={self.threads}")
-            self.logger.info(f"requested_products={self.products}, expanded_products={expanded_products}")
-            self.logger.info(f"Pair-correlation window: {self._describe_pair_window(self.pair_window)}")
+            self.logger.info(self._describe_products(expanded_products))
+            self.logger.info(self._describe_pair_window(self.pair_window))
             base_convols_cache = {}
             resolved_data_legs = []
             if needs_data:
@@ -1051,7 +1091,7 @@ class Corr_2PCF(TaskBase):
         return local_value
 
     def run(self, save_result=True, overwrite=False):
-        self._sync_runtime_options()
+        self._sync_runtime_options(log_runtime=False)
         if self.memory_strategy == "memory":
             if self._fields_prepared and self.rank == 0:
                 self.logger.warning(
@@ -1082,13 +1122,8 @@ class Corr_2PCF(TaskBase):
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
                 self.logger.info("Start to calculate 2PCF ...")
-                self.logger.info(self._describe_sampling())
-                self.logger.info(
-                    f"requested_products={self.products}, expanded_products={expanded_products}"
-                )
                 time_start = time.perf_counter()
                 self.logger.info(f"Pre-2PCF setup time: {time_start - time_run_1:.4f} sec")
-                self.logger.info(f"Main 2PCF loop products: {expanded_products}")
             # Generate sampling tasks at rank0.
             if rank == 0:
                 if self.mode == "smu":
@@ -1105,9 +1140,11 @@ class Corr_2PCF(TaskBase):
                 arr_complete = np.zeros(size, dtype=int)
                 total_tasks = len(tasks)
                 report_interval = max(1, total_tasks // 10)
-                next_report_threshold = 0
+                next_report_threshold = report_interval
                 requests = [None] + [comm.irecv(source=r, tag=r) for r in range(1, size)]
                 count_all = False
+                self.logger.info(self._describe_task_distribution(total_tasks, size))
+                self.logger.info("Progress:   0.00%")
             else:
                 task_sub_arrs = None
                 result_shape = None
@@ -1166,7 +1203,7 @@ class Corr_2PCF(TaskBase):
                     # Show status
                     if global_completed >= next_report_threshold:
                         progress = (global_completed / total_tasks) * 100
-                        self.logger.info(f" Progress: {progress:6.2f}%")
+                        self.logger.info(f"Progress: {progress:6.2f}%")
                         # Renew next report checkpoint
                         next_report_threshold += report_interval
                         if global_completed == total_tasks:
@@ -1222,7 +1259,7 @@ class Corr_2PCF(TaskBase):
                 self.corr2pcf_data.xi = None if 'xi' not in expanded_products else build_result(gathered_xi)
                 if not count_all:
                     progress = 100.
-                    self.logger.info(f" Progress: {progress:6.2f}%")
+                    self.logger.info(f"Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
                 self.logger.info(f"2PCF main loop time: {time_end - time_start:.4f} sec")
                 self.logger.info("Main 2PCF loop finished, gathering results on rank 0 ...")
