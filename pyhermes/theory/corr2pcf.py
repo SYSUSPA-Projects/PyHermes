@@ -518,7 +518,7 @@ class Corr_2PCF(TaskBase):
 
     def _normalize_pair_window(self, pair_window):
         if pair_window is None:
-            return copy.deepcopy(self.pair_window_params)
+            pair_window = self.pair_window_params
         if not isinstance(pair_window, dict):
             raise TypeError(
                 f"Unsupported pair_window input: expected dict or None, got {type(pair_window)}."
