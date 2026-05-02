@@ -3,6 +3,7 @@ import sys
 import inspect
 import argparse
 import importlib
+import copy
 
 import yaml
 import json5
@@ -131,18 +132,26 @@ class ParamBase(object):
             if key not in default_dict:
                 if isinstance(value, dict):
                     # Add new level
-                    self.logger.warning(f"Adding non-default level: '{full_key}'")
+                    if full_key.startswith("Corr_2PCF.sampling."):
+                        self.logger.info(f"Adding Corr_2PCF sampling coordinate: '{full_key}'")
+                    else:
+                        self.logger.warning(f"Adding non-default level: '{full_key}'")
                     default_dict[key] = {}  # Init new level
                     self._recursive_update(default_dict[key], value, full_key)
                 else:
                     # Add new key
-                    if parent_key != 'Convols.window':
+                    if parent_key == "Corr_2PCF.sampling" or parent_key.startswith("Corr_2PCF.sampling."):
+                        self.logger.info(f"Adding Corr_2PCF sampling value: '{full_key}' as '{value}'")
+                    elif parent_key != 'Convols.window':
                         # Skip warning for window_args
                         self.logger.warning(f"Adding non-default key: '{full_key}'")
                     else:
                         # ↓ Use special info instead of warning ↑
                         self.logger.info(f"Adding customizable window arg: '{full_key}' as '{value}'")
                     default_dict[key] = value
+            elif full_key == "Corr_2PCF.pair_window" and isinstance(value, dict):
+                self.logger.info("Using user-provided Corr_2PCF.pair_window dictionary.")
+                default_dict[key] = copy.deepcopy(value)
             elif isinstance(value, dict) and isinstance(default_dict[key], dict):
                 # Recursively to due the whole dict structure
                 self._recursive_update(default_dict[key], value, full_key)
@@ -177,6 +186,18 @@ class ParamBase(object):
         if full_key.endswith(".los"):
             default_ok = isinstance(default_value, (str, list, tuple))
             new_ok = isinstance(new_value, (str, list, tuple))
+            return default_ok and new_ok
+        if full_key.endswith(".pair_window"):
+            default_ok = isinstance(default_value, (dict, str))
+            new_ok = isinstance(new_value, (dict, str))
+            return default_ok and new_ok
+        if full_key.endswith(".len_args"):
+            default_ok = isinstance(default_value, (dict, list, tuple, str))
+            new_ok = isinstance(new_value, (dict, list, tuple, str))
+            return default_ok and new_ok
+        if full_key.endswith(".los_args"):
+            default_ok = isinstance(default_value, (dict, list, tuple))
+            new_ok = isinstance(new_value, (dict, list, tuple))
             return default_ok and new_ok
         return False
     

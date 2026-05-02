@@ -10,7 +10,8 @@ class Corr2PCFData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
         self.corr2pcf_info = {}
-        self.mode = "s"
+        self.sampling_names = ()
+        self.sampling = {}
         self.s = None
         self.mu = None
         self.dd = None
@@ -26,7 +27,7 @@ class Corr2PCFData(HermesData):
 
     def format_corr2pcf_params(self):
         for key, value in self.corr2pcf_info.items():
-            if key in ('s', 'mu'):
+            if key in ('sampling', 'sampling_names', 's', 'mu'):
                 continue
             setattr(self, key, value)
 
@@ -38,10 +39,14 @@ class Corr2PCFData(HermesData):
 
     def _ensure_result_array(self, values, name):
         arr = np.asarray(values, dtype=np.float64)
-        expected_ndim = 2 if self.mode == "smu" else 1
+        expected_ndim = len(self.sampling_names)
         if arr.ndim != expected_ndim:
-            raise ValueError(f"'{name}' must be stored as a {expected_ndim}D array for mode={self.mode}, got shape {arr.shape}.")
+            raise ValueError(f"'{name}' must be stored as a {expected_ndim}D array for sampling={self.sampling_names}, got shape {arr.shape}.")
         return np.ascontiguousarray(arr, dtype=np.float64)
+
+    def _sync_sampling_attrs(self):
+        self.s = self.sampling.get("s")
+        self.mu = self.sampling.get("mu")
 
     def load_corr2pcf(self, f_in, single=True):
         self.load(f_in, read_2pcf=True, single=single)
@@ -55,18 +60,15 @@ class Corr2PCFData(HermesData):
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
-            if 's' not in dataset:
-                self.logger.error("Failed to load the dataset. The file is missing the 's' key.")
+            if 'sampling' not in dataset:
+                self.logger.error("Failed to load the dataset. The file is missing the 'sampling' key.")
                 func_util.safe_exit(1)
-            self.mode = dataset.get('mode', 's')
-            self.s = self._ensure_1d_array(dataset['s'], 's')
-            if self.mode == "s":
-                self.mu = None
-            elif dataset.get('mu') is None:
-                self.logger.error("Failed to load the dataset. mode='smu' requires the 'mu' key.")
-                func_util.safe_exit(1)
-            else:
-                self.mu = self._ensure_1d_array(dataset.get('mu'), 'mu')
+            self.sampling_names = tuple(dataset.get('sampling_names', dataset['sampling'].keys()))
+            self.sampling = {
+                name: self._ensure_1d_array(dataset['sampling'][name], name)
+                for name in self.sampling_names
+            }
+            self._sync_sampling_attrs()
             self.dd = dataset.get('dd')
             self.dr = dataset.get('dr')
             self.rd = dataset.get('rd')
@@ -99,9 +101,11 @@ class Corr2PCFData(HermesData):
             'convols_info1': self.convols_info1,
             'convols_info2': self.convols_info2,
             'corr2pcf_info': self.corr2pcf_info,
-            'mode': self.mode,
-            's': self._ensure_1d_array(self.s, 's'),
-            'mu': None if self.mode == "s" else self._ensure_1d_array(self.mu, 'mu'),
+            'sampling_names': tuple(self.sampling_names),
+            'sampling': {
+                name: self._ensure_1d_array(self.sampling[name], name)
+                for name in self.sampling_names
+            },
             'dd': None if self.dd is None else self._ensure_result_array(self.dd, 'dd'),
             'dr': None if self.dr is None else self._ensure_result_array(self.dr, 'dr'),
             'rd': None if self.rd is None else self._ensure_result_array(self.rd, 'rd'),

@@ -122,9 +122,8 @@ def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     Thin ring-pair window in k-space with a configurable line of sight.
 
     ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
-    should be passed via
-    ``other_args`` because it is dimensionless. ``R`` and ``H`` are lengths and
-    should be passed via ``len_args``.
+    should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
+    passed via ``len_args``.
     """
     norm = np.sqrt(nx * nx + ny * ny + nz * nz)
     if norm == 0.0:
@@ -154,8 +153,8 @@ def window_function_disk_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     Thin disk-pair window in k-space with a configurable line of sight.
 
     ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
-    should be passed via ``other_args`` because it is dimensionless. ``R`` and
-    ``H`` are lengths and should be passed via ``len_args``.
+    should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
+    passed via ``len_args``.
 
     Let k_parallel = k dot n, k_perp = sqrt(|k|^2 - k_parallel^2),
     q_perp = 2*pi*k_perp*R, and q_parallel = 2*pi*k_parallel*H.
@@ -195,8 +194,8 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     Cylindrical top-hat window in k-space with a configurable line of sight.
 
     ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
-    should be passed via ``other_args`` because it is dimensionless. ``R`` and
-    ``H`` are lengths and should be passed via ``len_args``.
+    should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
+    passed via ``len_args``.
 
     Let k_parallel = k dot n, k_perp = sqrt(|k|^2 - k_parallel^2),
     q_perp = 2*pi*k_perp*R, and q_parallel = 2*pi*k_parallel*H/2.

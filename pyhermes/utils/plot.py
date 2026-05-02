@@ -11,8 +11,9 @@ def _as_1d_array(values, name):
 
 
 def _get_smu_arrays(corr2pcf_smu):
-    s = _as_1d_array(corr2pcf_smu.s, "corr2pcf_smu.s")
-    mu = _as_1d_array(corr2pcf_smu.mu, "corr2pcf_smu.mu")
+    sampling = getattr(corr2pcf_smu, "sampling", {})
+    s = _as_1d_array(sampling.get("s"), "corr2pcf_smu.sampling['s']")
+    mu = _as_1d_array(sampling.get("mu"), "corr2pcf_smu.sampling['mu']")
     xi = np.asarray(corr2pcf_smu.xi, dtype=np.float64)
     if xi.shape != (s.size, mu.size):
         raise ValueError(

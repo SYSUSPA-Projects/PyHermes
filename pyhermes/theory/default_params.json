@@ -7,6 +7,7 @@
 		"window": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"threads": 1,
@@ -22,36 +23,35 @@
 		"window": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window1": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window2": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"pair_window": {
-			"type": "",
-			"len_args": {},
+			"type": "shell",
+			"len_args": ["R"],
+			"los_args": {},
 			"other_args": {},
-			"mapping": "",
+			"mapping": "s_to_R",
 			"kernel_mode": ""
 		},
-		"mode": "s",
-		"los": "z",
-		"s": {
-			"s_min": 1.0,
-			"s_max": 150.0,
-			"n_s": 30
-		},
-		"mu": {
-			"mu_min": 0.0,
-			"mu_max": 1.0,
-			"n_mu": 20
+		"sampling": {
+			"s": {
+				"min": 1.0,
+				"max": 150.0,
+				"n": 30
+			}
 		},
 		"threads": 1,
 		"products": "xi",
@@ -76,21 +76,25 @@
 		"window": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window1": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window2": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window3": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"r12": 20.0,
@@ -126,21 +130,25 @@
 		"window": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window1": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window2": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"window3": {
 			"type": "",
 			"len_args": {},
+			"los_args": {},
 			"other_args": {}
 		},
 		"r12": 20.0,

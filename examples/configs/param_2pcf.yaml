@@ -3,12 +3,15 @@ Corr_2PCF:
    random: "uniform"
    fout_path: "./output/quijote_2pcf.pkl"
    pair_window:
-      type: ""
-      len_args: {}
+      type: "shell"
+      len_args: ["R"]
+      los_args: {}
       other_args: {}
-   mode: "s"
-   s:
-      s_min: 1.0
-      s_max: 150.0
-      n_s: 30
+      mapping: "s_to_R"
+      kernel_mode: "octant"
+   sampling:
+      s:
+         min: 1.0
+         max: 150.0
+         n: 30
    products: "xi"

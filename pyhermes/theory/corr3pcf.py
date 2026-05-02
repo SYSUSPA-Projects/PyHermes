@@ -14,7 +14,7 @@ from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.sampling import random_points_box
 from pyhermes.pipeline import TaskBase
 
-from .corr2pcf import compute_pair_product_at_smu
+from .corr2pcf import compute_pair_product_at_sample
 
 
 ### Product dependency metadata ###
@@ -338,6 +338,7 @@ class Corr_3PCF(TaskBase):
                 "kind": "WindowFunc",
                 "type": getattr(value, "type", "custom"),
                 "len_args": copy.deepcopy(getattr(value, "len_args", {})),
+                "los_args": copy.deepcopy(getattr(value, "los_args", {})),
                 "other_args": copy.deepcopy(getattr(value, "other_args", {})),
             }
         return value
@@ -652,7 +653,7 @@ class Corr_3PCF(TaskBase):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
-        return compute_pair_product_at_smu(radius, None, field1, field2)
+        return compute_pair_product_at_sample({"s": radius}, field1, field2)
 
     def _compute_rrr_value(
         self, mu, r23_value, center, pos_local, seed_base_rot, theta_index,

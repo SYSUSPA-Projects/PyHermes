@@ -16,6 +16,32 @@ from pyhermes.utils.window_functions import set_window_function
 
 ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
 VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
+LOS_ARG_KEYS = ("nx", "ny", "nz")
+DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
+
+
+def normalize_los_args(los_args, window_type=None):
+    if los_args is None:
+        los_args = {}
+    if isinstance(los_args, (list, tuple, np.ndarray)):
+        arr = np.asarray(los_args, dtype=np.float64)
+        if arr.shape != (3,):
+            raise ValueError("los_args array must contain exactly three values: [nx, ny, nz].")
+        los_args = {key: float(value) for key, value in zip(LOS_ARG_KEYS, arr)}
+    elif isinstance(los_args, dict):
+        los_args = dict(los_args)
+    else:
+        raise TypeError("los_args must be a dict, length-3 array, or None.")
+    if not los_args and window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:
+        los_args = dict(DEFAULT_LOS_ARGS)
+    if los_args:
+        if not all(key in los_args for key in LOS_ARG_KEYS):
+            raise ValueError("los_args must define nx, ny, and nz together.")
+        los = np.array([los_args[key] for key in LOS_ARG_KEYS], dtype=np.float64)
+        if np.linalg.norm(los) == 0.0:
+            raise ValueError("los_args vector must be non-zero.")
+        los_args = {key: float(los_args[key]) for key in LOS_ARG_KEYS}
+    return los_args
 
 
 class WindowFunc(ConvolsData):
@@ -76,8 +102,12 @@ class WindowFunc(ConvolsData):
         self.window_params["kernel_mode"] = self.kernel_mode
         self.len_args = win_params['len_args']
         self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
+        self.los_args = normalize_los_args(win_params.get('los_args', {}), self.type)
         self.other_args = win_params.get('other_args', {})
+        self.input_params["los_args"] = self.los_args
+        self.window_params["los_args"] = self.los_args
         self.window_args = dict(self.rescale_len_args)
+        self.window_args.update(self.los_args)
         self.window_args.update(self.other_args)
         self.w_kernel = None
 
@@ -99,13 +129,14 @@ class WindowFunc(ConvolsData):
         return kernel_mode
 
     def _los_is_axis_aligned(self):
+        los_args = dict(self.los_args)
         if self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not all(
-            key in self.other_args for key in ("nx", "ny", "nz")
+            key in los_args for key in ("nx", "ny", "nz")
         ):
             return not self.has_custom_func
-        nx = float(self.other_args.get("nx", 0.0))
-        ny = float(self.other_args.get("ny", 0.0))
-        nz = float(self.other_args.get("nz", 1.0))
+        nx = float(los_args.get("nx", 0.0))
+        ny = float(los_args.get("ny", 0.0))
+        nz = float(los_args.get("nz", 1.0))
         los = np.array([nx, ny, nz], dtype=np.float64)
         norm = np.linalg.norm(los)
         if norm == 0.0:

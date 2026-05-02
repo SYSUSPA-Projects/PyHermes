@@ -39,13 +39,20 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
             R: 20
 
    Corr_2PCF:
-      convols_data_path: "./output/quijote_sfc.pkl"
+      convols_data: "./output/quijote_sfc.pkl"
+      random: "uniform"
       fout_path: "./output/quijote_2pcf.pkl"
-      mode: "s"
-      s:
-         s_min: 1.0
-         s_max: 150.0
-         n_s: 30
+      pair_window:
+         type: "shell"
+         len_args: ["R"]
+         los_args: {}
+         other_args: {}
+         mapping: "s_to_R"
+      sampling:
+         s:
+            min: 1.0
+            max: 150.0
+            n: 30
 
    Corr_3PCF:
       convols_data_path: "./output/quijote_sfc.pkl"
@@ -106,4 +113,4 @@ Use the all-in-one style when:
 
 If you prefer simpler, task-specific examples, start with the dedicated pages
 for :doc:`convols/convols`, :doc:`counting/counting`, :doc:`corr_2pcf/corr_2pcf`,
- :doc:`corr_3pcf/corr_3pcf`, and :doc:`corr_3pcf_multipole/corr_3pcf_multipole`.
+:doc:`corr_3pcf/corr_3pcf`, and :doc:`corr_3pcf_multipole/corr_3pcf_multipole`.

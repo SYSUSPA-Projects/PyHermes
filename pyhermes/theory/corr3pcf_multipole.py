@@ -161,6 +161,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 "kind": "WindowFunc",
                 "type": getattr(value, "type", "custom"),
                 "len_args": copy.deepcopy(getattr(value, "len_args", {})),
+                "los_args": copy.deepcopy(getattr(value, "los_args", {})),
                 "other_args": copy.deepcopy(getattr(value, "other_args", {})),
             }
         return value

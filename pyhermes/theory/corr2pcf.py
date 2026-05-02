@@ -2,7 +2,6 @@ import time
 import pickle
 import copy
 import hashlib
-import inspect
 import json
 import os
 
@@ -35,6 +34,11 @@ PRODUCT_INPUT_FLAGS = {
 
 ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
 VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
+LOS_ARG_KEYS = ("nx", "ny", "nz")
+LOS_AWARE_PAIR_WINDOW_TYPES = {"ring", "disk", "cylinder"}
+DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
+POSITIVE_SAMPLING_ARGS = {"s", "r", "R", "rp", "rt"}
+REMOVED_CORR2PCF_PARAMS = {"mode", "los", "s", "mu"}
 
 
 def parse_bool(value):
@@ -43,35 +47,109 @@ def parse_bool(value):
     return bool(value)
 
 
-def los_to_vector(los):
-    if isinstance(los, str):
-        axis = los.strip().lower()
-        if axis == "x":
-            return (1.0, 0.0, 0.0)
-        if axis == "y":
-            return (0.0, 1.0, 0.0)
-        if axis == "z":
-            return (0.0, 0.0, 1.0)
-        raise ValueError("Corr_2PCF 'los' must be one of 'x', 'y', 'z', or a length-3 array.")
-    arr = np.asarray(los, dtype=np.float64)
-    if arr.shape != (3,):
-        raise ValueError("Corr_2PCF 'los' must be one of 'x', 'y', 'z', or a length-3 array.")
-    if np.linalg.norm(arr) == 0.0:
-        raise ValueError("Corr_2PCF 'los' vector must be non-zero.")
-    return tuple(float(v) for v in arr)
+def default_pair_window():
+    return {
+        "type": "shell",
+        "len_args": {"R": None},
+        "los_args": {},
+        "other_args": {},
+        "mapping": "s_to_R",
+        "kernel_mode": "octant",
+    }
 
 
-def default_pair_window(mode, los_vector):
-    if mode == "smu":
-        nx, ny, nz = los_vector
+def normalize_len_args(len_args):
+    if len_args is None:
+        return {}
+    if isinstance(len_args, dict):
+        return copy.deepcopy(len_args)
+    if isinstance(len_args, str):
+        return {len_args: None}
+    if isinstance(len_args, (list, tuple)):
+        normalized = {}
+        for item in len_args:
+            if not isinstance(item, str):
+                raise TypeError("pair_window len_args entries must be strings.")
+            normalized[item] = None
+        return normalized
+    raise TypeError("pair_window len_args must be a dict, string, list, tuple, or None.")
+
+
+def merge_len_arg_defaults(len_args, names):
+    normalized = normalize_len_args(len_args)
+    for name in names:
+        normalized.setdefault(name, None)
+    return normalized
+
+
+def normalize_los_args(los_args, window_type=None):
+    if los_args is None:
+        los_args = {}
+    if isinstance(los_args, (list, tuple, np.ndarray)):
+        arr = np.asarray(los_args, dtype=np.float64)
+        if arr.shape != (3,):
+            raise ValueError("los_args array must contain exactly three values: [nx, ny, nz].")
+        los_args = {key: float(value) for key, value in zip(LOS_ARG_KEYS, arr)}
+    elif isinstance(los_args, dict):
+        los_args = copy.deepcopy(los_args)
+    else:
+        raise TypeError("los_args must be a dict, length-3 array, or None.")
+    if not los_args and window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
+        los_args = copy.deepcopy(DEFAULT_LOS_ARGS)
+    if los_args:
+        if not all(key in los_args for key in LOS_ARG_KEYS):
+            raise ValueError("los_args must define nx, ny, and nz together.")
+        los = np.array([los_args[key] for key in LOS_ARG_KEYS], dtype=np.float64)
+        if np.linalg.norm(los) == 0.0:
+            raise ValueError("los_args vector must be non-zero.")
+        los_args = {key: float(los_args[key]) for key in LOS_ARG_KEYS}
+    return los_args
+
+
+def apply_builtin_pair_window_defaults(pair_window):
+    params = copy.deepcopy(pair_window)
+    window_type = params.get("type")
+    if not window_type:
+        return params
+    window_type = str(window_type).strip().lower()
+    params["type"] = window_type
+    if window_type == "shell":
+        params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R",))
+        params.setdefault("los_args", {})
+        params.setdefault("other_args", {})
+        params.setdefault("mapping", "s_to_R")
+    elif window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
+        params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R", "H"))
+        params.setdefault("los_args", copy.deepcopy(DEFAULT_LOS_ARGS))
+        params.setdefault("other_args", {})
+        params.setdefault("mapping", "smu_to_RH")
+    return params
+
+
+def pair_window_from_string(pair_window):
+    window_type = pair_window.strip().lower()
+    if not window_type:
+        raise ValueError("pair_window string cannot be empty.")
+    if window_type == "shell":
         return {
-            "type": "ring",
-            "len_args": {"R": None, "H": None},
-            "other_args": {"nx": nx, "ny": ny, "nz": nz},
-            "mapping": "smu_to_RH",
-            "kernel_mode": "auto",
+            "type": "shell",
+            "len_args": {"R": None},
+            "los_args": {},
+            "other_args": {},
+            "mapping": "s_to_R",
         }
-    return {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R", "kernel_mode": "octant"}
+    if window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
+        return {
+            "type": window_type,
+            "len_args": {"R": None, "H": None},
+            "los_args": copy.deepcopy(DEFAULT_LOS_ARGS),
+            "other_args": {},
+            "mapping": "smu_to_RH",
+        }
+    raise ValueError(
+        f"Unsupported pair_window string '{pair_window}'. "
+        "Supported built-in strings are 'shell', 'ring', 'disk', and 'cylinder'."
+    )
 
 
 def default_kernel_mode(window_type, has_custom_func=False):
@@ -141,13 +219,15 @@ def normalize_sampling_array(values, name, positive=True):
 
 
 # Logging and serialization helpers.
-def describe_sampling(mode, n_s, s_min, s_max, n_mu, mu_min, mu_max, s_spec, mu_spec):
-    base = f"mode={mode}, n_s={n_s}, s_min={s_min}, s_max={s_max}"
-    if mode == "smu":
-        base += f", n_mu={n_mu}, mu_min={mu_min}, mu_max={mu_max}"
-    if isinstance(s_spec, dict) and (mode == "s" or isinstance(mu_spec, dict)):
-        return base
-    return f"{base}, source=explicit sampling array"
+def describe_sampling(sampling_names, sampling_arrays, sampling_specs):
+    parts = []
+    for name in sampling_names:
+        arr = sampling_arrays[name]
+        text = f"{name}: n={arr.size}, min={float(np.min(arr))}, max={float(np.max(arr))}"
+        if not isinstance(sampling_specs.get(name), dict):
+            text += ", source=explicit array"
+        parts.append(text)
+    return "Sampling: " + " | ".join(parts)
 
 
 def format_product_list(products):
@@ -172,32 +252,26 @@ def describe_task_distribution(total_tasks, n_ranks):
     return f"Sampling tasks: total={total_tasks}, ranks={n_ranks}, per_rank={min_tasks}-{max_tasks}"
 
 
-def effective_pair_los(pair_window, mode, los_vector):
-    if mode != "smu" or not isinstance(pair_window, dict):
+def effective_pair_los(pair_window):
+    if not isinstance(pair_window, dict):
         return None
-    other_args = pair_window.get("other_args", {})
-    if not all(axis in other_args for axis in ("nx", "ny", "nz")):
+    los_args = pair_window.get("los_args", {})
+    if not all(axis in los_args for axis in LOS_ARG_KEYS):
         return None
-    los_values = tuple(other_args.get(axis) for axis in ("nx", "ny", "nz"))
+    los_values = tuple(los_args.get(axis) for axis in LOS_ARG_KEYS)
     if all(value is not None for value in los_values):
         return los_values
-    return los_vector
+    return None
 
 
-def describe_pair_window(pair_window, mode, los_vector):
+def describe_pair_window(pair_window):
     if isinstance(pair_window, dict):
         mapping = pair_window.get("mapping", "custom")
         mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
         parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
         if pair_window.get("kernel_mode") is not None:
             parts.append(f"kernel_mode={pair_window.get('kernel_mode')}")
-        # len_args = pair_window.get("len_args", {})
-        # other_args = pair_window.get("other_args", {})
-        # if len_args:
-        #     parts.append(f"len_args={len_args}")
-        # if other_args:
-        #     parts.append(f"other_args={other_args}")
-        pair_los = effective_pair_los(pair_window, mode, los_vector)
+        pair_los = effective_pair_los(pair_window)
         if pair_los is not None:
             parts.append(f"los={pair_los}")
         return "Pair window: " + " | ".join(parts)
@@ -246,95 +320,91 @@ def serialize_window_input(value):
             "kind": "WindowFunc",
             "type": getattr(value, "type", "custom"),
             "len_args": copy.deepcopy(getattr(value, "len_args", {})),
+            "los_args": copy.deepcopy(getattr(value, "los_args", {})),
             "other_args": copy.deepcopy(getattr(value, "other_args", {})),
         }
     return value
 
 
 # Sampling and result helpers.
-def make_sampling_tasks(mode, s_arr, mu_arr):
-    if mode == "smu":
-        tasks = np.array(
-            [(i, j, s_arr[i], mu_arr[j]) for i in range(len(s_arr)) for j in range(len(mu_arr))],
-            dtype=np.float64,
-        )
-        return tasks, (len(s_arr), len(mu_arr))
-    tasks = np.array([(i, -1, s_arr[i], np.nan) for i in range(len(s_arr))], dtype=np.float64)
-    return tasks, (len(s_arr),)
+def normalize_sampling_spec(name, spec):
+    positive = name in POSITIVE_SAMPLING_ARGS
+    if isinstance(spec, dict):
+        sampling_min = float(spec["min"])
+        sampling_max = float(spec["max"])
+        sampling_n = int(spec["n"])
+        if sampling_n <= 0:
+            raise ValueError(f"'{name}' sampling n must be positive.")
+        arr = np.linspace(sampling_min, sampling_max, sampling_n, dtype=np.float64)
+    else:
+        arr = normalize_sampling_array(spec, name, positive=positive)
+    if positive and np.any(arr <= 0.0):
+        raise ValueError(f"'{name}' sampling values must be strictly positive.")
+    return np.ascontiguousarray(arr, dtype=np.float64)
 
 
-def build_result_from_gathered(gathered_tasks, gathered_values, result_shape, mode):
+def make_sampling_tasks(sampling_names, sampling_arrays):
+    result_shape = tuple(int(sampling_arrays[name].size) for name in sampling_names)
+    rows = []
+    for index_tuple in np.ndindex(result_shape):
+        value_tuple = tuple(float(sampling_arrays[name][idx]) for name, idx in zip(sampling_names, index_tuple))
+        rows.append(tuple(index_tuple) + value_tuple)
+    return np.asarray(rows, dtype=np.float64), result_shape
+
+
+def task_to_sample(task, sampling_names):
+    n_dim = len(sampling_names)
+    indices = tuple(int(task[i]) for i in range(n_dim))
+    sample = {name: float(task[n_dim + i]) for i, name in enumerate(sampling_names)}
+    return indices, sample
+
+
+def build_result_from_gathered(gathered_tasks, gathered_values, result_shape):
     result = np.empty(result_shape, dtype=np.float64)
     flat_values = [item for sublist in gathered_values for item in sublist]
     flat_tasks = [item for sublist in gathered_tasks for item in sublist]
-    for (s_idx, mu_idx), value in zip(flat_tasks, flat_values):
-        if mode == "smu":
-            result[s_idx, mu_idx] = value
-        else:
-            result[s_idx] = value
+    for index_tuple, value in zip(flat_tasks, flat_values):
+        result[tuple(index_tuple)] = value
     return result
 
 
 # Pair-window mappings.
-def mapping_s_to_R(s, mu, pair_window):
+def mapping_s_to_R(sample, pair_window):
     params = copy.deepcopy(pair_window)
     params.setdefault("len_args", {})
     if params["len_args"].get("R") is None:
-        params["len_args"]["R"] = s
+        params["len_args"]["R"] = sample["s"]
     return params
 
 
-def mapping_smu_to_RH(s, mu, pair_window, los_vector=None):
-    if mu is None:
-        raise ValueError("Corr_2PCF mapping='smu_to_RH' requires a mu value.")
+def mapping_smu_to_RH(sample, pair_window):
     params = copy.deepcopy(pair_window)
     params.setdefault("len_args", {})
+    params.setdefault("los_args", {})
     params.setdefault("other_args", {})
     if params["len_args"].get("R") is None:
-        params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
+        params["len_args"]["R"] = sample["s"] * np.sqrt(max(0.0, 1.0 - sample["mu"] * sample["mu"]))
     if params["len_args"].get("H") is None:
-        params["len_args"]["H"] = s * mu
-    if los_vector is not None:
-        for key, value in zip(("nx", "ny", "nz"), los_vector):
-            if key in params["other_args"] and params["other_args"][key] is None:
-                params["other_args"][key] = value
+        params["len_args"]["H"] = sample["s"] * sample["mu"]
     return params
 
 
-PAIR_WINDOW_MAPPING_MODES = {
-    "s_to_R": "s",
-    "smu_to_RH": "smu",
+PAIR_WINDOW_MAPPING_SPECS = {
+    "s_to_R": {
+        "sampling_args": ("s",),
+        "len_args": ("R",),
+        "func": mapping_s_to_R,
+    },
+    "smu_to_RH": {
+        "sampling_args": ("s", "mu"),
+        "len_args": ("R", "H"),
+        "func": mapping_smu_to_RH,
+    },
 }
 
-PAIR_WINDOW_MAPPINGS = {
-    "s_to_R": mapping_s_to_R,
-    "smu_to_RH": mapping_smu_to_RH,
-}
 
-
-def call_pair_window_mapping(mapping, s, mu, pair_window, los_vector=None):
-    if los_vector is None:
-        return mapping(s, mu, pair_window)
-
-    try:
-        signature = inspect.signature(mapping)
-    except (TypeError, ValueError):
-        return mapping(s, mu, pair_window)
-
-    params = signature.parameters
-    if "los_vector" in params:
-        return mapping(s, mu, pair_window, los_vector=los_vector)
-
-    positional_kinds = (
-        inspect.Parameter.POSITIONAL_ONLY,
-        inspect.Parameter.POSITIONAL_OR_KEYWORD,
-    )
-    accepts_varargs = any(param.kind == inspect.Parameter.VAR_POSITIONAL for param in params.values())
-    n_positional = sum(param.kind in positional_kinds for param in params.values())
-    if accepts_varargs or n_positional >= 4:
-        return mapping(s, mu, pair_window, los_vector)
-
-    return mapping(s, mu, pair_window)
+def call_pair_window_mapping(mapping, sample, pair_window):
+    return mapping(sample, pair_window)
 
 
 # Pair-product kernels.
@@ -355,33 +425,47 @@ def pair_product_with_window(field1, field2, pair_window_obj, threads):
     return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
 
 
-def compute_pair_product_at_smu(s, mu, convols_data1, convols_data2=None, pair_window=None, los_vector=None):
+def compute_pair_product_at_sample(sample, convols_data1, convols_data2=None, pair_window=None):
     if convols_data2 is None:
         convols_data2 = convols_data1
     if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
         return field_density(convols_data1) * field_density(convols_data2)
     if pair_window is None:
-        pair_window = {"type": "shell", "len_args": {"R": None}, "other_args": {}, "mapping": "s_to_R"}
+        pair_window = default_pair_window()
+    elif isinstance(pair_window, str):
+        pair_window = pair_window_from_string(pair_window)
+    elif not isinstance(pair_window, dict):
+        raise TypeError(
+            f"Unsupported pair_window input: expected dict, string, or None, got {type(pair_window)}."
+        )
+    pair_window = copy.deepcopy(pair_window)
+    pair_window = apply_builtin_pair_window_defaults(pair_window)
+    if not pair_window.get("type"):
+        pair_window["type"] = "custom" if pair_window.get("func") is not None else "shell"
+    pair_window["len_args"] = normalize_len_args(pair_window.get("len_args", {}))
+    pair_window["los_args"] = normalize_los_args(pair_window.get("los_args", {}), pair_window.get("type"))
+    pair_window.setdefault("other_args", {})
     mapping = pair_window.get("mapping")
-    if mapping is None:
-        mapping = "smu_to_RH" if pair_window.get("type") in ("ring", "disk", "cylinder") and mu is not None else "s_to_R"
+    if not mapping:
+        raise ValueError("pair_window requires a 'mapping' field.")
     if isinstance(mapping, str):
-        if mapping not in PAIR_WINDOW_MAPPINGS:
+        if mapping not in PAIR_WINDOW_MAPPING_SPECS:
             raise ValueError(
                 f"Unsupported pair_window mapping '{mapping}'. "
-                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPINGS)}."
+                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
             )
-        mapper = PAIR_WINDOW_MAPPINGS[mapping]
+        mapper = PAIR_WINDOW_MAPPING_SPECS[mapping]["func"]
     elif callable(mapping):
         mapper = mapping
     else:
         raise TypeError("pair_window mapping must be a string or callable.")
-    pair_window_params = call_pair_window_mapping(mapper, s, mu, pair_window, los_vector)
+    pair_window_params = call_pair_window_mapping(mapper, sample, pair_window)
     if not isinstance(pair_window_params, dict):
         raise TypeError("pair_window mapping must return a pair_window dictionary.")
     pair_window_params = copy.deepcopy(pair_window_params)
     pair_window_params.pop("mapping", None)
     pair_window_params.setdefault("len_args", {})
+    pair_window_params.setdefault("los_args", {})
     pair_window_params.setdefault("other_args", {})
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     return pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
@@ -400,13 +484,8 @@ class Corr_2PCF(TaskBase):
 
     # Parameter formatting and validation.
     def _sync_runtime_options(self, log_runtime=True):
-        self.mode = str(self.mode).strip().lower()
-        if self.mode not in ("s", "smu"):
-            raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
-        self.los_vector = los_to_vector(self.los)
-        self._sync_sampling_attribute_overrides()
         if self._pair_window_from_default and self.pair_window is None:
-            self.pair_window_params = default_pair_window(self.mode, self.los_vector)
+            self.pair_window_params = default_pair_window()
         self.threads = max(1, int(self.threads))
         self.memory_strategy = str(self.memory_strategy).strip().lower()
         if self.memory_strategy not in ("speed", "memory"):
@@ -414,10 +493,7 @@ class Corr_2PCF(TaskBase):
         self.pair_window_cache = parse_bool(self.pair_window_cache)
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
-        self.task_params['mode'] = self.mode
-        self.task_params['los'] = copy.deepcopy(self.los)
-        self.task_params['s'] = copy.deepcopy(self.s)
-        self.task_params['mu'] = copy.deepcopy(self.mu)
+        self.task_params['sampling'] = copy.deepcopy(self.sampling)
         self.task_params['memory_strategy'] = self.memory_strategy
         self.task_params['pair_window_cache'] = self.pair_window_cache
         self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
@@ -425,6 +501,12 @@ class Corr_2PCF(TaskBase):
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
+        removed_keys = sorted(key for key in REMOVED_CORR2PCF_PARAMS if key in self.task_params)
+        if removed_keys:
+            raise ValueError(
+                "Corr_2PCF no longer accepts task-level "
+                f"{removed_keys}. Put sampling coordinates in 'sampling' and LOS in 'pair_window.los_args'."
+            )
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
         self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data
@@ -444,29 +526,21 @@ class Corr_2PCF(TaskBase):
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f'window{i}', window_i)
-        self.mode = str(self.task_params.get("mode", "s")).strip().lower()
-        if self.mode not in ("s", "smu"):
-            raise ValueError("Corr_2PCF mode must be either 's' or 'smu'.")
-        self.los = self.task_params.get("los", "z")
-        self.los_vector = los_to_vector(self.los)
         pair_window_params = self.task_params.get('pair_window', None)
-        if pair_window_params and (pair_window_params.get('type') or pair_window_params.get('func') is not None):
+        if isinstance(pair_window_params, str):
+            self.pair_window_params = pair_window_from_string(pair_window_params)
+            self._pair_window_from_default = False
+        elif pair_window_params and (pair_window_params.get('type') or pair_window_params.get('func') is not None):
             self.pair_window_params = copy.deepcopy(pair_window_params)
             self._pair_window_from_default = False
         else:
-            self.pair_window_params = default_pair_window(self.mode, self.los_vector)
+            self.pair_window_params = default_pair_window()
             self._pair_window_from_default = True
 
-        self.s = copy.deepcopy(self.task_params['s'])
-        self.mu = copy.deepcopy(self.task_params.get('mu', {"mu_min": 0.0, "mu_max": 1.0, "n_mu": 20}))
-        self.s_arr = None
-        self.mu_arr = None
-        self.s_min = None
-        self.s_max = None
-        self.n_s = None
-        self.mu_min = None
-        self.mu_max = None
-        self.n_mu = None
+        self.sampling = copy.deepcopy(self.task_params['sampling'])
+        self.sampling_names = ()
+        self.sampling_arrays = {}
+        self.sampling_specs = {}
         self.threads = int(self.task_params['threads'])
         self.products = self._normalize_products(self.task_params.get('products', 'xi'))
         self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
@@ -475,19 +549,6 @@ class Corr_2PCF(TaskBase):
         self.fout_path = self.task_params['fout_path']
 
     # Sampling, products, and pair-window normalization.
-    def _sync_sampling_attribute_overrides(self):
-        if isinstance(self.s, dict):
-            for attr in ("s_min", "s_max", "n_s"):
-                value = getattr(self, attr, None)
-                if value is not None:
-                    self.s[attr] = value
-        if isinstance(self.mu, dict):
-            for attr in ("mu_min", "mu_max", "n_mu"):
-                value = getattr(self, attr, None)
-                if value is not None:
-                    self.mu[attr] = value
-
-    # Product and logging helpers.
     def _normalize_products(self, products):
         return normalize_products(products)
 
@@ -495,23 +556,13 @@ class Corr_2PCF(TaskBase):
         return expand_products(self.products)
 
     def _describe_sampling(self):
-        return describe_sampling(
-            self.mode,
-            self.n_s,
-            self.s_min,
-            self.s_max,
-            self.n_mu,
-            self.mu_min,
-            self.mu_max,
-            self.s,
-            self.mu,
-        )
+        return describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs)
 
     def _describe_products(self, expanded_products):
         return describe_products(self.products, expanded_products)
 
     def _describe_pair_window(self, pair_window):
-        return describe_pair_window(pair_window, self.mode, self.los_vector)
+        return describe_pair_window(pair_window)
 
     def _describe_task_distribution(self, total_tasks, n_ranks):
         return describe_task_distribution(total_tasks, n_ranks)
@@ -519,14 +570,17 @@ class Corr_2PCF(TaskBase):
     def _normalize_pair_window(self, pair_window):
         if pair_window is None:
             pair_window = self.pair_window_params
+        if isinstance(pair_window, str):
+            pair_window = pair_window_from_string(pair_window)
         if not isinstance(pair_window, dict):
             raise TypeError(
-                f"Unsupported pair_window input: expected dict or None, got {type(pair_window)}."
+                f"Unsupported pair_window input: expected dict, string, or None, got {type(pair_window)}."
             )
-        normalized = copy.deepcopy(pair_window)
+        normalized = apply_builtin_pair_window_defaults(pair_window)
         if not normalized.get("type"):
             normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
-        normalized.setdefault("len_args", {})
+        normalized["len_args"] = normalize_len_args(normalized.get("len_args", {}))
+        normalized["los_args"] = normalize_los_args(normalized.get("los_args", {}), normalized.get("type"))
         normalized.setdefault("other_args", {})
         kernel_mode = normalized.get("kernel_mode")
         if not kernel_mode:
@@ -536,63 +590,39 @@ class Corr_2PCF(TaskBase):
             )
         normalized["kernel_mode"] = normalize_kernel_mode(kernel_mode)
         if not normalized.get("mapping"):
-            normalized["mapping"] = "smu_to_RH" if self.mode == "smu" else "s_to_R"
+            raise ValueError("pair_window requires a 'mapping' field.")
         mapping = normalized.get("mapping")
         if isinstance(mapping, str):
-            expected_mode = PAIR_WINDOW_MAPPING_MODES.get(mapping)
-            if expected_mode is None:
+            if mapping not in PAIR_WINDOW_MAPPING_SPECS:
                 raise ValueError(
                     f"Unsupported pair_window mapping '{mapping}'. "
-                    f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_MODES)}."
-                )
-            if expected_mode != self.mode:
-                raise ValueError(
-                    f"pair_window mapping '{mapping}' is only valid for mode='{expected_mode}', "
-                    f"got mode='{self.mode}'."
+                    f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
                 )
         elif not callable(mapping):
             raise TypeError("pair_window mapping must be a string or callable.")
-        if self.mode == "smu" and normalized.get("type") in ("ring", "disk", "cylinder"):
-            nx, ny, nz = self.los_vector
-            normalized["other_args"].setdefault("nx", nx)
-            normalized["other_args"].setdefault("ny", ny)
-            normalized["other_args"].setdefault("nz", nz)
         return normalized
 
     def _resolve_sampling(self):
-        if self.s is None:
-            raise ValueError("Corr_2PCF requires 's' to be provided as a dict or array-like input.")
-        if isinstance(self.s, dict):
-            s_min = float(self.s["s_min"])
-            s_max = float(self.s["s_max"])
-            n_s = int(self.s["n_s"])
-            s_arr = np.linspace(s_min, s_max, n_s, dtype=np.float64)
+        if not isinstance(self.sampling, dict) or not self.sampling:
+            raise ValueError("Corr_2PCF requires a non-empty 'sampling' dictionary.")
+        mapping = self.pair_window.get("mapping") if isinstance(self.pair_window, dict) else self.pair_window_params.get("mapping")
+        if isinstance(mapping, str):
+            required_names = PAIR_WINDOW_MAPPING_SPECS[mapping]["sampling_args"]
         else:
-            s_arr = normalize_sampling_array(self.s, "s")
-        self.s_arr = np.ascontiguousarray(s_arr, dtype=np.float64)
-        self.n_s = int(self.s_arr.size)
-        self.s_min = float(np.min(self.s_arr))
-        self.s_max = float(np.max(self.s_arr))
-
-        if self.mode == "smu":
-            if self.mu is None:
-                raise ValueError("Corr_2PCF mode='smu' requires 'mu' sampling.")
-            if isinstance(self.mu, dict):
-                mu_min = float(self.mu["mu_min"])
-                mu_max = float(self.mu["mu_max"])
-                n_mu = int(self.mu["n_mu"])
-                mu_arr = np.linspace(mu_min, mu_max, n_mu, dtype=np.float64)
-            else:
-                mu_arr = normalize_sampling_array(self.mu, "mu", positive=False)
-            self.mu_arr = np.ascontiguousarray(mu_arr, dtype=np.float64)
-            self.n_mu = int(self.mu_arr.size)
-            self.mu_min = float(np.min(self.mu_arr))
-            self.mu_max = float(np.max(self.mu_arr))
-        else:
-            self.mu_arr = None
-            self.n_mu = None
-            self.mu_min = None
-            self.mu_max = None
+            required_names = tuple(self.sampling.keys())
+        missing = [name for name in required_names if name not in self.sampling]
+        extra = [name for name in self.sampling if name not in required_names]
+        if missing or extra:
+            raise ValueError(
+                f"sampling keys must match mapping '{mapping}': "
+                f"expected {list(required_names)}, missing={missing}, extra={extra}."
+            )
+        self.sampling_names = tuple(required_names)
+        self.sampling_specs = copy.deepcopy(self.sampling)
+        self.sampling_arrays = {
+            name: normalize_sampling_spec(name, self.sampling[name])
+            for name in self.sampling_names
+        }
 
     def _current_task_params_snapshot(self):
         params = {}
@@ -608,18 +638,12 @@ class Corr_2PCF(TaskBase):
         params['pair_window'] = copy.deepcopy(
             self.pair_window if self.pair_window is not None else self.pair_window_params
         )
-        params['mode'] = self.mode
-        params['los'] = copy.deepcopy(self.los)
-        params['los_vector'] = list(self.los_vector)
-        params['s_spec'] = copy.deepcopy(self.s) if isinstance(self.s, dict) else np.asarray(self.s, dtype=np.float64).tolist()
-        params['s_min'] = self.s_min
-        params['s_max'] = self.s_max
-        params['n_s'] = self.n_s
-        if self.mode == "smu":
-            params['mu_spec'] = copy.deepcopy(self.mu) if isinstance(self.mu, dict) else np.asarray(self.mu, dtype=np.float64).tolist()
-            params['mu_min'] = self.mu_min
-            params['mu_max'] = self.mu_max
-            params['n_mu'] = self.n_mu
+        params['sampling_spec'] = copy.deepcopy(self.sampling_specs)
+        params['sampling_names'] = list(self.sampling_names)
+        params['sampling'] = {
+            name: self.sampling_arrays[name].tolist()
+            for name in self.sampling_names
+        }
         params['threads'] = self.threads
         params['products'] = copy.deepcopy(self.products)
         params['memory_strategy'] = self.memory_strategy
@@ -717,7 +741,7 @@ class Corr_2PCF(TaskBase):
         return needs_data, needs_random
 
     # Pair-product computation.
-    def calc_pair_product(self, s, field1, field2=None, mu=None, pair_window=None):
+    def calc_pair_product(self, sample, field1, field2=None, pair_window=None):
         if field2 is None:
             field2 = field1
         if pair_window is None:
@@ -725,10 +749,15 @@ class Corr_2PCF(TaskBase):
         pair_window = self._normalize_pair_window(pair_window)
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
-        return compute_pair_product_at_smu(s, mu, field1, field2, pair_window=pair_window)
+        return compute_pair_product_at_sample(
+            sample,
+            field1,
+            field2,
+            pair_window=pair_window,
+        )
 
-    def _build_pair_window_for_sample(self, s, mu, reference_field):
-        pair_window_params = self._pair_window_params_for_sample(s, mu, self.pair_window)
+    def _build_pair_window_for_sample(self, sample, reference_field):
+        pair_window_params = self._pair_window_params_for_sample(sample, self.pair_window)
         pair_window_obj = WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
         if self.pair_window_cache:
             cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
@@ -758,29 +787,30 @@ class Corr_2PCF(TaskBase):
         digest = hashlib.sha1(json.dumps(cache_key, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         return os.path.join(cache_dir, f"{digest}.npy")
 
-    def _pair_window_params_for_sample(self, s, mu, pair_window):
+    def _pair_window_params_for_sample(self, sample, pair_window):
         if pair_window is None:
             pair_window = self._normalize_pair_window(None)
+        elif isinstance(pair_window, str):
+            pair_window = self._normalize_pair_window(pair_window)
         elif not isinstance(pair_window, dict):
             raise TypeError(
-                f"Unsupported pair_window input: expected dict, got {type(pair_window)}."
+                f"Unsupported pair_window input: expected dict or string, got {type(pair_window)}."
             )
-        mapping = pair_window.get("mapping", "smu_to_RH" if self.mode == "smu" else "s_to_R")
+        mapping = pair_window.get("mapping")
         if isinstance(mapping, str):
             params = call_pair_window_mapping(
-                PAIR_WINDOW_MAPPINGS[mapping],
-                s,
-                mu,
+                PAIR_WINDOW_MAPPING_SPECS[mapping]["func"],
+                sample,
                 pair_window,
-                self.los_vector,
             )
         else:
-            params = call_pair_window_mapping(mapping, s, mu, pair_window, self.los_vector)
+            params = call_pair_window_mapping(mapping, sample, pair_window)
         if not isinstance(params, dict):
             raise TypeError("pair_window mapping must return a pair_window dictionary.")
         params = copy.deepcopy(params)
         params.pop("mapping", None)
         params.setdefault("len_args", {})
+        params.setdefault("los_args", {})
         params.setdefault("other_args", {})
         return params
 
@@ -797,8 +827,7 @@ class Corr_2PCF(TaskBase):
 
     def _compute_products_for_sample(
         self,
-        s,
-        mu,
+        sample,
         expanded_products,
         field1,
         field2,
@@ -815,7 +844,7 @@ class Corr_2PCF(TaskBase):
             if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
                 return self._field_density(a) * self._field_density(b)
             if pair_window_obj is None:
-                pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
+                pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
             return pair_product_with_window(a, b, pair_window_obj, self.threads)
 
         values = {
@@ -917,11 +946,11 @@ class Corr_2PCF(TaskBase):
         )
         return field1, field2
 
-    def _compute_single_product_for_sample(self, s, mu, field1, field2):
+    def _compute_single_product_for_sample(self, sample, field1, field2):
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_density(field1) * self._field_density(field2)
         reference_field = self._reference_pair_field(field1, field2)
-        pair_window_obj = self._build_pair_window_for_sample(s, mu, reference_field)
+        pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
         return pair_product_with_window(field1, field2, pair_window_obj, self.threads)
 
     def _run_memory_product(self, product, tasks, result_shape):
@@ -953,12 +982,9 @@ class Corr_2PCF(TaskBase):
         for local_idx in range(max_local_tasks):
             if local_idx < len(task_sub_arr):
                 task = task_sub_arr[local_idx]
-                s_idx = int(task[0])
-                mu_idx = int(task[1])
-                s_value = float(task[2])
-                mu_value = None if mu_idx < 0 else float(task[3])
-                local_values.append(self._compute_single_product_for_sample(s_value, mu_value, field1, field2))
-                local_tasks.append((s_idx, mu_idx))
+                index_tuple, sample = task_to_sample(task, self.sampling_names)
+                local_values.append(self._compute_single_product_for_sample(sample, field1, field2))
+                local_tasks.append(index_tuple)
                 local_completed += 1
             if (
                 (local_idx + 1) % step_report_interval == 0
@@ -978,7 +1004,7 @@ class Corr_2PCF(TaskBase):
         gathered_values = comm.gather(local_values, root=0)
         gathered_tasks = comm.gather(local_tasks, root=0)
         if rank == 0:
-            result = build_result_from_gathered(gathered_tasks, gathered_values, result_shape, self.mode)
+            result = build_result_from_gathered(gathered_tasks, gathered_values, result_shape)
             if total_tasks == 0:
                 self.logger.info(f"Memory product {product} progress: 100.00%")
             self.logger.info(f"Memory product {product} time: {time.perf_counter() - time_product_start:.4f} sec")
@@ -993,14 +1019,14 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             self.corr2pcf_data = Corr2PCFData(threads=self.threads)
             self._sync_runtime_options()
-            self._resolve_sampling()
             self.products = self._normalize_products(self.products)
             self.pair_window = self._normalize_pair_window(self.pair_window)
+            self._resolve_sampling()
             expanded_products = self._expanded_products()
             products_to_compute = [product for product in expanded_products if product != "xi"]
 
             if rank == 0:
-                tasks, result_shape = make_sampling_tasks(self.mode, self.s_arr, self.mu_arr)
+                tasks, result_shape = make_sampling_tasks(self.sampling_names, self.sampling_arrays)
                 self.logger.info("Start to calculate 2PCF in memory strategy ...")
                 self.logger.info(self._describe_sampling())
                 self.logger.info(self._describe_products(expanded_products))
@@ -1019,9 +1045,12 @@ class Corr_2PCF(TaskBase):
                 comm.Barrier()
 
             if rank == 0:
-                self.corr2pcf_data.mode = self.mode
-                self.corr2pcf_data.s = self.s_arr.copy()
-                self.corr2pcf_data.mu = None if self.mode == "s" else self.mu_arr.copy()
+                self.corr2pcf_data.sampling_names = tuple(self.sampling_names)
+                self.corr2pcf_data.sampling = {
+                    name: self.sampling_arrays[name].copy()
+                    for name in self.sampling_names
+                }
+                self.corr2pcf_data._sync_sampling_attrs()
                 self.corr2pcf_data.dd = results.get("dd") if "dd" in expanded_products else None
                 self.corr2pcf_data.dr = results.get("dr") if "dr" in expanded_products else None
                 self.corr2pcf_data.rd = results.get("rd") if "rd" in expanded_products else None
@@ -1061,7 +1090,6 @@ class Corr_2PCF(TaskBase):
     ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
-        self._resolve_sampling()
         self.products = self._normalize_products(self.products)
         expanded_products = self._expanded_products()
         if convols_data1 is None:
@@ -1079,6 +1107,7 @@ class Corr_2PCF(TaskBase):
         if pair_window is None:
             pair_window = self.pair_window
         self.pair_window = self._normalize_pair_window(pair_window)
+        self._resolve_sampling()
         needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
@@ -1227,15 +1256,7 @@ class Corr_2PCF(TaskBase):
                 self.logger.info(f"Pre-2PCF setup time: {time_start - time_run_1:.4f} sec")
             # Generate sampling tasks at rank0.
             if rank == 0:
-                if self.mode == "smu":
-                    tasks = np.array(
-                        [(i, j, self.s_arr[i], self.mu_arr[j]) for i in range(self.n_s) for j in range(self.n_mu)],
-                        dtype=np.float64,
-                    )
-                    result_shape = (self.n_s, self.n_mu)
-                else:
-                    tasks = np.array([(i, -1, self.s_arr[i], np.nan) for i in range(self.n_s)], dtype=np.float64)
-                    result_shape = (self.n_s,)
+                tasks, result_shape = make_sampling_tasks(self.sampling_names, self.sampling_arrays)
                 task_sub_arrs = np.array_split(tasks, size)
                 # Global process status
                 arr_complete = np.zeros(size, dtype=int)
@@ -1263,13 +1284,9 @@ class Corr_2PCF(TaskBase):
             local_rr = []
             local_tasks = []
             for task in task_sub_arr:
-                s_idx = int(task[0])
-                mu_idx = int(task[1])
-                s_value = float(task[2])
-                mu_value = None if mu_idx < 0 else float(task[3])
+                index_tuple, sample = task_to_sample(task, self.sampling_names)
                 values = self._compute_products_for_sample(
-                    s_value,
-                    mu_value,
+                    sample,
                     expanded_products,
                     _local_convols1,
                     _local_convols2,
@@ -1284,7 +1301,7 @@ class Corr_2PCF(TaskBase):
                 local_delta_dd.append(values["delta_dd"])
                 local_rr.append(values["rr"])
                 local_xi.append(values["xi"])
-                local_tasks.append((s_idx, mu_idx))
+                local_tasks.append(index_tuple)
                 local_completed += 1
                 if local_completed % local_report_interval == 0:
                     if rank == 0:
@@ -1342,16 +1359,16 @@ class Corr_2PCF(TaskBase):
 
                 def build_result(gathered_values):
                     result = np.empty(result_shape, dtype=np.float64)
-                    for (s_idx, mu_idx), value in zip(flat_tasks, [item for sublist in gathered_values for item in sublist]):
-                        if self.mode == "smu":
-                            result[s_idx, mu_idx] = value
-                        else:
-                            result[s_idx] = value
+                    for index_tuple, value in zip(flat_tasks, [item for sublist in gathered_values for item in sublist]):
+                        result[tuple(index_tuple)] = value
                     return result
 
-                self.corr2pcf_data.mode = self.mode
-                self.corr2pcf_data.s = self.s_arr.copy()
-                self.corr2pcf_data.mu = None if self.mode == "s" else self.mu_arr.copy()
+                self.corr2pcf_data.sampling_names = tuple(self.sampling_names)
+                self.corr2pcf_data.sampling = {
+                    name: self.sampling_arrays[name].copy()
+                    for name in self.sampling_names
+                }
+                self.corr2pcf_data._sync_sampling_attrs()
                 self.corr2pcf_data.dd = None if 'dd' not in expanded_products else build_result(gathered_dd)
                 self.corr2pcf_data.dr = None if 'dr' not in expanded_products else build_result(gathered_dr)
                 self.corr2pcf_data.rd = None if 'rd' not in expanded_products else build_result(gathered_rd)
