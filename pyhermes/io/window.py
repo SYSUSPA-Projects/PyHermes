@@ -12,36 +12,13 @@ from pyhermes.utils.convolution import (
 )
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_function
 from pyhermes.utils.window_functions import set_window_function
-
-
-ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
-VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
-LOS_ARG_KEYS = ("nx", "ny", "nz")
-DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
-
-
-def normalize_los_args(los_args, window_type=None):
-    if los_args is None:
-        los_args = {}
-    if isinstance(los_args, (list, tuple, np.ndarray)):
-        arr = np.asarray(los_args, dtype=np.float64)
-        if arr.shape != (3,):
-            raise ValueError("los_args array must contain exactly three values: [nx, ny, nz].")
-        los_args = {key: float(value) for key, value in zip(LOS_ARG_KEYS, arr)}
-    elif isinstance(los_args, dict):
-        los_args = dict(los_args)
-    else:
-        raise TypeError("los_args must be a dict, length-3 array, or None.")
-    if not los_args and window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:
-        los_args = dict(DEFAULT_LOS_ARGS)
-    if los_args:
-        if not all(key in los_args for key in LOS_ARG_KEYS):
-            raise ValueError("los_args must define nx, ny, and nz together.")
-        los = np.array([los_args[key] for key in LOS_ARG_KEYS], dtype=np.float64)
-        if np.linalg.norm(los) == 0.0:
-            raise ValueError("los_args vector must be non-zero.")
-        los_args = {key: float(los_args[key]) for key in LOS_ARG_KEYS}
-    return los_args
+from pyhermes.utils.window_params import (
+    ANISOTROPIC_AUTO_WINDOW_TYPES,
+    LOS_ARG_KEYS,
+    default_kernel_mode,
+    normalize_los_args,
+    normalize_kernel_mode,
+)
 
 
 class WindowFunc(ConvolsData):
@@ -114,24 +91,13 @@ class WindowFunc(ConvolsData):
     def _resolve_kernel_mode(self, win_params, has_custom_func):
         kernel_mode = win_params.get("kernel_mode", None)
         if not kernel_mode:
-            if self.type in ANISOTROPIC_AUTO_WINDOW_TYPES:
-                kernel_mode = "auto"
-            elif has_custom_func:
-                kernel_mode = "full_rfft"
-            else:
-                kernel_mode = "octant"
-        kernel_mode = str(kernel_mode).strip().lower()
-        if kernel_mode not in VALID_KERNEL_MODES:
-            raise ValueError(
-                f"Unsupported kernel_mode '{kernel_mode}'. "
-                f"Supported values are {sorted(VALID_KERNEL_MODES)}."
-            )
-        return kernel_mode
+            kernel_mode = default_kernel_mode(self.type, has_custom_func=has_custom_func)
+        return normalize_kernel_mode(kernel_mode)
 
     def _los_is_axis_aligned(self):
         los_args = dict(self.los_args)
         if self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not all(
-            key in los_args for key in ("nx", "ny", "nz")
+            key in los_args for key in LOS_ARG_KEYS
         ):
             return not self.has_custom_func
         nx = float(los_args.get("nx", 0.0))

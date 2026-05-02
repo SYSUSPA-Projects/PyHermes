@@ -15,6 +15,10 @@ from pyhermes.param.logbase import setup_logger
 import pyhermes.pipeline.custom_exceptions as ce
 
 
+REPLACE_KEYS = {
+    "Corr_2PCF.pair_window",
+}
+
 
 def print_flush(msg):
     print(msg)
@@ -149,8 +153,8 @@ class ParamBase(object):
                         # ↓ Use special info instead of warning ↑
                         self.logger.info(f"Adding customizable window arg: '{full_key}' as '{value}'")
                     default_dict[key] = value
-            elif full_key == "Corr_2PCF.pair_window" and isinstance(value, dict):
-                self.logger.info("Using user-provided Corr_2PCF.pair_window dictionary.")
+            elif full_key in REPLACE_KEYS:
+                self.logger.info(f"Using user-provided replacement value for '{full_key}'.")
                 default_dict[key] = copy.deepcopy(value)
             elif isinstance(value, dict) and isinstance(default_dict[key], dict):
                 # Recursively to due the whole dict structure
@@ -182,10 +186,6 @@ class ParamBase(object):
         if full_key.endswith(".theta") or full_key.endswith(".mu") or full_key.endswith(".s"):
             default_ok = isinstance(default_value, (dict, list, tuple))
             new_ok = isinstance(new_value, (dict, list, tuple))
-            return default_ok and new_ok
-        if full_key.endswith(".los"):
-            default_ok = isinstance(default_value, (str, list, tuple))
-            new_ok = isinstance(new_value, (str, list, tuple))
             return default_ok and new_ok
         if full_key.endswith(".pair_window"):
             default_ok = isinstance(default_value, (dict, str))

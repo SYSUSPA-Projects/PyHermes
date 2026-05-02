@@ -54,8 +54,8 @@ and ``mapping: "smu_to_RH"``. Built-in string shortcuts expand the same way:
 
 .. code-block:: yaml
 
-   pair_window: "shell"     # type=shell, mapping=s_to_R
-   pair_window: "disk"      # type=disk, mapping=smu_to_RH, los_args=[0, 0, 1]
+   pair_window: "shell"     # xi(s): type=shell, mapping=s_to_R
+   # pair_window: "disk"    # xi(s, mu): type=disk, mapping=smu_to_RH, los_args=[0, 0, 1]
 
 Sampling And Mapping
 --------------------
@@ -243,6 +243,8 @@ Key Parameters
 - ``pair_window``: pair-correlation kernel template dictionary or built-in
   string.
 - ``sampling``: coordinate dictionary consumed by ``pair_window.mapping``.
+  Saved ``Corr2PCFData`` objects expose coordinates through this dictionary,
+  for example ``corr2pcf.sampling["s"]`` and ``corr2pcf.sampling["mu"]``.
 - ``products``: one or more products from ``dd``, ``dr``, ``rd``,
   ``delta_dd``, ``rr``, and ``xi``.
 - ``threads``: CPU threads per MPI rank.

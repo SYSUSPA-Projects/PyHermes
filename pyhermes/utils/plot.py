@@ -20,7 +20,7 @@ def _get_smu_arrays(corr2pcf_smu):
             f"corr2pcf_smu.xi must have shape {(s.size, mu.size)}, got {xi.shape}."
         )
     if np.any(mu < 0.0) or np.any(mu > 1.0):
-        raise ValueError("corr2pcf_smu.mu is expected to lie in [0, 1].")
+        raise ValueError("corr2pcf_smu.sampling['mu'] is expected to lie in [0, 1].")
 
     order = np.argsort(mu)
     return s, mu[order], xi[:, order]

@@ -39,10 +39,12 @@ Minimal example
       particle_data_path: ""
 
    Corr_2PCF:
-      convols_data_path: "./output/convols.pkl"
+      convols_data: "./output/convols.pkl"
+      random: "uniform"
       fout_path: "./output/corr2pcf.pkl"
-      mode: "s"
-      s:
-         s_min: 1.0
-         s_max: 150.0
-         n_s: 30
+      pair_window: "shell"
+      sampling:
+         s:
+            min: 1.0
+            max: 150.0
+            n: 30

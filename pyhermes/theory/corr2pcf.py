@@ -12,12 +12,18 @@ from pyhermes.io import ConvolsData
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.window_params import (
+    LOS_ARG_KEYS,
+    default_pair_window,
+    normalize_pair_window_template,
+)
 from pyhermes.pipeline import TaskBase
 
 
 # Product and runtime configuration.
+PRODUCT_NAMES = ("dd", "dr", "rd", "delta_dd", "rr", "xi")
 PRODUCT_RULES = {
-    "allowed": {"dd", "dr", "rd", "delta_dd", "rr", "xi"},
+    "allowed": set(PRODUCT_NAMES),
     "deps": {
         "xi": ["delta_dd", "rr"],
     },
@@ -32,11 +38,6 @@ PRODUCT_INPUT_FLAGS = {
     "xi": (True, True),
 }
 
-ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
-VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
-LOS_ARG_KEYS = ("nx", "ny", "nz")
-LOS_AWARE_PAIR_WINDOW_TYPES = {"ring", "disk", "cylinder"}
-DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 POSITIVE_SAMPLING_ARGS = {"s", "r", "R", "rp", "rt"}
 REMOVED_CORR2PCF_PARAMS = {"mode", "los", "s", "mu"}
 
@@ -45,129 +46,6 @@ def parse_bool(value):
     if isinstance(value, str):
         return value.strip().lower() in ("1", "true", "yes", "on")
     return bool(value)
-
-
-def default_pair_window():
-    return {
-        "type": "shell",
-        "len_args": {"R": None},
-        "los_args": {},
-        "other_args": {},
-        "mapping": "s_to_R",
-        "kernel_mode": "octant",
-    }
-
-
-def normalize_len_args(len_args):
-    if len_args is None:
-        return {}
-    if isinstance(len_args, dict):
-        return copy.deepcopy(len_args)
-    if isinstance(len_args, str):
-        return {len_args: None}
-    if isinstance(len_args, (list, tuple)):
-        normalized = {}
-        for item in len_args:
-            if not isinstance(item, str):
-                raise TypeError("pair_window len_args entries must be strings.")
-            normalized[item] = None
-        return normalized
-    raise TypeError("pair_window len_args must be a dict, string, list, tuple, or None.")
-
-
-def merge_len_arg_defaults(len_args, names):
-    normalized = normalize_len_args(len_args)
-    for name in names:
-        normalized.setdefault(name, None)
-    return normalized
-
-
-def normalize_los_args(los_args, window_type=None):
-    if los_args is None:
-        los_args = {}
-    if isinstance(los_args, (list, tuple, np.ndarray)):
-        arr = np.asarray(los_args, dtype=np.float64)
-        if arr.shape != (3,):
-            raise ValueError("los_args array must contain exactly three values: [nx, ny, nz].")
-        los_args = {key: float(value) for key, value in zip(LOS_ARG_KEYS, arr)}
-    elif isinstance(los_args, dict):
-        los_args = copy.deepcopy(los_args)
-    else:
-        raise TypeError("los_args must be a dict, length-3 array, or None.")
-    if not los_args and window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
-        los_args = copy.deepcopy(DEFAULT_LOS_ARGS)
-    if los_args:
-        if not all(key in los_args for key in LOS_ARG_KEYS):
-            raise ValueError("los_args must define nx, ny, and nz together.")
-        los = np.array([los_args[key] for key in LOS_ARG_KEYS], dtype=np.float64)
-        if np.linalg.norm(los) == 0.0:
-            raise ValueError("los_args vector must be non-zero.")
-        los_args = {key: float(los_args[key]) for key in LOS_ARG_KEYS}
-    return los_args
-
-
-def apply_builtin_pair_window_defaults(pair_window):
-    params = copy.deepcopy(pair_window)
-    window_type = params.get("type")
-    if not window_type:
-        return params
-    window_type = str(window_type).strip().lower()
-    params["type"] = window_type
-    if window_type == "shell":
-        params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R",))
-        params.setdefault("los_args", {})
-        params.setdefault("other_args", {})
-        params.setdefault("mapping", "s_to_R")
-    elif window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
-        params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R", "H"))
-        params.setdefault("los_args", copy.deepcopy(DEFAULT_LOS_ARGS))
-        params.setdefault("other_args", {})
-        params.setdefault("mapping", "smu_to_RH")
-    return params
-
-
-def pair_window_from_string(pair_window):
-    window_type = pair_window.strip().lower()
-    if not window_type:
-        raise ValueError("pair_window string cannot be empty.")
-    if window_type == "shell":
-        return {
-            "type": "shell",
-            "len_args": {"R": None},
-            "los_args": {},
-            "other_args": {},
-            "mapping": "s_to_R",
-        }
-    if window_type in LOS_AWARE_PAIR_WINDOW_TYPES:
-        return {
-            "type": window_type,
-            "len_args": {"R": None, "H": None},
-            "los_args": copy.deepcopy(DEFAULT_LOS_ARGS),
-            "other_args": {},
-            "mapping": "smu_to_RH",
-        }
-    raise ValueError(
-        f"Unsupported pair_window string '{pair_window}'. "
-        "Supported built-in strings are 'shell', 'ring', 'disk', and 'cylinder'."
-    )
-
-
-def default_kernel_mode(window_type, has_custom_func=False):
-    if window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:
-        return "auto"
-    if has_custom_func:
-        return "full_rfft"
-    return "octant"
-
-
-def normalize_kernel_mode(kernel_mode):
-    kernel_mode = str(kernel_mode).strip().lower()
-    if kernel_mode not in VALID_KERNEL_MODES:
-        raise ValueError(
-            f"Unsupported kernel_mode '{kernel_mode}'. "
-            f"Supported values are {sorted(VALID_KERNEL_MODES)}."
-        )
-    return kernel_mode
 
 
 def normalize_products(products):
@@ -368,6 +246,22 @@ def build_result_from_gathered(gathered_tasks, gathered_values, result_shape):
     return result
 
 
+def populate_corr2pcf_data(corr2pcf_data, sampling_names, sampling_arrays, expanded_products, product_results):
+    corr2pcf_data.sampling_names = tuple(sampling_names)
+    corr2pcf_data.sampling = {
+        name: sampling_arrays[name].copy()
+        for name in sampling_names
+    }
+    for product in PRODUCT_NAMES:
+        setattr(
+            corr2pcf_data,
+            product,
+            product_results.get(product) if product in expanded_products else None,
+        )
+    if "xi" in expanded_products and corr2pcf_data.xi is None:
+        corr2pcf_data.xi = corr2pcf_data.delta_dd / corr2pcf_data.rr
+
+
 # Pair-window mappings.
 def mapping_s_to_R(sample, pair_window):
     params = copy.deepcopy(pair_window)
@@ -403,8 +297,44 @@ PAIR_WINDOW_MAPPING_SPECS = {
 }
 
 
+def normalize_pair_window_params(pair_window, require_mapping=True):
+    normalized = normalize_pair_window_template(pair_window)
+    mapping = normalized.get("mapping")
+    if not mapping:
+        if require_mapping:
+            raise ValueError("pair_window requires a 'mapping' field.")
+        return normalized
+    if isinstance(mapping, str):
+        if mapping not in PAIR_WINDOW_MAPPING_SPECS:
+            raise ValueError(
+                f"Unsupported pair_window mapping '{mapping}'. "
+                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
+            )
+    elif not callable(mapping):
+        raise TypeError("pair_window mapping must be a string or callable.")
+    return normalized
+
+
 def call_pair_window_mapping(mapping, sample, pair_window):
     return mapping(sample, pair_window)
+
+
+def build_pair_window_params_for_sample(sample, pair_window):
+    pair_window = normalize_pair_window_params(pair_window)
+    mapping = pair_window.get("mapping")
+    if isinstance(mapping, str):
+        mapper = PAIR_WINDOW_MAPPING_SPECS[mapping]["func"]
+    else:
+        mapper = mapping
+    params = call_pair_window_mapping(mapper, sample, pair_window)
+    if not isinstance(params, dict):
+        raise TypeError("pair_window mapping must return a pair_window dictionary.")
+    params = copy.deepcopy(params)
+    params.pop("mapping", None)
+    params.setdefault("len_args", {})
+    params.setdefault("los_args", {})
+    params.setdefault("other_args", {})
+    return params
 
 
 # Pair-product kernels.
@@ -430,43 +360,7 @@ def compute_pair_product_at_sample(sample, convols_data1, convols_data2=None, pa
         convols_data2 = convols_data1
     if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
         return field_density(convols_data1) * field_density(convols_data2)
-    if pair_window is None:
-        pair_window = default_pair_window()
-    elif isinstance(pair_window, str):
-        pair_window = pair_window_from_string(pair_window)
-    elif not isinstance(pair_window, dict):
-        raise TypeError(
-            f"Unsupported pair_window input: expected dict, string, or None, got {type(pair_window)}."
-        )
-    pair_window = copy.deepcopy(pair_window)
-    pair_window = apply_builtin_pair_window_defaults(pair_window)
-    if not pair_window.get("type"):
-        pair_window["type"] = "custom" if pair_window.get("func") is not None else "shell"
-    pair_window["len_args"] = normalize_len_args(pair_window.get("len_args", {}))
-    pair_window["los_args"] = normalize_los_args(pair_window.get("los_args", {}), pair_window.get("type"))
-    pair_window.setdefault("other_args", {})
-    mapping = pair_window.get("mapping")
-    if not mapping:
-        raise ValueError("pair_window requires a 'mapping' field.")
-    if isinstance(mapping, str):
-        if mapping not in PAIR_WINDOW_MAPPING_SPECS:
-            raise ValueError(
-                f"Unsupported pair_window mapping '{mapping}'. "
-                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
-            )
-        mapper = PAIR_WINDOW_MAPPING_SPECS[mapping]["func"]
-    elif callable(mapping):
-        mapper = mapping
-    else:
-        raise TypeError("pair_window mapping must be a string or callable.")
-    pair_window_params = call_pair_window_mapping(mapper, sample, pair_window)
-    if not isinstance(pair_window_params, dict):
-        raise TypeError("pair_window mapping must return a pair_window dictionary.")
-    pair_window_params = copy.deepcopy(pair_window_params)
-    pair_window_params.pop("mapping", None)
-    pair_window_params.setdefault("len_args", {})
-    pair_window_params.setdefault("los_args", {})
-    pair_window_params.setdefault("other_args", {})
+    pair_window_params = build_pair_window_params_for_sample(sample, pair_window)
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     return pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
 
@@ -479,13 +373,10 @@ class Corr_2PCF(TaskBase):
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
-        self.pair_window = None
         self._fields_prepared = False
 
     # Parameter formatting and validation.
     def _sync_runtime_options(self, log_runtime=True):
-        if self._pair_window_from_default and self.pair_window is None:
-            self.pair_window_params = default_pair_window()
         self.threads = max(1, int(self.threads))
         self.memory_strategy = str(self.memory_strategy).strip().lower()
         if self.memory_strategy not in ("speed", "memory"):
@@ -494,6 +385,7 @@ class Corr_2PCF(TaskBase):
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['sampling'] = copy.deepcopy(self.sampling)
+        self.task_params['pair_window'] = copy.deepcopy(self.pair_window)
         self.task_params['memory_strategy'] = self.memory_strategy
         self.task_params['pair_window_cache'] = self.pair_window_cache
         self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
@@ -526,16 +418,7 @@ class Corr_2PCF(TaskBase):
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f'window{i}', window_i)
-        pair_window_params = self.task_params.get('pair_window', None)
-        if isinstance(pair_window_params, str):
-            self.pair_window_params = pair_window_from_string(pair_window_params)
-            self._pair_window_from_default = False
-        elif pair_window_params and (pair_window_params.get('type') or pair_window_params.get('func') is not None):
-            self.pair_window_params = copy.deepcopy(pair_window_params)
-            self._pair_window_from_default = False
-        else:
-            self.pair_window_params = default_pair_window()
-            self._pair_window_from_default = True
+        self.pair_window = self._normalize_pair_window(self.task_params.get('pair_window', default_pair_window()))
 
         self.sampling = copy.deepcopy(self.task_params['sampling'])
         self.sampling_names = ()
@@ -568,44 +451,14 @@ class Corr_2PCF(TaskBase):
         return describe_task_distribution(total_tasks, n_ranks)
 
     def _normalize_pair_window(self, pair_window):
-        if pair_window is None:
-            pair_window = self.pair_window_params
-        if isinstance(pair_window, str):
-            pair_window = pair_window_from_string(pair_window)
-        if not isinstance(pair_window, dict):
-            raise TypeError(
-                f"Unsupported pair_window input: expected dict, string, or None, got {type(pair_window)}."
-            )
-        normalized = apply_builtin_pair_window_defaults(pair_window)
-        if not normalized.get("type"):
-            normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
-        normalized["len_args"] = normalize_len_args(normalized.get("len_args", {}))
-        normalized["los_args"] = normalize_los_args(normalized.get("los_args", {}), normalized.get("type"))
-        normalized.setdefault("other_args", {})
-        kernel_mode = normalized.get("kernel_mode")
-        if not kernel_mode:
-            kernel_mode = default_kernel_mode(
-                normalized.get("type"),
-                has_custom_func=normalized.get("func") is not None,
-            )
-        normalized["kernel_mode"] = normalize_kernel_mode(kernel_mode)
-        if not normalized.get("mapping"):
-            raise ValueError("pair_window requires a 'mapping' field.")
-        mapping = normalized.get("mapping")
-        if isinstance(mapping, str):
-            if mapping not in PAIR_WINDOW_MAPPING_SPECS:
-                raise ValueError(
-                    f"Unsupported pair_window mapping '{mapping}'. "
-                    f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
-                )
-        elif not callable(mapping):
-            raise TypeError("pair_window mapping must be a string or callable.")
-        return normalized
+        if pair_window is None and hasattr(self, "pair_window"):
+            pair_window = self.pair_window
+        return normalize_pair_window_params(pair_window)
 
     def _resolve_sampling(self):
         if not isinstance(self.sampling, dict) or not self.sampling:
             raise ValueError("Corr_2PCF requires a non-empty 'sampling' dictionary.")
-        mapping = self.pair_window.get("mapping") if isinstance(self.pair_window, dict) else self.pair_window_params.get("mapping")
+        mapping = self.pair_window.get("mapping")
         if isinstance(mapping, str):
             required_names = PAIR_WINDOW_MAPPING_SPECS[mapping]["sampling_args"]
         else:
@@ -635,9 +488,7 @@ class Corr_2PCF(TaskBase):
         params['window'] = serialize_window_input(self.window)
         params['window1'] = serialize_window_input(self.window1)
         params['window2'] = serialize_window_input(self.window2)
-        params['pair_window'] = copy.deepcopy(
-            self.pair_window if self.pair_window is not None else self.pair_window_params
-        )
+        params['pair_window'] = copy.deepcopy(self.pair_window)
         params['sampling_spec'] = copy.deepcopy(self.sampling_specs)
         params['sampling_names'] = list(self.sampling_names)
         params['sampling'] = {
@@ -788,31 +639,7 @@ class Corr_2PCF(TaskBase):
         return os.path.join(cache_dir, f"{digest}.npy")
 
     def _pair_window_params_for_sample(self, sample, pair_window):
-        if pair_window is None:
-            pair_window = self._normalize_pair_window(None)
-        elif isinstance(pair_window, str):
-            pair_window = self._normalize_pair_window(pair_window)
-        elif not isinstance(pair_window, dict):
-            raise TypeError(
-                f"Unsupported pair_window input: expected dict or string, got {type(pair_window)}."
-            )
-        mapping = pair_window.get("mapping")
-        if isinstance(mapping, str):
-            params = call_pair_window_mapping(
-                PAIR_WINDOW_MAPPING_SPECS[mapping]["func"],
-                sample,
-                pair_window,
-            )
-        else:
-            params = call_pair_window_mapping(mapping, sample, pair_window)
-        if not isinstance(params, dict):
-            raise TypeError("pair_window mapping must return a pair_window dictionary.")
-        params = copy.deepcopy(params)
-        params.pop("mapping", None)
-        params.setdefault("len_args", {})
-        params.setdefault("los_args", {})
-        params.setdefault("other_args", {})
-        return params
+        return build_pair_window_params_for_sample(sample, pair_window)
 
     def _reference_pair_field(self, *fields):
         for field in fields:
@@ -1045,22 +872,13 @@ class Corr_2PCF(TaskBase):
                 comm.Barrier()
 
             if rank == 0:
-                self.corr2pcf_data.sampling_names = tuple(self.sampling_names)
-                self.corr2pcf_data.sampling = {
-                    name: self.sampling_arrays[name].copy()
-                    for name in self.sampling_names
-                }
-                self.corr2pcf_data._sync_sampling_attrs()
-                self.corr2pcf_data.dd = results.get("dd") if "dd" in expanded_products else None
-                self.corr2pcf_data.dr = results.get("dr") if "dr" in expanded_products else None
-                self.corr2pcf_data.rd = results.get("rd") if "rd" in expanded_products else None
-                self.corr2pcf_data.delta_dd = results.get("delta_dd") if "delta_dd" in expanded_products else None
-                self.corr2pcf_data.rr = results.get("rr") if "rr" in expanded_products else None
-                if "xi" in expanded_products:
-                    self.corr2pcf_data.xi = self.corr2pcf_data.delta_dd / self.corr2pcf_data.rr
-                else:
-                    self.corr2pcf_data.xi = None
-
+                populate_corr2pcf_data(
+                    self.corr2pcf_data,
+                    self.sampling_names,
+                    self.sampling_arrays,
+                    expanded_products,
+                    results,
+                )
                 self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
                 self.corr2pcf_data.task_params = self._current_task_params_snapshot()
                 if save_result:
@@ -1355,26 +1173,30 @@ class Corr_2PCF(TaskBase):
             gathered_rr = comm.gather(local_rr, root=0)
             gathered_tasks = comm.gather(local_tasks, root=0)
             if rank == 0:
-                flat_tasks = [item for sublist in gathered_tasks for item in sublist]
-
-                def build_result(gathered_values):
-                    result = np.empty(result_shape, dtype=np.float64)
-                    for index_tuple, value in zip(flat_tasks, [item for sublist in gathered_values for item in sublist]):
-                        result[tuple(index_tuple)] = value
-                    return result
-
-                self.corr2pcf_data.sampling_names = tuple(self.sampling_names)
-                self.corr2pcf_data.sampling = {
-                    name: self.sampling_arrays[name].copy()
-                    for name in self.sampling_names
+                gathered_by_product = {
+                    "dd": gathered_dd,
+                    "dr": gathered_dr,
+                    "rd": gathered_rd,
+                    "delta_dd": gathered_delta_dd,
+                    "rr": gathered_rr,
+                    "xi": gathered_xi,
                 }
-                self.corr2pcf_data._sync_sampling_attrs()
-                self.corr2pcf_data.dd = None if 'dd' not in expanded_products else build_result(gathered_dd)
-                self.corr2pcf_data.dr = None if 'dr' not in expanded_products else build_result(gathered_dr)
-                self.corr2pcf_data.rd = None if 'rd' not in expanded_products else build_result(gathered_rd)
-                self.corr2pcf_data.delta_dd = None if 'delta_dd' not in expanded_products else build_result(gathered_delta_dd)
-                self.corr2pcf_data.rr = None if 'rr' not in expanded_products else build_result(gathered_rr)
-                self.corr2pcf_data.xi = None if 'xi' not in expanded_products else build_result(gathered_xi)
+                product_results = {
+                    product: build_result_from_gathered(
+                        gathered_tasks,
+                        gathered_values,
+                        result_shape,
+                    )
+                    for product, gathered_values in gathered_by_product.items()
+                    if product in expanded_products
+                }
+                populate_corr2pcf_data(
+                    self.corr2pcf_data,
+                    self.sampling_names,
+                    self.sampling_arrays,
+                    expanded_products,
+                    product_results,
+                )
                 if not count_all:
                     progress = 100.
                     self.logger.info(f"Progress: {progress:6.2f}%")

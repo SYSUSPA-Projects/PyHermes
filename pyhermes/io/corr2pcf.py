@@ -12,8 +12,6 @@ class Corr2PCFData(HermesData):
         self.corr2pcf_info = {}
         self.sampling_names = ()
         self.sampling = {}
-        self.s = None
-        self.mu = None
         self.dd = None
         self.dr = None
         self.rd = None
@@ -27,7 +25,7 @@ class Corr2PCFData(HermesData):
 
     def format_corr2pcf_params(self):
         for key, value in self.corr2pcf_info.items():
-            if key in ('sampling', 'sampling_names', 's', 'mu'):
+            if key in ('sampling', 'sampling_names'):
                 continue
             setattr(self, key, value)
 
@@ -43,10 +41,6 @@ class Corr2PCFData(HermesData):
         if arr.ndim != expected_ndim:
             raise ValueError(f"'{name}' must be stored as a {expected_ndim}D array for sampling={self.sampling_names}, got shape {arr.shape}.")
         return np.ascontiguousarray(arr, dtype=np.float64)
-
-    def _sync_sampling_attrs(self):
-        self.s = self.sampling.get("s")
-        self.mu = self.sampling.get("mu")
 
     def load_corr2pcf(self, f_in, single=True):
         self.load(f_in, read_2pcf=True, single=single)
@@ -68,7 +62,6 @@ class Corr2PCFData(HermesData):
                 name: self._ensure_1d_array(dataset['sampling'][name], name)
                 for name in self.sampling_names
             }
-            self._sync_sampling_attrs()
             self.dd = dataset.get('dd')
             self.dr = dataset.get('dr')
             self.rd = dataset.get('rd')
