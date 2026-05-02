@@ -315,10 +315,6 @@ def normalize_pair_window_params(pair_window, require_mapping=True):
     return normalized
 
 
-def call_pair_window_mapping(mapping, sample, pair_window):
-    return mapping(sample, pair_window)
-
-
 def build_pair_window_params_for_sample(sample, pair_window):
     pair_window = normalize_pair_window_params(pair_window)
     mapping = pair_window.get("mapping")
@@ -326,7 +322,7 @@ def build_pair_window_params_for_sample(sample, pair_window):
         mapper = PAIR_WINDOW_MAPPING_SPECS[mapping]["func"]
     else:
         mapper = mapping
-    params = call_pair_window_mapping(mapper, sample, pair_window)
+    params = mapper(sample, pair_window)
     if not isinstance(params, dict):
         raise TypeError("pair_window mapping must return a pair_window dictionary.")
     params = copy.deepcopy(params)
@@ -418,42 +414,18 @@ class Corr_2PCF(TaskBase):
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f'window{i}', window_i)
-        self.pair_window = self._normalize_pair_window(self.task_params.get('pair_window', default_pair_window()))
+        self.pair_window = normalize_pair_window_params(self.task_params.get('pair_window', default_pair_window()))
 
         self.sampling = copy.deepcopy(self.task_params['sampling'])
         self.sampling_names = ()
         self.sampling_arrays = {}
         self.sampling_specs = {}
         self.threads = int(self.task_params['threads'])
-        self.products = self._normalize_products(self.task_params.get('products', 'xi'))
+        self.products = normalize_products(self.task_params.get('products', 'xi'))
         self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
         self.pair_window_cache = parse_bool(self.task_params.get("pair_window_cache", False))
         self.pair_window_cache_dir = self.task_params.get("pair_window_cache_dir", "")
         self.fout_path = self.task_params['fout_path']
-
-    # Sampling, products, and pair-window normalization.
-    def _normalize_products(self, products):
-        return normalize_products(products)
-
-    def _expanded_products(self):
-        return expand_products(self.products)
-
-    def _describe_sampling(self):
-        return describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs)
-
-    def _describe_products(self, expanded_products):
-        return describe_products(self.products, expanded_products)
-
-    def _describe_pair_window(self, pair_window):
-        return describe_pair_window(pair_window)
-
-    def _describe_task_distribution(self, total_tasks, n_ranks):
-        return describe_task_distribution(total_tasks, n_ranks)
-
-    def _normalize_pair_window(self, pair_window):
-        if pair_window is None and hasattr(self, "pair_window"):
-            pair_window = self.pair_window
-        return normalize_pair_window_params(pair_window)
 
     def _resolve_sampling(self):
         if not isinstance(self.sampling, dict) or not self.sampling:
@@ -502,9 +474,6 @@ class Corr_2PCF(TaskBase):
         params['pair_window_cache_dir'] = self.pair_window_cache_dir
         params['fout_path'] = self.fout_path
         return params
-
-    def _memory_leg_desc(self, source_desc, leg_idx):
-        return f"{source_desc}, {compact_window_desc(getattr(self, f'window{leg_idx}'))}"
 
     # Input field resolution.
     def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
@@ -562,9 +531,6 @@ class Corr_2PCF(TaskBase):
         )
         func_util.safe_exit(1)
 
-    def _field_density(self, field):
-        return field_density(field)
-
     def _resolve_window(self, leg_idx, base_convols, provided_window):
         if provided_window is None:
             return None, "no additional window convolution"
@@ -585,7 +551,7 @@ class Corr_2PCF(TaskBase):
     def _required_input_flags(self):
         needs_data = False
         needs_random = False
-        for product in self._expanded_products():
+        for product in expand_products(self.products):
             product_needs_data, product_needs_random = PRODUCT_INPUT_FLAGS[product]
             needs_data = needs_data or product_needs_data
             needs_random = needs_random or product_needs_random
@@ -597,9 +563,9 @@ class Corr_2PCF(TaskBase):
             field2 = field1
         if pair_window is None:
             pair_window = self.pair_window
-        pair_window = self._normalize_pair_window(pair_window)
+        pair_window = normalize_pair_window_params(pair_window)
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-            return self._field_density(field1) * self._field_density(field2)
+            return field_density(field1) * field_density(field2)
         return compute_pair_product_at_sample(
             sample,
             field1,
@@ -608,7 +574,7 @@ class Corr_2PCF(TaskBase):
         )
 
     def _build_pair_window_for_sample(self, sample, reference_field):
-        pair_window_params = self._pair_window_params_for_sample(sample, self.pair_window)
+        pair_window_params = build_pair_window_params_for_sample(sample, self.pair_window)
         pair_window_obj = WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
         if self.pair_window_cache:
             cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
@@ -638,9 +604,6 @@ class Corr_2PCF(TaskBase):
         digest = hashlib.sha1(json.dumps(cache_key, sort_keys=True, default=str).encode("utf-8")).hexdigest()
         return os.path.join(cache_dir, f"{digest}.npy")
 
-    def _pair_window_params_for_sample(self, sample, pair_window):
-        return build_pair_window_params_for_sample(sample, pair_window)
-
     def _reference_pair_field(self, *fields):
         for field in fields:
             if isinstance(field, ConvolsData):
@@ -649,7 +612,7 @@ class Corr_2PCF(TaskBase):
 
     def _delta_field(self, data_field, random_field):
         if isinstance(random_field, (float, int, np.floating)):
-            return data_field - self._field_density(random_field)
+            return data_field - field_density(random_field)
         return data_field - random_field
 
     def _compute_products_for_sample(
@@ -669,7 +632,7 @@ class Corr_2PCF(TaskBase):
         def product(a, b):
             nonlocal pair_window_obj
             if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
-                return self._field_density(a) * self._field_density(b)
+                return field_density(a) * field_density(b)
             if pair_window_obj is None:
                 pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
             return pair_product_with_window(a, b, pair_window_obj, self.threads)
@@ -725,7 +688,8 @@ class Corr_2PCF(TaskBase):
             final_field = base_field.copy()
             final_field.format_convols_params()
         self._record_memory_convols_info(leg_idx, final_field)
-        return final_field, self._memory_leg_desc(source_desc, leg_idx)
+        window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
+        return final_field, f"{source_desc}, {window_desc}"
 
     def _record_memory_convols_info(self, leg_idx, field):
         if self.rank == 0 and isinstance(field, ConvolsData):
@@ -775,7 +739,7 @@ class Corr_2PCF(TaskBase):
 
     def _compute_single_product_for_sample(self, sample, field1, field2):
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-            return self._field_density(field1) * self._field_density(field2)
+            return field_density(field1) * field_density(field2)
         reference_field = self._reference_pair_field(field1, field2)
         pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
         return pair_product_with_window(field1, field2, pair_window_obj, self.threads)
@@ -846,20 +810,20 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             self.corr2pcf_data = Corr2PCFData(threads=self.threads)
             self._sync_runtime_options()
-            self.products = self._normalize_products(self.products)
-            self.pair_window = self._normalize_pair_window(self.pair_window)
+            self.products = normalize_products(self.products)
+            self.pair_window = normalize_pair_window_params(self.pair_window)
             self._resolve_sampling()
-            expanded_products = self._expanded_products()
+            expanded_products = expand_products(self.products)
             products_to_compute = [product for product in expanded_products if product != "xi"]
 
             if rank == 0:
                 tasks, result_shape = make_sampling_tasks(self.sampling_names, self.sampling_arrays)
                 self.logger.info("Start to calculate 2PCF in memory strategy ...")
-                self.logger.info(self._describe_sampling())
-                self.logger.info(self._describe_products(expanded_products))
-                self.logger.info(self._describe_pair_window(self.pair_window))
+                self.logger.info(describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs))
+                self.logger.info(describe_products(self.products, expanded_products))
+                self.logger.info(describe_pair_window(self.pair_window))
                 self.logger.info(f"Pair-window cache: enabled={self.pair_window_cache}")
-                self.logger.info(self._describe_task_distribution(len(tasks), comm.Get_size()))
+                self.logger.info(describe_task_distribution(len(tasks), comm.Get_size()))
             else:
                 tasks = None
                 result_shape = None
@@ -908,8 +872,8 @@ class Corr_2PCF(TaskBase):
     ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         self._sync_runtime_options()
-        self.products = self._normalize_products(self.products)
-        expanded_products = self._expanded_products()
+        self.products = normalize_products(self.products)
+        expanded_products = expand_products(self.products)
         if convols_data1 is None:
             convols_data1 = self.convols_data1
         if convols_data2 is None:
@@ -924,14 +888,14 @@ class Corr_2PCF(TaskBase):
             window2 = self.window2
         if pair_window is None:
             pair_window = self.pair_window
-        self.pair_window = self._normalize_pair_window(pair_window)
+        self.pair_window = normalize_pair_window_params(pair_window)
         self._resolve_sampling()
         needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
-            self.logger.info(f"{self._describe_sampling()}, threads={self.threads}")
-            self.logger.info(self._describe_products(expanded_products))
-            self.logger.info(self._describe_pair_window(self.pair_window))
+            self.logger.info(f"{describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs)}, threads={self.threads}")
+            self.logger.info(describe_products(self.products, expanded_products))
+            self.logger.info(describe_pair_window(self.pair_window))
             base_convols_cache = {}
             resolved_data_legs = []
             if needs_data:
@@ -1055,7 +1019,7 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
                 self.prepare_input_fields()
-            expanded_products = self._expanded_products()
+            expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
             _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
             _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
@@ -1083,7 +1047,7 @@ class Corr_2PCF(TaskBase):
                 next_report_threshold = report_interval
                 requests = [None] + [comm.irecv(source=r, tag=r) for r in range(1, size)]
                 count_all = False
-                self.logger.info(self._describe_task_distribution(total_tasks, size))
+                self.logger.info(describe_task_distribution(total_tasks, size))
                 self.logger.info("Progress:   0.00%")
             else:
                 task_sub_arrs = None
