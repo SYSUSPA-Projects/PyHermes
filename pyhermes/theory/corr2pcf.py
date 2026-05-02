@@ -807,7 +807,6 @@ class Corr_2PCF(TaskBase):
             if rank == 0:
                 time_run_1 = time.perf_counter()
             self.corr2pcf_data = Corr2PCFData(threads=self.threads)
-            self._sync_runtime_options()
             self.products = normalize_products(self.products)
             self.pair_window = normalize_pair_window_params(self.pair_window)
             self._resolve_sampling()
@@ -867,9 +866,11 @@ class Corr_2PCF(TaskBase):
         window1=None,
         window2=None,
         pair_window=None,
+        sync_runtime=True,
     ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
-        self._sync_runtime_options()
+        if sync_runtime:
+            self._sync_runtime_options()
         self.products = normalize_products(self.products)
         expanded_products = expand_products(self.products)
         if convols_data1 is None:
@@ -1016,7 +1017,7 @@ class Corr_2PCF(TaskBase):
             if rank == 0:
                 time_run_1 = time.perf_counter()
             if not self._fields_prepared:
-                self.prepare_input_fields()
+                self.prepare_input_fields(sync_runtime=False)
             expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
             _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
