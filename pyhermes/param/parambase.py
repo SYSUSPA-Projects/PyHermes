@@ -17,6 +17,7 @@ import pyhermes.pipeline.custom_exceptions as ce
 
 REPLACE_KEYS = {
     "Corr_2PCF.pair_window",
+    "Corr_2PCF.sampling",
 }
 
 

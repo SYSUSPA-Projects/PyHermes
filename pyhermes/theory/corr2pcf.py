@@ -39,7 +39,6 @@ PRODUCT_INPUT_FLAGS = {
 }
 
 POSITIVE_SAMPLING_ARGS = {"s", "r", "R", "rp", "rt"}
-REMOVED_CORR2PCF_PARAMS = {"mode", "los", "s", "mu"}
 
 
 def parse_bool(value):
@@ -283,6 +282,18 @@ def mapping_smu_to_RH(sample, pair_window):
     return params
 
 
+def mapping_rppi_to_RH(sample, pair_window):
+    params = copy.deepcopy(pair_window)
+    params.setdefault("len_args", {})
+    params.setdefault("los_args", {})
+    params.setdefault("other_args", {})
+    if params["len_args"].get("R") is None:
+        params["len_args"]["R"] = sample["rp"]
+    if params["len_args"].get("H") is None:
+        params["len_args"]["H"] = sample["pi"]
+    return params
+
+
 PAIR_WINDOW_MAPPING_SPECS = {
     "s_to_R": {
         "sampling_args": ("s",),
@@ -293,6 +304,11 @@ PAIR_WINDOW_MAPPING_SPECS = {
         "sampling_args": ("s", "mu"),
         "len_args": ("R", "H"),
         "func": mapping_smu_to_RH,
+    },
+    "rppi_to_RH": {
+        "sampling_args": ("rp", "pi"),
+        "len_args": ("R", "H"),
+        "func": mapping_rppi_to_RH,
     },
 }
 
@@ -389,12 +405,6 @@ class Corr_2PCF(TaskBase):
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
-        removed_keys = sorted(key for key in REMOVED_CORR2PCF_PARAMS if key in self.task_params)
-        if removed_keys:
-            raise ValueError(
-                "Corr_2PCF no longer accepts task-level "
-                f"{removed_keys}. Put sampling coordinates in 'sampling' and LOS in 'pair_window.los_args'."
-            )
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
         self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data

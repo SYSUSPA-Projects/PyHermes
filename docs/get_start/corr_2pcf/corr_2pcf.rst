@@ -81,11 +81,16 @@ The built-in mappings are:
 - ``s_to_R``: requires ``sampling.s`` and fills ``len_args.R = s``.
 - ``smu_to_RH``: requires ``sampling.s`` and ``sampling.mu``; fills
   ``R = s * sqrt(1 - mu^2)`` and ``H = s * mu``.
+- ``rppi_to_RH``: requires ``sampling.rp`` and ``sampling.pi``; fills
+  ``R = rp`` and ``H = pi``.
 
 The keys in ``sampling`` must match the mapping exactly. For ``xi(s)``, use a
 shell pair window with ``mapping: "s_to_R"`` and provide only ``sampling.s``.
 For ``xi(s, mu)``, use a LOS-aware pair window with ``mapping: "smu_to_RH"``
-and provide ``sampling.s`` and ``sampling.mu``.
+and provide ``sampling.s`` and ``sampling.mu``. For ``xi(rp, pi)``, use
+``mapping: "rppi_to_RH"`` and provide ``sampling.rp`` and ``sampling.pi``.
+``rp`` is treated as a positive transverse separation; ``pi`` is the
+line-of-sight separation and may be signed.
 
 Kernel Mode
 -----------
@@ -244,7 +249,8 @@ Key Parameters
   string.
 - ``sampling``: coordinate dictionary consumed by ``pair_window.mapping``.
   Saved ``Corr2PCFData`` objects expose coordinates through this dictionary,
-  for example ``corr2pcf.sampling["s"]`` and ``corr2pcf.sampling["mu"]``.
+  for example ``corr2pcf.sampling["s"]``, ``corr2pcf.sampling["mu"]``,
+  ``corr2pcf.sampling["rp"]``, or ``corr2pcf.sampling["pi"]``.
 - ``products``: one or more products from ``dd``, ``dr``, ``rd``,
   ``delta_dd``, ``rr``, and ``xi``.
 - ``threads``: CPU threads per MPI rank.
