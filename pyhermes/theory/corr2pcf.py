@@ -38,7 +38,7 @@ PRODUCT_INPUT_FLAGS = {
     "xi": (True, True),
 }
 
-POSITIVE_SAMPLING_ARGS = {"s", "r", "R", "rp", "rt"}
+POSITIVE_SAMPLING_ARGS = {"s", "rp"}
 
 
 def parse_bool(value):

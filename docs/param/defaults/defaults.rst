@@ -94,15 +94,12 @@ Corr_2PCF
 - ``window1`` and ``window2``:
   optional leg-specific smoothing windows.
 - ``pair_window``:
-  kernel template used in the pair-correlation measurement itself. By default,
-  ``mode: s`` uses a shell window with ``mapping: s_to_R`` and ``mode: smu``
-  uses a ring window with ``mapping: smu_to_RH``. Built-in mappings are
-  mode-specific: ``s_to_R`` is only valid with ``mode: s`` and
-  ``smu_to_RH`` is only valid with ``mode: smu``. Only ``None`` values in
-  ``len_args`` are filled at runtime by the mapping; fixed numeric values are
-  left unchanged. With ``smu_to_RH``, ``other_args`` entries ``nx``, ``ny``,
-  and ``nz`` are filled from ``los`` when those keys are explicitly present
-  with value ``None``.
+  kernel template used in the pair-correlation measurement itself. The default
+  is a shell window with ``mapping: s_to_R``. Built-in mappings are
+  ``s_to_R``, ``smu_to_RH``, and ``rppi_to_RH``; the ``sampling`` keys must
+  match the selected mapping exactly. Only ``None`` values in ``len_args`` are
+  filled at runtime by the mapping; fixed numeric values are left unchanged.
+  LOS information belongs in ``pair_window.los_args``.
 - ``pair_window.kernel_mode``:
   kernel construction strategy. ``full_rfft`` evaluates the full real-FFT
   kernel and is the default for custom windows. ``octant`` uses symmetry
@@ -113,16 +110,12 @@ Corr_2PCF
   and ``kz``. Isotropic windows satisfy this automatically; oblique LOS
   anisotropic windows generally require ``full_rfft``. This is a symmetry test
   in the FFT grid coordinates, not merely a visual shape-symmetry test.
-- ``mode``:
-  ``s`` for isotropic ``xi(s)`` or ``smu`` for ``xi(s, mu)``.
-- ``los``:
-  line-of-sight direction for ``smu`` mode; use ``x``, ``y``, ``z``, or a
-  length-3 vector.
-- ``s``:
-  pair-separation sampling specification.
-- ``mu``:
-  angular sampling specification for ``smu`` mode. For the default ring window,
-  ``0 <= mu <= 1`` is sufficient.
+- ``sampling``:
+  coordinate specification for the output grid. Supported built-in mapping
+  coordinate sets are ``s``, ``s`` and ``mu``, or ``rp`` and ``pi``.
+- ``pair_window.los_args``:
+  line-of-sight direction for LOS-aware pair windows, expressed as
+  ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
 - ``threads``:
   CPU threads per MPI rank.
 - ``memory_strategy``:
