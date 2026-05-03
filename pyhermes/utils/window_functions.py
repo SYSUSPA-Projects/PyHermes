@@ -16,10 +16,10 @@ def window_function_sphere_numba(ki, kj, kk, R):
     W(k; R) = 3 * (sin(q) - q*cos(q)) / q^3, with W(0; R) = 1.
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
+    q = 2 * np.pi * k * R
+    if q == 0.0:
         return 1
-    Phase = 2 * np.pi * k * R
-    result = 3 * (np.sin(Phase) - Phase * np.cos(Phase)) / Phase**3
+    result = 3 * (np.sin(q) - q * np.cos(q)) / q**3
     return result
 
 
@@ -32,8 +32,8 @@ def window_function_gauss_numba(ki, kj, kk, R):
     W(k; R) = exp(-q^2 / 2).
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
-    Phase = 2 * np.pi * k * R
-    result = np.exp(-(Phase**2) / 2)
+    q = 2 * np.pi * k * R
+    result = np.exp(-(q**2) / 2)
     return result
 
 
@@ -46,10 +46,10 @@ def window_function_shell_numba(ki, kj, kk, R):
     W(k; R) = sin(q) / q, with W(0; R) = 1.
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
+    q = 2 * np.pi * k * R
+    if q == 0.0:
         return 1
-    Phase = 2 * np.pi * k * R
-    result = np.sin(Phase) / Phase
+    result = np.sin(q) / q
     return result
 
 @njit
@@ -69,18 +69,14 @@ def window_function_Tshell_numba(ki, kj, kk, R_in, R_out):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         return 1
-    phase_in = 2 * np.pi * k * R_in
-    phase_out = 2 * np.pi * k * R_out
-    result = (
-        3
-        * (
-            np.sin(phase_out)
-            - phase_out * np.cos(phase_out)
-            - np.sin(phase_in)
-            + phase_in * np.cos(phase_in)
-        )
-        / (phase_out**3 - phase_in**3)
-    )
+    q_in = 2 * np.pi * k * R_in
+    q_out = 2 * np.pi * k * R_out
+    denom = q_out**3 - q_in**3
+    if denom == 0.0:
+        if q_out == 0.0:
+            return 1
+        return np.sin(q_out) / q_out
+    result = 3 * (np.sin(q_out) - np.sin(q_in) - q_out * np.cos(q_out) + q_in * np.cos(q_in)) / denom
     return result
 
 
@@ -102,15 +98,18 @@ def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     if k == 0:
         return 1
-    phase_shell = 2 * np.pi * k * R_shell
-    phase_smooth = 2 * np.pi * k * R_smooth
+    q_shell = 2 * np.pi * k * R_shell
+    q_smooth = 2 * np.pi * k * R_smooth
+    denom = R_shell * R_shell + R_smooth * R_smooth
+    if denom == 0.0:
+        return 1
+    if q_shell == 0.0:
+        shell_sinc = 1.0
+    else:
+        shell_sinc = np.sin(q_shell) / q_shell
     result = (
-        (
-            R_smooth * R_smooth * np.cos(phase_shell)
-            + R_shell * R_shell * np.sin(phase_shell) / phase_shell
-        )
-        / (R_shell * R_shell + R_smooth * R_smooth)
-        * np.exp(-(phase_smooth**2) / 2)
+        (R_smooth * R_smooth * np.cos(q_shell) + R_shell * R_shell * shell_sinc) 
+        / denom * np.exp(-(q_smooth**2) / 2)
     )
     return result
 
@@ -243,9 +242,9 @@ def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
     W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
-    Phase = 2 * np.pi * k * R
+    q = 2 * np.pi * k * R
     norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
-    result = norm * Phase**2 * np.exp(-(Phase**2) / 2)
+    result = norm * q**2 * np.exp(-(q**2) / 2)
     return result
 
 
