@@ -26,6 +26,21 @@ def _get_smu_arrays(corr2pcf_smu):
     return s, mu[order], xi[:, order]
 
 
+def _get_rppi_arrays(corr2pcf_rppi):
+    sampling = getattr(corr2pcf_rppi, "sampling", {})
+    rp = _as_1d_array(sampling.get("rp"), "corr2pcf_rppi.sampling['rp']")
+    pi = _as_1d_array(sampling.get("pi"), "corr2pcf_rppi.sampling['pi']")
+    xi = np.asarray(corr2pcf_rppi.xi, dtype=np.float64)
+    if xi.shape != (rp.size, pi.size):
+        raise ValueError(
+            f"corr2pcf_rppi.xi must have shape {(rp.size, pi.size)}, got {xi.shape}."
+        )
+
+    rp_order = np.argsort(rp)
+    pi_order = np.argsort(pi)
+    return rp[rp_order], pi[pi_order], xi[np.ix_(rp_order, pi_order)]
+
+
 def smu_to_half_plane(corr2pcf_smu, side="right", s_power=2):
     """
     Convert xi(s, mu) sampled on mu in [0, 1] to one half of the
@@ -50,6 +65,23 @@ def smu_to_half_plane(corr2pcf_smu, side="right", s_power=2):
     return s_perp, s_par, scaled_xi
 
 
+def rppi_to_half_plane(corr2pcf_rppi, side="right", s_power=2):
+    """
+    Convert xi(rp, pi) to one half of the (rp, pi) plane.
+    """
+    rp, pi, xi = _get_rppi_arrays(corr2pcf_rppi)
+    RP, PI = np.meshgrid(rp, pi, indexing="ij")
+    x = RP.copy()
+    if side == "left":
+        x = -x
+    elif side != "right":
+        raise ValueError("side must be 'left' or 'right'.")
+
+    s = np.sqrt(RP**2 + PI**2)
+    scaled_xi = (s**s_power) * xi
+    return x, PI, scaled_xi
+
+
 def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2):
     """
     Convert xi(s, mu) sampled on mu in [0, 1] to one quadrant of the
@@ -69,6 +101,31 @@ def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2):
 
     scaled_xi = (S**s_power) * xi
     return s_perp, s_par, scaled_xi
+
+
+def rppi_to_quadrant(corr2pcf_rppi, quadrant="upper_right", s_power=2):
+    """
+    Select one quadrant from xi(rp, pi).
+    """
+    quadrant = _normalize_quadrant_name(quadrant)
+    rp, pi, xi = _get_rppi_arrays(corr2pcf_rppi)
+    if "upper" in quadrant:
+        pi_mask = pi >= 0.0
+    else:
+        pi_mask = pi <= 0.0
+    if not np.any(pi_mask):
+        raise ValueError(f"corr2pcf_rppi.sampling['pi'] has no values for {quadrant}.")
+
+    pi = pi[pi_mask]
+    xi = xi[:, pi_mask]
+    RP, PI = np.meshgrid(rp, pi, indexing="ij")
+    x = RP.copy()
+    if "left" in quadrant:
+        x = -x
+
+    s = np.sqrt(RP**2 + PI**2)
+    scaled_xi = (s**s_power) * xi
+    return x, PI, scaled_xi
 
 
 def _normalize_quadrant_name(name):
@@ -159,7 +216,7 @@ def _triangulation(x, y):
     )
 
 
-def plot_corr2pcf_smu(
+def plot_corr2pcf_2d(
     corr2pcf1=None,
     corr2pcf2=None,
     quadrants=None,
@@ -179,10 +236,11 @@ def plot_corr2pcf_smu(
     label_fontsize=16,
     tick_fontsize=12,
     title_fontsize=18,
-    text_fontsize=14
+    text_fontsize=14,
+    coordinates="smu",
 ):
     """
-    Plot s**s_power * xi(s_perp, s_parallel).
+    Plot s**s_power * xi on the LOS plane.
 
     If corr2pcf2 is provided, corr2pcf1 is shown on the left half-plane and
     corr2pcf2 on the right half-plane. If corr2pcf2 is omitted, corr2pcf1 is
@@ -205,14 +263,23 @@ def plot_corr2pcf_smu(
     else:
         fig = ax.figure
 
+    if coordinates not in ("smu", "rppi"):
+        raise ValueError("coordinates must be 'smu' or 'rppi'.")
+    if coordinates == "smu":
+        half_plane_func = smu_to_half_plane
+        quadrant_func = smu_to_quadrant
+    else:
+        half_plane_func = rppi_to_half_plane
+        quadrant_func = rppi_to_quadrant
+
     if quadrants is None:
         if corr2pcf1 is None:
             raise ValueError("corr2pcf1 is required when quadrants is not provided.")
-        x_left, y_left, z_left = smu_to_half_plane(corr2pcf1, side="left", s_power=s_power)
+        x_left, y_left, z_left = half_plane_func(corr2pcf1, side="left", s_power=s_power)
         if corr2pcf2 is None:
-            x_right, y_right, z_right = smu_to_half_plane(corr2pcf1, side="right", s_power=s_power)
+            x_right, y_right, z_right = half_plane_func(corr2pcf1, side="right", s_power=s_power)
         else:
-            x_right, y_right, z_right = smu_to_half_plane(corr2pcf2, side="right", s_power=s_power)
+            x_right, y_right, z_right = half_plane_func(corr2pcf2, side="right", s_power=s_power)
         plot_items = [
             ("upper_left", x_left, y_left, z_left),
             ("upper_right", x_right, y_right, z_right),
@@ -226,7 +293,7 @@ def plot_corr2pcf_smu(
             corr = quadrant_map.get(quadrant)
             if corr is None:
                 continue
-            x, y, z = smu_to_quadrant(corr, quadrant=quadrant, s_power=s_power)
+            x, y, z = quadrant_func(corr, quadrant=quadrant, s_power=s_power)
             plot_items.append((quadrant, x, y, z))
 
     if vmax is None:
@@ -279,8 +346,12 @@ def plot_corr2pcf_smu(
                 fontsize=text_fontsize,
             )
 
-    ax.set_xlabel(r"$s_\perp$", fontsize=label_fontsize)
-    ax.set_ylabel(r"$s_\parallel$", fontsize=label_fontsize)
+    if coordinates == "rppi":
+        ax.set_xlabel(r"$r_p$", fontsize=label_fontsize)
+        ax.set_ylabel(r"$\pi$", fontsize=label_fontsize)
+    else:
+        ax.set_xlabel(r"$s_\perp$", fontsize=label_fontsize)
+        ax.set_ylabel(r"$s_\parallel$", fontsize=label_fontsize)
     ax.tick_params(labelsize=tick_fontsize)
     if title:
         ax.set_title(title, fontsize=title_fontsize)
