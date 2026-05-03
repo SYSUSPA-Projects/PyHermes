@@ -67,10 +67,16 @@ def smu_to_half_plane(corr2pcf_smu, side="right", s_power=2):
 
 def rppi_to_half_plane(corr2pcf_rppi, side="right", s_power=2):
     """
-    Convert xi(rp, pi) to one half of the (rp, pi) plane.
+    Convert xi(rp, pi) sampled on pi >= 0 to one half of the
+    (rp, pi) plane.
     """
     rp, pi, xi = _get_rppi_arrays(corr2pcf_rppi)
-    RP, PI = np.meshgrid(rp, pi, indexing="ij")
+
+    negative_pi_mask = pi != 0.0
+    pi_full = np.concatenate([-pi[negative_pi_mask][::-1], pi])
+    xi_full = np.concatenate([xi[:, negative_pi_mask][:, ::-1], xi], axis=1)
+
+    RP, PI = np.meshgrid(rp, pi_full, indexing="ij")
     x = RP.copy()
     if side == "left":
         x = -x
@@ -78,7 +84,7 @@ def rppi_to_half_plane(corr2pcf_rppi, side="right", s_power=2):
         raise ValueError("side must be 'left' or 'right'.")
 
     s = np.sqrt(RP**2 + PI**2)
-    scaled_xi = (s**s_power) * xi
+    scaled_xi = (s**s_power) * xi_full
     return x, PI, scaled_xi
 
 
@@ -105,23 +111,17 @@ def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2):
 
 def rppi_to_quadrant(corr2pcf_rppi, quadrant="upper_right", s_power=2):
     """
-    Select one quadrant from xi(rp, pi).
+    Convert xi(rp, pi) sampled on pi >= 0 to one quadrant.
     """
     quadrant = _normalize_quadrant_name(quadrant)
     rp, pi, xi = _get_rppi_arrays(corr2pcf_rppi)
-    if "upper" in quadrant:
-        pi_mask = pi >= 0.0
-    else:
-        pi_mask = pi <= 0.0
-    if not np.any(pi_mask):
-        raise ValueError(f"corr2pcf_rppi.sampling['pi'] has no values for {quadrant}.")
 
-    pi = pi[pi_mask]
-    xi = xi[:, pi_mask]
     RP, PI = np.meshgrid(rp, pi, indexing="ij")
     x = RP.copy()
     if "left" in quadrant:
         x = -x
+    if "lower" in quadrant:
+        PI = -PI
 
     s = np.sqrt(RP**2 + PI**2)
     scaled_xi = (s**s_power) * xi
