@@ -346,12 +346,8 @@ def plot_corr2pcf_2d(
                 fontsize=text_fontsize,
             )
 
-    if coordinates == "rppi":
-        ax.set_xlabel(r"$r_p$", fontsize=label_fontsize)
-        ax.set_ylabel(r"$\pi$", fontsize=label_fontsize)
-    else:
-        ax.set_xlabel(r"$s_\perp$", fontsize=label_fontsize)
-        ax.set_ylabel(r"$s_\parallel$", fontsize=label_fontsize)
+    ax.set_xlabel(r"$s_\perp$", fontsize=label_fontsize)
+    ax.set_ylabel(r"$s_\parallel$", fontsize=label_fontsize)
     ax.tick_params(labelsize=tick_fontsize)
     if title:
         ax.set_title(title, fontsize=title_fontsize)
