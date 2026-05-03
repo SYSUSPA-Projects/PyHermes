@@ -128,6 +128,12 @@ def rppi_to_quadrant(corr2pcf_rppi, quadrant="upper_right", s_power=2):
     return x, PI, scaled_xi
 
 
+COORDINATE_CONVERTERS = {
+    "smu": (smu_to_half_plane, smu_to_quadrant),
+    "rppi": (rppi_to_half_plane, rppi_to_quadrant),
+}
+
+
 def _normalize_quadrant_name(name):
     aliases = {
         "ul": "upper_left",
@@ -173,6 +179,58 @@ def _normalize_quadrants(quadrants):
         )
     names = ("upper_left", "upper_right", "lower_left", "lower_right")
     return {name: corr for name, corr in zip(names, quadrants) if corr is not None}
+
+
+def _normalize_coordinates_name(name):
+    if name not in COORDINATE_CONVERTERS:
+        raise ValueError("coordinates must contain only 'smu' or 'rppi'.")
+    return name
+
+
+def _half_plane_coordinates(coordinates):
+    if isinstance(coordinates, str):
+        name = _normalize_coordinates_name(coordinates)
+        return name, name
+    if isinstance(coordinates, dict):
+        left = coordinates.get("left", coordinates.get("corr2pcf1"))
+        right = coordinates.get("right", coordinates.get("corr2pcf2", left))
+        if left is None or right is None:
+            raise ValueError(
+                "coordinates dict must define left/right or corr2pcf1/corr2pcf2."
+            )
+        return _normalize_coordinates_name(left), _normalize_coordinates_name(right)
+    if len(coordinates) != 2:
+        raise ValueError(
+            "coordinates must be 'smu', 'rppi', or a 2-item sequence for "
+            "(corr2pcf1, corr2pcf2)."
+        )
+    return tuple(_normalize_coordinates_name(name) for name in coordinates)
+
+
+def _quadrant_coordinates(coordinates):
+    if isinstance(coordinates, str):
+        name = _normalize_coordinates_name(coordinates)
+        return {
+            "upper_left": name,
+            "upper_right": name,
+            "lower_left": name,
+            "lower_right": name,
+        }
+    if isinstance(coordinates, dict):
+        return {
+            _normalize_quadrant_name(quadrant): _normalize_coordinates_name(name)
+            for quadrant, name in coordinates.items()
+        }
+    if len(coordinates) != 4:
+        raise ValueError(
+            "coordinates must be 'smu', 'rppi', or a 4-item sequence ordered as "
+            "(upper_left, upper_right, lower_left, lower_right)."
+        )
+    names = ("upper_left", "upper_right", "lower_left", "lower_right")
+    return {
+        quadrant: _normalize_coordinates_name(name)
+        for quadrant, name in zip(names, coordinates)
+    }
 
 
 def _combined_vmax(arrays, percentile):
@@ -244,12 +302,15 @@ def plot_corr2pcf_2d(
 
     If corr2pcf2 is provided, corr2pcf1 is shown on the left half-plane and
     corr2pcf2 on the right half-plane. If corr2pcf2 is omitted, corr2pcf1 is
-    mirrored to show the full plane.
+    mirrored to show the full plane. ``coordinates`` may be either "smu",
+    "rppi", a dict keyed by left/right, or a 2-item sequence giving the
+    coordinate type for (corr2pcf1, corr2pcf2).
 
     If quadrants is provided, it should be either a dict keyed by
     upper_left, upper_right, lower_left, lower_right, or a 4-item sequence in
     that order. Each quadrant is drawn from one corr2pcf object without
-    mirroring across s_parallel=0.
+    mirroring across s_parallel=0. ``coordinates`` may be a matching dict or
+    4-item sequence.
     """
     import matplotlib.pyplot as plt
 
@@ -263,23 +324,27 @@ def plot_corr2pcf_2d(
     else:
         fig = ax.figure
 
-    if coordinates not in ("smu", "rppi"):
-        raise ValueError("coordinates must be 'smu' or 'rppi'.")
-    if coordinates == "smu":
-        half_plane_func = smu_to_half_plane
-        quadrant_func = smu_to_quadrant
-    else:
-        half_plane_func = rppi_to_half_plane
-        quadrant_func = rppi_to_quadrant
-
     if quadrants is None:
         if corr2pcf1 is None:
             raise ValueError("corr2pcf1 is required when quadrants is not provided.")
-        x_left, y_left, z_left = half_plane_func(corr2pcf1, side="left", s_power=s_power)
+        coordinates_left, coordinates_right = _half_plane_coordinates(coordinates)
+        x_left, y_left, z_left = COORDINATE_CONVERTERS[coordinates_left][0](
+            corr2pcf1,
+            side="left",
+            s_power=s_power,
+        )
         if corr2pcf2 is None:
-            x_right, y_right, z_right = half_plane_func(corr2pcf1, side="right", s_power=s_power)
+            x_right, y_right, z_right = COORDINATE_CONVERTERS[coordinates_left][0](
+                corr2pcf1,
+                side="right",
+                s_power=s_power,
+            )
         else:
-            x_right, y_right, z_right = half_plane_func(corr2pcf2, side="right", s_power=s_power)
+            x_right, y_right, z_right = COORDINATE_CONVERTERS[coordinates_right][0](
+                corr2pcf2,
+                side="right",
+                s_power=s_power,
+            )
         plot_items = [
             ("upper_left", x_left, y_left, z_left),
             ("upper_right", x_right, y_right, z_right),
@@ -288,12 +353,20 @@ def plot_corr2pcf_2d(
         quadrant_map = _normalize_quadrants(quadrants)
         if not quadrant_map:
             raise ValueError("quadrants must contain at least one corr2pcf object.")
+        coordinates_map = _quadrant_coordinates(coordinates)
         plot_items = []
         for quadrant in ("upper_left", "upper_right", "lower_left", "lower_right"):
             corr = quadrant_map.get(quadrant)
             if corr is None:
                 continue
-            x, y, z = quadrant_func(corr, quadrant=quadrant, s_power=s_power)
+            coordinates_name = coordinates_map.get(quadrant)
+            if coordinates_name is None:
+                raise ValueError(f"coordinates is missing an entry for {quadrant}.")
+            x, y, z = COORDINATE_CONVERTERS[coordinates_name][1](
+                corr,
+                quadrant=quadrant,
+                s_power=s_power,
+            )
             plot_items.append((quadrant, x, y, z))
 
     if vmax is None:
