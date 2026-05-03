@@ -38,7 +38,7 @@ PRODUCT_INPUT_FLAGS = {
     "xi": (True, True),
 }
 
-POSITIVE_SAMPLING_ARGS = {"s", "rp"}
+NONNEGATIVE_SAMPLING_ARGS = {"s", "rp", "pi"}
 
 
 def parse_bool(value):
@@ -81,14 +81,14 @@ def expand_products(products):
     return expanded
 
 
-def normalize_sampling_array(values, name, positive=True):
+def normalize_sampling_array(values, name, nonnegative=True):
     arr = np.asarray(values, dtype=np.float64)
     if arr.ndim != 1:
         raise TypeError(f"'{name}' must be a 1D array-like input.")
     if arr.size == 0:
         raise ValueError(f"'{name}' must contain at least one sampling point.")
-    if positive and np.any(arr <= 0.0):
-        raise ValueError(f"'{name}' values must be strictly positive.")
+    if nonnegative and np.any(arr < 0.0):
+        raise ValueError(f"'{name}' values must be non-negative.")
     diffs = np.diff(arr)
     if np.any(diffs < 0.0) and np.any(diffs > 0.0):
         raise ValueError(f"'{name}' values must be monotonic.")
@@ -205,7 +205,7 @@ def serialize_window_input(value):
 
 # Sampling and result helpers.
 def normalize_sampling_spec(name, spec):
-    positive = name in POSITIVE_SAMPLING_ARGS
+    nonnegative = name in NONNEGATIVE_SAMPLING_ARGS
     if isinstance(spec, dict):
         sampling_min = float(spec["min"])
         sampling_max = float(spec["max"])
@@ -214,9 +214,9 @@ def normalize_sampling_spec(name, spec):
             raise ValueError(f"'{name}' sampling n must be positive.")
         arr = np.linspace(sampling_min, sampling_max, sampling_n, dtype=np.float64)
     else:
-        arr = normalize_sampling_array(spec, name, positive=positive)
-    if positive and np.any(arr <= 0.0):
-        raise ValueError(f"'{name}' sampling values must be strictly positive.")
+        arr = normalize_sampling_array(spec, name, nonnegative=nonnegative)
+    if nonnegative and np.any(arr < 0.0):
+        raise ValueError(f"'{name}' sampling values must be non-negative.")
     return np.ascontiguousarray(arr, dtype=np.float64)
 
 

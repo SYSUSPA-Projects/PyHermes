@@ -89,8 +89,8 @@ shell pair window with ``mapping: "s_to_R"`` and provide only ``sampling.s``.
 For ``xi(s, mu)``, use a LOS-aware pair window with ``mapping: "smu_to_RH"``
 and provide ``sampling.s`` and ``sampling.mu``. For ``xi(rp, pi)``, use
 ``mapping: "rppi_to_RH"`` and provide ``sampling.rp`` and ``sampling.pi``.
-``rp`` is treated as a positive transverse separation; ``pi`` is the
-line-of-sight separation and may be signed.
+``s``, ``rp``, and ``pi`` are treated as non-negative separations and may
+include zero.
 
 Kernel Mode
 -----------
