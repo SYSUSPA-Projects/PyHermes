@@ -1,5 +1,6 @@
 import os
 import pickle
+import copy
 
 import numpy as np
 
@@ -144,6 +145,33 @@ class WindowFunc(ConvolsData):
         if self.w_kernel is None:
             self._build_kernel()
         return self.w_kernel
+
+    def copy(self, copy_kernel=True):
+        """
+        Copy this window object without rebuilding the Fourier kernel.
+
+        Parameters
+        ----------
+        copy_kernel : bool, default=True
+            If True, copy the cached ``w_kernel`` array when it has already
+            been built. If False, the returned window keeps the same window
+            parameters but will rebuild ``w_kernel`` on the next ``as_array()``
+            call.
+        """
+        new = self.__class__.__new__(self.__class__)
+        for key, value in self.__dict__.items():
+            if key in ("comm", "logger", "func"):
+                setattr(new, key, value)
+            elif key == "w_kernel":
+                if copy_kernel and value is not None:
+                    setattr(new, key, value.copy())
+                else:
+                    setattr(new, key, None)
+            elif isinstance(value, np.ndarray):
+                setattr(new, key, value.copy())
+            else:
+                setattr(new, key, copy.deepcopy(value))
+        return new
 
     def _load_single(self, f_in):
         with open(f_in, 'rb') as f:
