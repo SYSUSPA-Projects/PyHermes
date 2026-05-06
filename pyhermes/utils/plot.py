@@ -10,10 +10,16 @@ def _as_1d_array(values, name):
     return arr
 
 
+def _sampling_array(corr2pcf, name, object_name):
+    if hasattr(corr2pcf, name):
+        return _as_1d_array(getattr(corr2pcf, name), f"{object_name}.{name}")
+    sampling = getattr(corr2pcf, "sampling", {})
+    return _as_1d_array(sampling.get(name), f"{object_name}.sampling['{name}']")
+
+
 def _get_smu_arrays(corr2pcf_smu):
-    sampling = getattr(corr2pcf_smu, "sampling", {})
-    s = _as_1d_array(sampling.get("s"), "corr2pcf_smu.sampling['s']")
-    mu = _as_1d_array(sampling.get("mu"), "corr2pcf_smu.sampling['mu']")
+    s = _sampling_array(corr2pcf_smu, "s", "corr2pcf_smu")
+    mu = _sampling_array(corr2pcf_smu, "mu", "corr2pcf_smu")
     xi = np.asarray(corr2pcf_smu.xi, dtype=np.float64)
     if xi.shape != (s.size, mu.size):
         raise ValueError(
@@ -27,9 +33,8 @@ def _get_smu_arrays(corr2pcf_smu):
 
 
 def _get_rppi_arrays(corr2pcf_rppi):
-    sampling = getattr(corr2pcf_rppi, "sampling", {})
-    rp = _as_1d_array(sampling.get("rp"), "corr2pcf_rppi.sampling['rp']")
-    pi = _as_1d_array(sampling.get("pi"), "corr2pcf_rppi.sampling['pi']")
+    rp = _sampling_array(corr2pcf_rppi, "rp", "corr2pcf_rppi")
+    pi = _sampling_array(corr2pcf_rppi, "pi", "corr2pcf_rppi")
     xi = np.asarray(corr2pcf_rppi.xi, dtype=np.float64)
     if xi.shape != (rp.size, pi.size):
         raise ValueError(

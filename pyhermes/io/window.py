@@ -52,6 +52,7 @@ class WindowFunc(ConvolsData):
             "bandwidth": self.bandwidth,
         }
         phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
+        self.phi_array = phi_array
         self.phi_fourier_power = fourier_power_spectrum(
             phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution
         )
@@ -64,7 +65,7 @@ class WindowFunc(ConvolsData):
                 self.logger.error(f"Invalid L/bandwidth: L={self.L}, bandwidth={self.bandwidth}. Must be > 0.")
             func_util.safe_exit(1)
         # There is NO DEFAULT window!!!
-        # Missing `type` will raise an error in set_window_function.
+        # Missing `type` or `func` will raise an error in set_window_function.
         self.window_params = dict(win_params)
         has_custom_func = "func" in win_params
         self.has_custom_func = has_custom_func

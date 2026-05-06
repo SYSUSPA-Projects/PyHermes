@@ -248,9 +248,9 @@ Key Parameters
 - ``pair_window``: pair-correlation kernel template dictionary or built-in
   string.
 - ``sampling``: coordinate dictionary consumed by ``pair_window.mapping``.
-  Saved ``Corr2PCFData`` objects expose coordinates through this dictionary,
-  for example ``corr2pcf.sampling["s"]``, ``corr2pcf.sampling["mu"]``,
-  ``corr2pcf.sampling["rp"]``, or ``corr2pcf.sampling["pi"]``.
+  Saved ``Corr2PCFData`` objects expose coordinates as direct attributes,
+  for example ``corr2pcf.s``, ``corr2pcf.mu``, ``corr2pcf.rp``, or
+  ``corr2pcf.pi``.
 - ``products``: one or more products from ``dd``, ``dr``, ``rd``,
   ``delta_dd``, ``rr``, and ``xi``.
 - ``threads``: CPU threads per MPI rank.

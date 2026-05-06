@@ -6,6 +6,9 @@ from .base import HermesData
 from pyhermes.utils import func_util
 
 
+COORDINATE_NAMES = ("s", "mu", "rp", "pi")
+
+
 class Corr2PCFData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
@@ -25,9 +28,45 @@ class Corr2PCFData(HermesData):
 
     def format_corr2pcf_params(self):
         for key, value in self.corr2pcf_info.items():
-            if key in ('sampling', 'sampling_names'):
+            if key in ('sampling', 'sampling_names') or key in COORDINATE_NAMES:
                 continue
             setattr(self, key, value)
+
+    def _clear_sampling_attrs(self):
+        for name in set(COORDINATE_NAMES) | set(getattr(self, "sampling_names", ())):
+            if hasattr(self, name):
+                delattr(self, name)
+
+    def set_sampling(self, sampling_names, sampling):
+        self._clear_sampling_attrs()
+        self.sampling_names = tuple(sampling_names)
+        self.sampling = {
+            name: self._ensure_1d_array(sampling[name], name)
+            for name in self.sampling_names
+        }
+        for name, values in self.sampling.items():
+            setattr(self, name, values)
+
+    def _sync_sampling_from_attrs(self):
+        if self.sampling_names:
+            names = tuple(self.sampling_names)
+        elif self.sampling:
+            names = tuple(self.sampling.keys())
+        else:
+            names = tuple(name for name in COORDINATE_NAMES if hasattr(self, name))
+        if not names:
+            raise ValueError("Corr2PCFData has no sampling coordinates to save.")
+
+        sampling = {}
+        for name in names:
+            if hasattr(self, name):
+                sampling[name] = getattr(self, name)
+            elif name in self.sampling:
+                sampling[name] = self.sampling[name]
+            else:
+                raise ValueError(f"Missing sampling coordinate '{name}'.")
+        self.set_sampling(names, sampling)
+        return self.sampling
 
     def _ensure_1d_array(self, values, name):
         arr = np.asarray(values, dtype=np.float64)
@@ -54,20 +93,32 @@ class Corr2PCFData(HermesData):
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
-            if 'sampling' not in dataset:
-                self.logger.error("Failed to load the dataset. The file is missing the 'sampling' key.")
+            if 'sampling_names' in dataset:
+                sampling_names = tuple(dataset['sampling_names'])
+            elif 'sampling' in dataset:
+                sampling_names = tuple(dataset['sampling'].keys())
+            else:
+                sampling_names = tuple(name for name in COORDINATE_NAMES if name in dataset)
+            if not sampling_names:
+                self.logger.error("Failed to load the dataset. No Corr2PCF sampling coordinates were found.")
                 func_util.safe_exit(1)
-            self.sampling_names = tuple(dataset.get('sampling_names', dataset['sampling'].keys()))
-            self.sampling = {
-                name: self._ensure_1d_array(dataset['sampling'][name], name)
-                for name in self.sampling_names
-            }
-            self.dd = dataset.get('dd')
-            self.dr = dataset.get('dr')
-            self.rd = dataset.get('rd')
-            self.delta_dd = dataset.get('delta_dd')
-            self.rr = dataset.get('rr')
-            self.xi = dataset.get('xi')
+
+            if all(name in dataset for name in sampling_names):
+                sampling = {name: dataset[name] for name in sampling_names}
+            elif 'sampling' in dataset:
+                sampling = {name: dataset['sampling'][name] for name in sampling_names}
+            else:
+                self.logger.error("Failed to load the dataset. Sampling coordinate arrays are incomplete.")
+                func_util.safe_exit(1)
+            self.set_sampling(sampling_names, sampling)
+
+            for name in ('dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi'):
+                value = dataset.get(name)
+                setattr(
+                    self,
+                    name,
+                    None if value is None else self._ensure_result_array(value, name),
+                )
             # Assign the dictionary from the file to self.corr2pcf_info
             for i in range(1, 3):
                 _convols_info = dataset.get(f'convols_info{i}')
@@ -89,16 +140,13 @@ class Corr2PCFData(HermesData):
             self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
+        sampling = self._sync_sampling_from_attrs()
         # If all required variables are present, create the dataset
         dataset = {
             'convols_info1': self.convols_info1,
             'convols_info2': self.convols_info2,
             'corr2pcf_info': self.corr2pcf_info,
             'sampling_names': tuple(self.sampling_names),
-            'sampling': {
-                name: self._ensure_1d_array(self.sampling[name], name)
-                for name in self.sampling_names
-            },
             'dd': None if self.dd is None else self._ensure_result_array(self.dd, 'dd'),
             'dr': None if self.dr is None else self._ensure_result_array(self.dr, 'dr'),
             'rd': None if self.rd is None else self._ensure_result_array(self.rd, 'rd'),
@@ -106,6 +154,8 @@ class Corr2PCFData(HermesData):
             'rr': None if self.rr is None else self._ensure_result_array(self.rr, 'rr'),
             'xi': None if self.xi is None else self._ensure_result_array(self.xi, 'xi')
         }
+        for name, values in sampling.items():
+            dataset[name] = values
         # Save the dataset to the specified file
         #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
         _serialized_data = pickle.dumps(dataset, protocol=4)

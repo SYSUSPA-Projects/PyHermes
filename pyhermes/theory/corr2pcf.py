@@ -246,11 +246,10 @@ def build_result_from_gathered(gathered_tasks, gathered_values, result_shape):
 
 
 def populate_corr2pcf_data(corr2pcf_data, sampling_names, sampling_arrays, expanded_products, product_results):
-    corr2pcf_data.sampling_names = tuple(sampling_names)
-    corr2pcf_data.sampling = {
+    corr2pcf_data.set_sampling(tuple(sampling_names), {
         name: sampling_arrays[name].copy()
         for name in sampling_names
-    }
+    })
     for product in PRODUCT_NAMES:
         setattr(
             corr2pcf_data,
