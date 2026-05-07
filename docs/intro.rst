@@ -50,10 +50,10 @@ Supported input formats
 
 PyHermes currently supports the following particle input formats:
 
-- ``generic_pos``: raw binary file of ``float32`` values reshaped to ``(-1, 3)``
-- ``generic_pos_weight``: raw binary file of ``float32`` values reshaped to
-  ``(-1, 4)``, where the fourth column is a particle weight
+- ``bin``: raw binary table with configurable position and field columns
+- ``npz``: NumPy ``.npz`` particle dataset
 - ``gadget``
 - ``gadget-fof``
+- ``fof``: Quijote/Pylians-style FoF halo catalogs
 
 For details on formats and parameter fields, see :doc:`param/param`.

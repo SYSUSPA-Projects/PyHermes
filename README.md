@@ -203,9 +203,8 @@ The provided example configs show the typical workflow:
 - `Counting`, `Corr_2PCF`, and `Corr_3PCF` reuse that coefficient file as input
 - task parameters are stored in YAML and loaded with `read_param(...)`
 
-The default example dataset in `param_convols.yaml` points to a hosted binary particle catalog:
-
-- `https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin`
+PyHermes expects particle catalogs to be available as local files before a task
+starts; it does not download input data automatically.
 
 ## Package Requirements
 

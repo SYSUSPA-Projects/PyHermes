@@ -33,7 +33,13 @@ Minimal example
    Convols:
       fin:
          path: "./data.bin"
-         format: "generic_pos"
+         format: "bin"
+         reader_params:
+            dtype: "float32"
+            ncols: 3
+            pos_cols: [0, 1, 2]
+            fields: {}
+         weight_key: null
       fout_path: "./output/convols.pkl"
       save_particle_data: false
       particle_data_path: ""

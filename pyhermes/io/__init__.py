@@ -1,4 +1,5 @@
 from .funcs import *
+from .readers import *
 from .base import HermesData
 from .window import WindowFunc
 from .convols import ConvolsData

@@ -3,9 +3,14 @@
 	"Convols": {
 		"fin": {
 			"path": "",
-			"url": "",
-			"format": "generic_pos",
-			"weight_key": "unit"
+			"format": "bin",
+			"reader_params": {
+				"dtype": "float32",
+				"ncols": 3,
+				"pos_cols": [0, 1, 2],
+				"fields": {}
+			},
+			"weight_key": null
 		},
 		"particle_pos": null,
 		"particle_weight": null,

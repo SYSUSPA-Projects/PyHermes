@@ -7,40 +7,55 @@ stored on disk.
 Particle input formats
 ----------------------
 
-PyHermes currently dispatches particle readers based on ``fin.format``.
-Supported values in the current codebase are:
+PyHermes dispatches particle readers based on ``fin.format``. Supported values
+are:
 
-- ``generic_pos``
-- ``generic_pos_weight``
+- ``bin``: raw binary table with configurable column mappings
+- ``npz``: NumPy ``.npz`` particle dataset
 - ``gadget``
 - ``gadget-fof``
+- ``fof``: Quijote/Pylians-style FoF ``group_tab`` halo catalogs
 
-Generic binary position format
-------------------------------
+Binary table format
+-------------------
 
-``generic_pos`` expects a raw binary file of ``float32`` values that can be
-reshaped into ``(-1, 3)``:
+``bin`` reads a raw binary table with ``reader_params``:
 
-.. code-block:: python
+.. code-block:: yaml
 
-   import numpy as np
+   fin:
+      path: "./data/halo.bin"
+      format: "bin"
+      reader_params:
+         dtype: "float32"
+         ncols: 7
+         pos_cols: [0, 1, 2]
+         fields:
+            vel_x: 3
+            vel_y: 4
+            vel_z: 5
+            mass: 6
+      weight_key: "mass"
 
-   pos = np.fromfile("data.bin", dtype=np.float32).reshape(-1, 3)
+Scalar field mappings return one-dimensional arrays. List mappings return
+two-dimensional arrays. ``weight_key`` must refer to a one-dimensional field;
+use ``null`` for unit weights.
 
-Each row is interpreted as ``(x, y, z)``.
+NPZ format
+----------
 
-Generic binary position + weight format
----------------------------------------
+``npz`` reads an existing NumPy particle dataset:
 
-``generic_pos_weight`` expects ``float32`` values reshaped into ``(-1, 4)``,
-where the first three columns are positions and the fourth column is a weight.
+.. code-block:: yaml
 
-Remote input files
-------------------
-
-If ``fin.path`` is an ``http://`` or ``https://`` URL, PyHermes downloads the
-file automatically before reading it. The downloaded file is saved using the
-remote filename in the current working directory.
+   fin:
+      path: "./data/quijote_particles.npz"
+      format: "npz"
+      reader_params:
+         pos_key: "pos"
+         fields:
+            weight: "weight"
+      weight_key: "weight"
 
 Task outputs
 ------------
@@ -59,7 +74,8 @@ later tasks.
 Relevant fields
 ---------------
 
-- ``fin.path``: local path or URL of the particle catalog
+- ``fin.path``: local path of the particle catalog
 - ``fin.format``: declared input format
-- ``fin.weight_key``: optional weight selector field for supported formats
+- ``fin.reader_params``: format-specific reader options
+- ``fin.weight_key``: optional one-dimensional weight selector; ``null`` means unit weights
 - ``fout_path``: output file path for the current task

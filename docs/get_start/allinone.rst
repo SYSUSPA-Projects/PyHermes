@@ -19,8 +19,14 @@ You can place multiple task sections into one YAML or JSON5 file. For example:
    Convols:
       J: 8
       fin:
-         path: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
-         format: "generic_pos"
+         path: "./data/quijote10000.bin"
+         format: "bin"
+         reader_params:
+            dtype: "float32"
+            ncols: 3
+            pos_cols: [0, 1, 2]
+            fields: {}
+         weight_key: null
       fout_path: "./output/quijote_sfc.pkl"
       save_particle_data: false
       particle_data_path: ""

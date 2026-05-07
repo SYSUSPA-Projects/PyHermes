@@ -12,7 +12,6 @@ What it does
 ------------
 
 - reads particle positions from a local file
-- optionally downloads the particle file first if ``fin.url`` is given
 - computes the scaling-coefficient field
 - saves a reusable ``.pkl`` product for later tasks
 
@@ -44,9 +43,13 @@ Use the shipped example config:
       J: 8
       fin:
          path: "./data/quijote10000.bin"
-         url: "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin"
-         format: "generic_pos"
-         weight_key: "unit"
+         format: "bin"
+         reader_params:
+            dtype: "float32"
+            ncols: 3
+            pos_cols: [0, 1, 2]
+            fields: {}
+         weight_key: null
       fout_path: "./output/quijote_sfc.pkl"
       save_particle_data: false
       particle_data_path: ""
@@ -97,8 +100,14 @@ adjust a few runtime attributes:
    convols_task.threads = 8
    convols_task.fin = {
        "path": "./quijote10000.bin",
-       "format": "generic_pos",
-       "weight_key": "unit",
+       "format": "bin",
+       "reader_params": {
+           "dtype": "float32",
+           "ncols": 3,
+           "pos_cols": [0, 1, 2],
+           "fields": {},
+       },
+       "weight_key": None,
    }
    convols_task.prepare_input_fields()
    convols = convols_task.run(save_result=False)
@@ -150,12 +159,12 @@ Key parameters
   multiresolution level
 - ``fin.path``:
   local particle file path
-- ``fin.url``:
-  optional download URL; if non-empty, PyHermes downloads to ``fin.path`` first
 - ``fin.format``:
-  particle format such as ``generic_pos``
+  particle format such as ``bin``, ``npz``, ``gadget``, ``gadget-fof``, or ``fof``
+- ``fin.reader_params``:
+  format-specific reader options, such as binary column mappings
 - ``fin.weight_key``:
-  particle weight field name, or ``unit``
+  one-dimensional particle weight field name, or ``null`` for unit weights
 - ``fout_path``:
   output path for the serialized coefficient field
 - ``save_particle_data``:
@@ -174,5 +183,5 @@ Notes
 
 - ``prepare_input_fields()`` prepares particle input and runtime metadata.
 - ``run()`` performs the actual field construction.
-- If the directory in ``fin.path`` does not exist, it is created automatically
-  before download.
+- PyHermes does not download particle catalogs. Download or generate the input
+  file before running ``Convols``.

@@ -6,7 +6,7 @@ from pyhermes.utils import func_util
 from pyhermes.utils.runtime import configure
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
-from pyhermes.io import handle_PATHorURL, check_fout
+from pyhermes.io import check_fout
 
 
 
@@ -32,7 +32,6 @@ class HermesData(object):
         try:
             if single:
                 if self.rank == 0:
-                    f_in = handle_PATHorURL(f_in)
                     if read_convols:
                         extra_str = 'Convols '
                         self.logger.info(f'Reading {extra_str}data from ---> {f_in} <---')

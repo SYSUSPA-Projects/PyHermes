@@ -49,13 +49,12 @@ Particle input parameters
   ``fout_path``.
 - ``fin.path``:
   local path to the particle catalog.
-- ``fin.url``:
-  optional remote URL. If this is non-empty, PyHermes downloads the file and
-  stores it at ``fin.path`` before reading it.
 - ``fin.format``:
-  particle file format, for example ``generic_pos``.
+  particle file format, for example ``bin``.
+- ``fin.reader_params``:
+  format-specific reader options.
 - ``fin.weight_key``:
-  particle weight field name, or ``unit`` if unweighted counts are desired.
+  one-dimensional particle weight field name, or ``null`` for unit weights.
 
 Output
 ^^^^^^

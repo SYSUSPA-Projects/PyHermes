@@ -5,8 +5,7 @@ import os
 import numpy as np
 
 from pyhermes.io import ConvolsData
-from pyhermes.io import read_particle_data
-from pyhermes.io.funcs import dl_rich_pbar
+from pyhermes.io.readers import read_particle_data, resolve_particle_weight
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
     project_scaling_grid_numba,
@@ -97,8 +96,11 @@ class Convols(TaskBase):
             merged_fin = base_fin
             merged_fin.update(self.fin)
             self.fin = merged_fin
-        self.fin.setdefault("url", "")
-        self.fin.setdefault("weight_key", "unit")
+        if self.fin.get("url"):
+            self.logger.error("Convols.fin.url is no longer supported. Download the data first and set Convols.fin.path.")
+            func_util.safe_exit(1)
+        self.fin.setdefault("reader_params", {})
+        self.fin.setdefault("weight_key", None)
         self.task_params = {
             'fin': copy.deepcopy(self.fin),
             'particle_pos': self.particle_pos,
@@ -116,20 +118,7 @@ class Convols(TaskBase):
         self.L = 1 << self.J
         self.sync_runtime_options(context="Convols runtime configuration")
 
-    def _resolve_fin_source(self):
-        fin_url = self.fin.get("url", "")
-        input_path = self.fin["path"]
-        if fin_url:
-            if not input_path:
-                self.logger.error("When 'fin.url' is provided, 'fin.path' must also be provided as the local download target.")
-                func_util.safe_exit(1)
-            downloaded_path = dl_rich_pbar(fin_url, output_path=input_path)
-            self.fin['path'] = downloaded_path
-            return f"url={fin_url} -> path={downloaded_path}"
-        return f"path={input_path}"
-
     def _load_particle_input(self):
-        fin_source_desc = self._resolve_fin_source()
         if self.particle_pos is not None:
             p_pos = self.particle_pos
             self.particle_count = p_pos.shape[0]
@@ -138,35 +127,26 @@ class Convols(TaskBase):
                     f"No particle_weight provided; using unit weights for {self.particle_count} particles."
                 )
                 p_wei = np.ones(self.particle_count, dtype=np.float32)
-                self.fin["weight_key"] = "unit"
+                self.fin["weight_key"] = None
             else:
                 p_wei = self.particle_weight
                 self.fin["weight_key"] = "custom"
             source_desc = "custom particle_pos array"
         else:
             input_format = self.fin["format"]
-            p_dict_all = read_particle_data(self.fin["path"], input_format)
+            p_dict_all = read_particle_data(
+                self.fin["path"],
+                input_format,
+                self.fin.get("reader_params", {}),
+            )
             p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']
-            if input_format == 'generic_pos':
-                p_wei = np.ones(self.particle_count, dtype=np.float32)
-                self.fin["weight_key"] = "unit"
-            elif input_format == 'generic_pos_weight':
-                p_wei = p_dict_all['weight']
-                self.fin["weight_key"] = "weight"
-            else:
-                _key = self.fin["weight_key"]
-                if _key == 'unit':
-                    p_wei = np.ones(self.particle_count, dtype=np.float32)
-                elif _key in p_dict_all:
-                    p_wei = p_dict_all[_key]
-                else:
-                    self.logger.warning(
-                        f"Weight key '{_key}' not found in particle data. Calculating without weight. "
-                        f"Available keys: {list(p_dict_all.keys())}. Use weight_key='unit' if unit weighting is desired."
-                    )
-                    p_wei = np.ones(self.particle_count, dtype=np.float32)
-                    self.fin["weight_key"] = "unit"
-            source_desc = f"file={fin_source_desc} format={input_format}"
+            p_wei, resolved_weight_key = resolve_particle_weight(
+                p_dict_all,
+                self.fin.get("weight_key", None),
+                logger=self.logger,
+            )
+            self.fin["weight_key"] = resolved_weight_key
+            source_desc = f"file=path={self.fin['path']} format={input_format}"
 
         if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
             self.logger.error(

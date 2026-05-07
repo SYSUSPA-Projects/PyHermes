@@ -5,7 +5,7 @@ import copy
 import numpy as np
 
 from .base import HermesData
-from .funcs import read_particle_data
+from .readers import read_particle_data, resolve_particle_weight
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
@@ -230,19 +230,20 @@ class ConvolsData(HermesData):
                 }
 
         fin = getattr(self, "fin", {})
+        if fin.get("url"):
+            self.logger.error("fin.url is no longer supported. Download the data first and set fin.path.")
+            func_util.safe_exit(1)
         if not fin.get("path", ""):
             self.logger.error("Input particle path is not specified.")
             func_util.safe_exit(1)
-        particle_data = read_particle_data(fin["path"], fin["format"])
-        weight_key = fin.get("weight_key", "unit")
-        if weight_key == "unit":
-            weight = np.ones(particle_data["size"], dtype=np.float32)
-        elif weight_key in particle_data:
-            weight = particle_data[weight_key]
-        else:
-            self.logger.error(
-                f"Weight key '{weight_key}' not found in particle data. Available keys: {list(particle_data.keys())}."
-            )
+        particle_data = read_particle_data(
+            fin["path"],
+            fin["format"],
+            fin.get("reader_params", {}),
+        )
+        try:
+            weight, _ = resolve_particle_weight(particle_data, fin.get("weight_key", None), logger=self.logger)
+        except Exception:
             func_util.safe_exit(1)
         return {
             "pos": particle_data["pos"],
