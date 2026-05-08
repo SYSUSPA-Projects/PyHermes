@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 
 from pyhermes.param.logbase import setup_logger
@@ -283,60 +281,25 @@ def read_gadget_fof(f_in, **kwargs):
 
 
 # Quijote/Pylians FoF group_tab reader.
-def read_fof(f_in, snapnum, redshift=0.0, **kwargs):
-    """Read a Quijote/Pylians FoF group_tab catalog directory."""
-    _mod_name, _func_name = get_fname_info()
-    logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading Quijote FoF halo data from ---> {f_in} <---")
-    ext = f"{int(snapnum):03d}"
-    prefix = os.path.join(f_in, f"groups_{ext}", f"group_tab_{ext}.")
-    vector3 = np.dtype((np.float32, 3))
-    vector6 = np.dtype((np.float32, 6))
+def _select_particle_fields(data, fields, reader_name):
+    """Select or rename optional reader fields while preserving pos and size."""
+    if fields is None:
+        return data
+    selected = {
+        "pos": data["pos"],
+        "size": data["size"],
+    }
+    for out_key, in_key in fields.items():
+        if in_key not in data:
+            raise ValueError(f"{reader_name} output does not contain field '{in_key}' for output field '{out_key}'.")
+        selected[out_key] = data[in_key]
+    return selected
 
-    group_len = None
-    group_offset = None
-    group_mass = None
-    group_pos = None
-    group_vel = None
-    skip = 0
-    file_index = 0
-    nfiles = None
-    while nfiles is None or file_index < nfiles:
-        filename = f"{prefix}{file_index}"
-        if not os.path.exists(filename):
-            raise FileNotFoundError(f"Missing Quijote FoF tab file: {filename}")
-        with open(filename, "rb") as f:
-            ngroups = int(np.fromfile(f, dtype=np.int32, count=1)[0])
-            total_groups = int(np.fromfile(f, dtype=np.int32, count=1)[0])
-            _ = np.fromfile(f, dtype=np.int32, count=1)
-            _ = np.fromfile(f, dtype=np.uint64, count=1)
-            nfiles = int(np.fromfile(f, dtype=np.uint32, count=1)[0])
 
-            if file_index == 0:
-                group_len = np.empty(total_groups, dtype=np.int32)
-                group_offset = np.empty(total_groups, dtype=np.int32)
-                group_mass = np.empty(total_groups, dtype=np.float32)
-                group_pos = np.empty((total_groups, 3), dtype=np.float32)
-                group_vel = np.empty((total_groups, 3), dtype=np.float32)
-
-            loc = slice(skip, skip + ngroups)
-            group_len[loc] = np.fromfile(f, dtype=np.int32, count=ngroups)
-            group_offset[loc] = np.fromfile(f, dtype=np.int32, count=ngroups)
-            group_mass[loc] = np.fromfile(f, dtype=np.float32, count=ngroups)
-            group_pos[loc] = np.fromfile(f, dtype=vector3, count=ngroups)
-            group_vel[loc] = np.fromfile(f, dtype=vector3, count=ngroups)
-            np.fromfile(f, dtype=vector6, count=ngroups)
-            np.fromfile(f, dtype=vector6, count=ngroups)
-            if f.tell() != os.path.getsize(filename):
-                raise ValueError(
-                    f"Finished reading {filename} before EOF. read_fof supports standard Quijote "
-                    "group_tab files without extra SFR blocks."
-                )
-        skip += ngroups
-        file_index += 1
-
+def _format_fof_catalog(group_pos, group_vel, group_mass, group_len, group_offset, redshift):
+    """Convert raw FoF arrays into the shared PyHermes reader schema."""
     vel = group_vel * (1.0 + float(redshift))
-    data = {
+    return {
         "pos": group_pos / 1e3,
         "vel": vel,
         "vel_x": vel[:, 0],
@@ -347,6 +310,37 @@ def read_fof(f_in, snapnum, redshift=0.0, **kwargs):
         "group_offset": group_offset,
         "size": group_pos.shape[0],
     }
+
+
+def _read_fof_catalog(f_in, snapnum, redshift=0.0, **kwargs):
+    """Read a Quijote/Pylians FoF catalog through the readfof package."""
+    import readfof
+
+    catalog_kwargs = {
+        "long_ids": bool(kwargs.get("long_ids", False)),
+        "swap": bool(kwargs.get("swap", False)),
+        "SFR": bool(kwargs.get("SFR", False)),
+        "read_IDs": bool(kwargs.get("read_IDs", False)),
+        "prefix": kwargs.get("prefix", "/groups_"),
+    }
+    catalog = readfof.FoF_catalog(str(f_in), int(snapnum), **catalog_kwargs)
+    return _format_fof_catalog(
+        np.asarray(catalog.GroupPos),
+        np.asarray(catalog.GroupVel),
+        np.asarray(catalog.GroupMass),
+        np.asarray(catalog.GroupLen),
+        np.asarray(catalog.GroupOffset),
+        redshift,
+    )
+
+
+def read_fof(f_in, snapnum, redshift=0.0, fields=None, **kwargs):
+    """Read a Quijote/Pylians FoF group_tab catalog directory with readfof."""
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    logger.info(f"Reading Quijote FoF halo data from ---> {f_in} <---")
+    data = _read_fof_catalog(f_in, snapnum, redshift=redshift, **kwargs)
+    data = _select_particle_fields(data, fields, "read_fof")
     return _validate_reader_output(data, "read_fof")
 
 
@@ -364,9 +358,6 @@ def read_particle_data(f_in, f_format, reader_params=None):
     """Dispatch a local particle catalog path to one of the registered readers."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    if str(f_in).lower().startswith(("http://", "https://")):
-        logger.error("Remote particle inputs are no longer supported. Download the data first and pass a local path.")
-        func_util.safe_exit(1)
     if f_format not in FORMAT_READERS:
         supported_formats = ", ".join(FORMAT_READERS.keys())
         logger.error(f"Unsupported input particle format: {f_format}")

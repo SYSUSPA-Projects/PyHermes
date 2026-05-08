@@ -57,6 +57,27 @@ NPZ format
             weight: "weight"
       weight_key: "weight"
 
+FoF format
+----------
+
+``fof`` reads local Quijote/Pylians-style halo catalogs. By default it returns
+``pos``, ``mass``, ``vel``, ``vel_x``, ``vel_y``, ``vel_z``, ``npart``, and
+``group_offset``. Use ``fields`` to select or rename optional fields; ``pos``
+and ``size`` are always retained. This reader requires the ``readfof`` package.
+
+.. code-block:: yaml
+
+   fin:
+      path: "./tests/data/halos/8000"
+      format: "fof"
+      reader_params:
+         snapnum: 4
+         redshift: 0.0
+         fields:
+            mass: "mass"
+            vel_x: "vel_x"
+      weight_key: "vel_x"
+
 Task outputs
 ------------
 
