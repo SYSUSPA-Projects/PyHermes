@@ -2,19 +2,21 @@ import os
 
 import numpy as np
 
-from .my_gd_io import read_my_gd2, read_my_gd2_fof
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
 
 
+# Shared reader utilities.
 def _as_column_selector(value):
+    """Normalize one or many column indices to int selectors."""
     if isinstance(value, (list, tuple, np.ndarray)):
         return [int(v) for v in value]
     return int(value)
 
 
 def _validate_reader_output(data, reader_name):
+    """Validate and normalize the shared particle-reader output contract."""
     if not isinstance(data, dict):
         raise TypeError(f"{reader_name} must return a dict, got {type(data)}.")
     if "pos" not in data:
@@ -31,7 +33,9 @@ def _validate_reader_output(data, reader_name):
     return data
 
 
+# Generic table readers.
 def read_bin(f_in, dtype="float32", ncols=3, pos_cols=(0, 1, 2), fields=None, **kwargs):
+    """Read a raw binary table using configurable position and field columns."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading particle data from ---> {f_in} <---")
@@ -58,6 +62,7 @@ def read_bin(f_in, dtype="float32", ncols=3, pos_cols=(0, 1, 2), fields=None, **
 
 
 def read_npz(f_in, pos_key="pos", fields=None, **kwargs):
+    """Read a NumPy NPZ particle dataset with optional key remapping."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading particle data from ---> {f_in} <---")
@@ -79,38 +84,207 @@ def read_npz(f_in, pos_key="pos", fields=None, **kwargs):
     return _validate_reader_output(data, "read_npz")
 
 
+# Gadget legacy binary helpers.
+def _add_velocity_components(data):
+    """Expose vel[:,0:3] as vel_x, vel_y, and vel_z when available."""
+    if "vel" in data:
+        vel = np.asarray(data["vel"])
+        if vel.ndim == 2 and vel.shape[1] == 3:
+            data["vel_x"] = vel[:, 0]
+            data["vel_y"] = vel[:, 1]
+            data["vel_z"] = vel[:, 2]
+    return data
+
+
+def _read_record_block(f, dtype, count, shape=None):
+    """Read one Gadget-style record block with leading and trailing byte counts."""
+    np.fromfile(f, dtype=np.int32, count=1)
+    values = np.fromfile(f, dtype=dtype, count=count)
+    np.fromfile(f, dtype=np.int32, count=1)
+    if shape is not None:
+        values = values.reshape(shape)
+    return values
+
+
+def _read_vec3_block(f, count):
+    """Read a Gadget record block containing count three-vectors."""
+    return _read_record_block(f, np.float32, count * 3, (-1, 3))
+
+
+def _concat_particle_blocks(parts, keys=("pos", "vel", "mass")):
+    """Concatenate split particle arrays and attach the shared size field."""
+    out = {}
+    for key in keys:
+        out[key] = np.concatenate([part[key] for part in parts], axis=0)
+    out["size"] = out["pos"].shape[0]
+    return out
+
+
+def _read_gadget_single(filename, ptype=1):
+    """Read one legacy Gadget snapshot file for a single particle type."""
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    header_dtype = np.dtype([
+        ("block1", np.int32),
+        ("npart", np.uint32, 6),
+        ("massarr", np.float64, 6),
+        ("time", np.float64),
+        ("redshift", np.float64),
+        ("flag_sfr", np.int32),
+        ("flag_feedback", np.int32),
+        ("npartTotal", np.int32, (6,)),
+        ("flag_cooling", np.int32),
+        ("num_files", np.int32),
+        ("BoxSize", np.float64),
+        ("Omega0", np.float64),
+        ("OmegaLambda", np.float64),
+        ("HubbleParam", np.float64),
+        ("fill", np.int32, 24),
+        ("block2", np.int32),
+    ])
+    out = {}
+    with open(filename, "rb") as f:
+        header = np.fromfile(f, dtype=header_dtype, count=1)[0]
+        if header["npart"][0] != 0:
+            logger.error(
+                "Currently, only DM-only snapshots in Gadget1/2/3/4 legacy-format1 are supported, "
+                "but it appears your file contains SPH particles."
+            )
+            func_util.safe_exit(1)
+        npart = int(header["npart"][ptype])
+
+        out["pos"] = _read_vec3_block(f, npart)
+        out["vel"] = _read_vec3_block(f, npart)
+        _read_record_block(f, np.int32, npart)
+
+        if header["massarr"][ptype] != 0:
+            out["mass"] = float(header["massarr"][ptype])
+            masstab = True
+        else:
+            out["mass"] = _read_record_block(f, np.float32, npart)
+            masstab = False
+    return out, masstab
+
+
+def _read_gadget_all(f_in, ptype=1):
+    """Read and combine a possibly split legacy Gadget snapshot."""
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    files = func_util.find_subsplit_files(f_in)
+    parts = []
+    masstab_pre = None
+    for filename in files:
+        part, masstab = _read_gadget_single(filename, ptype=ptype)
+        if masstab_pre is not None and masstab != masstab_pre:
+            logger.error("Inconsistent masstab across subsnaps. Please make sure you are using one simulation.")
+            func_util.safe_exit(1)
+        masstab_pre = masstab
+        parts.append(part)
+
+    out = _concat_particle_blocks(parts, keys=("pos", "vel"))
+    out["mass"] = parts[0]["mass"] if masstab_pre else np.concatenate([part["mass"] for part in parts], axis=0)
+    return out
+
+
+# Gadget legacy snapshot reader.
 def read_gadget(f_in, **kwargs):
+    """Read a legacy Gadget snapshot and return PyHermes particle fields."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading particle data from ---> {f_in} <---")
-    data = read_my_gd2(f_in)
+    data = _read_gadget_all(f_in, ptype=int(kwargs.get("ptype", 1)))
     data = _validate_reader_output(data, "read_gadget")
     if "mass" in data and np.isscalar(data["mass"]):
         data["mass"] = np.full(data["size"], data["mass"], dtype=np.float32)
-    if "vel" in data:
-        vel = np.asarray(data["vel"])
-        if vel.ndim == 2 and vel.shape[1] == 3:
-            data["vel_x"] = vel[:, 0]
-            data["vel_y"] = vel[:, 1]
-            data["vel_z"] = vel[:, 2]
-    return data
+    return _add_velocity_components(data)
 
 
+# Gadget FoF binary helpers.
+def _read_gadget_fof_single(filename):
+    """Read one legacy Gadget FoF catalog file."""
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    header_dtype = np.dtype([
+        ("block1", np.int32),
+        ("Ngroups", np.int64),
+        ("Nsubhalos", np.int64),
+        ("Nids", np.int64),
+        ("TotNgroups", np.int64),
+        ("TotNsubhalos", np.int64),
+        ("TotNids", np.int64),
+        ("num_files", np.int32),
+        ("dummy", np.int32),
+        ("time", np.float64),
+        ("redshift", np.float64),
+        ("BoxSize", np.float64),
+        ("block2", np.int32),
+    ])
+    header_fields = [
+        "Ngroups",
+        "Nsubhalos",
+        "Nids",
+        "TotNgroups",
+        "TotNsubhalos",
+        "TotNids",
+        "num_files",
+        "time",
+        "redshift",
+        "BoxSize",
+    ]
+    out = {}
+    with open(filename, "rb") as f:
+        header = np.fromfile(f, dtype=header_dtype, count=1)[0]
+        out.update({field: header[field] for field in header_fields})
+        if out["Nsubhalos"] != 0:
+            logger.error(
+                "Currently, the 'gadget-fof' reader supports only FoF, i.e. Gadget compiled "
+                "with FOF but without SUBFIND."
+            )
+            func_util.safe_exit(1)
+
+        ngroups = int(out["Ngroups"])
+        _read_record_block(f, np.int32, ngroups)
+        out["mass"] = _read_record_block(f, np.float32, ngroups)
+        out["pos"] = _read_vec3_block(f, ngroups)
+        out["vel"] = _read_vec3_block(f, ngroups)
+    return out
+
+
+def _read_gadget_fof_all(f_in):
+    """Read and combine a possibly split legacy Gadget FoF catalog."""
+    files = func_util.find_subsplit_files(f_in)
+    out = {
+        "TotNgroups": 0,
+        "TotNsubhalos": 0,
+        "TotNids": 0,
+        "num_files": 0,
+        "time": 0.0,
+        "redshift": 0.0,
+        "BoxSize": 0.0,
+    }
+    parts = []
+    for filename in files:
+        part = _read_gadget_fof_single(filename)
+        for key in ("TotNgroups", "TotNsubhalos", "TotNids", "num_files", "time", "redshift", "BoxSize"):
+            out[key] = part[key]
+        parts.append(part)
+    out.update(_concat_particle_blocks(parts, keys=("pos", "vel", "mass")))
+    return out
+
+
+# Gadget FoF catalog reader.
 def read_gadget_fof(f_in, **kwargs):
+    """Read a legacy Gadget FoF catalog and return PyHermes particle fields."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading particle data from ---> {f_in} <---")
-    data = _validate_reader_output(read_my_gd2_fof(f_in), "read_gadget_fof")
-    if "vel" in data:
-        vel = np.asarray(data["vel"])
-        if vel.ndim == 2 and vel.shape[1] == 3:
-            data["vel_x"] = vel[:, 0]
-            data["vel_y"] = vel[:, 1]
-            data["vel_z"] = vel[:, 2]
-    return data
+    data = _validate_reader_output(_read_gadget_fof_all(f_in), "read_gadget_fof")
+    return _add_velocity_components(data)
 
 
+# Quijote/Pylians FoF group_tab reader.
 def read_fof(f_in, snapnum, redshift=0.0, **kwargs):
+    """Read a Quijote/Pylians FoF group_tab catalog directory."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading Quijote FoF halo data from ---> {f_in} <---")
@@ -176,21 +350,18 @@ def read_fof(f_in, snapnum, redshift=0.0, **kwargs):
     return _validate_reader_output(data, "read_fof")
 
 
-def read_somethingelse(f_in, **kwargs):
-    raise NotImplementedError("Reader format 'somethingelse' is not implemented.")
-
-
+# Reader dispatcher.
 FORMAT_READERS = {
     "bin": read_bin,
     "npz": read_npz,
     "gadget": read_gadget,
     "gadget-fof": read_gadget_fof,
     "fof": read_fof,
-    "somethingelse": read_somethingelse,
 }
 
 
 def read_particle_data(f_in, f_format, reader_params=None):
+    """Dispatch a local particle catalog path to one of the registered readers."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     if str(f_in).lower().startswith(("http://", "https://")):
@@ -206,7 +377,9 @@ def read_particle_data(f_in, f_format, reader_params=None):
     return FORMAT_READERS[f_format](f_in, **params)
 
 
+# Weight selection used by Convols and ConvolsData.
 def resolve_particle_weight(particle_data, weight_key, logger=None):
+    """Resolve a unit or named one-dimensional particle weight array."""
     size = int(particle_data["size"])
     if weight_key is None:
         return np.ones(size, dtype=np.float32), None
