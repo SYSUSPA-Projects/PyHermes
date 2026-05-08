@@ -133,7 +133,7 @@ class Convols(TaskBase):
                 self.fin["weight_key"] = "custom"
             source_desc = "custom particle_pos array"
         else:
-            input_format = self.fin["format"]
+            input_format = self.fin.get("format", None)
             p_dict_all = read_particle_data(
                 self.fin["path"],
                 input_format,
@@ -146,7 +146,7 @@ class Convols(TaskBase):
                 logger=self.logger,
             )
             self.fin["weight_key"] = resolved_weight_key
-            source_desc = f"file=path={self.fin['path']} format={input_format}"
+            source_desc = f"file=path={self.fin['path']} format={input_format or 'auto'}"
 
         if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
             self.logger.error(

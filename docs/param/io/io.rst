@@ -96,7 +96,8 @@ Relevant fields
 ---------------
 
 - ``fin.path``: local path of the particle catalog
-- ``fin.format``: declared input format
+- ``fin.format``: declared input format; when omitted or ``null``, PyHermes
+  infers simple file formats from the suffix, such as ``.bin`` or ``.npz``
 - ``fin.reader_params``: format-specific reader options
 - ``fin.weight_key``: optional one-dimensional weight selector; ``null`` means unit weights
 - ``fout_path``: output file path for the current task

@@ -238,7 +238,7 @@ class ConvolsData(HermesData):
             func_util.safe_exit(1)
         particle_data = read_particle_data(
             fin["path"],
-            fin["format"],
+            fin.get("format", None),
             **fin.get("reader_params", {}),
         )
         try:

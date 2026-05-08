@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 
 from pyhermes.param.logbase import setup_logger
@@ -31,19 +33,31 @@ def _validate_reader_output(data, reader_name):
     return data
 
 
+def _infer_format_from_path(path):
+    """Infer a reader format from the final file suffix."""
+    suffix = Path(path).suffix.lower().lstrip(".")
+    suffix_to_format = {
+        "bin": "bin",
+        "npz": "npz",
+        "gadget": "gadget",
+        "fof": "fof",
+    }
+    return suffix_to_format.get(suffix)
+
+
 # Generic table readers.
-def read_bin(f_in, dtype="float32", ncols=3, pos_cols=(0, 1, 2), fields=None, **kwargs):
+def read_bin(path, dtype="float32", ncols=3, pos_cols=(0, 1, 2), fields=None, **kwargs):
     """Read a raw binary table using configurable position and field columns."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading particle data from ---> {f_in} <---")
+    logger.info(f"Reading particle data from ---> {path} <---")
     ncols = int(ncols)
     if ncols <= 0:
         raise ValueError("read_bin requires ncols > 0.")
-    raw = np.fromfile(f_in, dtype=np.dtype(dtype))
+    raw = np.fromfile(path, dtype=np.dtype(dtype))
     if raw.size % ncols != 0:
         raise ValueError(
-            f"Binary file '{f_in}' contains {raw.size} values, which cannot be reshaped into (-1, {ncols})."
+            f"Binary file '{path}' contains {raw.size} values, which cannot be reshaped into (-1, {ncols})."
         )
     table = raw.reshape(-1, ncols)
     pos_cols = _as_column_selector(pos_cols)
@@ -59,15 +73,15 @@ def read_bin(f_in, dtype="float32", ncols=3, pos_cols=(0, 1, 2), fields=None, **
     return _validate_reader_output(data, "read_bin")
 
 
-def read_npz(f_in, pos_key="pos", fields=None, **kwargs):
+def read_npz(path, pos_key="pos", fields=None, **kwargs):
     """Read a NumPy NPZ particle dataset with optional key remapping."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading particle data from ---> {f_in} <---")
+    logger.info(f"Reading particle data from ---> {path} <---")
     data = {}
-    with np.load(f_in) as npz_data:
+    with np.load(path) as npz_data:
         if pos_key not in npz_data:
-            raise ValueError(f"NPZ file '{f_in}' does not contain pos_key='{pos_key}'.")
+            raise ValueError(f"NPZ file '{path}' does not contain pos_key='{pos_key}'.")
         data["pos"] = npz_data[pos_key]
         if fields is None:
             for key in npz_data.files:
@@ -76,7 +90,7 @@ def read_npz(f_in, pos_key="pos", fields=None, **kwargs):
         else:
             for out_key, in_key in fields.items():
                 if in_key not in npz_data:
-                    raise ValueError(f"NPZ file '{f_in}' does not contain key '{in_key}' for field '{out_key}'.")
+                    raise ValueError(f"NPZ file '{path}' does not contain key '{in_key}' for field '{out_key}'.")
                 data[out_key] = npz_data[in_key]
     data["size"] = np.asarray(data["pos"]).shape[0]
     return _validate_reader_output(data, "read_npz")
@@ -164,11 +178,11 @@ def _read_gadget_single(filename, ptype=1):
     return out, masstab
 
 
-def _read_gadget_all(f_in, ptype=1):
+def _read_gadget_all(path, ptype=1):
     """Read and combine a possibly split legacy Gadget snapshot."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    files = func_util.find_subsplit_files(f_in)
+    files = func_util.find_subsplit_files(path)
     parts = []
     masstab_pre = None
     for filename in files:
@@ -185,12 +199,12 @@ def _read_gadget_all(f_in, ptype=1):
 
 
 # Gadget legacy snapshot reader.
-def read_gadget(f_in, **kwargs):
+def read_gadget(path, **kwargs):
     """Read a legacy Gadget snapshot and return PyHermes particle fields."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading particle data from ---> {f_in} <---")
-    data = _read_gadget_all(f_in, ptype=int(kwargs.get("ptype", 1)))
+    logger.info(f"Reading particle data from ---> {path} <---")
+    data = _read_gadget_all(path, ptype=int(kwargs.get("ptype", 1)))
     data = _validate_reader_output(data, "read_gadget")
     if "mass" in data and np.isscalar(data["mass"]):
         data["mass"] = np.full(data["size"], data["mass"], dtype=np.float32)
@@ -248,9 +262,9 @@ def _read_gadget_fof_single(filename):
     return out
 
 
-def _read_gadget_fof_all(f_in):
+def _read_gadget_fof_all(path):
     """Read and combine a possibly split legacy Gadget FoF catalog."""
-    files = func_util.find_subsplit_files(f_in)
+    files = func_util.find_subsplit_files(path)
     out = {
         "TotNgroups": 0,
         "TotNsubhalos": 0,
@@ -271,12 +285,12 @@ def _read_gadget_fof_all(f_in):
 
 
 # Gadget FoF catalog reader.
-def read_gadget_fof(f_in, **kwargs):
+def read_gadget_fof(path, **kwargs):
     """Read a legacy Gadget FoF catalog and return PyHermes particle fields."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading particle data from ---> {f_in} <---")
-    data = _validate_reader_output(_read_gadget_fof_all(f_in), "read_gadget_fof")
+    logger.info(f"Reading particle data from ---> {path} <---")
+    data = _validate_reader_output(_read_gadget_fof_all(path), "read_gadget_fof")
     return _add_velocity_components(data)
 
 
@@ -312,7 +326,7 @@ def _format_fof_catalog(group_pos, group_vel, group_mass, group_len, group_offse
     }
 
 
-def _read_fof_catalog(f_in, snapnum, redshift=0.0, **kwargs):
+def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
     """Read a Quijote/Pylians FoF catalog through the readfof package."""
     import readfof
 
@@ -323,7 +337,7 @@ def _read_fof_catalog(f_in, snapnum, redshift=0.0, **kwargs):
         "read_IDs": bool(kwargs.get("read_IDs", False)),
         "prefix": kwargs.get("prefix", "/groups_"),
     }
-    catalog = readfof.FoF_catalog(str(f_in), int(snapnum), **catalog_kwargs)
+    catalog = readfof.FoF_catalog(str(path), int(snapnum), **catalog_kwargs)
     return _format_fof_catalog(
         np.asarray(catalog.GroupPos),
         np.asarray(catalog.GroupVel),
@@ -334,12 +348,12 @@ def _read_fof_catalog(f_in, snapnum, redshift=0.0, **kwargs):
     )
 
 
-def read_fof(f_in, snapnum, redshift=0.0, fields=None, **kwargs):
+def read_fof(path, snapnum, redshift=0.0, fields=None, **kwargs):
     """Read a Quijote/Pylians FoF group_tab catalog directory with readfof."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    logger.info(f"Reading Quijote FoF halo data from ---> {f_in} <---")
-    data = _read_fof_catalog(f_in, snapnum, redshift=redshift, **kwargs)
+    logger.info(f"Reading Quijote FoF halo data from ---> {path} <---")
+    data = _read_fof_catalog(path, snapnum, redshift=redshift, **kwargs)
     data = _select_particle_fields(data, fields, "read_fof")
     return _validate_reader_output(data, "read_fof")
 
@@ -354,17 +368,28 @@ FORMAT_READERS = {
 }
 
 
-def read_particle_data(f_in, f_format, **reader_params):
+def read_particle_data(path, data_format=None, **reader_params):
     """Dispatch a local particle catalog path to one of the registered readers."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
-    if f_format not in FORMAT_READERS:
+    data_format = reader_params.pop("f_format", data_format)
+    data_format = reader_params.pop("format", data_format)
+    if data_format == "":
+        data_format = None
+    if data_format is None:
+        data_format = _infer_format_from_path(path)
+    if data_format is None:
         supported_formats = ", ".join(FORMAT_READERS.keys())
-        logger.error(f"Unsupported input particle format: {f_format}")
+        logger.error(f"Could not infer input particle format from path: {path}")
+        logger.error(f"Set fin.format explicitly. Supported formats: '{supported_formats}'")
+        func_util.safe_exit(1)
+    if data_format not in FORMAT_READERS:
+        supported_formats = ", ".join(FORMAT_READERS.keys())
+        logger.error(f"Unsupported input particle format: {data_format}")
         logger.error(f"Supported formats: '{supported_formats}'")
         func_util.safe_exit(1)
-    logger.info(f"Selected input particle format: {f_format}")
-    return FORMAT_READERS[f_format](f_in, **reader_params)
+    logger.info(f"Selected input particle format: {data_format}")
+    return FORMAT_READERS[data_format](path, **reader_params)
 
 
 # Weight selection used by Convols and ConvolsData.
