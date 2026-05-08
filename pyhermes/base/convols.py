@@ -137,7 +137,7 @@ class Convols(TaskBase):
             p_dict_all = read_particle_data(
                 self.fin["path"],
                 input_format,
-                self.fin.get("reader_params", {}),
+                **self.fin.get("reader_params", {}),
             )
             p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']
             p_wei, resolved_weight_key = resolve_particle_weight(

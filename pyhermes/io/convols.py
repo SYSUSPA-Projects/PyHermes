@@ -239,7 +239,7 @@ class ConvolsData(HermesData):
         particle_data = read_particle_data(
             fin["path"],
             fin["format"],
-            fin.get("reader_params", {}),
+            **fin.get("reader_params", {}),
         )
         try:
             weight, _ = resolve_particle_weight(particle_data, fin.get("weight_key", None), logger=self.logger)

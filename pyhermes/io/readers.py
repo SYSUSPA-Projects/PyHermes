@@ -354,7 +354,7 @@ FORMAT_READERS = {
 }
 
 
-def read_particle_data(f_in, f_format, reader_params=None):
+def read_particle_data(f_in, f_format, **reader_params):
     """Dispatch a local particle catalog path to one of the registered readers."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
@@ -364,8 +364,7 @@ def read_particle_data(f_in, f_format, reader_params=None):
         logger.error(f"Supported formats: '{supported_formats}'")
         func_util.safe_exit(1)
     logger.info(f"Selected input particle format: {f_format}")
-    params = {} if reader_params is None else dict(reader_params)
-    return FORMAT_READERS[f_format](f_in, **params)
+    return FORMAT_READERS[f_format](f_in, **reader_params)
 
 
 # Weight selection used by Convols and ConvolsData.
