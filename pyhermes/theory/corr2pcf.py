@@ -1011,7 +1011,7 @@ class Corr_2PCF(TaskBase):
         return local_value
 
     def run(self, save_result=True, overwrite=False):
-        self._sync_runtime_options(log_runtime=False)
+        self._sync_runtime_options()
         if self.memory_strategy == "memory":
             if self._fields_prepared and self.rank == 0:
                 self.logger.warning(
