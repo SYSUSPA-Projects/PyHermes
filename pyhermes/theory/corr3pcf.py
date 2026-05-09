@@ -66,7 +66,7 @@ def estimate_triplet_product_with_sampled_centers(
     center_weight=None,
     center_weight_sum=None,
     seed_base_rot=-1,
-    theta_index=-1,
+    mu_index=-1,
     eps1=None,
     rho1=None,
 ):
@@ -77,7 +77,7 @@ def estimate_triplet_product_with_sampled_centers(
         "phi_resolution": convols_meta.phi_resolution,
         "phi_support": convols_meta.phi_support,
         "seed_base_rot": seed_base_rot,
-        "theta_index": theta_index,
+        "mu_index": mu_index,
     }
 
     eps2 = convols_data2.epsilon
@@ -656,7 +656,7 @@ class Corr_3PCF(TaskBase):
         return compute_pair_product_at_sample({"s": radius}, field1, field2)
 
     def _compute_rrr_value(
-        self, mu, r23_value, center, pos_local, seed_base_rot, theta_index,
+        self, mu, r23_value, center, pos_local, seed_base_rot, mu_index,
         random1, random2, random3, rr23_cache=None, center_weight=None, center_weight_sum=None
     ):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
@@ -686,7 +686,7 @@ class Corr_3PCF(TaskBase):
             center_weight=center_weight,
             center_weight_sum=center_weight_sum,
             seed_base_rot=seed_base_rot,
-            theta_index=theta_index,
+            mu_index=mu_index,
             eps1=random1.epsilon,
             rho1=self._field_density(random1),
         )
@@ -1003,64 +1003,64 @@ class Corr_3PCF(TaskBase):
 
     ### Theta-local triplet kernels ###
 
-    def _compute_random_center_theta(
-        self, mu, r23_value, pos_local, seed_base_rot, theta_index,
+    def _compute_random_center_mu(
+        self, mu, r23_value, pos_local, seed_base_rot, mu_index,
         local_results, _local_convols1, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
-        """Compute theta-local products for the box-random center mode."""
+        """Compute mu-local products for the box-random center mode."""
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
+            local_results["ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, _local_convols2, _local_convols3,
-                center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="box_random", seed_base_rot=seed_base_rot, mu_index=mu_index,
                 eps1=_local_convols1.epsilon,
             )
         if "delta_ddd" in local_results:
             field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
             field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
             field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
-            local_results["delta_ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
+            local_results["delta_ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
-                center="box_random", seed_base_rot=seed_base_rot, theta_index=theta_index,
+                center="box_random", seed_base_rot=seed_base_rot, mu_index=mu_index,
                 eps1=field1.epsilon,
             )
         if "rrr" in local_results:
-            local_results["rrr"][theta_index] = self._compute_rrr_value(
-                mu, r23_value, "box_random", pos_local, seed_base_rot, theta_index,
+            local_results["rrr"][mu_index] = self._compute_rrr_value(
+                mu, r23_value, "box_random", pos_local, seed_base_rot, mu_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None
             )
 
-    def _compute_particle_center_theta(
+    def _compute_particle_center_mu(
         self, mu, r23_value, pos_local_data, weight_local_data, weight_sum_local_data,
-        pos_local_random1, weight_local_random1, weight_sum_local_random1, seed_base_rot, theta_index,
+        pos_local_random1, weight_local_random1, weight_sum_local_random1, seed_base_rot, mu_index,
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
-        """Compute theta-local products for the particle-center mode."""
+        """Compute mu-local products for the particle-center mode."""
         rho = self._shared_density()
         if "ddd" in local_results:
-            local_results["ddd"][theta_index] = estimate_triplet_product_with_sampled_centers(
+            local_results["ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
-                seed_base_rot=seed_base_rot, theta_index=theta_index,
+                seed_base_rot=seed_base_rot, mu_index=mu_index,
                 rho1=rho,
             )
         if "rrr" in local_results:
-            local_results["rrr"][theta_index] = self._compute_rrr_value(
-                mu, r23_value, "particle", pos_local_random1, seed_base_rot, theta_index,
+            local_results["rrr"][mu_index] = self._compute_rrr_value(
+                mu, r23_value, "particle", pos_local_random1, seed_base_rot, mu_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None,
                 center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
-            local_results["d_delta_dd"][theta_index] = estimate_triplet_product_with_sampled_centers(
+            local_results["d_delta_dd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, field2, field3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
-                seed_base_rot=seed_base_rot, theta_index=theta_index,
+                seed_base_rot=seed_base_rot, mu_index=mu_index,
                 rho1=rho,
             )
         if "r_delta_dd" in local_results:
@@ -1070,11 +1070,11 @@ class Corr_3PCF(TaskBase):
                 pass
             else:
                 field2, field3 = self._particle_delta_fields
-                local_results["r_delta_dd"][theta_index] = estimate_triplet_product_with_sampled_centers(
+                local_results["r_delta_dd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                     self.r12_scaled, self.r13_scaled, mu, pos_local_random1, self.n_rot,
                     self.meta_convols, field2, field3,
                     center="particle", center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
-                    seed_base_rot=seed_base_rot, theta_index=theta_index,
+                    seed_base_rot=seed_base_rot, mu_index=mu_index,
                     rho1=rho,
                 )
 
@@ -1408,17 +1408,17 @@ class Corr_3PCF(TaskBase):
 
                 local_results = {product: np.zeros(mu_arr.shape[0], dtype=np.float64)}
                 for it, mu in enumerate(mu_arr):
-                    t_theta_start = time.perf_counter() if rank == 0 else None
+                    t_mu_start = time.perf_counter() if rank == 0 else None
                     r23_value = third_side_from_mu(self.r12, self.r13, mu)
                     if self.center == "box_random":
-                        self._compute_random_center_theta(
+                        self._compute_random_center_mu(
                             mu, r23_value, pos_local, seed_base_rot, it,
                             local_results,
                             local_data.get(1), local_data.get(2), local_data.get(3),
                             local_random.get(1), local_random.get(2), local_random.get(3),
                         )
                     else:
-                        self._compute_particle_center_theta(
+                        self._compute_particle_center_mu(
                             mu, r23_value,
                             pos_local, weight_local, weight_sum_local,
                             pos_local_random1 if pos_local_random1 is not None else pos_local,
@@ -1431,10 +1431,10 @@ class Corr_3PCF(TaskBase):
                         )
 
                     if rank == 0:
-                        elapsed_theta = time.perf_counter() - t_theta_start
+                        elapsed_mu = time.perf_counter() - t_mu_start
                         self.logger.info(
-                            f" product={product} | theta[{it + 1:02d}/{self.n_theta}] done | "
-                            f"theta={theta_arr[it]:.5f} rad | mu={mu:.5f} | elapsed={elapsed_theta:.2f} sec"
+                            f" product={product} | mu[{it + 1:02d}/{mu_arr.shape[0]}] done | "
+                            f"mu={mu:.5f} | theta={theta_arr[it]:.5f} rad | elapsed={elapsed_mu:.2f} sec"
                         )
 
                 arr = local_results[product]

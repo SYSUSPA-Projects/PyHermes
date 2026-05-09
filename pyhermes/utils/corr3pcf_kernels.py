@@ -69,7 +69,7 @@ def estimate_triplet_product_particle_centers(
     center_scaled, center_weight, center_weight_sum, n_rot,
     rho1, epsilon2, epsilon3,
     phi_array, L, phi_resolution, phi_support,
-    seed_base_rot=-1, theta_index=-1
+    seed_base_rot=-1, mu_index=-1
 ):
     """Estimate DDD using object positions as triangle centers."""
     npos = center_scaled.shape[0]
@@ -80,8 +80,8 @@ def estimate_triplet_product_particle_centers(
     for irot in range(n_rot):
         if seed_base_rot >= 0:
             seed_rot = seed_base_rot + irot
-            if theta_index >= 0:
-                seed_rot += theta_index * 1000003
+            if mu_index >= 0:
+                seed_rot += mu_index * 1000003
             np.random.seed(seed_rot)
         a, b, c = np.random.rand(3)
         phi = two_pi * a
@@ -103,7 +103,7 @@ def estimate_triplet_product_box_random_centers(
     center_scaled, n_rot,
     epsilon1, epsilon2, epsilon3,
     phi_array, L, phi_resolution, phi_support,
-    seed_base_rot=-1, theta_index=-1
+    seed_base_rot=-1, mu_index=-1
 ):
     """Estimate DDD by averaging over uniform random centers in the periodic box."""
     npos = center_scaled.shape[0]
@@ -119,8 +119,8 @@ def estimate_triplet_product_box_random_centers(
     for irot in range(n_rot):
         if seed_base_rot >= 0:
             seed_rot = seed_base_rot + irot
-            if theta_index >= 0:
-                seed_rot += theta_index * 1000003
+            if mu_index >= 0:
+                seed_rot += mu_index * 1000003
             np.random.seed(seed_rot)
         a, b, c = np.random.rand(3)
         phi = two_pi * a
