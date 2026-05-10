@@ -1,7 +1,8 @@
 ## ignore the generated file
 **/*.npy
 **/*.bin
-examples/output/
+examples/output/**
+!examples/output/.gitkeep
 examples/data/**
 !examples/data/.gitkeep
 examples/logs/*.log
