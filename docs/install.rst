@@ -56,7 +56,6 @@ Verify the install
 What to open next
 -----------------
 
-After installation, open :doc:`get_start/quick_start` if you already have a
-small local particle catalog. If you want to start from the tracked example
-material only, jump directly to :doc:`get_start/convols/convols`, which shows
-how to prepare the main example data in ``examples/data/``.
+After installation, start with :doc:`get_start/convols/convols` to prepare the
+main example data in ``examples/data/``. Once that data exists, open
+:doc:`get_start/quick_start` for the smallest end-to-end calculation.

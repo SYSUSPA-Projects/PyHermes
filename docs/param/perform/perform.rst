@@ -11,7 +11,8 @@ multiple MPI ranks:
 
 .. code-block:: bash
 
-   mpirun -np 8 python run_2pcf.py
+   cd examples
+   mpirun -np 8 python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
 
 If ``mpi4py`` is not installed, PyHermes falls back to a single-process wrapper
 so the same Python code can still run.
