@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">PyHermes workflow</title>
+  <desc id="desc">Particle catalogs are prepared locally, converted into ConvolsData, and reused by Counting, Corr_2PCF, and Corr_3PCF workflows.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfbf7"/>
+      <stop offset="1" stop-color="#eef3f1"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-16%" width="124%" height="132%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#12312c" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 1 1 L 12 7 L 1 13 Z" fill="#415650"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <text x="82" y="112" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="700" fill="#152522">PyHermes workflow</text>
+  <text x="82" y="148" font-family="Arial, Helvetica, sans-serif" font-size="21" fill="#52645f">Prepare local example data, build a reusable field, then run one-point, two-point, and three-point statistics.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="80" y="190" width="330" height="150" rx="14" fill="#ffffff" stroke="#d7dfdc"/>
+    <rect x="104" y="214" width="56" height="56" rx="12" fill="#d8efe3"/>
+    <path d="M118 252 L146 236 L146 280 L118 264 Z" fill="#247b5d"/>
+    <text x="184" y="254" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">Particle catalogs</text>
+    <text x="184" y="278" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">bin, npz, gadget, fof</text>
+    <text x="184" y="308" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">prepared under examples/data</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="535" y="190" width="270" height="150" rx="14" fill="#ffffff" stroke="#d7dfdc"/>
+    <rect x="559" y="214" width="56" height="56" rx="12" fill="#d9e9f8"/>
+    <path d="M587 226 L607 262 L567 262 Z" fill="#2b70b8"/>
+    <circle cx="587" cy="262" r="8" fill="#2b70b8"/>
+    <text x="638" y="254" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">Convols</text>
+    <text x="638" y="278" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">project particles into a</text>
+    <text x="638" y="308" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">multiresolution field</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="925" y="178" width="355" height="174" rx="14" fill="#17322d" stroke="#17322d"/>
+    <rect x="952" y="206" width="62" height="62" rx="12" fill="#f4c768"/>
+    <path d="M970 228 H1000 M970 245 H1000 M970 262 H1000" stroke="#17322d" stroke-width="7" stroke-linecap="round"/>
+    <text x="1042" y="250" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700" fill="#ffffff">ConvolsData</text>
+    <text x="1042" y="276" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#cbd9d5">reusable field product</text>
+    <text x="1042" y="308" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#cbd9d5">saved in examples/output</text>
+  </g>
+
+  <path d="M410 265 H535" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M805 265 H925" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="140" y="480" width="330" height="150" rx="14" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="170" y="544" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Counting</text>
+    <text x="170" y="572" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">sample fields at random points</text>
+    <text x="170" y="602" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">PDFs and one-point diagnostics</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="650" y="480" width="330" height="150" rx="14" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="680" y="544" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_2PCF</text>
+    <text x="680" y="572" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">xi(s), xi(s, mu), xi(rp, pi)</text>
+    <text x="680" y="602" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">real and redshift space</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1160" y="480" width="330" height="150" rx="14" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="1190" y="544" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_3PCF</text>
+    <text x="1190" y="572" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">Q(theta), Q(mu)</text>
+    <text x="1190" y="602" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">particle centers and multipoles</text>
+  </g>
+
+  <path d="M1100 352 C760 420 560 446 305 480" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1100 352 C945 420 880 446 815 480" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1100 352 C1245 420 1280 446 1325 480" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+
+  <rect x="80" y="715" width="680" height="97" rx="14" fill="#fff8e5" stroke="#e7cf8a"/>
+  <text x="112" y="767" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#473614">User entry points</text>
+  <text x="112" y="798" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#665735">examples/notebooks, examples/configs, examples/scripts</text>
+
+  <rect x="840" y="715" width="680" height="97" rx="14" fill="#eef7fb" stroke="#bdd9e7"/>
+  <text x="872" y="767" font-family="Arial, Helvetica, sans-serif" font-size="23" font-weight="700" fill="#183746">Local products</text>
+  <text x="872" y="798" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#405c68">examples/data and examples/output are generated while examples run</text>
+</svg>

@@ -11,6 +11,8 @@ Project links:
 - Documentation: [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
 - Source code: [github.com/PyHermes/PyHermes](https://github.com/PyHermes/PyHermes)
 
+![PyHermes workflow](docs/_static/pyhermes_workflow.png)
+
 ## Installation
 
 Create a clean environment and install from source:

@@ -6,6 +6,10 @@ You start from a particle catalog, project it onto a multiresolution grid, and
 then reuse that field for downstream measurements instead of rereading the raw
 catalog for every task.
 
+.. image:: _static/pyhermes_workflow.png
+   :alt: PyHermes workflow
+   :class: workflow-diagram
+
 Core workflow
 -------------
 
