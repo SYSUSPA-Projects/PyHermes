@@ -37,7 +37,9 @@ def _extension_available(name):
         return find_spec(base_name) is not None
 
 
-extensions = [ext for ext in _optional_extensions if _extension_available(ext)]
+extensions = ['sphinx.ext.mathjax'] + [
+    ext for ext in _optional_extensions if _extension_available(ext)
+]
 
 # Sphinx extensions:
 # https://sphinx-extensions.readthedocs.io/en/latest/

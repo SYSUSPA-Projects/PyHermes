@@ -72,3 +72,6 @@ PyHermes currently supports these particle input formats:
 - ``fof``
 
 For parameter details, see :doc:`param/param`.
+
+For the compact mathematical formulation behind these examples, see
+:doc:`math`.

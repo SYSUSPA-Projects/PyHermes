@@ -76,3 +76,39 @@ Key idea
 ``Convols`` builds a weighted multiresolution field and stores it in a reusable
 format. Once that field exists, downstream tasks no longer need to reread and
 repartition the original particle catalog.
+
+Mathematical idea
+-----------------
+
+The input catalog is a weighted point process,
+
+.. math::
+
+   n(\mathbf{x}) =
+   \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
+
+``Convols`` projects it onto scaling-function coefficients,
+
+.. math::
+
+   n_j(\mathbf{x}) =
+   \sum_\ell \epsilon_{j\ell}\phi_{j\ell}(\mathbf{x}),
+   \qquad
+   \epsilon_{j\ell} =
+   \sum_i w_i\phi_{j\ell}(\mathbf{x}_i).
+
+The saved ``ConvolsData`` object stores these normalized coefficients and the
+metadata needed to apply later windows. The redshift-space cells first map
+positions along a chosen line of sight,
+
+.. math::
+
+   \mathbf{s}
+   =
+   \mathbf{x}
+   +
+   {(\mathbf{v}\cdot\widehat{\mathbf{n}})(1+z)\over H(z)}
+   \widehat{\mathbf{n}},
+
+with periodic wrapping in the simulation box, and then build the same
+coefficient field from :math:`\mathbf{s}`.

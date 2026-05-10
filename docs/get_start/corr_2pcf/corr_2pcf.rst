@@ -67,3 +67,42 @@ If you mainly care about real-space 2PCF, the first half is enough.
 If you care about redshift-space distortions, the second half is the more
 important reference because it shows how line-of-sight choice, smoothing, and
 window family affect the result.
+
+Mathematical idea
+-----------------
+
+PyHermes treats a 2PCF bin as a windowed copy of the same fluctuation field:
+
+.. math::
+
+   \xi_P =
+   \left\langle
+   \delta(\mathbf{x})\,
+   (W_P\circ\delta)(\mathbf{x})
+   \right\rangle.
+
+For real-space ``xi(s)``, :math:`W_P` is a spherical shell. In the thin-shell
+limit,
+
+.. math::
+
+   W_{\rm shell}(r;R)
+   =
+   {1\over 4\pi R^2}\delta_{\rm D}(r-R),
+   \qquad
+   \widehat W_{\rm shell}(k;R)
+   =
+   {\sin(kR)\over kR}.
+
+For redshift-space ``(s, mu)`` and ``(rp, pi)`` measurements, the same
+estimator uses line-of-sight-aware windows. A thin ring window has
+
+.. math::
+
+   \widehat W(k_\perp,k_\parallel)
+   =
+   e^{i k_\parallel r_\parallel}J_0(k_\perp r_\perp),
+
+with finite-bin and real-valued variants implemented by the built-in ring,
+disk, and cylinder windows. Random fields provide the ``RR`` normalization and
+the data-minus-random correction used in the estimator.

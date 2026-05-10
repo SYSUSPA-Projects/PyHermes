@@ -46,3 +46,20 @@ shows how smoothing radius changes the sampled distribution and how the saved
 
 In other words, if ``Convols`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
+
+Mathematical idea
+-----------------
+
+Counting is direct evaluation of a windowed field at sampled centers:
+
+.. math::
+
+   c_a =
+   (W\circ n)(\mathbf{y}_a)
+   =
+   \int W(\mathbf{y}_a-\mathbf{x})n(\mathbf{x})\,d^3x.
+
+The sampled values :math:`\{c_a\}` estimate the count-in-cell distribution, or
+the distribution of a smoothed fluctuation field when the input is
+:math:`\delta=(n-\bar n)/\bar n`. This is why changing the smoothing window in
+the notebook changes the measured one-point PDF.

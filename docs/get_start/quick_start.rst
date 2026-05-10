@@ -44,3 +44,21 @@ What you should take away
 The important idea is that PyHermes turns particle data into a reusable field
 object. Later notebooks keep the same pattern, but add task-level workflows,
 saved outputs, redshift-space variants, and heavier estimators.
+
+Mathematical idea
+-----------------
+
+The quick start uses the core in-situ 2PCF identity:
+
+.. math::
+
+   \xi(R)
+   =
+   \left\langle
+   \delta_W(\mathbf{x})\,
+   (W_{\rm shell}(R)\circ\delta_W)(\mathbf{x})
+   \right\rangle.
+
+Here ``Convols`` supplies the normalized field, the notebook forms
+:math:`\delta`, smooths it into :math:`\delta_W`, and each shell convolution
+reads one separation bin. For the full notation, see :doc:`../math`.

@@ -65,3 +65,42 @@ best place to connect the code to the estimator formula.
 Finally, treat the multipole section as an advanced extension. It is still part
 of the same notebook, but it is more computationally demanding and more useful
 once the standard 3PCF workflow is already familiar.
+
+Mathematical idea
+-----------------
+
+The standard 3PCF section estimates products of three fields arranged in a
+triangle. For a center :math:`\mathbf{x}` and two triangle legs,
+
+.. math::
+
+   DDD =
+   \left\langle
+   n(\mathbf{x})\,
+   \widetilde n_{R_1}(\mathbf{x})\,
+   \widetilde n_{R_2,\theta}(\mathbf{x})
+   \right\rangle.
+
+After the matching random normalization, PyHermes stores the connected
+statistic :math:`\zeta`, the hierarchical denominator
+
+.. math::
+
+   \zeta_H =
+   \xi_{12}\xi_{13}
+   +
+   \xi_{12}\xi_{23}
+   +
+   \xi_{13}\xi_{23},
+
+and the reduced statistic
+
+.. math::
+
+   Q = {\zeta\over\zeta_H}.
+
+The low-level reconstruction section is therefore not a separate estimator; it
+rebuilds :math:`Q` from the same saved ingredients. The multipole section
+replaces shell-averaged legs with spherical-harmonic-filtered legs
+:math:`n_{\ell m}(\mathbf{x};R)`, then couples them into rotationally invariant
+3PCF components up to the requested ``lmax``.
