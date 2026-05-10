@@ -28,6 +28,65 @@ MPI is optional. Install `mpi4py` only if you plan to run multi-process jobs:
 pip install mpi4py
 ```
 
+## Quick Start
+
+The examples use paths relative to `examples/`. From a fresh clone, first open
+`examples/notebooks/convols.ipynb` and run its data-preparation cells. They
+download and prepare the Quijote halo catalog used by the quick start config.
+
+After that, the core PyHermes workflow is only a few lines:
+
+```python
+from pathlib import Path
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+from pyhermes.base.convols import Convols
+from pyhermes.io import WindowFunc
+from pyhermes.param.parambase import read_param
+
+# Use the same base directory as the example scripts and YAML files.
+os.chdir(Path("examples"))
+
+# Build the multiresolution field from the example particle catalog.
+task_params = read_param(config_path="./configs/param_convols.yaml")
+D = Convols(task_params).run(save_result=False)
+D.threads = 8
+
+# Convert the normalized field into a fluctuation field.
+rho = 1 / D.V
+RR = rho**2
+deltaD = D - rho
+
+# Smooth the fluctuation field with a spherical top-hat window.
+smooth_window = WindowFunc(
+    {"type": "sphere", "len_args": {"R": 5}},
+    D.convols_info,
+    threads=8,
+)
+deltaD_w = deltaD @ smooth_window
+
+# Estimate xi(r) with shell convolutions and a spatial average.
+r_arr = np.linspace(0, 150, 26)
+xi_arr = np.zeros_like(r_arr)
+
+for i, r in enumerate(r_arr):
+    shell_window = WindowFunc(
+        {"type": "shell", "len_args": {"R": r}},
+        D.convols_info,
+        threads=8,
+    )
+    pair_field = deltaD_w @ shell_window * deltaD_w
+    xi_arr[i] = pair_field.as_array().mean() / RR
+
+plt.plot(r_arr, xi_arr * r_arr**2)
+plt.xlabel("r [Mpc/h]")
+plt.ylabel(r"$r^2 \xi(r)$")
+plt.show()
+```
+
 ## Start Here
 
 The repository is organized around five notebooks in `examples/notebooks/`:
