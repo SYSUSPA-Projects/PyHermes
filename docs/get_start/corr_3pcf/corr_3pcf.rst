@@ -1,163 +1,67 @@
 Corr_3PCF
 =========
 
-``Corr_3PCF`` measures the three-point correlation function for triangles
-defined by two side lengths ``r12`` and ``r13`` and an angular grid in
-``theta``.
+``corr3pcf.ipynb`` is the most advanced tutorial notebook in the repository.
+It combines three related topics in one place:
 
-The field preparation step and the center-sampling step are intentionally split:
+1. standard reduced 3PCF measurements
+2. low-level reconstruction of ``Q`` from saved components
+3. 3PCF multipole examples
 
-- ``prepare_input_fields()`` prepares the three legs of the correlation
-- ``run()`` handles center generation or particle-center sampling and performs
-  the actual estimator
+Notebook structure
+------------------
 
-Workflow Ladder
----------------
+The advanced multipole material is the last section of ``corr3pcf.ipynb``
+because it builds naturally on the same prepared fields and triangle
+configuration ideas as the standard 3PCF sections.
 
-- **Workflow A. Command-Line Driver**
-- **Workflow B. Config-Driven Python API**
-- **Workflow C. Task Object with Attribute Overrides**
-- **Workflow D. Manual Input Objects and Custom Preparation**
-- **Workflow E. Low-Level Building Blocks**
+What this notebook covers
+-------------------------
 
-Workflow A. Command-Line Driver
+The main progression is:
+
+1. run the standard task with particle centers and box-random centers
+2. compare saved outputs and task-level API variants
+3. reconstruct ``Q`` from lower-level ingredients to make the estimator more
+   transparent
+4. inspect multipole truncation choices and field-resolution effects
+
+This is the notebook to read when you want both the practical workflow and the
+estimator logic.
+
+Heavy outputs and external runs
 -------------------------------
 
-Use the shipped config:
+Many of the comparison figures in this notebook rely on heavier saved products.
+Those outputs are not committed to the repository. Instead, the notebook marks
+the exact script and YAML file needed to generate them locally.
 
-.. code-block:: yaml
+Tracked files involved here include:
 
-   Corr_3PCF:
-      convols_data_path: "./output/quijote_sfc.pkl"
-      fout_path: "./output/quijote_3pcf_rand1e7.pkl"
-      window2:
-         type: "sphere"
-         len_args:
-            R: 5
-      window3:
-         type: "sphere"
-         len_args:
-            R: 5
-      r12: 20.0
-      r13: 40.0
-      n_theta: 20
-      n_rot: 20
-      center: "box_random"
-      field_mode: "delta"
-      n_box_centers: 10000000
-      base_seed: 42
+- ``examples/notebooks/corr3pcf.ipynb``
+- ``examples/scripts/run_3pcf.py``
+- ``examples/scripts/run_3pcf_multipole.py``
+- the ``param_3pcf_*.yaml`` and ``param_3pcf_multipole_*.yaml`` files under
+  ``examples/configs/``
 
-Then run:
+Typical commands look like:
 
 .. code-block:: bash
 
-   python run_3pcf.py
+   cd examples
+   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
+   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
 
-or with MPI:
+How to read the notebook
+------------------------
 
-.. code-block:: bash
+If you are new to PyHermes 3PCF, focus first on the standard workflow and the
+diagnostic plots.
 
-   mpirun -np 4 python run_3pcf.py ./configs/param_3pcf.yaml
+Then read the low-level ``Q`` reconstruction section. That part explains why
+the saved components are enough to rebuild the reduced statistic and is the
+best place to connect the code to the estimator formula.
 
-Workflow B. Config-Driven Python API
-------------------------------------
-
-.. code-block:: python
-
-   from pyhermes.param.parambase import read_param
-   from pyhermes.theory.corr3pcf import Corr_3PCF
-
-   params = read_param("./configs/param_3pcf.yaml")
-   corr3pcf_task = Corr_3PCF(param_task=params)
-   corr3pcf = corr3pcf_task.run(overwrite=True)
-
-Workflow C. Task Object with Attribute Overrides
-------------------------------------------------
-
-.. code-block:: python
-
-   from pyhermes.theory.corr3pcf import Corr_3PCF
-
-   corr3pcf_task = Corr_3PCF()
-   corr3pcf_task.threads = 8
-   corr3pcf_task.center = "particle"
-   corr3pcf_task.n_theta = 20
-   corr3pcf_task.n_rot = 20
-   corr3pcf_task.prepare_input_fields()
-   corr3pcf = corr3pcf_task.run(save_result=False)
-
-Workflow D. Manual Input Objects and Custom Preparation
--------------------------------------------------------
-
-This layer gives explicit control over the three legs:
-
-.. code-block:: python
-
-   from pyhermes.io import ConvolsData, WindowFunc
-   from pyhermes.theory.corr3pcf import Corr_3PCF
-
-   D = ConvolsData(data_path="./output/quijote_sfc.pkl")
-   win_params = {"type": "sphere", "len_args": {"R": 5}}
-   filter_sph5 = WindowFunc(win_params, D.convols_info)
-
-   corr3pcf_task = Corr_3PCF()
-   corr3pcf_task.threads = 8
-   corr3pcf_task.center = "particle"
-   corr3pcf_task.convols_data1 = D.copy()
-   corr3pcf_task.convols_data2 = D.copy()
-   corr3pcf_task.convols_data3 = D.copy()
-   corr3pcf_task.window2 = filter_sph5
-   corr3pcf_task.window3 = filter_sph5
-   corr3pcf_task.prepare_input_fields()
-   corr3pcf = corr3pcf_task.run(save_result=False)
-
-Workflow E. Low-Level Building Blocks
--------------------------------------
-
-At the lowest level, you can work directly with prepared fields, explicit
-center positions, and the low-level Monte Carlo kernels in
-``pyhermes.utils.corr3pcf_kernels``. This is the most flexible route, but it
-assumes you want to manage normalization, windows, and estimator bookkeeping
-yourself.
-
-Output
-------
-
-The standard output is:
-
-.. code-block:: text
-
-   ./output/quijote_3pcf_rand1e7.pkl
-
-Key parameters
---------------
-
-- ``convols_data_path``:
-  shared fallback input field path
-- ``convols_data1_path`` / ``convols_data2_path`` / ``convols_data3_path``:
-  optional leg-specific field paths
-- ``window``, ``window1``, ``window2``, ``window3``:
-  optional smoothing windows for the three legs
-- ``r12`` and ``r13``:
-  triangle side lengths
-- ``n_theta``:
-  number of angular bins
-- ``n_rot``:
-  number of rotations used by the estimator
-- ``center``:
-  ``"box_random"`` or ``"particle"``
-- ``field_mode``:
-  ``"raw"`` or ``"delta"``
-- ``n_box_centers``:
-  number of random centers when ``center="box_random"``
-- ``base_seed``:
-  random seed
-
-Notes
------
-
-- ``prepare_input_fields()`` prepares the three fields and checks that they are
-  compatible.
-- ``run()`` keeps the center handling in the runtime stage, because center
-  generation depends strongly on MPI rank count and execution mode.
-- When using MPI, modify config values in Python only on rank 0.
+Finally, treat the multipole section as an advanced extension. It is still part
+of the same notebook, but it is more computationally demanding and more useful
+once the standard 3PCF workflow is already familiar.

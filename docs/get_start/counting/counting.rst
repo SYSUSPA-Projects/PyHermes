@@ -1,127 +1,48 @@
 Counting
 ========
 
-``Counting`` evaluates the field at many random positions. This is useful for
-sampling local densities, estimating one-point distributions, and inspecting how
-a previously prepared field behaves under additional smoothing.
+``counting.ipynb`` is the one-point companion to ``convols.ipynb``. It starts
+from a saved ``ConvolsData`` field, optionally smooths it, evaluates it at
+many random positions, and studies the resulting distribution.
 
-Workflow Ladder
----------------
+What this notebook covers
+-------------------------
 
-As with the other PyHermes tasks, ``Counting`` can be used at several levels:
+The notebook walks through:
 
-- **Workflow A. Command-Line Driver**
-- **Workflow B. Config-Driven Python API**
-- **Workflow C. Task Object with Attribute Overrides**
-- **Workflow D. Manual Input Objects and Custom Preparation**
-- **Workflow E. Low-Level Building Blocks**
+1. the standard ``Counting`` driver
+2. the config-driven Python API
+3. task-object overrides
+4. manual preparation of ``ConvolsData`` and ``WindowFunc``
+5. direct low-level sampling of the smoothed field
 
-Workflow A. Command-Line Driver
--------------------------------
+The last section is useful because it makes the estimator interpretation
+explicit: ``Counting`` is fundamentally a random-position probe of a field.
 
-Use the shipped example config:
+Inputs and outputs
+------------------
 
-.. code-block:: yaml
+Inputs are produced by ``convols.ipynb`` and live locally in
+``examples/output/``. The main tracked files involved in this stage are:
 
-   Counting:
-      N_randoms: 10000000
-      convols_data_path: "./output/quijote_sfc.pkl"
-      fout_path: "./output/quijote_counting_sph20.pkl"
-      window:
-         type: sphere
-         len_args:
-            R: 20
+- ``examples/notebooks/counting.ipynb``
+- ``examples/scripts/run_counting.py``
+- ``examples/configs/param_counting.yaml``
 
-Then run:
+The counting result itself is lightweight and is expected to be generated
+locally during notebook execution or by the driver script:
 
 .. code-block:: bash
 
-   python run_counting.py
+   cd examples
+   python ./scripts/run_counting.py ./configs/param_counting.yaml
 
-Workflow B. Config-Driven Python API
-------------------------------------
+What you should learn here
+--------------------------
 
-.. code-block:: python
+This notebook is where the field representation starts to feel concrete. It
+shows how smoothing radius changes the sampled distribution and how the saved
+``CountingData`` result relates to direct field evaluation.
 
-   from pyhermes.theory.counting import Counting
-   from pyhermes.param.parambase import read_param
-
-   counting_params = read_param("./configs/param_counting.yaml")
-   counting_task = Counting(param_task=counting_params)
-   counting = counting_task.run(overwrite=True)
-
-If you modify config values in an MPI workflow, do it only on rank 0.
-
-Workflow C. Task Object with Attribute Overrides
-------------------------------------------------
-
-.. code-block:: python
-
-   from pyhermes.theory.counting import Counting
-
-   counting_task = Counting()
-   counting_task.N_randoms = 1_000_000
-   counting_task.threads = 8
-   counting_task.convols_data_path = "./output/quijote_sfc.pkl"
-   counting_task.prepare_input_fields()
-   counting = counting_task.run(save_result=False)
-
-Workflow D. Manual Input Objects and Custom Preparation
--------------------------------------------------------
-
-If you already have a prepared field or a custom smoothing window, inject them
-directly:
-
-.. code-block:: python
-
-   from pyhermes.io import ConvolsData, WindowFunc
-   from pyhermes.theory.counting import Counting
-
-   D = ConvolsData(data_path="./output/quijote_sfc.pkl")
-   win_params = {"type": "sphere", "len_args": {"R": 20}}
-   filter_sph20 = WindowFunc(win_params, D.convols_info)
-
-   counting_task = Counting()
-   counting_task.N_randoms = 1_000_000
-   counting_task.convols_data = D.copy()
-   counting_task.window = filter_sph20
-   counting_task.prepare_input_fields()
-   counting = counting_task.run(save_result=False)
-
-Workflow E. Low-Level Building Blocks
--------------------------------------
-
-At the lowest level, you can generate the random positions yourself and call
-``n_at_pos`` directly on a prepared field. This is the most flexible option,
-but it assumes you want to manage the sampling and post-processing manually.
-
-Output
-------
-
-The example writes:
-
-.. code-block:: text
-
-   ./output/quijote_counting_sph20.pkl
-
-Key parameters
---------------
-
-- ``N_randoms``:
-  number of random sampling points
-- ``convols_data_path``:
-  path to the ``Convols`` output file
-- ``window``:
-  optional smoothing window applied before counting
-- ``threads``:
-  CPU threads per MPI rank
-- ``fout_path``:
-  output path for the counting result
-
-Notes
------
-
-- ``prepare_input_fields()`` prepares the counting field.
-- ``run()`` generates random positions, evaluates the field, and gathers the result.
-- ``Counting`` requires a previously generated ``Convols`` field unless you pass a
-  prepared ``ConvolsData`` object directly.
+In other words, if ``Convols`` explains how PyHermes stores the field,
+``Counting`` explains how PyHermes reads values back out of it.

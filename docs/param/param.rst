@@ -1,29 +1,40 @@
 Parameters
 ==========
 
-This section summarizes the configuration structure used by PyHermes. Parameter
-files can be written in YAML or JSON5, and each top-level task name matches the
-corresponding Python class.
+This section is a reference appendix for PyHermes configuration files. The
+fastest way to learn the parameter structure is still to read the example YAML
+files under ``examples/configs/`` alongside the five tutorial notebooks.
 
-Supported top-level sections include:
+Supported top-level task sections include:
 
 - ``Convols``
 - ``Counting``
 - ``Corr_2PCF``
 - ``Corr_3PCF``
+- ``Corr_3PCF_Multipole``
 
-Each task has a default parameter dictionary bundled with the package. User
-configuration values override only the keys you specify, while unspecified
-fields fall back to those defaults.
+Each task starts from a default parameter dictionary bundled with the package.
+User YAML or JSON5 files only need to override the keys they actually want to
+change.
 
 .. toctree::
    :maxdepth: 2
    :caption: Reference
-   
+
    defaults/defaults
    io/io
    perform/perform
    cal/cal
+
+Practical advice
+----------------
+
+For day-to-day use:
+
+- use ``examples/configs/`` as the most concrete starting point
+- use the notebook pages in :doc:`../get_start/get_start` to understand which
+  parameters matter for each task
+- come back to this section when you need field-by-field details
 
 Minimal example
 ---------------
@@ -41,8 +52,6 @@ Minimal example
             fields: {}
          weight_key: null
       fout_path: "./output/convols.pkl"
-      save_particle_data: false
-      particle_data_path: ""
 
    Corr_2PCF:
       convols_data: "./output/convols.pkl"

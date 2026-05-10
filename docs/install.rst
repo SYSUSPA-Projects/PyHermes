@@ -1,14 +1,12 @@
 Installation
 ============
 
-PyHermes can run in a normal Python environment. MPI support is optional.
-If ``mpi4py`` is not installed, PyHermes falls back to a single-process
-compatibility wrapper.
+PyHermes runs in a normal Python environment. MPI support is optional.
 
-Recommended environment
------------------------
+Recommended setup
+-----------------
 
-Using a fresh conda environment is the easiest way to avoid dependency
+Using a fresh conda environment is the simplest way to avoid dependency
 conflicts:
 
 .. code-block:: bash
@@ -18,8 +16,6 @@ conflicts:
 
 Install from source
 -------------------
-
-Clone the repository and install the package:
 
 .. code-block:: bash
 
@@ -31,7 +27,7 @@ Clone the repository and install the package:
 Install from PyPI
 -----------------
 
-If you are using a published release, install with:
+If you are using a published release:
 
 .. code-block:: bash
 
@@ -40,8 +36,8 @@ If you are using a published release, install with:
 Optional MPI support
 --------------------
 
-If you want parallel execution with MPI, install ``mpi4py`` after your MPI
-runtime is available:
+If you want multi-process execution, install ``mpi4py`` after your MPI runtime
+is available:
 
 .. code-block:: bash
 
@@ -50,16 +46,17 @@ runtime is available:
 See `mpi4py on PyPI <https://pypi.org/project/mpi4py/>`_ for platform-specific
 installation notes.
 
-Verify the installation
------------------------
-
-You can verify that the package imports correctly with:
+Verify the install
+------------------
 
 .. code-block:: bash
 
    python -c "import pyhermes; print(pyhermes.__version__)"
 
-Next step
----------
+What to open next
+-----------------
 
-Once installation is complete, continue with :doc:`get_start/get_start`.
+After installation, open :doc:`get_start/quick_start` if you already have a
+small local particle catalog. If you want to start from the tracked example
+material only, jump directly to :doc:`get_start/convols/convols`, which shows
+how to prepare the main example data in ``examples/data/``.
