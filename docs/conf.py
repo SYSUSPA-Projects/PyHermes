@@ -78,5 +78,5 @@ html_static_path = ['_static']
 html_css_files = ['style.css']
 # html_show_sourcelink = False
 
-# html_logo = ''
+html_logo = '_static/pyhermes_logo.png'
 # html_favicon = ''

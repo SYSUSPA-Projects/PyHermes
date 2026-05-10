@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/_static/pyhermes_logo.png" alt="PyHermes logo" width="220">
+</p>
+
 # PyHermes
 
 PyHermes is a Python package for large-scale-structure statistics on particle
