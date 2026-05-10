@@ -260,8 +260,8 @@ class ConvolsData(HermesData):
         normalize:
             True  -> return the normalized/grid-space nx (as in interpolate_grid_at_pos_numba)
             False -> return scaled output:
-                     if physical: nx * particle_count * scale_factor**3
-                     else:        nx * particle_count
+                     if physical: nx / norm_factor * scale_factor**3
+                     else:        nx / norm_factor
         physical:
             Only used when normalize is False.
         """

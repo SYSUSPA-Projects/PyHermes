@@ -220,15 +220,28 @@ class Convols(TaskBase):
             p_pos, p_wei, source_desc = self._load_particle_input()
             self.particle_pos = p_pos
             self.particle_weight = p_wei
-            self.norm_factor = 1 / self.particle_count
+            self.weight_sum = float(np.sum(self.particle_weight, dtype=np.float64))
+            if not np.isfinite(self.weight_sum):
+                self.logger.error(
+                    f"Particle weights produced a non-finite total weight: {self.weight_sum!r}."
+                )
+                func_util.safe_exit(1)
+            if np.isclose(self.weight_sum, 0.0):
+                self.logger.error(
+                    "Particle weights sum to zero, so Convols cannot normalize epsilon to unit total weight."
+                )
+                func_util.safe_exit(1)
+            self.norm_factor = 1 / self.weight_sum
             self.logger.info(
-                f"Input particles ready | source={source_desc} | particle_count={self.particle_count} | weight_key={self.fin['weight_key']}"
+                f"Input particles ready | source={source_desc} | particle_count={self.particle_count} "
+                f"| weight_key={self.fin['weight_key']} | weight_sum={self.weight_sum:.6e}"
             )
             if self.save_particle_data:
                 self._save_particle_dataset()
         else:
             self.particle_pos = None
             self.particle_weight = None
+            self.weight_sum = None
         self._fields_prepared = True
 
     def run(self, save_result=True, overwrite=False):
@@ -313,6 +326,7 @@ class Convols(TaskBase):
                 _convols_info = {
                     "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
+                    "weight_sum"      : self.weight_sum,
                     "box_size"       : self.box_size,
                     "J"             : self.J,
                     "L"             : self.L,
