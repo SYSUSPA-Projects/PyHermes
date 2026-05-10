@@ -1,12 +1,6 @@
 Corr_3PCF:
-   convols_data: "./output/quijote_sfc.pkl"
-   convols_data1: ""
-   convols_data2: ""
-   convols_data3: ""
-   particle_pos1:
-   random_pos1:
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
    random: "uniform"
-   fout_path: "./output/quijote_3pcf_rand1e7.pkl"
    window2:
       type: "sphere"
       len_args:
@@ -22,8 +16,9 @@ Corr_3PCF:
       theta_max: 3.141592653589793
       n_theta: 20
    n_rot: 20
-   # center: "particle"
    center: "box_random"
-   products: "Q"
-   n_box_centers: 10000000
+   n_box_centers: 1000000
    base_seed: 42
+   threads: 2
+   products: "Q"
+   fout_path: "./output/quijote8000_snap004_3pcf_rcenter_nrot20.pkl"

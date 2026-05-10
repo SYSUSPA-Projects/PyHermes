@@ -1,0 +1,18 @@
+Corr_3PCF_Multipole:
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   random: "./output/random_sfc.pkl"
+   fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7_full.pkl"
+   window:
+      type: "sphere"
+      len_args:
+         R: 5
+   r12: 20.0
+   r13: 40.0
+   l_max: 7
+   gpu_device_id: 0
+   products: ["ddd_l","zeta_l"]
+   execution_mode: "pair_mpi"
+   # cache_multipole_fields: True
+   # cache_dir: "./output/cache_3pcf_multipole_lmax7"
+   verbose_m_progress: True
+   # verbose_profile: True

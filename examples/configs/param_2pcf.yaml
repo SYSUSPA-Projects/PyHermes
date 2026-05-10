@@ -1,17 +1,12 @@
 Corr_2PCF:
-   convols_data: "./output/quijote_sfc.pkl"
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
    random: "uniform"
-   fout_path: "./output/quijote_2pcf.pkl"
-   pair_window:
-      type: "shell"
-      len_args: ["R"]
-      los_args: {}
-      other_args: {}
-      mapping: "s_to_R"
-      kernel_mode: "octant"
+   pair_window: "shell"
    sampling:
       s:
-         min: 1.0
+         min: 0.0
          max: 150.0
-         n: 30
-   products: "xi"
+         n: 31
+   products: ["dd", "dr", "rd", "xi"]
+   threads: 2
+   fout_path: "./output/quijote8000_snap004_2pcf.pkl"

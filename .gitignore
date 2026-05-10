@@ -2,6 +2,8 @@
 **/*.npy
 **/*.bin
 examples/output/
+examples/data/**
+!examples/data/.gitkeep
 examples/logs/*.log
 
 ## remove the python cache to avoid conflicts

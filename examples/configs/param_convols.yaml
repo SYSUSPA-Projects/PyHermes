@@ -1,18 +1,23 @@
 Convols:
-   J: 8
    fin:
-      path: "./data/quijote10000.bin"
-      format: "bin"
+      path: "./data/quijote_halos/8000"
+      format: "fof"
       reader_params:
-         dtype: "float32"
-         ncols: 3
-         pos_cols: [0, 1, 2]
-         fields: {}
-      weight_key: null
-   fout_path: "./output/quijote_sfc.pkl"
-   save_particle_data: false
-   particle_data_path: ""
-   phi_resolution: 1024
+         snapnum: 4
+      #    redshift: 0.0
+      #    fields:
+      #       mass: "mass"
+      #       vel_x: "vel_x"
+      #       vel_y: "vel_y"
+      #       vel_z: "vel_z"
+      #       npart: "npart"
+      # weight_key: null
    box_size: 1000
+   J: 8
    wavelet_mode: "db2"
    wavelet_level: 10
+   phi_resolution: 1024
+   threads: 2
+   save_particle_data: True
+   particle_data_path: "./data/quijote_halos/8000/groups_004/group_tab_004.pos.npz"
+   fout_path: "./output/quijote8000_snap004_sfc.pkl"
