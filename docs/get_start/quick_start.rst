@@ -16,8 +16,13 @@ When to use this notebook
 Use ``quick_start.ipynb`` when the example halo data have already been prepared
 and you want a compact end-to-end calculation.
 
-Use ``convols.ipynb`` first when you are starting from a fresh clone, because
-that notebook prepares the example data used by ``param_convols.yaml``.
+When starting from a fresh clone, prepare the example data first. You can do
+this interactively with ``examples/notebooks/convols.ipynb`` or from the command
+line with:
+
+.. code-block:: bash
+
+   python examples/scripts/prepare_convols_data.py
 
 Input expectation
 -----------------
@@ -30,13 +35,14 @@ example:
    examples/configs/param_convols.yaml
 
 That config points to the local Quijote halo example prepared by
-``convols.ipynb``:
+``convols.ipynb`` or ``examples/scripts/prepare_convols_data.py``:
 
 .. code-block:: text
 
    examples/data/quijote_halos/8000
 
-If that directory is not present yet, start with :doc:`convols/convols`.
+If that directory is not present yet, start with :doc:`convols/convols` or run
+``python examples/scripts/prepare_convols_data.py`` from the repository root.
 
 What you should take away
 -------------------------

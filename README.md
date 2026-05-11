@@ -47,9 +47,14 @@ pip install mpi4py
 
 ## Quick Start
 
-The examples use paths relative to `examples/`. From a fresh clone, first open
-`examples/notebooks/convols.ipynb` and run its data-preparation cells. They
-download and prepare the Quijote halo catalog used by the quick start config.
+The examples use paths relative to `examples/`. From a fresh clone, first
+prepare the local Quijote halo catalog and the reusable `ConvolsData` products
+used by later examples. You can either run the data-preparation sections in
+`examples/notebooks/convols.ipynb`, or run the same preparation directly:
+
+```bash
+python examples/scripts/prepare_convols_data.py
+```
 
 After that, the core PyHermes workflow is only a few lines:
 
@@ -132,8 +137,9 @@ The tracked example assets are:
 
 The following directories are created and filled locally:
 
-- `examples/data/`: local example data. `convols.ipynb` shows how to download
-  and prepare the Quijote halo example used by the tutorials.
+- `examples/data/`: local example data. Use `examples/notebooks/convols.ipynb`
+  or `examples/scripts/prepare_convols_data.py` to download and prepare the
+  Quijote halo example used by the tutorials.
 - `examples/output/`: local outputs. Lightweight products are created during
   notebook runs. Heavier 2PCF and 3PCF products are not committed; the
   relevant cells in `corr2pcf.ipynb` and `corr3pcf.ipynb` point to the exact

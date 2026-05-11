@@ -3,7 +3,8 @@ Convols
 
 ``convols.ipynb`` is the upstream notebook for the whole example chain. It is
 where particle catalogs become ``ConvolsData`` fields that later notebooks
-reuse.
+reuse. If you only want to prepare those files without opening a notebook, run
+``examples/scripts/prepare_convols_data.py`` from the repository root.
 
 What this notebook covers
 -------------------------
@@ -25,7 +26,9 @@ Why this notebook matters
 -------------------------
 
 Every later notebook assumes that one or more field files already exist. In the
-tracked example workflow, ``convols.ipynb`` is the notebook that creates them.
+tracked example workflow, ``convols.ipynb`` shows the construction step by
+step, while ``examples/scripts/prepare_convols_data.py`` provides the direct
+command-line route.
 
 Tracked inputs and local products
 ---------------------------------
@@ -33,6 +36,7 @@ Tracked inputs and local products
 Tracked in the repository:
 
 - ``examples/notebooks/convols.ipynb``
+- ``examples/scripts/prepare_convols_data.py``
 - ``examples/scripts/run_convols.py``
 - ``examples/configs/param_convols.yaml``
 - ``examples/data/.gitkeep``

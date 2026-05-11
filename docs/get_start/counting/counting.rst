@@ -22,7 +22,8 @@ explicit: ``Counting`` is fundamentally a random-position probe of a field.
 Inputs and outputs
 ------------------
 
-Inputs are produced by ``convols.ipynb`` and live locally in
+Inputs are produced by ``convols.ipynb`` or
+``examples/scripts/prepare_convols_data.py`` and live locally in
 ``examples/output/``. The main tracked files involved in this stage are:
 
 - ``examples/notebooks/counting.ipynb``
