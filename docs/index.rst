@@ -16,7 +16,8 @@ most outputs are generated locally while you work through the tutorials.
 
    intro
    math
-   benchmark
+   windows
    install
    get_start/get_start
    param/param
+   benchmark

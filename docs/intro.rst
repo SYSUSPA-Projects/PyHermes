@@ -10,6 +10,58 @@ catalog for every task.
    :alt: PyHermes workflow
    :class: workflow-diagram
 
+Hermes vs. Traditional Counting
+-------------------------------
+
+Traditional cosmological estimators usually start from the discrete catalog and
+count geometric configurations directly:
+
+.. code-block:: text
+
+   particle catalog -> pair/triplet counting -> DD, DR, RR, DDD, ... -> xi, zeta, Q
+
+Hermes rewrites the same statistical goals as operations on a multiresolution
+field:
+
+.. code-block:: text
+
+   particle catalog -> multiresolution field -> window convolution -> field products -> xi, zeta, Q, multipoles
+
+For example, a two-point statistic can be written as a product of a field and
+a windowed copy of itself,
+
+.. math::
+
+   \xi_P =
+   \left\langle
+   \delta(\mathbf{x})\,
+   (W_P\circ\delta)(\mathbf{x})
+   \right\rangle.
+
+The window :math:`W_P` defines the geometry of the measurement: a real-space
+shell, a redshift-space ring, a cylinder, or another supported window. The same
+idea extends to 3PCF, where the triangle legs are windowed fields, and to 3PCF
+multipoles, where angular filters build the multipole components.
+
+This field-and-window viewpoint gives PyHermes several practical advantages:
+
+- intermediate ``ConvolsData`` fields can be reused across Counting, 2PCF,
+  3PCF, and multipole workflows;
+- smoothing, pair bins, triangle legs, and multipole filters are expressed in
+  one consistent window-function language;
+- complex redshift-space geometries and line-of-sight choices fit naturally
+  into the same framework;
+- high-order statistics avoid returning to raw catalog triplet counting for
+  every requested configuration;
+- dense particle samples can be handled with field evaluations and box-random
+  centers instead of using every particle as a center.
+
+The tradeoff is that users should think carefully about the field resolution
+and window definition. Parameters such as ``J``, ``wavelet_level``,
+``phi_resolution``, and the selected window are part of the numerical
+definition of the measurement. For the compact mathematical formulation, see
+:doc:`math`; for practical window choices, see :doc:`windows`.
+
 Core workflow
 -------------
 

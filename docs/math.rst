@@ -5,6 +5,8 @@ This page summarizes the Hermes formulation behind PyHermes. The same
 mathematical object appears throughout the package: a weighted point catalog is
 turned into a continuous multiresolution field, window functions are applied as
 convolutions, and statistics are read out as field averages or sampled products.
+For a task-oriented reference to the built-in windows and their YAML/Python
+definitions, see :doc:`windows`.
 
 Point Catalogs And Window Counts
 --------------------------------
@@ -39,7 +41,8 @@ window function,
 
 Changing the window changes the statistic: a sphere gives count-in-cell values,
 a shell gives pair counts, and redshift-space windows describe cylindrical or
-ring-like pair geometries.
+ring-like pair geometries. The practical window families are summarized in
+:doc:`windows`.
 
 Multiresolution Field Reconstruction
 ------------------------------------
