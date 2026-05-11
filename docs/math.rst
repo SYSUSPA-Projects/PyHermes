@@ -181,22 +181,63 @@ Three-Point Correlations
 ------------------------
 
 For a triangle with two sides measured from a chosen center, the monopole
-triplet count can be viewed as
+triplet count combines one center leg with two displaced legs. PyHermes
+supports two center choices, and the distinction matters because it determines
+whether the first leg is a discrete catalog sample or a convolved field.
+
+Particle Centers
+~~~~~~~~~~~~~~~~
+
+With ``center="particle"``, the first leg is the input catalog itself. A
+schematic triplet product is
 
 .. math::
 
-   DDD(R_1,R_2,\theta)
+   DDD_{\rm pcenter}(R_2,R_3,\theta)
    =
-   \left\langle
-   n(\mathbf{x})\,
-   \widetilde n_{R_1}(\mathbf{x})\,
-   \widetilde n_{R_2,\theta}(\mathbf{x})
-   \right\rangle,
+   {1\over W_1}
+   \sum_{i\in D_1} w_i\,
+   \widetilde n_{2,R_2}(\mathbf{x}_i)\,
+   \widetilde n_{3,R_3,\theta}(\mathbf{x}_i),
+   \qquad
+   W_1=\sum_{i\in D_1}w_i.
 
-where each :math:`\widetilde n` is a windowed field evaluated at the same
-center after averaging over the requested rotations. After random
-normalization, PyHermes forms the connected three-point statistic
-:math:`\zeta` and the reduced statistic
+The center positions :math:`\mathbf{x}_i` are real particles, halos, or
+galaxies. The second and third legs are windowed fields evaluated at those
+positions after averaging over the requested rotations. Since the first leg is
+not evaluated as a continuous field, this mode cannot apply a window
+convolution to leg 1. It is therefore best suited to sparse tracer catalogs,
+for example halo or galaxy samples with up to roughly a million objects.
+
+Box-Random Centers
+~~~~~~~~~~~~~~~~~~
+
+With ``center="box_random"``, PyHermes draws Monte Carlo centers
+:math:`\{\mathbf{y}_a\}` uniformly in the periodic box and evaluates all three
+legs as fields at those centers:
+
+.. math::
+
+   DDD_{\rm rcenter}(R_1,R_2,R_3,\theta)
+   \simeq
+   {1\over N_{\rm c}}
+   \sum_{a=1}^{N_{\rm c}}
+   \widetilde n_{1,R_1}(\mathbf{y}_a)\,
+   \widetilde n_{2,R_2}(\mathbf{y}_a)\,
+   \widetilde n_{3,R_3,\theta}(\mathbf{y}_a).
+
+Equivalently, this is a Monte Carlo estimate of the volume average of the
+product of three convolved fields. Because leg 1 is also a field in this mode,
+``window1`` can be applied to the center leg. This is the natural mode for very
+dense simulation catalogs, such as dark matter particle samples with
+ten-million-scale particle counts, where using every particle as a center would
+be unnecessarily expensive.
+
+Reduced Statistic
+~~~~~~~~~~~~~~~~~
+
+After random normalization, both center modes feed the same connected
+three-point statistic :math:`\zeta` and reduced statistic
 
 .. math::
 

@@ -28,8 +28,6 @@ paths from the ``examples/`` directory.
 Each notebook switches its working directory to ``examples/`` near the top, so
 the same script and config paths work in both notebook and command-line usage.
 
-What you generate locally
--------------------------
 
 The repository does not commit the example data or the full set of outputs.
 
@@ -41,9 +39,11 @@ The repository does not commit the example data or the full set of outputs.
   ``corr3pcf.ipynb`` together with the exact script and YAML file needed to
   reproduce them on your own machine or server
 
+Notebook Guide
+--------------
+
 .. toctree::
    :maxdepth: 1
-   :caption: Notebook Guide
 
    quick_start
    convols/convols

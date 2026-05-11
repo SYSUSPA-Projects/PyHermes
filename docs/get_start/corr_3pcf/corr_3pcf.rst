@@ -52,6 +52,32 @@ Typical commands look like:
    mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
    mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
 
+Choosing The Center Mode
+------------------------
+
+PyHermes provides two standard 3PCF center modes.
+
+``center: "particle"`` uses the input particles themselves as the first
+triangle vertex. This is usually the right choice for sparse tracer samples,
+such as halo or galaxy catalogs with particle counts below roughly a million.
+It is efficient because the number of centers is modest and the estimator
+samples physically occupied positions directly. The important limitation is
+that the first leg is a discrete center catalog, so ``window1`` cannot be
+applied to the center leg. Window convolutions only apply to the second and
+third legs in this mode.
+
+``center: "box_random"`` samples Monte Carlo centers uniformly in the periodic
+box. This is usually better for dense simulation fields, especially dark
+matter particle samples with counts at the ten-million level or above, where
+using every particle as a center would dominate the runtime. Because all three
+legs are evaluated as continuous convolved fields at the sampled box centers,
+this mode also allows the first leg to be window-convolved. Use
+``n_box_centers`` to control the Monte Carlo center count.
+
+In short: use particle centers for sparse halo/galaxy tracers, and box-random
+centers for very dense particle fields or whenever the center leg must carry a
+window convolution.
+
 How to read the notebook
 ------------------------
 

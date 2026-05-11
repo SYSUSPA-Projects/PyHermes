@@ -149,11 +149,11 @@ Corr_3PCF
 - ``n_rot``:
   number of rotations used in the Monte Carlo estimator.
 - ``center``:
-  center sampling mode, usually ``random`` or ``particle``.
+  center sampling mode, usually ``box_random`` or ``particle``.
 - ``field_mode``:
   either ``delta`` or ``raw``.
-- ``n_rand``:
-  total number of random centers when ``center="random"``.
+- ``n_box_centers``:
+  total number of Monte Carlo centers when ``center="box_random"``.
 - ``base_seed``:
   random seed controlling reproducibility.
 - ``threads``:

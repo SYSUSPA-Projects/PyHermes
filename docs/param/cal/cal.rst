@@ -83,7 +83,8 @@ Corr_3PCF
 - ``r13``: second side length
 - ``n_theta``: number of angular bins
 - ``n_rot``: number of rotations
-- ``center``: center sampling strategy, usually ``random`` or ``particle``
-- ``n_rand``: number of random centers
+- ``center``: center sampling strategy, usually ``box_random`` or ``particle``
+- ``n_box_centers``: number of Monte Carlo centers for ``center: "box_random"``
 - ``base_seed``: seed controlling random center generation
-- ``window2`` and ``window3``: window definitions for the two legs
+- ``window2`` and ``window3``: window definitions for the two displaced legs
+- ``window1``: optional center-leg window, available when ``center: "box_random"``
