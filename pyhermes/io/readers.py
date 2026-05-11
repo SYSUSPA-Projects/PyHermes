@@ -326,30 +326,104 @@ def _format_fof_catalog(group_pos, group_vel, group_mass, group_len, group_offse
     }
 
 
-def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
-    """Read a Quijote/Pylians FoF catalog through the readfof package."""
-    import readfof
+def _read_fof_array(file_obj, dtype, count, swap=False):
+    """Read a fixed-size FoF block and optionally byteswap it."""
+    values = np.fromfile(file_obj, dtype=dtype, count=count)
+    if len(values) != count:
+        raise EOFError(f"FoF file ended early while reading {count} values of dtype {dtype}.")
+    if swap:
+        values = values.byteswap()
+    return values
 
-    catalog_kwargs = {
-        "long_ids": bool(kwargs.get("long_ids", False)),
-        "swap": bool(kwargs.get("swap", False)),
-        "SFR": bool(kwargs.get("SFR", False)),
-        "read_IDs": bool(kwargs.get("read_IDs", False)),
-        "prefix": kwargs.get("prefix", "/groups_"),
-    }
-    catalog = readfof.FoF_catalog(str(path), int(snapnum), **catalog_kwargs)
+
+def _fof_tab_path(path, snapnum, file_index, prefix="/groups_"):
+    """Return the path of one Quijote/Pylians-style group_tab split file."""
+    snap_ext = f"{int(snapnum):03d}"
+    group_dir = f"{str(prefix).strip('/')}{snap_ext}"
+    return Path(path) / group_dir / f"group_tab_{snap_ext}.{file_index}"
+
+
+def _read_fof_tab_file(filename, swap=False, sfr=False):
+    """Read one Quijote/Pylians-style FoF group_tab file."""
+    vec3 = np.dtype((np.float32, 3))
+    vec6 = np.dtype((np.float32, 6))
+    with open(filename, "rb") as file_obj:
+        header = {
+            "Ngroups": int(_read_fof_array(file_obj, np.int32, 1, swap=swap)[0]),
+            "TotNgroups": int(_read_fof_array(file_obj, np.int32, 1, swap=swap)[0]),
+            "Nids": int(_read_fof_array(file_obj, np.int32, 1, swap=swap)[0]),
+            "TotNids": int(_read_fof_array(file_obj, np.uint64, 1, swap=swap)[0]),
+            "Nfiles": int(_read_fof_array(file_obj, np.uint32, 1, swap=swap)[0]),
+        }
+
+        ngroups = header["Ngroups"]
+        part = {
+            "GroupLen": _read_fof_array(file_obj, np.int32, ngroups, swap=swap),
+            "GroupOffset": _read_fof_array(file_obj, np.int32, ngroups, swap=swap),
+            "GroupMass": _read_fof_array(file_obj, np.float32, ngroups, swap=swap),
+            "GroupPos": _read_fof_array(file_obj, vec3, ngroups, swap=swap),
+            "GroupVel": _read_fof_array(file_obj, vec3, ngroups, swap=swap),
+        }
+
+        _read_fof_array(file_obj, vec6, ngroups, swap=swap)
+        _read_fof_array(file_obj, vec6, ngroups, swap=swap)
+        if sfr:
+            part["GroupSFR"] = _read_fof_array(file_obj, np.float32, ngroups, swap=swap)
+
+        end_pos = file_obj.tell()
+        file_obj.seek(0, 2)
+        if end_pos != file_obj.tell():
+            raise ValueError(f"Finished reading before EOF for FoF tab file: {filename}")
+
+    return header, part
+
+
+def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
+    """Read a Quijote/Pylians-style FoF group_tab catalog without readfof."""
+    swap = bool(kwargs.get("swap", False))
+    sfr = bool(kwargs.get("SFR", False))
+    prefix = kwargs.get("prefix", "/groups_")
+
+    first_file = _fof_tab_path(path, snapnum, 0, prefix=prefix)
+    if not first_file.exists():
+        raise FileNotFoundError(f"FoF group_tab file not found: {first_file}")
+
+    header0, part0 = _read_fof_tab_file(first_file, swap=swap, sfr=sfr)
+    total_groups = int(header0["TotNgroups"])
+    num_files = int(header0["Nfiles"])
+    parts = [part0]
+
+    for file_index in range(1, num_files):
+        filename = _fof_tab_path(path, snapnum, file_index, prefix=prefix)
+        if not filename.exists():
+            raise FileNotFoundError(f"FoF group_tab file not found: {filename}")
+        header, part = _read_fof_tab_file(filename, swap=swap, sfr=sfr)
+        if header["TotNgroups"] != total_groups or header["Nfiles"] != num_files:
+            raise ValueError(f"Inconsistent FoF header in split file: {filename}")
+        parts.append(part)
+
+    group_len = np.concatenate([part["GroupLen"] for part in parts])
+    group_offset = np.concatenate([part["GroupOffset"] for part in parts])
+    group_mass = np.concatenate([part["GroupMass"] for part in parts])
+    group_pos = np.concatenate([part["GroupPos"] for part in parts], axis=0)
+    group_vel = np.concatenate([part["GroupVel"] for part in parts], axis=0)
+    if group_pos.shape[0] != total_groups:
+        raise ValueError(
+            f"FoF catalog expected {total_groups} groups, but read {group_pos.shape[0]} groups."
+        )
+
     return _format_fof_catalog(
-        np.asarray(catalog.GroupPos),
-        np.asarray(catalog.GroupVel),
-        np.asarray(catalog.GroupMass),
-        np.asarray(catalog.GroupLen),
-        np.asarray(catalog.GroupOffset),
+        group_pos,
+        group_vel,
+        group_mass,
+        group_len,
+        group_offset,
         redshift,
     )
 
 
 def read_fof(path, snapnum, redshift=0.0, fields=None, **kwargs):
-    """Read a Quijote/Pylians FoF group_tab catalog directory with readfof."""
+    """Read a Quijote/Pylians-style FoF group_tab catalog directory."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading Quijote FoF halo data from ---> {path} <---")

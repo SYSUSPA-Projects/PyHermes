@@ -7,4 +7,3 @@ pyyaml
 requests
 PyWavelets
 termcolor==1.1.0
-Pylians

@@ -60,10 +60,10 @@ NPZ format
 FoF format
 ----------
 
-``fof`` reads local Quijote/Pylians-style halo catalogs. By default it returns
-``pos``, ``mass``, ``vel``, ``vel_x``, ``vel_y``, ``vel_z``, ``npart``, and
-``group_offset``. Use ``fields`` to select or rename optional fields; ``pos``
-and ``size`` are always retained. This reader requires the ``readfof`` package.
+``fof`` reads local Quijote/Pylians-style ``group_tab`` halo catalogs directly.
+By default it returns ``pos``, ``mass``, ``vel``, ``vel_x``, ``vel_y``,
+``vel_z``, ``npart``, and ``group_offset``. Use ``fields`` to select or rename
+optional fields; ``pos`` and ``size`` are always retained.
 
 .. code-block:: yaml
 
