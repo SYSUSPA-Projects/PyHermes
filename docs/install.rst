@@ -24,6 +24,11 @@ Install from source
    pip install -r requirements.txt
    pip install .
 
+The ``fof`` reader used by the Quijote halo examples imports ``readfof``.
+This module is provided by ``Pylians``, so installing ``requirements.txt`` is
+enough for the standard examples. On clusters, ``Pylians`` may need a working
+C/C++ compiler and OpenMP runtime during installation.
+
 Install from PyPI
 -----------------
 
