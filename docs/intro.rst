@@ -1,6 +1,28 @@
 Introduction
 ============
 
+What Is Hermes?
+---------------
+
+``Hermes`` stands for **HypER-speed MultiResolution cosmic Statistics**. The
+name captures the main design goal: a unified, high-performance framework for
+cosmic clustering statistics built around multiresolution fields and window
+convolutions.
+
+``PyHermes`` is the Python implementation of this idea. It is designed as an
+open-source, massively parallel toolkit for particle-based cosmic statistics,
+with GPU acceleration available for the multipole workflow. Instead of
+recounting pairs or triplets directly for every requested configuration,
+PyHermes projects the catalog onto a grid and evaluates many statistics through
+field operations. The core convolution work is organized around an
+:math:`N_g\log N_g` style algorithm, where :math:`N_g` is the grid size, so
+the expensive field operations are controlled primarily by the grid
+representation rather than by the number of requested sampling points.
+
+The result is a common scheme for many variants of clustering statistics:
+one-point counts, two-point correlations, three-point correlations, and
+multipoles all share the same field-and-window language.
+
 PyHermes is built around one reusable intermediate object: ``ConvolsData``.
 You start from a particle catalog, project it onto a multiresolution grid, and
 then reuse that field for downstream measurements instead of rereading the raw
