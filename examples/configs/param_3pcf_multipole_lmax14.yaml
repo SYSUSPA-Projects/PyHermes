@@ -13,6 +13,3 @@ Corr_3PCF_Multipole:
    threads: 4
    products: "zeta_l"
    execution_mode: "pair_mpi"
-   # cache_multipole_fields: True
-   # cache_dir: "./output/cache_3pcf_multipole_lmax8"
-   # verbose_m_progress: False

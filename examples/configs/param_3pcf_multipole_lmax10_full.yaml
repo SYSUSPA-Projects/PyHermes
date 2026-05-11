@@ -13,5 +13,3 @@ Corr_3PCF_Multipole:
    threads: 4
    products: ["ddd_l","zeta_l"]
    execution_mode: "pair_mpi"
-   # verbose_m_progress: True
-   # verbose_profile: True

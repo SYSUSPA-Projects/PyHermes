@@ -10,10 +10,6 @@ Corr_3PCF_Multipole:
    l_max: 14
    gpu_device_id: 0
    execution_mode: "pair_mpi"
-   # cache_multipole_fields: True
-   # cache_dir: "./output/cache_3pcf_multipole_lmax8"
-   # verbose_m_progress: True
-   # verbose_profile: True
    threads: 4
    products: ["ddd_l", "zeta_l"]
    fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax14_full.pkl"
