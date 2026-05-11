@@ -4,11 +4,22 @@
 
 # PyHermes
 
-PyHermes is a Python package for large-scale-structure statistics on particle
-catalogs. Its workflow is simple:
+PyHermes implements **Hermes**: **HypER-speed MultiResolution cosmic
+Statistics**. It is an open-source Python toolkit for particle-based cosmic
+statistics, built around multiresolution fields and window convolutions.
 
-1. build a multiresolution field from particle positions with `Convols`
-2. reuse that field for sampling, 2PCF, and 3PCF measurements
+Instead of recounting pairs or triplets for every requested configuration,
+PyHermes projects a particle catalog onto a grid, stores the result as reusable
+`ConvolsData`, and evaluates downstream measurements through field operations.
+This gives one common workflow for one-point counts, two-point correlations,
+three-point correlations, and multipoles, with GPU acceleration available for
+the multipole path.
+
+The typical workflow is:
+
+1. build `ConvolsData` from particle positions with `Convols`
+2. define the window functions required by the statistic
+3. reuse the same field for counting, 2PCF, 3PCF, and multipole measurements
 
 Project links:
 
