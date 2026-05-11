@@ -18,5 +18,6 @@ Corr_3PCF:
       n_theta: 20
    n_rot: 200
    center: "particle"
+   threads: 8
    products: "Q"
    base_seed: 42

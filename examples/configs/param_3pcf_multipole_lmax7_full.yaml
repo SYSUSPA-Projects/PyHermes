@@ -10,6 +10,7 @@ Corr_3PCF_Multipole:
    r13: 40.0
    l_max: 7
    gpu_device_id: 0
+   threads: 4
    products: ["ddd_l","zeta_l"]
    execution_mode: "pair_mpi"
    # cache_multipole_fields: True

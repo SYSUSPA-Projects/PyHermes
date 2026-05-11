@@ -18,6 +18,7 @@ Corr_3PCF:
    n_rot: 200
    center: "box_random"
    n_box_centers: 8000000
+   threads: 8
    base_seed: 42
    products: "Q"
    fout_path: "./output/quijote8000_snap004_3pcf_rcenter_nrot200.pkl"
