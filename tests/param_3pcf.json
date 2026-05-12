@@ -1,0 +1,15 @@
+{
+  "Corr_3PCF": {
+    "fin": {
+      "path": "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin",
+      "format": "generic"
+    },
+    "deltac_in_path": "./Output_ConvolsData_example.npy",
+    "corr2pcf_in_path": "./Output_Corr2PCFData_example.txt",
+    "fout_path": "./Output_Corr3PCFData_example.txt",
+    "NStheta": 20,
+    "R1": 20.0,
+    "R2": 40.0,
+    "rot_num": 3
+  }
+}
