@@ -1,72 +1,178 @@
 import os
 import pickle
-from datetime import datetime
+import copy
 
 import numpy as np
 
 from .convols import ConvolsData
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
-
+from pyhermes.utils.convolution import (
+    build_real_window_octant_array,
+    build_real_window_rfft_kernel,
+    fold_octant_window_to_rfft_kernel,
+)
+from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_function
+from pyhermes.utils.window_functions import set_window_function
+from pyhermes.utils.window_params import (
+    ANISOTROPIC_AUTO_WINDOW_TYPES,
+    LOS_ARG_KEYS,
+    default_kernel_mode,
+    normalize_los_args,
+    normalize_kernel_mode,
+)
 
 
 class WindowFunc(ConvolsData):
-
-    _REQUIRED_ARGV = ("L", "bandwidth", "DeltaXi", "PowerPhi")
-
-    def __init__(self, win_params, threads):
+    def __init__(self, win_params, convols_params, bandwidth=1, threads=1):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
-        missing = [k for k in self._REQUIRED_ARGV if k not in win_params]
+        missing = [k for k in self._REQUIRED_ARGV if k not in convols_params]
         if missing:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc missing required keys: {missing}")
             func_util.safe_exit(1)
-        self.input_params = dict(win_params)
-        params = dict(win_params)
         try:
-            self.L = int(params.pop("L"))
-            self.bandwidth = int(params.pop("bandwidth"))
-            self.DeltaXi = float(params.pop("DeltaXi"))
+            self.L = 1 << int(convols_params['J'])
+            self.bandwidth = int(bandwidth)
+            self.box_size = convols_params["box_size"]
+            self.phi_resolution = int(convols_params["phi_resolution"])
+            self.wavelet_mode = convols_params["wavelet_mode"]
+            self.wavelet_level = convols_params["wavelet_level"]
         except Exception as e:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
-        self.PowerPhi = params.pop("PowerPhi")
-        if not isinstance(self.PowerPhi, np.ndarray):
+        self.input_params = {
+            **dict(win_params),
+            "J": int(convols_params["J"]),
+            "box_size": self.box_size,
+            "phi_resolution": self.phi_resolution,
+            "wavelet_mode": self.wavelet_mode,
+            "wavelet_level": self.wavelet_level,
+            "bandwidth": self.bandwidth,
+        }
+        phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
+        self.phi_array = phi_array
+        self.phi_fourier_power = fourier_power_spectrum(
+            phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution
+        )
+        if not isinstance(self.phi_fourier_power, np.ndarray):
             if self.rank == 0:
-                self.logger.error("WindowFunc requires PowerPhi to be a numpy.ndarray.")
+                self.logger.error("WindowFunc requires phi_fourier_power to be a numpy.ndarray.")
             func_util.safe_exit(1)
         if self.L <= 0 or self.bandwidth <= 0:
             if self.rank == 0:
                 self.logger.error(f"Invalid L/bandwidth: L={self.L}, bandwidth={self.bandwidth}. Must be > 0.")
             func_util.safe_exit(1)
         # There is NO DEFAULT window!!!
-        # Missing `type` will raise an error in math_util.
-        self.window_type = params.pop("type", None)
-        self.window_args   = {key : float(value) for key, value in params.items()}
-        self._window_array = None
+        # Missing `type` or `func` will raise an error in set_window_function.
+        self.window_params = dict(win_params)
+        has_custom_func = "func" in win_params
+        self.has_custom_func = has_custom_func
+        if has_custom_func:
+            self.type = win_params.get('type', None) or "custom"
+            self.func = win_params["func"]
+        else:
+            assert "type" in win_params
+            self.type = win_params['type']
+            self.func = set_window_function(self.type, verbose=False)
+        self.kernel_mode = self._resolve_kernel_mode(win_params, has_custom_func)
+        self.input_params["kernel_mode"] = self.kernel_mode
+        self.window_params["kernel_mode"] = self.kernel_mode
+        self.len_args = win_params['len_args']
+        self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
+        self.los_args = normalize_los_args(win_params.get('los_args', {}), self.type)
+        self.other_args = win_params.get('other_args', {})
+        self.input_params["los_args"] = self.los_args
+        self.window_params["los_args"] = self.los_args
+        self.window_args = dict(self.rescale_len_args)
+        self.window_args.update(self.los_args)
+        self.window_args.update(self.other_args)
         self.w_kernel = None
-    
-    def _build_window_array(self):
-        _w_func = math_util.set_window_function(self.window_type, verbose=False)
-        self._window_array = math_util.call_calculate_window_array(
-            L=self.L,
-            bandwidth=self.bandwidth,
-            DeltaXi=self.DeltaXi,
-            PowerPhi=self.PowerPhi,
-            window_function_numba=_w_func,
-            **self.window_args,
+
+    def _resolve_kernel_mode(self, win_params, has_custom_func):
+        kernel_mode = win_params.get("kernel_mode", None)
+        if not kernel_mode:
+            kernel_mode = default_kernel_mode(self.type, has_custom_func=has_custom_func)
+        return normalize_kernel_mode(kernel_mode)
+
+    def _los_is_axis_aligned(self):
+        los_args = dict(self.los_args)
+        if self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not all(
+            key in los_args for key in LOS_ARG_KEYS
+        ):
+            return not self.has_custom_func
+        nx = float(los_args.get("nx", 0.0))
+        ny = float(los_args.get("ny", 0.0))
+        nz = float(los_args.get("nz", 1.0))
+        los = np.array([nx, ny, nz], dtype=np.float64)
+        norm = np.linalg.norm(los)
+        if norm == 0.0:
+            return True
+        los = np.abs(los / norm)
+        return (
+            np.isclose(los[0], 1.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 0.0)
+            or np.isclose(los[0], 0.0) and np.isclose(los[1], 1.0) and np.isclose(los[2], 0.0)
+            or np.isclose(los[0], 0.0) and np.isclose(los[1], 0.0) and np.isclose(los[2], 1.0)
         )
 
+    def _requires_full_rfft_kernel(self):
+        if self.kernel_mode == "full_rfft":
+            return True
+        if self.kernel_mode == "octant":
+            return False
+        return not self._los_is_axis_aligned()
+
     def _build_kernel(self):
-        self._build_window_array()
-        self.w_kernel = math_util.calculate_w_numba(self._window_array)
+        if self._requires_full_rfft_kernel():
+            self.w_kernel = build_real_window_rfft_kernel(
+                L=self.L,
+                bandwidth=self.bandwidth,
+                phi_fourier_power=self.phi_fourier_power,
+                window_function_numba=self.func,
+                **self.window_args,
+            )
+            return
+        _window_array = build_real_window_octant_array(
+            L=self.L,
+            bandwidth=self.bandwidth,
+            phi_fourier_power=self.phi_fourier_power,
+            window_function_numba=self.func,
+            **self.window_args,
+        )
+        self.w_kernel = fold_octant_window_to_rfft_kernel(_window_array)
 
     def as_array(self):
         if self.w_kernel is None:
             self._build_kernel()
         return self.w_kernel
+
+    def copy(self, copy_kernel=True):
+        """
+        Copy this window object without rebuilding the Fourier kernel.
+
+        Parameters
+        ----------
+        copy_kernel : bool, default=True
+            If True, copy the cached ``w_kernel`` array when it has already
+            been built. If False, the returned window keeps the same window
+            parameters but will rebuild ``w_kernel`` on the next ``as_array()``
+            call.
+        """
+        new = self.__class__.__new__(self.__class__)
+        for key, value in self.__dict__.items():
+            if key in ("comm", "logger", "func"):
+                setattr(new, key, value)
+            elif key == "w_kernel":
+                if copy_kernel and value is not None:
+                    setattr(new, key, value.copy())
+                else:
+                    setattr(new, key, None)
+            elif isinstance(value, np.ndarray):
+                setattr(new, key, value.copy())
+            else:
+                setattr(new, key, copy.deepcopy(value))
+        return new
 
     def _load_single(self, f_in):
         with open(f_in, 'rb') as f:
@@ -78,7 +184,7 @@ class WindowFunc(ConvolsData):
             if 'window_kernal' not in dataset:
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'window_kernal' key.")
                 func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.dict_inht_vonDeltac
+            # Assign the dictionary from the file to self.convols_info
             self.input_params = {key: value for key, value in dataset.items() if key != 'window_kernal'}
             self.w_kernel = dataset['window_kernal']
 

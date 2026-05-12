@@ -54,17 +54,3 @@ class PipelineFinished(Exception):
 class PipelineMissingData(Exception):
     """Used for flow control when input data is yet to be produced."""
     pass
-
-# class _PipelineFinished(Exception):
-#     """Raised by tasks that have been completed."""
-#     pass
-
-# class PipelineFinished(Exception):
-#     """Public exception raised when a task is completed."""
-#     def __init__(self, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         raise _PipelineFinished(*args, **kwargs)
-
-# class _PipelineMissingData(Exception):
-#     """Used for flow control when input data is yet to be produced."""
-#     pass

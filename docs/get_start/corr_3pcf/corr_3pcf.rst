@@ -1,59 +1,132 @@
-Corr_3pcf
+Corr_3PCF
 =========
 
+``corr3pcf.ipynb`` is the most advanced tutorial notebook in the repository.
+It combines three related topics in one place:
 
-Hi, 3pcf is waving at you!
+1. standard reduced 3PCF measurements
+2. low-level reconstruction of ``Q`` from saved components
+3. 3PCF multipole examples
 
-Finally, the output file *corr3pcf_r5_R120.0_R240.0_rotN3.txt* looks like:
+Notebook structure
+------------------
 
-.. code-block:: python
+The advanced multipole material is the last section of ``corr3pcf.ipynb``
+because it builds naturally on the same prepared fields and triangle
+configuration ideas as the standard 3PCF sections.
 
-    # Corr_3PCF output from PyHermes v0.0.7, TIME: 2024.08.22-13:43:23
-    # Parameters from input :
-    #  R1              = 20.0
-    #  R2              = 40.0
-    #  rot_num         = 3
-    #  NStheta         = 20
-    #  fin_path        = https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin
-    #  fin_size        = 406793
-    #  fin_format      = generic
-    #  fout_dir        = ./check_3pcf
-    #  deltac_in_path  = ./convols_L512_r5_pywt.npy
-    # Parameters from DeltaC:
-    #  J               = 9
-    #  Radius          = 5
-    #  SimBoxL         = 1000
-    #  SampRate        = 1024
-    #  bandwidth       = 1
-    #  fin_path        = ./quijote10000.bin
-    #  fin_size        = 406793
-    #  fin_format      = generic
-    #  Window type     = shell
-    #  wavelet_mode    = db2
-    #  wavelet_level   = 10
+What this notebook covers
+-------------------------
 
-    ---------------------------
-    theta[rad]  , Q
-    0.000000e+00, 7.640629e-03
-    1.570796e-01, -2.177687e-03
-    3.141593e-01, 8.511964e-03
-    4.712389e-01, -4.927628e-03
-    6.283185e-01, 1.795788e-02
-    7.853982e-01, -5.265108e-03
-    9.424778e-01, 2.705745e-03
-    1.099557e+00, -4.329137e-03
-    1.256637e+00, -4.375826e-03
-    1.413717e+00, -6.530497e-03
-    1.570796e+00, -7.242383e-03
-    1.727876e+00, 8.449440e-03
-    1.884956e+00, 1.422531e-03
-    2.042035e+00, 8.215399e-03
-    2.199115e+00, 5.502320e-03
-    2.356194e+00, 7.779238e-03
-    2.513274e+00, -6.256983e-03
-    2.670354e+00, 6.903949e-03
-    2.827433e+00, 1.791596e-02
-    2.984513e+00, 2.845509e-03
+The main progression is:
 
+1. run the standard task with particle centers and box-random centers
+2. compare saved outputs and task-level API variants
+3. reconstruct ``Q`` from lower-level ingredients to make the estimator more
+   transparent
+4. inspect multipole truncation choices and field-resolution effects
 
-Ok, thats it!
+This is the notebook to read when you want both the practical workflow and the
+estimator logic.
+
+Heavy outputs and external runs
+-------------------------------
+
+Many of the comparison figures in this notebook rely on heavier saved products.
+Those outputs are not committed to the repository. Instead, the notebook marks
+the exact script and YAML file needed to generate them locally.
+
+Tracked files involved here include:
+
+- ``examples/notebooks/corr3pcf.ipynb``
+- ``examples/scripts/run_3pcf.py``
+- ``examples/scripts/run_3pcf_multipole.py``
+- the ``param_3pcf_*.yaml`` and ``param_3pcf_multipole_*.yaml`` files under
+  ``examples/configs/``
+
+Typical commands look like:
+
+.. code-block:: bash
+
+   cd examples
+   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
+   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
+
+Choosing The Center Mode
+------------------------
+
+PyHermes provides two standard 3PCF center modes.
+
+``center: "particle"`` uses the input particles themselves as the first
+triangle vertex. This is usually the right choice for sparse tracer samples,
+such as halo or galaxy catalogs with particle counts below roughly a million.
+It is efficient because the number of centers is modest and the estimator
+samples physically occupied positions directly. The important limitation is
+that the first leg is a discrete center catalog, so ``window1`` cannot be
+applied to the center leg. Window convolutions only apply to the second and
+third legs in this mode.
+
+``center: "box_random"`` samples Monte Carlo centers uniformly in the periodic
+box. This is usually better for dense simulation fields, especially dark
+matter particle samples with counts at the ten-million level or above, where
+using every particle as a center would dominate the runtime. Because all three
+legs are evaluated as continuous convolved fields at the sampled box centers,
+this mode also allows the first leg to be window-convolved. Use
+``n_box_centers`` to control the Monte Carlo center count.
+
+In short: use particle centers for sparse halo/galaxy tracers, and box-random
+centers for very dense particle fields or whenever the center leg must carry a
+window convolution.
+
+How to read the notebook
+------------------------
+
+If you are new to PyHermes 3PCF, focus first on the standard workflow and the
+diagnostic plots.
+
+Then read the low-level ``Q`` reconstruction section. That part explains why
+the saved components are enough to rebuild the reduced statistic and is the
+best place to connect the code to the estimator formula.
+
+Finally, treat the multipole section as an advanced extension. It is still part
+of the same notebook, but it is more computationally demanding and more useful
+once the standard 3PCF workflow is already familiar.
+
+Mathematical idea
+-----------------
+
+The standard 3PCF section estimates products of three fields arranged in a
+triangle. For a center :math:`\mathbf{x}` and two triangle legs,
+
+.. math::
+
+   DDD =
+   \left\langle
+   n(\mathbf{x})\,
+   \widetilde n_{R_1}(\mathbf{x})\,
+   \widetilde n_{R_2,\theta}(\mathbf{x})
+   \right\rangle.
+
+After the matching random normalization, PyHermes stores the connected
+statistic :math:`\zeta`, the hierarchical denominator
+
+.. math::
+
+   \zeta_H =
+   \xi_{12}\xi_{13}
+   +
+   \xi_{12}\xi_{23}
+   +
+   \xi_{13}\xi_{23},
+
+and the reduced statistic
+
+.. math::
+
+   Q = {\zeta\over\zeta_H}.
+
+The low-level reconstruction section is therefore not a separate estimator; it
+rebuilds :math:`Q` from the same saved ingredients. The multipole section
+replaces shell-averaged legs with spherical-harmonic-filtered legs
+:math:`n_{\ell m}(\mathbf{x};R)`, then couples them into rotationally invariant
+3PCF components up to the requested ``lmax``.

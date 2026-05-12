@@ -1,35 +1,66 @@
 Counting
 ========
 
+``counting.ipynb`` is the one-point companion to ``convols.ipynb``. It starts
+from a saved ``ConvolsData`` field, optionally smooths it, evaluates it at
+many random positions, and studies the resulting distribution.
 
-Counting should be displayed here.
+What this notebook covers
+-------------------------
 
+The notebook walks through:
 
-Users should prepare the parameter file in the format of ``JSON``. See example below, we create parameter file named `param_counting.json`:
+1. the standard ``Counting`` driver
+2. the config-driven Python API
+3. task-object overrides
+4. manual preparation of ``ConvolsData`` and ``WindowFunc``
+5. direct low-level sampling of the smoothed field
 
+The last section is useful because it makes the estimator interpretation
+explicit: ``Counting`` is fundamentally a random-position probe of a field.
 
+Inputs and outputs
+------------------
 
-.. code-block:: json
+Inputs are produced by ``convols.ipynb`` or
+``examples/scripts/prepare_convols_data.py`` and live locally in
+``examples/output/``. The main tracked files involved in this stage are:
 
-    {
-    "Counting": {
-        "n_tasks": 100,
-        "deltac_in_path": "./convols_L512_r5_pywt.npy",
-        "fout_dir": "./"
-      }
-    }
+- ``examples/notebooks/counting.ipynb``
+- ``examples/scripts/run_counting.py``
+- ``examples/configs/param_counting.yaml``
 
-for the defination of these parameters, please see :ref:.
+The counting result itself is lightweight and is expected to be generated
+locally during notebook execution or by the driver script:
 
-Then we create python script here, i.g., `run_pyhermes_counting.py`
+.. code-block:: bash
 
+   cd examples
+   python ./scripts/run_counting.py ./configs/param_counting.yaml
 
-.. code:: python
+What you should learn here
+--------------------------
 
-    from pyhermes.theory.counting import Counting
-    from pyhermes.param.parambase import read_param
+This notebook is where the field representation starts to feel concrete. It
+shows how smoothing radius changes the sampled distribution and how the saved
+``CountingData`` result relates to direct field evaluation.
 
-    param_input = read_param()
-    Counting(param_task=param_input).run()
+In other words, if ``Convols`` explains how PyHermes stores the field,
+``Counting`` explains how PyHermes reads values back out of it.
 
-then run the command in terminal:
+Mathematical idea
+-----------------
+
+Counting is direct evaluation of a windowed field at sampled centers:
+
+.. math::
+
+   c_a =
+   (W\circ n)(\mathbf{y}_a)
+   =
+   \int W(\mathbf{y}_a-\mathbf{x})n(\mathbf{x})\,d^3x.
+
+The sampled values :math:`\{c_a\}` estimate the count-in-cell distribution, or
+the distribution of a smoothed fluctuation field when the input is
+:math:`\delta=(n-\bar n)/\bar n`. This is why changing the smoothing window in
+the notebook changes the measured one-point PDF.

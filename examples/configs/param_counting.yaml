@@ -1,0 +1,9 @@
+Counting:
+  convols_data: "./output/quijote8000_snap004_sfc.pkl"
+  random_count: 10000000
+  window:
+    type: sphere
+    len_args:
+      R: 20
+  threads: 8
+  fout_path: "./output/quijote8000_snap004_counting_sph20.pkl"

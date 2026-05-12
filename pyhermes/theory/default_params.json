@@ -1,32 +1,168 @@
 {
 	"enable_default_param": true, // do not change this
 	"Counting": {
-		"n_tasks": 1000000,
-		"deltac_in_path": "",
+		"convols_data": "",
+		"random_count": 1000000,
+		"seed": 42,
+		"window": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"threads": 1,
 		"fout_path": ""
 	},
 	"Corr_2PCF": {
-		"deltac_in_path": "",
-		"fout_path": "",
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
+		"random": null,
+		"random1": "",
+		"random2": "",
 		"window": {
-			"type": "shell"
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"pair_window": {
+			"type": "shell",
+			"len_args": ["R"],
+			"los_args": {},
+			"other_args": {},
+			"mapping": "s_to_R",
+			"kernel_mode": ""
+		},
+		"sampling": {
+			"s": {
+				"min": 1.0,
+				"max": 150.0,
+				"n": 30
+			}
 		},
 		"threads": 1,
-		"R1": 1.0,
-		"R2": 150.0,
-		"xi_num": 150
+		"products": "xi",
+		"memory_strategy": "speed",
+		"pair_window_cache": false,
+		"pair_window_cache_dir": "",
+		"fout_path": ""
 	},
 	"Corr_3PCF": {
-		"deltac_in_path": "",
-		"corr2pcf_in_path": "",
-		"fin": {
-			"path": "./data.bin",
-			"format": "generic"
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
+		"convols_data3": "",
+		"particle_pos1": null,
+		"particle_weight1": null,
+		"random": null,
+		"random1": "",
+		"random2": "",
+		"random3": "",
+		"random_pos1": null,
+		"random_weight1": null,
+		"window": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
 		},
-		"fout_path": "",
-		"NStheta": 20,
-		"R1": 20.0,
-		"R2": 40.0,
-		"rot_num": 10000
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window3": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"r12": 20.0,
+		"r13": 40.0,
+		"angle_param": "theta",
+		"theta": {
+			"theta_min": 0.0,
+			"theta_max": 3.141592653589793,
+			"n_theta": 20
+		},
+		"mu": {
+			"mu_min": -1.0,
+			"mu_max": 1.0,
+			"n_mu": 20
+		},
+		"n_rot": 100,
+		"center": "box_random",
+		"n_box_centers": 5000000,
+		"base_seed": 42,
+		"threads": 1,
+		"products": "Q",
+		"fout_path": ""
+	},
+	"Corr_3PCF_Multipole": {
+		"convols_data": "",
+		"convols_data1": "",
+		"convols_data2": "",
+		"convols_data3": "",
+		"random": null,
+		"random1": "",
+		"random2": "",
+		"random3": "",
+		"window": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window1": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window2": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"window3": {
+			"type": "",
+			"len_args": {},
+			"los_args": {},
+			"other_args": {}
+		},
+		"r12": 20.0,
+		"r13": 40.0,
+		"l_min": 0,
+		"l_max": 4,
+		"gpu_device_id": 0,
+		"execution_mode": "serial",
+		"cache_multipole_fields": false,
+		"cache_dir": "",
+		"verbose_m_progress": false,
+		"verbose_profile": false,
+		"threads": 1,
+		"products": "zeta_l",
+		"fout_path": ""
 	}
 }

@@ -1,59 +1,108 @@
-Corr_2pcf
+Corr_2PCF
 =========
 
+``corr2pcf.ipynb`` covers both the standard isotropic two-point correlation
+function ``xi(s)`` and the anisotropic redshift-space views ``(s, mu)`` and
+``(rp, pi)``.
 
-.. role:: strike
-    :class: strike
+What this notebook covers
+-------------------------
 
-Wanna calculate 2pcf with boost-speed? Come and try PyHermes.
+The notebook has two main halves:
 
+1. isotropic 2PCF on a one-dimensional separation grid
+2. anisotropic 2PCF in redshift space, including line-of-sight changes,
+   smoothing choices, and alternative pair-window families
 
-Finally, the output file *corr2pcf_r5.txt* looks like:
+It also contains lower-level sections for custom pair windows and direct
+estimator comparisons. Those sections are useful when you want to understand
+what the task wrapper is doing under the hood.
 
-.. code-block:: python
+What is lightweight and what is not
+-----------------------------------
 
-    # Corr_2PCF output from PyHermes v0.0.7, TIME: 2024.08.22-13:46:31
-    # Parameters from input :
-    #  R1            = 1.0
-    #  R2            = 150.0
-    #  xi_num        = 20
-    #  threads       = 20
-    #  fout_dir      = ./check_2pcf
-    #  deltac_in_pat = ./convols_L512_r5_pywt.npy
-    # Parameters from DeltaC:
-    #  J             = 9
-    #  Radius        = 5
-    #  SimBoxL       = 1000
-    #  SampRate      = 1024
-    #  bandwidth     = 1
-    #  fin_path      = https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin
-    #  fin_size      = 406793
-    #  fin_format    = generic
-    #  Window type   = shell
-    #  wavelet_mode  = db2
-    #  wavelet_level = 10
+Small smoke-test runs and direct API examples are meant to be executed inside
+the notebook.
 
-    ---------------------------
-    r[h-1 Mpc]  , xi
-    1.000000e+00, 4.849146e+00
-    8.842105e+00, 1.291518e+00
-    1.668421e+01, 2.761841e-01
-    2.452632e+01, 1.201382e-01
-    3.236842e+01, 6.153875e-02
-    4.021053e+01, 3.495787e-02
-    4.805263e+01, 2.120653e-02
-    5.589474e+01, 1.290703e-02
-    6.373684e+01, 7.618866e-03
-    7.157895e+01, 4.722179e-03
-    7.942105e+01, 3.620078e-03
-    8.726316e+01, 3.336819e-03
-    9.510526e+01, 2.975417e-03
-    1.029474e+02, 2.706145e-03
-    1.107895e+02, 1.797030e-03
-    1.186316e+02, 3.404875e-04
-    1.264737e+02, -6.665408e-04
-    1.343158e+02, -1.202132e-03
-    1.421579e+02, -1.517370e-03
-    1.500000e+02, -1.325033e-03
+The production-style outputs compared later in the notebook are heavier and are
+not committed to the repository. At each relevant point, the notebook tells you
+which script and YAML file to run. Those jobs are intended for your own laptop,
+workstation, or cluster.
 
-Thats it, great! :strike:`Im wondering why this cannot displayed properly?`
+Tracked files
+-------------
+
+- ``examples/notebooks/corr2pcf.ipynb``
+- ``examples/scripts/run_2pcf.py``
+- ``examples/configs/param_2pcf.yaml``
+- the additional anisotropic configs in ``examples/configs/param_2pcf_*.yaml``
+
+Typical command-line runs look like:
+
+.. code-block:: bash
+
+   cd examples
+   python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
+   mpirun -np 4 python ./scripts/run_2pcf.py ./configs/param_2pcf_smu_test.yaml
+
+Conceptual focus
+----------------
+
+This is the notebook where PyHermes' pair-window abstraction becomes important.
+Instead of hard-coding one estimator shape, the task combines:
+
+- a prepared field
+- optional smoothing windows
+- a pair window
+- a sampling grid
+
+That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
+``xi(rp, pi)`` in one interface.
+
+What to carry forward
+---------------------
+
+If you mainly care about real-space 2PCF, the first half is enough.
+
+If you care about redshift-space distortions, the second half is the more
+important reference because it shows how line-of-sight choice, smoothing, and
+window family affect the result.
+
+Mathematical idea
+-----------------
+
+PyHermes treats a 2PCF bin as a windowed copy of the same fluctuation field:
+
+.. math::
+
+   \xi_P =
+   \left\langle
+   \delta(\mathbf{x})\,
+   (W_P\circ\delta)(\mathbf{x})
+   \right\rangle.
+
+For real-space ``xi(s)``, :math:`W_P` is a spherical shell. In the thin-shell
+limit,
+
+.. math::
+
+   W_{\rm shell}(r;R)
+   =
+   {1\over 4\pi R^2}\delta_{\rm D}(r-R),
+   \qquad
+   \widehat W_{\rm shell}(k;R)
+   =
+   {\sin(kR)\over kR}.
+
+For redshift-space ``(s, mu)`` and ``(rp, pi)`` measurements, the same
+estimator uses line-of-sight-aware windows. A thin ring window has
+
+.. math::
+
+   \widehat W(k_\perp,k_\parallel)
+   =
+   e^{i k_\parallel r_\parallel}J_0(k_\perp r_\perp),
+
+with finite-bin and real-valued variants implemented by the built-in ring,
+disk, and cylinder windows. Random fields provide the ``RR`` normalization and
+the data-minus-random correction used in the estimator.

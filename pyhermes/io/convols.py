@@ -1,15 +1,58 @@
 import os
 import pickle
+import copy
 
 import numpy as np
 
 from .base import HermesData
+from .readers import read_particle_data, resolve_particle_weight
 from pyhermes.utils import func_util
-from pyhermes.utils import math_util
-
+from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
 class ConvolsData(HermesData):
+    _REQUIRED_ARGV = ("J", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level")
+
+    def __init__(self, *args, threads=None, **kwargs):
+        data_path = kwargs.pop("data_path", None)
+        self.convols_info = {}
+        self.epsilon = None
+        super().__init__(*args, threads=threads, **kwargs)
+        if data_path:
+            self.convols_info['convols_data_path'] = data_path
+            self.load_convols(data_path)
+
+    def _spawn_like(self):
+        """
+        Create a new empty object of the same class,
+        inheriting metadata but NOT copying heavy data arrays.
+        """
+        new = self.__class__(threads=self.threads)
+
+        # --- MPI / logging ---
+        new.comm   = self.comm
+        new.rank   = self.rank
+        new.logger = self.logger
+
+        # --- copy metadata (shallow copy is enough) ---
+        new.convols_info = copy.deepcopy(self.convols_info)
+        new.task_params  = copy.deepcopy(self.task_params)
+
+        # --- clear data containers ---
+        new.epsilon = None
+        new.saveflag = False
+
+        return new
+
+    def copy(self):
+        """
+        Create a deep copy of the object, including data arrays.
+        """
+        new = self._spawn_like()
+        new.epsilon = copy.deepcopy(self.epsilon)
+        new.format_convols_params()
+        return new
 
     def _conv(self, other):
         if not hasattr(other, "as_array"):
@@ -28,7 +71,7 @@ class ConvolsData(HermesData):
         if a.ndim != 3 or b.ndim != 3:
             if self.rank == 0:
                 self.logger.error(
-                    f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
+                    f"specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
                 )
             func_util.safe_exit(1)
         # Window is calculated through rfft, so here to match half dimension
@@ -42,75 +85,266 @@ class ConvolsData(HermesData):
                     "(signal @ window). "
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
-        return math_util.specialized_convolution_3d(a, b, threads=self.threads)
+        conv = specialized_convolution_3d(
+            a, b, threads=self.threads
+        )
 
-    # def _conv_numpy(self, other):
-    #     a = self.as_array()
-    #     b = np.array(other)
-    #     if a.ndim != 3 or b.ndim != 3:
-    #         if self.rank == 0:
-    #             self.logger.error(
-    #                 f"math_util.specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
-    #             )
-    #         func_util.safe_exit(1)
-    #     nx, ny, nz = a.shape
-    #     expected = (nx, ny, nz // 2 + 1)
-    #     if b.shape != expected:
-    #         if self.rank == 0:
-    #             self.logger.error(f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}.")
-    #         func_util.safe_exit(1)
-    #     return math_util.specialized_convolution_3d(a, b, threads=self.threads)
+        # --- spawn new ConvolsData ---
+        new = self._spawn_like()
+
+        # --- set result ---
+        new.epsilon = conv
+
+        # --- optional: record provenance ---
+        windows = self.convols_info.get("convolution_of", [])
+        # windows.append(other.window_params)
+        new.convols_info.update({
+            "convolution_of": windows + [other.window_params]
+        })
+        new.format_convols_params()
+
+        return new
 
     def __matmul__(self, other):
         if isinstance(other, ConvolsData):
             return self._conv(other)
-        # Numpy will NOT automatically pass to our __rmatmul__, so abort here.
-        # if isinstance(other, np.ndarray):
-        #     return self._conv_numpy(other)
         return NotImplemented
 
     def __rmatmul__(self, other):
         if isinstance(other, ConvolsData):
             return other._conv(self)  
-        # if isinstance(other, np.ndarray):
-        #     return self._conv_numpy(other)
         return NotImplemented
 
-    def as_array(self):
-        return self.deltac
+    def __mul__(self, other):
+        if isinstance(other, ConvolsData):
+            return self._mul_field(other)
 
-    def _load_single(self, f_in):
+        if np.isscalar(other):
+            return self._mul_scalar(other)
+
+        return NotImplemented
+
+    def __rmul__(self, other):
+        if np.isscalar(other):
+            return self._mul_scalar(other)
+
+        if isinstance(other, ConvolsData):
+            return other._mul_field(self)
+
+        return NotImplemented
+    # ---------- field × field ----------
+    def _mul_field(self, other):
+        a = self.epsilon
+        b = other.epsilon
+
+        if a is None or b is None:
+            self.logger.error("Cannot multiply: epsilon is None.")
+            func_util.safe_exit(1)
+
+        if a.shape != b.shape:
+            self.logger.error(
+                f"Shape mismatch in multiplication: {a.shape} vs {b.shape}"
+            )
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = a * b
+        new.convols_info['norm_factor'] = self.norm_factor * other.norm_factor
+        new.format_convols_params()
+        return new
+
+    # ---------- field × scalar ----------
+    def _mul_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot multiply by scalar: epsilon is None.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon * scalar
+        new.format_convols_params()
+        return new
+
+    def __sub__(self, other):
+        # Case 1: field - field
+        if isinstance(other, ConvolsData):
+            return self._sub_field(other)
+
+        # Case 2: field - scalar
+        if np.isscalar(other):
+            return self._sub_scalar(other)
+
+        return NotImplemented
+
+    def __rsub__(self, other):
+        # Case: scalar - field
+        if np.isscalar(other):
+            return -1 * self._sub_scalar(other)
+
+        # Case: field - field (only reached if left side failed)
+        if isinstance(other, ConvolsData):
+            return other._sub_field(self)
+
+        return NotImplemented
+
+    def _sub_field(self, other):
+        a = self.epsilon
+        b = other.epsilon
+
+        if a is None or b is None:
+            self.logger.error("Cannot subtract: epsilon is None.")
+            func_util.safe_exit(1)
+
+        if a.shape != b.shape:
+            self.logger.error(
+                f"Shape mismatch in subtraction: {a.shape} vs {b.shape}"
+            )
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = a - b
+        new.format_convols_params()
+        return new
+
+    def _sub_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot subtract scalar: epsilon is None.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon - scalar
+        new.format_convols_params()
+        return new
+    
+    def get_particle_data(self):
+        particle_data_path = getattr(self, "particle_data_path", "")
+        if particle_data_path:
+            with np.load(particle_data_path) as particle_data:
+                if "pos" not in particle_data or "weight" not in particle_data:
+                    self.logger.error(
+                        f"Particle dataset '{particle_data_path}' must contain 'pos' and 'weight' arrays."
+                    )
+                    func_util.safe_exit(1)
+                return {
+                    "pos": particle_data["pos"],
+                    "weight": particle_data["weight"],
+                }
+
+        fin = getattr(self, "fin", {})
+        if fin.get("url"):
+            self.logger.error("fin.url is no longer supported. Download the data first and set fin.path.")
+            func_util.safe_exit(1)
+        if not fin.get("path", ""):
+            self.logger.error("Input particle path is not specified.")
+            func_util.safe_exit(1)
+        particle_data = read_particle_data(
+            fin["path"],
+            fin.get("format", None),
+            **fin.get("reader_params", {}),
+        )
+        try:
+            weight, _ = resolve_particle_weight(particle_data, fin.get("weight_key", None), logger=self.logger)
+        except Exception:
+            func_util.safe_exit(1)
+        return {
+            "pos": particle_data["pos"],
+            "weight": weight,
+        }
+    
+    def phi_at_pos(self, pos):
+        return scaling_stencil_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
+    
+    def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
+        """
+        Evaluate number density n(x) at positions.
+
+        normalize:
+            True  -> return the normalized/grid-space nx (as in interpolate_grid_at_pos_numba)
+            False -> return scaled output:
+                     if physical: nx / norm_factor * scale_factor**3
+                     else:        nx / norm_factor
+        physical:
+            Only used when normalize is False.
+        """
+        if epsilon is None:
+            if filter is not None:
+                epsilon = self._conv(filter).epsilon
+            else:
+                epsilon = self.epsilon
+
+        npos = pos.shape[0]
+        nx = np.empty(npos, dtype=np.float64)
+        pos_scaled = pos * self.scale_factor
+        interpolate_grid_at_pos_numba(
+            nx, pos_scaled, epsilon, self.phi_array, self.L, self.phi_resolution, self.phi_support
+        )
+
+        if normalize:
+            return nx
+        else:
+            nx /= self.norm_factor
+            if physical:
+                return nx * (self.scale_factor ** 3)
+            else:
+                return nx
+
+    def as_array(self, normlize=True):
+        if normlize:
+            return self.epsilon
+        else:
+            return self.epsilon / self.norm_factor
+
+    def format_convols_params(self):
+        missing = [k for k in self._REQUIRED_ARGV if k not in self.convols_info]
+        if missing:
+            self.logger.error(f"ConvolsData missing required keys: {missing}")
+            func_util.safe_exit(1)
+        for key, value in self.convols_info.items():
+            setattr(self, key, value)
+
+    def load_convols(self, f_in, single=True):
+        self.load(f_in, read_convols=True, single=single)
+
+    def save_convols(self, f_out, single=True, overwrite=False):
+        self.save(f_out, save_convols=True, single=single, overwrite=overwrite)
+
+    def _load_convols(self, f_in):
         with open(f_in, 'rb') as f:
             # Read the entire .npy file as bytes
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             # Convert the bytes back into the original dataset using pickle
             dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
-            if 'deltac' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'data' key.")
+            if 'epsilon' not in dataset:
+                self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
                 func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.dict_inht_vonDeltac
-            self.dict_inht_vonDeltac = {key: value for key, value in dataset.items() if key != 'deltac'}
-            self.deltac = dataset['deltac']
+            self.epsilon = dataset['epsilon']
+            # Assign the dictionary from the file to self.convols_info
+            # _convols_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
+            _convols_info = dataset.get('convols_info')
+            if _convols_info:
+                self.convols_info.update(_convols_info)
+            self.format_convols_params()
 
-    def _save_single(self, f_out):
+    def _save_convols(self, f_out):
         # Check and create directory if it doesn't exist
         _dir = os.path.dirname(f_out)
         if not os.path.exists(_dir):
             os.makedirs(_dir)
-        # Check if the dict_inht_vonDeltac is empty
-        if not self.dict_inht_vonDeltac:
-            self.logger.error('The dictionary "dict_inht_vonDeltac" is empty.')
+        # Check if the convols_info is empty
+        if not self.convols_info:
+            self.logger.error('The dictionary "convols_info" is empty.')
             self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         # If all required variables are present, create the dataset
         dataset = {
-            **self.dict_inht_vonDeltac,  # Add all required variables to the dataset
-            'deltac': self.deltac  # Include the actual data
+            'convols_info': self.convols_info,
+            'epsilon': self.epsilon  # Include the actual data
         }
         # Save the dataset to the specified file
         #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
         _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
             np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+
+    

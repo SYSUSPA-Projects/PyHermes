@@ -1,0 +1,24 @@
+Corr_3PCF:
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   random: "uniform"
+   window2:
+      type: "sphere"
+      len_args:
+         R: 5
+   window3:
+      type: "sphere"
+      len_args:
+         R: 5
+   r12: 20.0
+   r13: 40.0
+   theta:
+      theta_min: 0.0
+      theta_max: 3.141592653589793
+      n_theta: 20
+   n_rot: 200
+   center: "box_random"
+   n_box_centers: 8000000
+   threads: 8
+   base_seed: 42
+   products: "Q"
+   fout_path: "./output/quijote8000_snap004_3pcf_rcenter_nrot200.pkl"

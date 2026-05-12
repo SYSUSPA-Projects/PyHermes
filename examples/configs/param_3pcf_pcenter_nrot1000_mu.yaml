@@ -1,0 +1,24 @@
+Corr_3PCF:
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   random: "uniform"
+   fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot1000_mu.pkl"
+   window2:
+      type: "sphere"
+      len_args:
+         R: 5
+   window3:
+      type: "sphere"
+      len_args:
+         R: 5
+   r12: 20.0
+   r13: 40.0
+   angle_param: "mu"
+   mu:
+      mu_min: -1.0
+      mu_max: 1.0
+      n_mu: 20
+   n_rot: 1000
+   center: "particle"
+   products: Q
+   base_seed: 42
+   threads: 8

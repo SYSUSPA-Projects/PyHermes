@@ -1,6 +1,11 @@
 ## ignore the generated file
 **/*.npy
 **/*.bin
+examples/output/**
+!examples/output/.gitkeep
+examples/data/**
+!examples/data/.gitkeep
+examples/logs/*.log
 
 ## remove the python cache to avoid conflicts
 **/__pycache__/
@@ -8,3 +13,6 @@
 ## ignore the generated file when install 
 pyhermes.egg-info/
 build/
+tests/
+.DS_Store
+.vscode/

@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">PyHermes workflow</title>
+  <desc id="desc">Particle catalogs are converted into ConvolsData, then window functions define smoothing, pair bins, triangle legs, and multipole filters for downstream statistics.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbfbf7"/>
+      <stop offset="1" stop-color="#edf4f0"/>
+    </linearGradient>
+    <linearGradient id="windowGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fff9e8"/>
+      <stop offset="1" stop-color="#f5ecd0"/>
+    </linearGradient>
+    <filter id="shadow" x="-12%" y="-16%" width="124%" height="132%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#12312c" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 1 1 L 12 7 L 1 13 Z" fill="#415650"/>
+    </marker>
+    <marker id="arrowGold" markerWidth="14" markerHeight="14" refX="11" refY="7" orient="auto">
+      <path d="M 1 1 L 12 7 L 1 13 Z" fill="#b67d20"/>
+    </marker>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <text x="82" y="108" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="700" fill="#152522">PyHermes workflow</text>
+  <text x="82" y="146" font-family="Arial, Helvetica, sans-serif" font-size="22" fill="#52645f">Build a reusable multiresolution field, then let window functions define each statistic.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="80" y="180" width="315" height="135" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <rect x="105" y="207" width="58" height="58" rx="13" fill="#d8efe3"/>
+    <path d="M119 246 L149 229 L149 279 L119 262 Z" fill="#247b5d"/>
+    <text x="185" y="241" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">Particle catalogs</text>
+    <text x="185" y="269" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">bin, npz, gadget, fof</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="455" y="180" width="290" height="135" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <rect x="480" y="207" width="58" height="58" rx="13" fill="#d9e9f8"/>
+    <path d="M509 218 L531 259 L487 259 Z" fill="#2b70b8"/>
+    <circle cx="509" cy="259" r="8" fill="#2b70b8"/>
+    <text x="560" y="241" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">Convols</text>
+    <text x="560" y="269" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">particles to field</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="805" y="162" width="360" height="170" rx="18" fill="#17322d" stroke="#17322d"/>
+    <rect x="833" y="203" width="62" height="62" rx="13" fill="#f4c768"/>
+    <path d="M850 225 H881 M850 242 H881 M850 259 H881" stroke="#17322d" stroke-width="7" stroke-linecap="round"/>
+    <text x="922" y="243" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="700" fill="#ffffff">ConvolsData</text>
+    <text x="922" y="272" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#cbd9d5">one reusable field product</text>
+    <text x="922" y="302" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#cbd9d5">shared by all tasks</text>
+  </g>
+
+  <path d="M395 248 H455" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M745 248 H805" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="335" y="392" width="930" height="150" rx="20" fill="url(#windowGrad)" stroke="#d8b84d" stroke-width="1.5"/>
+    <circle cx="410" cy="467" r="44" fill="#f5c766" opacity="0.95"/>
+    <circle cx="410" cy="467" r="29" fill="none" stroke="#8d641d" stroke-width="4"/>
+    <circle cx="410" cy="467" r="13" fill="none" stroke="#8d641d" stroke-width="4"/>
+    <text x="480" y="448" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#3c2c10">Window functions</text>
+    <text x="480" y="481" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#6b5522">W-convolved fields define the geometry</text>
+    <text x="480" y="514" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#6b5522">smooth fields | pair bins | triangle legs | multipole filters</text>
+    <rect x="930" y="421" width="270" height="42" rx="21" fill="#ffffff" stroke="#e1c76e"/>
+    <text x="958" y="448" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#533d12">sphere / gaussian</text>
+    <rect x="930" y="477" width="270" height="42" rx="21" fill="#ffffff" stroke="#e1c76e"/>
+    <text x="958" y="504" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#533d12">shell / ring / cylinder</text>
+  </g>
+
+  <path d="M985 332 C985 356 890 365 835 392" stroke="#b67d20" stroke-width="4" fill="none" marker-end="url(#arrowGold)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="70" y="650" width="300" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="100" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Counting</text>
+    <text x="100" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">sample smoothed fields</text>
+    <text x="100" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">PDFs and one-point stats</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="450" y="650" width="300" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="480" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_2PCF</text>
+    <text x="480" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">pair_window defines bins</text>
+    <text x="480" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">xi(s), xi(s,mu), xi(rp,pi)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="830" y="650" width="300" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="860" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_3PCF</text>
+    <text x="860" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">window1/2/3 set legs</text>
+    <text x="860" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">Q(theta), Q(mu)</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1210" y="650" width="320" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
+    <text x="1240" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">3PCF Multipoles</text>
+    <text x="1240" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">angular W_lm filters</text>
+    <text x="1240" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">zeta_l up to lmax</text>
+  </g>
+
+  <path d="M510 542 C410 594 315 620 220 650" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M690 542 C650 585 620 615 600 650" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M910 542 C940 590 960 615 980 650" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1110 542 C1210 594 1290 620 1370 650" stroke="#415650" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+</svg>

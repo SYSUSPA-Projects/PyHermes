@@ -1,78 +1,118 @@
-Convolution
-===========
+Convols
+=======
 
+``convols.ipynb`` is the upstream notebook for the whole example chain. It is
+where particle catalogs become ``ConvolsData`` fields that later notebooks
+reuse. If you only want to prepare those files without opening a notebook, run
+``examples/scripts/prepare_convols_data.py`` from the repository root.
 
-This is the base step to touch the whole truth.
+What this notebook covers
+-------------------------
 
-We provide example file in the format of generic, 
+The notebook is organized in five steps:
 
-.. _download_example:
+1. read particle data through different reader paths
+2. build ``ConvolsData`` through the standard driver, config-driven API, and
+   task-object overrides
+3. construct a matching random field
+4. reload data and random fields from disk
+5. build ``delta`` and apply a window
 
-Download the file here: :download:`quijote10000.bin <_static/quijote10000.bin>`
+It also includes a redshift-space preparation section, so this is the right
+place to understand how the real-space and redshift-space example fields are
+created.
 
-Ok, first you need parameter file, in the format of ``JSON``. See example below, we create parameter file named `param_convols.json`:
+Why this notebook matters
+-------------------------
 
+Every later notebook assumes that one or more field files already exist. In the
+tracked example workflow, ``convols.ipynb`` shows the construction step by
+step, while ``examples/scripts/prepare_convols_data.py`` provides the direct
+command-line route.
 
-.. code-block:: json
+Tracked inputs and local products
+---------------------------------
 
-    {
-        "Convols": {
-            "J": 9,
-            "fin": {
-                "path": "https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin",
-                "format": "generic"
-            },
-            "fout_dir": "./",
-            "SampRate": 1024,
-            "SimBoxL": 1000,
-            "window_type": "shell",
-            "wavelet_mode": "db2",
-            "wavelet_level": 10,
-            "Radius": 5,
-            "bandwidth": 1,
-            "threads": 2
-        }
-    }
+Tracked in the repository:
 
-for the defination of these parameters, please see :ref:.
+- ``examples/notebooks/convols.ipynb``
+- ``examples/scripts/prepare_convols_data.py``
+- ``examples/scripts/run_convols.py``
+- ``examples/configs/param_convols.yaml``
+- ``examples/data/.gitkeep``
 
-Then we can create python script here, i.g., `run_pyhermes_convols.py`
+Generated locally while following the notebook:
 
-.. code:: python
+- the downloaded and unpacked example halo catalog under ``examples/data/``
+- the compact FoF-derived binary table documented by
+  ``examples/data/quijote_halos/quijote_halo_bin_schema.yaml``
+- the main field products in ``examples/output/``, such as:
 
-    from pyhermes.base.convols import Convols
-    from pyhermes.param.parambase import read_param
+  - ``quijote8000_snap004_sfc.pkl``
+  - ``quijote8000_snap004_rsd_sfc.pkl``
+  - ``quijote8000_snap004_rsd_diag_sfc.pkl``
+  - ``random_sfc.pkl``
 
-    param_input = read_param()
-    Convols(param_task=param_input).run()
+Recommended usage modes
+-----------------------
 
-then run the command in terminal:
+Use the notebook when you want to:
 
+- inspect supported particle readers
+- prepare the tracked example data for the first time
+- compare real-space and redshift-space field construction
+- work interactively with manual particle arrays
 
-.. prompt:: bash $user@linux, auto
+Use the driver script when you want a clean batch run:
 
-   $user@linux mpirun -n 8 python run_pyhermes_convols.py -c param_convols_mpi.json
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Reading configure file: 'param_convols_mpi.json'
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Set default parameters of module <base> ...
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Default 'Convols.fin.path' from './data.bin' to 'https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin'
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Default 'Convols.fout_dir' from 'empty' to './'
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Default 'Convols.window_type' from 'sphere' to 'shell'
-    17:43:39 - INFO - pyhermes.param.parambase:JsonBase - Default 'Convols.threads' from '5' to '2'
-    17:43:39 - INFO - pyhermes.pipeline.pipeline:Convols - The task will run on 8 MPI ranks
-    17:43:39 - INFO - pyhermes.io.funcs:read_particle_data - Selected input particle format: generic
-    17:43:40 - INFO - pyhermes.io.funcs:dl_rich_pbar - Downloading file from 'https://pyhermes.astroslacker.com/_downloads/906e0695649e3634a5fe8081b9ab2086/quijote10000.bin'
-    Downloading quijote10000.bin... ━━━━━━━━━━━━━━━━━━━━ 4.9/4.9 MB 2.4 MB/s 0:00:00
-    17:43:43 - INFO - pyhermes.io.funcs:read_generic - Reading paricle data from ---> quijote10000.bin <---
-    17:43:43 - INFO - pyhermes.pipeline.pipeline:Convols - Start partition ...
-    17:43:43 - INFO - pyhermes.pipeline.pipeline:Convols - The time for partition data: 0.0094 sec
-    17:43:43 - INFO - pyhermes.pipeline.pipeline:Convols - Start to calculate scaling coefficient...
-    17:43:47 - INFO - pyhermes.pipeline.pipeline:Convols - The time for scaling function: 3.1818 sec
-    17:43:47 - INFO - pyhermes.utils.math_util:set_window_function - Using window function: shell
-    17:43:49 - INFO - pyhermes.pipeline.pipeline:Convols - Start to calculte FFT
-    17:43:52 - INFO - pyhermes.pipeline.pipeline:Convols - The time for FFT: 2.8357 sec
-    17:43:52 - INFO - pyhermes.io.base:ColvolsData - Writing data to ---> ./convols_L512_r5_pywt.npy <---
+.. code-block:: bash
 
-    17:43:59 - INFO - pyhermes.pipeline.pipeline:Convols - The time for task: 19.9119 sec
-    17:43:59 - INFO - pyhermes.pipeline.pipeline:Convols - Bye.
+   cd examples
+   python ./scripts/run_convols.py ./configs/param_convols.yaml
 
-This will first download the online example `quijote`:ref: simulation data in format of ``generic``, saved to disk of current workdir named *quijote10000.bin*, then use 8 MPI ranks to run the task of ``Convols``.
+The notebook shows the same task through the config-driven API and through
+manual object setup, so it doubles as both a tutorial and a reference for
+interactive usage.
+
+Key idea
+--------
+
+``Convols`` builds a weighted multiresolution field and stores it in a reusable
+format. Once that field exists, downstream tasks no longer need to reread and
+repartition the original particle catalog.
+
+Mathematical idea
+-----------------
+
+The input catalog is a weighted point process,
+
+.. math::
+
+   n(\mathbf{x}) =
+   \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
+
+``Convols`` projects it onto scaling-function coefficients,
+
+.. math::
+
+   n_j(\mathbf{x}) =
+   \sum_\ell \epsilon_{j\ell}\phi_{j\ell}(\mathbf{x}),
+   \qquad
+   \epsilon_{j\ell} =
+   \sum_i w_i\phi_{j\ell}(\mathbf{x}_i).
+
+The saved ``ConvolsData`` object stores these normalized coefficients and the
+metadata needed to apply later windows. The redshift-space cells first map
+positions along a chosen line of sight,
+
+.. math::
+
+   \mathbf{s}
+   =
+   \mathbf{x}
+   +
+   {(\mathbf{v}\cdot\widehat{\mathbf{n}})(1+z)\over H(z)}
+   \widehat{\mathbf{n}},
+
+with periodic wrapping in the simulation box, and then build the same
+coefficient field from :math:`\mathbf{s}`.

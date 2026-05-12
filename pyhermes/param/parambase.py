@@ -3,6 +3,7 @@ import sys
 import inspect
 import argparse
 import importlib
+import copy
 
 import yaml
 import json5
@@ -13,6 +14,11 @@ from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
 import pyhermes.pipeline.custom_exceptions as ce
 
+
+REPLACE_KEYS = {
+    "Corr_2PCF.pair_window",
+    "Corr_2PCF.sampling",
+}
 
 
 def print_flush(msg):
@@ -131,29 +137,70 @@ class ParamBase(object):
             if key not in default_dict:
                 if isinstance(value, dict):
                     # Add new level
-                    self.logger.warning(f"Adding non-default level: '{full_key}'")
+                    if full_key.startswith("Corr_2PCF.sampling."):
+                        self.logger.info(f"Adding Corr_2PCF sampling coordinate: '{full_key}'")
+                    else:
+                        self.logger.warning(f"Adding non-default level: '{full_key}'")
                     default_dict[key] = {}  # Init new level
                     self._recursive_update(default_dict[key], value, full_key)
                 else:
                     # Add new key
-                    if parent_key != 'Convols.window':
+                    if parent_key == "Corr_2PCF.sampling" or parent_key.startswith("Corr_2PCF.sampling."):
+                        self.logger.info(f"Adding Corr_2PCF sampling value: '{full_key}' as '{value}'")
+                    elif parent_key != 'Convols.window':
                         # Skip warning for window_args
                         self.logger.warning(f"Adding non-default key: '{full_key}'")
                     else:
                         # ↓ Use special info instead of warning ↑
                         self.logger.info(f"Adding customizable window arg: '{full_key}' as '{value}'")
                     default_dict[key] = value
+            elif full_key in REPLACE_KEYS:
+                self.logger.info(f"Using user-provided replacement value for '{full_key}'.")
+                default_dict[key] = copy.deepcopy(value)
             elif isinstance(value, dict) and isinstance(default_dict[key], dict):
                 # Recursively to due the whole dict structure
                 self._recursive_update(default_dict[key], value, full_key)
             else:
-                if not isinstance(value, type(default_dict[key])):
+                if not self._is_type_compatible(full_key, default_dict[key], value):
                     self.logger.warning(f"Type mismatch for key: '{full_key}' !!!")
                 else:
                     if default_dict[key] != value:
                         old_value = 'empty' if default_dict[key] == '' or default_dict[key] == [] else default_dict[key]
                         self.logger.info(f"Default '{full_key}' from '{old_value}' to '{value}'")
                 default_dict[key] = value
+
+    def _is_type_compatible(self, full_key, default_value, new_value):
+        if isinstance(new_value, type(default_value)):
+            return True
+        if isinstance(default_value, (int, float)) and isinstance(new_value, (int, float)):
+            return True
+        # Some fields intentionally support either a single string or a list of strings.
+        if full_key.endswith(".products"):
+            default_ok = isinstance(default_value, (str, list, tuple))
+            new_ok = isinstance(new_value, (str, list, tuple))
+            return default_ok and new_ok
+        # Random inputs intentionally allow a missing default (null/None) to be
+        # overridden by a runtime string such as "uniform" or a data path.
+        if full_key.endswith(".random"):
+            return default_value is None and isinstance(new_value, str)
+        # Angle sampling specs accept either dict configs or explicit arrays/lists.
+        if full_key.endswith(".theta") or full_key.endswith(".mu") or full_key.endswith(".s"):
+            default_ok = isinstance(default_value, (dict, list, tuple))
+            new_ok = isinstance(new_value, (dict, list, tuple))
+            return default_ok and new_ok
+        if full_key.endswith(".pair_window"):
+            default_ok = isinstance(default_value, (dict, str))
+            new_ok = isinstance(new_value, (dict, str))
+            return default_ok and new_ok
+        if full_key.endswith(".len_args"):
+            default_ok = isinstance(default_value, (dict, list, tuple, str))
+            new_ok = isinstance(new_value, (dict, list, tuple, str))
+            return default_ok and new_ok
+        if full_key.endswith(".los_args"):
+            default_ok = isinstance(default_value, (dict, list, tuple))
+            new_ok = isinstance(new_value, (dict, list, tuple))
+            return default_ok and new_ok
+        return False
     
     def recursive_update(self, default_dict, new_dict, parent_key='', section=None):
         return self._recursive_update(default_dict, new_dict, parent_key=parent_key, section=section)
