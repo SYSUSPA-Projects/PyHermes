@@ -231,6 +231,47 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     return part_perp * part_parallel
 
 
+@njit
+def window_function_cylshell_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
+    """
+    Thin cylindrical-shell window in k-space with a configurable line of sight.
+
+    ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
+    should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
+    passed via ``len_args``. Here ``H`` is the half-height of the cylinder, so
+    the real-space support is ``|z| <= H``.
+
+    Let k_parallel = k dot n, k_perp = sqrt(|k|^2 - k_parallel^2),
+    q_perp = 2*pi*k_perp*R, and q_parallel = 2*pi*k_parallel*H.
+    W(k; R, H) = J0(q_perp) * (sin(q_parallel)/q_parallel),
+    with the parallel factor set to 1 when q_parallel = 0.
+    """
+    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
+    if norm == 0.0:
+        return np.nan
+    nx = nx / norm
+    ny = ny / norm
+    nz = nz / norm
+
+    k_parallel = ki * nx + kj * ny + kk * nz
+    k2 = ki * ki + kj * kj + kk * kk
+    k_perp2 = k2 - k_parallel * k_parallel
+
+    if k_perp2 < 0.0:
+        k_perp2 = 0.0
+
+    k_perp = np.sqrt(k_perp2)
+    q_perp = 2.0 * np.pi * k_perp * R
+    q_parallel = 2.0 * np.pi * k_parallel * H
+
+    if q_parallel == 0.0:
+        part_parallel = 1.0
+    else:
+        part_parallel = np.sin(q_parallel) / q_parallel
+
+    return jn_numba(0, q_perp) * part_parallel
+
+
 # Special-purpose windows.
 @njit
 def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
@@ -257,6 +298,7 @@ WINDOW_TYPE_DICT = {
     "ring": window_function_ring_numba,
     "disk": window_function_disk_numba,
     "cylinder": window_function_cylinder_numba,
+    "cylshell": window_function_cylshell_numba,
     "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
 }
 

@@ -104,5 +104,5 @@ estimator uses line-of-sight-aware windows. A thin ring window has
    e^{i k_\parallel r_\parallel}J_0(k_\perp r_\perp),
 
 with finite-bin and real-valued variants implemented by the built-in ring,
-disk, and cylinder windows. Random fields provide the ``RR`` normalization and
-the data-minus-random correction used in the estimator.
+disk, cylinder, and ``cylshell`` windows. Random fields provide the ``RR``
+normalization and the data-minus-random correction used in the estimator.

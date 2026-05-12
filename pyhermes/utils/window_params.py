@@ -3,7 +3,7 @@ import copy
 import numpy as np
 
 
-ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder"}
+ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell"}
 VALID_KERNEL_MODES = {"auto", "octant", "full_rfft"}
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
@@ -114,7 +114,8 @@ def pair_window_from_string(pair_window):
     if window_type not in BUILTIN_PAIR_WINDOW_TYPES:
         raise ValueError(
             f"Unsupported pair_window string '{pair_window}'. "
-            "Supported built-in strings are 'shell', 'ring', 'disk', and 'cylinder'."
+            "Supported built-in strings are 'shell', 'ring', 'disk', "
+            "'cylinder', and 'cylshell'."
         )
     return apply_builtin_pair_window_defaults({"type": window_type})
 

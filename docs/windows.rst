@@ -158,6 +158,25 @@ The redshift-space windows use a line-of-sight vector
 The fractions above are evaluated with their limiting value of one when the
 denominator is zero.
 
+``cylshell`` averages over the cylindrical side surface at radius :math:`R`
+and half-height :math:`H`:
+
+.. math::
+
+   W_{\rm cylshell}(r,z;R,H)
+   =
+   {\delta_{\rm D}(R-r)\,\theta(H-|z|)\over 4\pi R H},
+
+.. math::
+
+   \widehat W_{\rm cylshell}
+   =
+   J_0(2\pi k_\perp R)\,
+   {\sin(2\pi k_\parallel H)\over 2\pi k_\parallel H}.
+
+The parallel fraction is evaluated with its limiting value of one when
+:math:`k_\parallel H = 0`.
+
 Defining Windows In PyHermes
 ----------------------------
 
@@ -311,9 +330,9 @@ different preprocessing.
        max: 180.0
        n: 46
 
-For redshift-space coordinates, use ``ring``, ``disk``, or ``cylinder``. The
-``mapping`` field tells PyHermes how to convert sampling coordinates into
-window lengths:
+For redshift-space coordinates, use ``ring``, ``disk``, ``cylinder``, or
+``cylshell``. The ``mapping`` field tells PyHermes how to convert sampling
+coordinates into window lengths:
 
 .. code-block:: yaml
 
@@ -432,8 +451,9 @@ Practical Rules Of Thumb
 
 - Use ``sphere`` for smoothing before Counting, 2PCF, or 3PCF measurements.
 - Use ``shell`` or ``Tshell`` for real-space pair separations.
-- Use ``ring`` for thin redshift-space pair bins, and ``disk`` or ``cylinder``
-  when a finite transverse or line-of-sight average is desired.
+- Use ``ring`` for thin redshift-space pair bins, ``cylshell`` for cylindrical
+  side surfaces, and ``disk`` or ``cylinder`` when a finite transverse or
+  line-of-sight average is desired.
 - Keep the LOS axis-aligned when possible if runtime matters. Oblique LOS is
   supported, but it uses a more general kernel path.
 - Use ``pair_window_cache`` for heavy 2PCF runs when many pair windows are

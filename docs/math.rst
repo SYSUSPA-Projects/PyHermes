@@ -151,8 +151,8 @@ and its Fourier-space form contains the Bessel factor
    e^{i k_\parallel r_\parallel}
    J_0(k_\perp r_\perp).
 
-In practice PyHermes can use shell, ring, disk, or cylinder pair windows, all
-with the same coefficient-level machinery.
+In practice PyHermes can use shell, ring, disk, cylinder, or cylindrical-shell
+pair windows, all with the same coefficient-level machinery.
 
 Random Fields And Estimators
 ----------------------------
