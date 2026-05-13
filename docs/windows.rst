@@ -208,7 +208,8 @@ The redshift-space windows use a line-of-sight vector
 
 The ``ring`` and ``disk`` kernels use a cosine factor in Fourier space, so
 their coordinate-space definitions below are symmetrized over
-:math:`z=\pm H`.
+:math:`z=\pm H`; the factor
+:math:`\delta_{\rm D}(|z|-H)/2` keeps the line-of-sight part normalized.
 
 ``ring`` is a thin transverse ring at radius :math:`R` and line-of-sight
 offset :math:`H`:
@@ -218,7 +219,7 @@ offset :math:`H`:
    W_{\rm ring}(\rho,z;R,H)
    =
    {\delta_{\rm D}(\rho-R)\over 2\pi R}
-   { \delta_{\rm D}(z-H)+\delta_{\rm D}(z+H) \over 2},
+   {\delta_{\rm D}(|z|-H)\over 2},
    \qquad
    \widehat W_{\rm ring}
    =
@@ -233,27 +234,12 @@ offset :math:`H`:
    W_{\rm disk}(\rho,z;R,H)
    =
    {\Theta(R-\rho)\over \pi R^2}
-   { \delta_{\rm D}(z-H)+\delta_{\rm D}(z+H) \over 2},
+   {\delta_{\rm D}(|z|-H)\over 2},
    \qquad
    \widehat W_{\rm disk}
    =
    {2J_1(2\pi k_\perp R)\over 2\pi k_\perp R}\,
    \cos(2\pi k_\parallel H).
-
-``cylinder`` is a cylindrical top-hat of radius :math:`R` and total height
-:math:`H`:
-
-.. math::
-
-   W_{\rm cylinder}(\rho,z;R,H)
-   =
-   {\Theta(R-\rho)\over \pi R^2}
-   {\Theta(H/2-|z|)\over H},
-   \qquad
-   \widehat W_{\rm cylinder}
-   =
-   {2J_1(2\pi k_\perp R)\over 2\pi k_\perp R}\,
-   {\sin(\pi k_\parallel H)\over \pi k_\parallel H}.
 
 ``cylshell`` is a cylindrical side surface at radius :math:`R` and half-height
 :math:`H`:
@@ -262,11 +248,27 @@ offset :math:`H`:
 
    W_{\rm cylshell}(\rho,z;R,H)
    =
-   {\delta_{\rm D}(\rho-R)\,\Theta(H-|z|)\over 4\pi R H},
+   {\delta_{\rm D}(\rho-R)\over 2\pi R}
+   {\Theta(H-|z|)\over 2H},
    \qquad
    \widehat W_{\rm cylshell}
    =
    J_0(2\pi k_\perp R)\,
+   {\sin(2\pi k_\parallel H)\over 2\pi k_\parallel H}.
+
+``cylinder`` is a cylindrical top-hat of radius :math:`R` and half-height
+:math:`H`:
+
+.. math::
+
+   W_{\rm cylinder}(\rho,z;R,H)
+   =
+   {\Theta(R-\rho)\over \pi R^2}
+   {\Theta(H-|z|)\over 2H},
+   \qquad
+   \widehat W_{\rm cylinder}
+   =
+   {2J_1(2\pi k_\perp R)\over 2\pi k_\perp R}\,
    {\sin(2\pi k_\parallel H)\over 2\pi k_\parallel H}.
 
 All sinc-like fractions in this section are evaluated with their limiting
