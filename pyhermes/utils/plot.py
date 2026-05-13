@@ -1,40 +1,97 @@
+"""
+Plot helpers for PyHermes.
+
+``plot_styles.json`` stores the built-in defaults for ``plot_corr2pcf_2d``:
+base plot values, accepted ``**kwargs``, nested kwargs that should be merged,
+and corner-label appearance. Users normally override these values at call time
+instead of editing the JSON.
+
+Direct ``plot_corr2pcf_2d`` arguments:
+    corr2pcf1, corr2pcf2, quadrants, coordinates, add_contour, value,
+    s_range, s_min, s_max, quadrant_labels, label1, label2, title, ax,
+    add_colorbar.
+
+Accepted ``**kwargs``:
+    figsize, cmap, n_levels, vmin, vmax, percentile, s_power,
+    colorbar_kwargs, colorbar_nbins, colorbar_tick_prune, label_fontsize,
+    tick_fontsize, title_fontsize, text_fontsize, xlabel, ylabel,
+    tick_params, spine_linewidth, symmetric_limits, contour_kwargs,
+    contour_levels, center_lines, center_line_kwargs,
+    s_min_mask, s_min_mask_kwargs.
+
+Examples:
+    plot_corr2pcf_2d(corr, title="redshift space")
+
+    plot_corr2pcf_2d(
+        corr,
+        add_contour=True,
+        value="log10_1p_xi",
+        s_min=20,
+        contour_levels=[0.001, 0.01, 0.05, 0.1],
+    )
+
+    plot_corr2pcf_2d(
+        corr_smu,
+        corr_rppi,
+        coordinates={"left": "smu", "right": "rppi"},
+        label1="smu mode",
+        label2="rppi mode",
+        cmap="viridis",
+        colorbar_kwargs={"shrink": 0.7},
+        contour_kwargs={"colors": "black", "linewidths": 0.8},
+    )
+"""
+
+import copy
+import json
+from pathlib import Path
+
+import matplotlib.pyplot as plt
 import numpy as np
 
 
-def _as_1d_array(values, name):
+def _load_plot_config():
+    with open(Path(__file__).with_name("plot_styles.json"), encoding="utf-8") as f:
+        return json.load(f)["corr2pcf_2d"]
+
+
+PLOT_CONFIG = _load_plot_config()
+PLOT_BASE_OPTIONS = PLOT_CONFIG["base_options"]
+PLOT_KWARG_DEFAULTS = PLOT_CONFIG["kwarg_defaults"]
+PLOT_OPTION_KWARGS = tuple(PLOT_CONFIG["option_kwargs"])
+PLOT_MERGE_KWARGS = set(PLOT_CONFIG["merge_kwargs"])
+CORNER_LABEL_BBOX = PLOT_CONFIG["corner_label_bbox"]
+CORNER_LABEL_POSITIONS = PLOT_CONFIG["corner_label_positions"]
+QUADRANTS = ("upper_left", "upper_right", "lower_left", "lower_right")
+
+PLOT_VALUE_NAMES = {"s_power_xi", "xi", "log10_1p_xi"}
+COORDINATE_NAMES = {"smu", "rppi"}
+
+
+def _corr_array(corr2pcf, name, object_name):
+    try:
+        values = getattr(corr2pcf, name)
+    except AttributeError as exc:
+        raise ValueError(f"{object_name}.{name} is required.") from exc
+
     arr = np.asarray(values, dtype=np.float64)
     if arr.ndim != 1:
-        raise ValueError(f"{name} must be a 1D array.")
+        raise ValueError(f"{object_name}.{name} must be a 1D array.")
     if arr.size == 0:
-        raise ValueError(f"{name} must not be empty.")
+        raise ValueError(f"{object_name}.{name} must not be empty.")
     return arr
 
 
-def _sampling_array(corr2pcf, name, object_name):
-    if hasattr(corr2pcf, name):
-        return _as_1d_array(getattr(corr2pcf, name), f"{object_name}.{name}")
-    sampling = getattr(corr2pcf, "sampling", {})
-    return _as_1d_array(sampling.get(name), f"{object_name}.sampling['{name}']")
-
-
-def _normalize_plot_value(value):
-    aliases = {
-        "s_power_xi": "s_power_xi",
-        "xi": "xi",
-        "log10": "log10_1p_xi",
-        "log10_1p_xi": "log10_1p_xi",
-        "log10(1+xi)": "log10_1p_xi",
-    }
-    try:
-        return aliases[value]
-    except KeyError as exc:
+def _check_plot_value(value):
+    if value not in PLOT_VALUE_NAMES:
         raise ValueError(
             "value must be 's_power_xi', 'xi', or 'log10_1p_xi'."
-        ) from exc
+        )
+    return value
 
 
 def _plot_values(xi, radius, s_power, value):
-    value = _normalize_plot_value(value)
+    value = _check_plot_value(value)
     if value == "s_power_xi":
         return (radius**s_power) * xi
     if value == "xi":
@@ -44,7 +101,7 @@ def _plot_values(xi, radius, s_power, value):
 
 
 def _plot_value_label(value, s_power):
-    value = _normalize_plot_value(value)
+    value = _check_plot_value(value)
     if value == "s_power_xi":
         return rf"$s^{s_power} \xi$"
     if value == "xi":
@@ -52,162 +109,37 @@ def _plot_value_label(value, s_power):
     return r"$\log (1 + \xi)$"
 
 
-def _plot_title_label(value, s_power):
-    value = _normalize_plot_value(value)
-    if value == "s_power_xi":
-        return rf"$s^{s_power}\xi(s_\perp, s_\parallel)$"
-    if value == "xi":
-        return r"$\xi(s_\perp, s_\parallel)$"
-    return r"$\log (1+\xi(s_\perp, s_\parallel))$"
-
-
-def _normalize_plot_style(style):
-    if style is None:
-        return "default"
-    aliases = {
-        "default": "default",
-        "contour": "contour",
-    }
-    try:
-        return aliases[style]
-    except KeyError as exc:
-        raise ValueError("style must be None, 'default', or 'contour'.") from exc
-
-
-PLOT_CORR2PCF_2D_BASE_STYLE = {
-    "figsize": (6.8, 6.8),
-    "label_fontsize": 18,
-    "tick_fontsize": 13,
-    "title_fontsize": 19,
-    "text_fontsize": 14,
-    "xlabel": r"$s_\perp\,(Mpc/h)$",
-    "ylabel": r"$s_\parallel\,(Mpc/h)$",
-    "tick_params": {
-        "direction": "in",
-        "top": True,
-        "right": True,
-    },
-    "center_lines": True,
-    "center_line_kwargs": {
-        "color": "black",
-        "lw": 1.0,
-        "alpha": 1.0,
-        "zorder": 20,
-    },
-    "spine_linewidth": 1.0,
-}
-
-
-PLOT_CORR2PCF_2D_STYLES = {
-    "default": {
-        **PLOT_CORR2PCF_2D_BASE_STYLE,
-        "value": "s_power_xi",
-        "cmap": "RdBu_r",
-        "n_levels": 81,
-        "symmetric_limits": True,
-        "draw_contours": False,
-        "contour_kwargs": {},
-        "colorbar_kwargs": {
-            "shrink": 0.75,
-            "fraction": 0.05,
-            "pad": 0.04,
-            "aspect": 25,
-        },
-        "colorbar_nbins": None,
-    },
-    "contour": {
-        **PLOT_CORR2PCF_2D_BASE_STYLE,
-        "value": "log10_1p_xi",
-        "cmap": "plasma",
-        "n_levels": 121,
-        "symmetric_limits": False,
-        "draw_contours": True,
-        "contour_kwargs": {
-            "colors": "yellow",
-            "linewidths": 1.1,
-            "linestyles": "dashdot",
-        },
-        "colorbar_kwargs": {
-            "orientation": "horizontal",
-            "shrink": 0.78,
-            "fraction": 0.07,
-            "pad": 0.12,
-            "aspect": 32,
-        },
-        "colorbar_nbins": 6,
-    },
-}
-
-
-CORNER_LABEL_BBOX = {
-    "boxstyle": "round,pad=0.25",
-    "facecolor": "white",
-    "edgecolor": "0.75",
-    "alpha": 0.95,
-}
-
-
-CORNER_LABEL_POSITIONS = {
-    "upper_left": (0.02, 0.98, "left", "top"),
-    "upper_right": (0.98, 0.98, "right", "top"),
-    "lower_left": (0.02, 0.02, "left", "bottom"),
-    "lower_right": (0.98, 0.02, "right", "bottom"),
-}
-
-
-PLOT_CORR2PCF_2D_KWARG_DEFAULTS = {
-    "figsize": None,
-    "cmap": None,
-    "n_levels": None,
-    "vmin": None,
-    "vmax": None,
-    "percentile": 98,
-    "s_power": 2,
-    "colorbar_kwargs": None,
-    "label_fontsize": None,
-    "tick_fontsize": None,
-    "title_fontsize": None,
-    "text_fontsize": None,
-    "contour_levels": None,
-    "center_lines": None,
-}
-
-
-PLOT_CORR2PCF_2D_STYLE_KWARGS = (
-    "figsize",
-    "cmap",
-    "n_levels",
-    "label_fontsize",
-    "tick_fontsize",
-    "title_fontsize",
-    "text_fontsize",
-    "center_lines",
-)
-
-
-def _normalize_plot_kwargs(kwargs):
-    unexpected = sorted(set(kwargs) - set(PLOT_CORR2PCF_2D_KWARG_DEFAULTS))
+def _plot_options(add_contour, value, title, kwargs):
+    unexpected = sorted(set(kwargs) - set(PLOT_KWARG_DEFAULTS))
     if unexpected:
         names = ", ".join(unexpected)
         raise TypeError(f"Unexpected plot_corr2pcf_2d keyword argument(s): {names}.")
+    if not isinstance(add_contour, bool):
+        raise ValueError("add_contour must be True or False.")
 
-    options = dict(PLOT_CORR2PCF_2D_KWARG_DEFAULTS)
-    options.update(kwargs)
-    return options
+    plot_kwargs = dict(PLOT_KWARG_DEFAULTS)
+    plot_kwargs.update(kwargs)
+
+    options = copy.deepcopy(PLOT_BASE_OPTIONS)
+    options["add_contour"] = add_contour
+    options["value"] = _check_plot_value(value)
+    options["title"] = title
+
+    for name in PLOT_OPTION_KWARGS:
+        override = plot_kwargs[name]
+        if override is None:
+            continue
+        if name in PLOT_MERGE_KWARGS:
+            options[name].update(override)
+        else:
+            options[name] = override
+
+    if plot_kwargs["colorbar_kwargs"] is not None:
+        options["colorbar_kwargs"].update(plot_kwargs["colorbar_kwargs"])
+    return options, plot_kwargs
 
 
-def _style_options(style):
-    style = _normalize_plot_style(style)
-    options = dict(PLOT_CORR2PCF_2D_STYLES[style])
-    options["style"] = style
-    options["colorbar_kwargs"] = dict(options["colorbar_kwargs"])
-    options["contour_kwargs"] = dict(options["contour_kwargs"])
-    options["tick_params"] = dict(options["tick_params"])
-    options["center_line_kwargs"] = dict(options["center_line_kwargs"])
-    return options
-
-
-def _normalize_s_limits(s_range, s_min, s_max):
+def _s_limits(s_range, s_min, s_max):
     if s_range is not None:
         if s_min is not None or s_max is not None:
             raise ValueError("Use either s_range or s_min/s_max, not both.")
@@ -228,24 +160,20 @@ def _normalize_s_limits(s_range, s_min, s_max):
     return s_min, s_max
 
 
-def _s_range_mask(x, y, s_min, s_max):
-    radius = np.sqrt(x**2 + y**2)
-    mask = np.ones(radius.shape, dtype=bool)
-    if s_min is not None:
-        mask &= radius >= s_min
-    if s_max is not None:
-        mask &= radius <= s_max
-    if not np.any(mask):
-        raise ValueError("s range does not include any plotted points.")
-    return mask
-
-
 def _prepare_plot_item(name, x, y, z, s_min, s_max, value):
-    point_mask = _s_range_mask(x, y, s_min, s_max)
+    radius = np.sqrt(x**2 + y**2)
+    point_mask = np.ones(radius.shape, dtype=bool)
+    if s_min is not None:
+        point_mask &= radius >= s_min
+    if s_max is not None:
+        point_mask &= radius <= s_max
+    if not np.any(point_mask):
+        raise ValueError("s range does not include any plotted points.")
+
     z_plot = np.asarray(z, dtype=np.float64).copy()
     selected = z_plot[point_mask]
     if np.any(~np.isfinite(selected)):
-        if _normalize_plot_value(value) == "log10_1p_xi":
+        if _check_plot_value(value) == "log10_1p_xi":
             raise ValueError(
                 "value='log10_1p_xi' requires xi > -1 in the selected s range."
             )
@@ -255,23 +183,23 @@ def _prepare_plot_item(name, x, y, z, s_min, s_max, value):
 
 
 def _get_smu_arrays(corr2pcf_smu):
-    s = _sampling_array(corr2pcf_smu, "s", "corr2pcf_smu")
-    mu = _sampling_array(corr2pcf_smu, "mu", "corr2pcf_smu")
+    s = _corr_array(corr2pcf_smu, "s", "corr2pcf_smu")
+    mu = _corr_array(corr2pcf_smu, "mu", "corr2pcf_smu")
     xi = np.asarray(corr2pcf_smu.xi, dtype=np.float64)
     if xi.shape != (s.size, mu.size):
         raise ValueError(
             f"corr2pcf_smu.xi must have shape {(s.size, mu.size)}, got {xi.shape}."
         )
     if np.any(mu < 0.0) or np.any(mu > 1.0):
-        raise ValueError("corr2pcf_smu.sampling['mu'] is expected to lie in [0, 1].")
+        raise ValueError("corr2pcf_smu.mu is expected to lie in [0, 1].")
 
     order = np.argsort(mu)
     return s, mu[order], xi[:, order]
 
 
 def _get_rppi_arrays(corr2pcf_rppi):
-    rp = _sampling_array(corr2pcf_rppi, "rp", "corr2pcf_rppi")
-    pi = _sampling_array(corr2pcf_rppi, "pi", "corr2pcf_rppi")
+    rp = _corr_array(corr2pcf_rppi, "rp", "corr2pcf_rppi")
+    pi = _corr_array(corr2pcf_rppi, "pi", "corr2pcf_rppi")
     xi = np.asarray(corr2pcf_rppi.xi, dtype=np.float64)
     if xi.shape != (rp.size, pi.size):
         raise ValueError(
@@ -303,8 +231,7 @@ def smu_to_half_plane(corr2pcf_smu, side="right", s_power=2, value="s_power_xi")
     elif side != "right":
         raise ValueError("side must be 'left' or 'right'.")
 
-    values = _plot_values(xi_full, S, s_power, value)
-    return s_perp, s_par, values
+    return s_perp, s_par, _plot_values(xi_full, S, s_power, value)
 
 
 def rppi_to_half_plane(corr2pcf_rppi, side="right", s_power=2, value="s_power_xi"):
@@ -326,8 +253,7 @@ def rppi_to_half_plane(corr2pcf_rppi, side="right", s_power=2, value="s_power_xi
         raise ValueError("side must be 'left' or 'right'.")
 
     s = np.sqrt(RP**2 + PI**2)
-    values = _plot_values(xi_full, s, s_power, value)
-    return x, PI, values
+    return x, PI, _plot_values(xi_full, s, s_power, value)
 
 
 def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2, value="s_power_xi"):
@@ -335,7 +261,7 @@ def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2, value="s_po
     Convert xi(s, mu) sampled on mu in [0, 1] to one quadrant of the
     (s_perp, s_parallel) plane.
     """
-    quadrant = _normalize_quadrant_name(quadrant)
+    quadrant = _check_quadrant_name(quadrant)
     s, mu, xi = _get_smu_arrays(corr2pcf_smu)
 
     S, MU = np.meshgrid(s, mu, indexing="ij")
@@ -347,15 +273,14 @@ def smu_to_quadrant(corr2pcf_smu, quadrant="upper_right", s_power=2, value="s_po
     if "lower" in quadrant:
         s_par = -s_par
 
-    values = _plot_values(xi, S, s_power, value)
-    return s_perp, s_par, values
+    return s_perp, s_par, _plot_values(xi, S, s_power, value)
 
 
 def rppi_to_quadrant(corr2pcf_rppi, quadrant="upper_right", s_power=2, value="s_power_xi"):
     """
     Convert xi(rp, pi) sampled on pi >= 0 to one quadrant.
     """
-    quadrant = _normalize_quadrant_name(quadrant)
+    quadrant = _check_quadrant_name(quadrant)
     rp, pi, xi = _get_rppi_arrays(corr2pcf_rppi)
 
     RP, PI = np.meshgrid(rp, pi, indexing="ij")
@@ -366,8 +291,7 @@ def rppi_to_quadrant(corr2pcf_rppi, quadrant="upper_right", s_power=2, value="s_
         PI = -PI
 
     s = np.sqrt(RP**2 + PI**2)
-    values = _plot_values(xi, s, s_power, value)
-    return x, PI, values
+    return x, PI, _plot_values(xi, s, s_power, value)
 
 
 COORDINATE_CONVERTERS = {
@@ -376,91 +300,73 @@ COORDINATE_CONVERTERS = {
 }
 
 
-def _normalize_quadrant_name(name):
-    aliases = {
-        "ul": "upper_left",
-        "upper-left": "upper_left",
-        "upper_left": "upper_left",
-        "top_left": "upper_left",
-        "tl": "upper_left",
-        "ur": "upper_right",
-        "upper-right": "upper_right",
-        "upper_right": "upper_right",
-        "top_right": "upper_right",
-        "tr": "upper_right",
-        "ll": "lower_left",
-        "lower-left": "lower_left",
-        "lower_left": "lower_left",
-        "bottom_left": "lower_left",
-        "bl": "lower_left",
-        "lr": "lower_right",
-        "lower-right": "lower_right",
-        "lower_right": "lower_right",
-        "bottom_right": "lower_right",
-        "br": "lower_right",
-    }
-    try:
-        return aliases[name]
-    except KeyError as exc:
+def _check_quadrant_name(name):
+    if name not in QUADRANTS:
         raise ValueError(
             "quadrant must be one of upper_left, upper_right, lower_left, lower_right."
-        ) from exc
-
-
-def _normalize_quadrants(quadrants):
-    if isinstance(quadrants, dict):
-        return {
-            _normalize_quadrant_name(name): corr
-            for name, corr in quadrants.items()
-            if corr is not None
-        }
-    if len(quadrants) != 4:
-        raise ValueError(
-            "quadrants must be a dict or a 4-item sequence ordered as "
-            "(upper_left, upper_right, lower_left, lower_right)."
         )
-    names = ("upper_left", "upper_right", "lower_left", "lower_right")
-    return {name: corr for name, corr in zip(names, quadrants) if corr is not None}
+    return name
 
 
-def _normalize_coordinates_name(name):
-    if name not in COORDINATE_CONVERTERS:
+def _check_coordinate_name(name):
+    if name not in COORDINATE_NAMES:
         raise ValueError("coordinates must contain only 'smu' or 'rppi'.")
     return name
 
 
 def _half_plane_coordinates(coordinates):
     if isinstance(coordinates, str):
-        name = _normalize_coordinates_name(coordinates)
+        name = _check_coordinate_name(coordinates)
         return name, name
     if isinstance(coordinates, dict):
-        left = coordinates.get("left", coordinates.get("corr2pcf1"))
-        right = coordinates.get("right", coordinates.get("corr2pcf2", left))
-        if left is None or right is None:
+        required = {"left", "right"}
+        if set(coordinates) != required:
             raise ValueError(
-                "coordinates dict must define left/right or corr2pcf1/corr2pcf2."
+                "coordinates dict must contain exactly 'left' and 'right'."
             )
-        return _normalize_coordinates_name(left), _normalize_coordinates_name(right)
+        return (
+            _check_coordinate_name(coordinates["left"]),
+            _check_coordinate_name(coordinates["right"]),
+        )
     if len(coordinates) != 2:
         raise ValueError(
             "coordinates must be 'smu', 'rppi', or a 2-item sequence for "
             "(corr2pcf1, corr2pcf2)."
         )
-    return tuple(_normalize_coordinates_name(name) for name in coordinates)
+    return tuple(_check_coordinate_name(name) for name in coordinates)
+
+
+def _quadrant_map(quadrants):
+    if isinstance(quadrants, dict):
+        quadrant_map = {
+            _check_quadrant_name(name): corr
+            for name, corr in quadrants.items()
+            if corr is not None
+        }
+    else:
+        if len(quadrants) != 4:
+            raise ValueError(
+                "quadrants must be a dict or a 4-item sequence ordered as "
+                "(upper_left, upper_right, lower_left, lower_right)."
+            )
+        quadrant_map = {
+            quadrant: corr
+            for quadrant, corr in zip(QUADRANTS, quadrants)
+            if corr is not None
+        }
+
+    if not quadrant_map:
+        raise ValueError("quadrants must contain at least one corr2pcf object.")
+    return quadrant_map
 
 
 def _quadrant_coordinates(coordinates):
     if isinstance(coordinates, str):
-        name = _normalize_coordinates_name(coordinates)
-        return {
-            "upper_left": name,
-            "upper_right": name,
-            "lower_left": name,
-            "lower_right": name,
-        }
+        name = _check_coordinate_name(coordinates)
+        return {quadrant: name for quadrant in QUADRANTS}
     if isinstance(coordinates, dict):
         return {
-            _normalize_quadrant_name(quadrant): _normalize_coordinates_name(name)
+            _check_quadrant_name(quadrant): _check_coordinate_name(name)
             for quadrant, name in coordinates.items()
         }
     if len(coordinates) != 4:
@@ -468,52 +374,97 @@ def _quadrant_coordinates(coordinates):
             "coordinates must be 'smu', 'rppi', or a 4-item sequence ordered as "
             "(upper_left, upper_right, lower_left, lower_right)."
         )
-    names = ("upper_left", "upper_right", "lower_left", "lower_right")
     return {
-        quadrant: _normalize_coordinates_name(name)
-        for quadrant, name in zip(names, coordinates)
+        quadrant: _check_coordinate_name(name)
+        for quadrant, name in zip(QUADRANTS, coordinates)
     }
 
 
-def _combined_vmax(arrays, percentile):
-    values = np.concatenate([np.abs(arr).ravel() for arr in arrays])
+def _plot_items(corr2pcf1, corr2pcf2, quadrants, coordinates, s_power, value):
+    if quadrants is None:
+        if corr2pcf1 is None:
+            raise ValueError("corr2pcf1 is required when quadrants is not provided.")
+
+        coordinates_left, coordinates_right = _half_plane_coordinates(coordinates)
+        left_converter = COORDINATE_CONVERTERS[coordinates_left][0]
+        x_left, y_left, z_left = left_converter(
+            corr2pcf1,
+            side="left",
+            s_power=s_power,
+            value=value,
+        )
+
+        if corr2pcf2 is None:
+            right_corr = corr2pcf1
+            right_converter = left_converter
+        else:
+            right_corr = corr2pcf2
+            right_converter = COORDINATE_CONVERTERS[coordinates_right][0]
+        x_right, y_right, z_right = right_converter(
+            right_corr,
+            side="right",
+            s_power=s_power,
+            value=value,
+        )
+        return [
+            ("upper_left", x_left, y_left, z_left),
+            ("upper_right", x_right, y_right, z_right),
+        ]
+
+    quadrant_map = _quadrant_map(quadrants)
+    coordinates_map = _quadrant_coordinates(coordinates)
+    plot_items = []
+    for quadrant in QUADRANTS:
+        corr = quadrant_map.get(quadrant)
+        if corr is None:
+            continue
+        coordinates_name = coordinates_map.get(quadrant)
+        if coordinates_name is None:
+            raise ValueError(f"coordinates is missing an entry for {quadrant}.")
+        converter = COORDINATE_CONVERTERS[coordinates_name][1]
+        x, y, z = converter(corr, quadrant=quadrant, s_power=s_power, value=value)
+        plot_items.append((quadrant, x, y, z))
+    return plot_items
+
+
+def _value_limits(plot_items, vmin, vmax, percentile, symmetric_limits):
+    values = np.concatenate(
+        [z[point_mask].ravel() for _, _, _, z, point_mask in plot_items]
+    )
     values = values[np.isfinite(values)]
-    if values.size == 0:
-        return 1.0
-    vmax = np.nanpercentile(values, percentile)
-    if not np.isfinite(vmax) or vmax == 0.0:
-        vmax = np.nanmax(values)
-    return float(vmax) if np.isfinite(vmax) and vmax > 0.0 else 1.0
+    if symmetric_limits and vmin is None:
+        if vmax is None:
+            if values.size == 0:
+                auto_vmax = 1.0
+            else:
+                auto_vmax = np.nanpercentile(np.abs(values), percentile)
+                if not np.isfinite(auto_vmax) or auto_vmax == 0.0:
+                    auto_vmax = np.nanmax(np.abs(values))
+                auto_vmax = float(auto_vmax) if auto_vmax > 0.0 else 1.0
+        else:
+            auto_vmax = vmax
+        auto_vmin = -auto_vmax
+    elif values.size == 0:
+        auto_vmin, auto_vmax = -1.0, 1.0
+    else:
+        percentile = float(percentile)
+        if percentile <= 0.0 or percentile > 100.0:
+            raise ValueError("percentile must be in (0, 100].")
+        lower_percentile = max(0.0, 100.0 - percentile)
+        auto_vmin = float(np.nanpercentile(values, lower_percentile))
+        auto_vmax = float(np.nanpercentile(values, percentile))
+        if auto_vmin == auto_vmax:
+            delta = abs(auto_vmax) * 0.1 if auto_vmax != 0.0 else 1.0
+            auto_vmin -= delta
+            auto_vmax += delta
 
-
-def _combined_vrange(arrays, percentile):
-    values = np.concatenate([arr.ravel() for arr in arrays])
-    values = values[np.isfinite(values)]
-    if values.size == 0:
-        return -1.0, 1.0
-
-    percentile = float(percentile)
-    if percentile <= 0.0 or percentile > 100.0:
-        raise ValueError("percentile must be in (0, 100].")
-    lower_percentile = max(0.0, 100.0 - percentile)
-    vmin = np.nanpercentile(values, lower_percentile)
-    vmax = np.nanpercentile(values, percentile)
-
-    if not np.isfinite(vmin):
-        vmin = np.nanmin(values)
-    if not np.isfinite(vmax):
-        vmax = np.nanmax(values)
-    if not np.isfinite(vmin) or not np.isfinite(vmax):
-        return -1.0, 1.0
-    if vmin == vmax:
-        delta = abs(vmax) * 0.1 if vmax != 0.0 else 1.0
-        vmin -= delta
-        vmax += delta
-    return float(vmin), float(vmax)
-
-
-def _default_contour_levels(vmin, vmax):
-    return np.linspace(vmin, vmax, 7)[1:-1]
+    if vmin is None:
+        vmin = auto_vmin
+    if vmax is None:
+        vmax = auto_vmax
+    if vmin >= vmax:
+        raise ValueError("vmin must be smaller than vmax.")
+    return vmin, vmax
 
 
 def _grid_triangles(x, y):
@@ -536,7 +487,7 @@ def _grid_triangles(x, y):
     return np.asarray(triangles, dtype=np.int32).reshape(-1, 3)
 
 
-def _triangulation(x, y, point_mask=None):
+def _triangulation(x, y, point_mask):
     import matplotlib.tri as mtri
 
     triangles = _grid_triangles(x, y)
@@ -545,174 +496,25 @@ def _triangulation(x, y, point_mask=None):
         y.ravel(),
         triangles=triangles,
     )
-    if point_mask is not None:
-        triangle_mask = ~np.all(point_mask.ravel()[triangles], axis=1)
-        if np.all(triangle_mask):
-            raise ValueError("s range does not include any complete plot cells.")
-        triangulation.set_mask(triangle_mask)
+    triangle_mask = ~np.all(point_mask.ravel()[triangles], axis=1)
+    if np.all(triangle_mask):
+        raise ValueError("s range does not include any complete plot cells.")
+    triangulation.set_mask(triangle_mask)
     return triangulation
 
 
-def _resolve_plot_options(
-    style,
-    value,
-    title,
-    s_power,
-    plot_kwargs,
-):
-    options = _style_options(style)
-    if value is not None:
-        options["value"] = value
-    for name in PLOT_CORR2PCF_2D_STYLE_KWARGS:
-        override = plot_kwargs[name]
-        if override is not None:
-            options[name] = override
-
-    options["value"] = _normalize_plot_value(options["value"])
-    if plot_kwargs["colorbar_kwargs"] is not None:
-        options["colorbar_kwargs"].update(plot_kwargs["colorbar_kwargs"])
-    if title is None and options["style"] == "contour":
-        title = _plot_title_label(options["value"], s_power)
-    options["title"] = title
-    return options
-
-
-def _converted_plot_items(
-    corr2pcf1,
-    corr2pcf2,
-    quadrants,
-    coordinates,
-    s_power,
-    value,
-):
-    if quadrants is None:
-        if corr2pcf1 is None:
-            raise ValueError("corr2pcf1 is required when quadrants is not provided.")
-        coordinates_left, coordinates_right = _half_plane_coordinates(coordinates)
-        x_left, y_left, z_left = COORDINATE_CONVERTERS[coordinates_left][0](
-            corr2pcf1,
-            side="left",
-            s_power=s_power,
-            value=value,
-        )
-        if corr2pcf2 is None:
-            x_right, y_right, z_right = COORDINATE_CONVERTERS[coordinates_left][0](
-                corr2pcf1,
-                side="right",
-                s_power=s_power,
-                value=value,
-            )
-        else:
-            x_right, y_right, z_right = COORDINATE_CONVERTERS[coordinates_right][0](
-                corr2pcf2,
-                side="right",
-                s_power=s_power,
-                value=value,
-            )
-        return [
-            ("upper_left", x_left, y_left, z_left),
-            ("upper_right", x_right, y_right, z_right),
-        ]
-
-    quadrant_map = _normalize_quadrants(quadrants)
-    if not quadrant_map:
-        raise ValueError("quadrants must contain at least one corr2pcf object.")
-    coordinates_map = _quadrant_coordinates(coordinates)
-    plot_items = []
-    for quadrant in ("upper_left", "upper_right", "lower_left", "lower_right"):
-        corr = quadrant_map.get(quadrant)
-        if corr is None:
-            continue
-        coordinates_name = coordinates_map.get(quadrant)
-        if coordinates_name is None:
-            raise ValueError(f"coordinates is missing an entry for {quadrant}.")
-        x, y, z = COORDINATE_CONVERTERS[coordinates_name][1](
-            corr,
-            quadrant=quadrant,
-            s_power=s_power,
-            value=value,
-        )
-        plot_items.append((quadrant, x, y, z))
-    return plot_items
-
-
-def _prepared_plot_items(plot_items, s_min, s_max, value):
-    return [
-        _prepare_plot_item(name, x, y, z, s_min, s_max, value)
-        for name, x, y, z in plot_items
-    ]
-
-
-def _plot_value_arrays(plot_items):
-    return [z[point_mask] for _, _, _, z, point_mask in plot_items]
-
-
-def _resolve_value_limits(plot_items, vmin, vmax, percentile, symmetric_limits):
-    plot_value_arrays = _plot_value_arrays(plot_items)
-    if symmetric_limits and vmin is None:
-        if vmax is None:
-            vmax = _combined_vmax(plot_value_arrays, percentile)
-        vmin = -vmax
-    else:
-        auto_vmin, auto_vmax = _combined_vrange(plot_value_arrays, percentile)
-        if vmin is None:
-            vmin = auto_vmin
-        if vmax is None:
-            vmax = auto_vmax
-
-    if vmin >= vmax:
-        raise ValueError("vmin must be smaller than vmax.")
-    return vmin, vmax
-
-
 def _add_s_min_mask(ax, s_min, options):
-    if options["style"] != "contour" or s_min is None:
+    if not options["s_min_mask"] or s_min is None:
         return
 
-    import matplotlib.pyplot as plt
-
-    circle = plt.Circle(
-        (0.0, 0.0),
-        s_min,
-        facecolor="white",
-        # facecolor=plt.get_cmap(options["cmap"])(1.0),
-        edgecolor="none",
-        zorder=0.5,
-    )
+    circle = plt.Circle((0.0, 0.0), s_min, **options["s_min_mask_kwargs"])
     ax.add_patch(circle)
-
-
-def _draw_contours(ax, triangulation, z, vmin, vmax, options, contour_levels):
-    if not options["draw_contours"] and contour_levels is None:
-        return
-
-    levels = (
-        _default_contour_levels(vmin, vmax)
-        if contour_levels is None
-        else contour_levels
-    )
-    cs = ax.tricontour(
-        triangulation,
-        z.ravel(),
-        levels=levels,
-        **options["contour_kwargs"],
-    )
-    label_levels = cs.levels[::2] if cs.levels.size > 5 else cs.levels
-    ax.clabel(
-        cs,
-        label_levels,
-        inline=True,
-        fontsize=max(9, options["tick_fontsize"] - 1),
-        fmt="%.3f",
-        colors=options["contour_kwargs"].get("colors"),
-        inline_spacing=4,
-    )
 
 
 def _draw_plot_items(ax, plot_items, levels, vmin, vmax, options, contour_levels):
     cf = None
     for _, x, y, z, point_mask in plot_items:
-        triangulation = _triangulation(x, y, point_mask=point_mask)
+        triangulation = _triangulation(x, y, point_mask)
         cf = ax.tricontourf(
             triangulation,
             z.ravel(),
@@ -720,7 +522,30 @@ def _draw_plot_items(ax, plot_items, levels, vmin, vmax, options, contour_levels
             cmap=options["cmap"],
             extend="both",
         )
-        _draw_contours(ax, triangulation, z, vmin, vmax, options, contour_levels)
+        if not options["add_contour"]:
+            continue
+
+        contour_levels = (
+            np.linspace(vmin, vmax, 7)[1:-1]
+            if contour_levels is None
+            else contour_levels
+        )
+        cs = ax.tricontour(
+            triangulation,
+            z.ravel(),
+            levels=contour_levels,
+            **options["contour_kwargs"],
+        )
+        label_levels = cs.levels[::2] if cs.levels.size > 5 else cs.levels
+        ax.clabel(
+            cs,
+            label_levels,
+            inline=True,
+            fontsize=max(9, options["tick_fontsize"] - 1),
+            fmt="%.3f",
+            colors=options["contour_kwargs"].get("colors"),
+            inline_spacing=4,
+        )
     return cf
 
 
@@ -735,10 +560,16 @@ def _add_colorbar(fig, ax, cf, options, s_power):
     cbar.set_label(cbar_label, fontsize=options["label_fontsize"])
     cbar.ax.tick_params(labelsize=options["tick_fontsize"])
 
-    if options["colorbar_nbins"] is not None:
+    if (
+        options["colorbar_nbins"] is not None
+        and "ticks" not in options["colorbar_kwargs"]
+    ):
         import matplotlib.ticker as mticker
 
-        cbar.locator = mticker.MaxNLocator(nbins=options["colorbar_nbins"])
+        locator_kwargs = {"nbins": options["colorbar_nbins"]}
+        if options["colorbar_tick_prune"]:
+            locator_kwargs["prune"] = options["colorbar_tick_prune"]
+        cbar.locator = mticker.MaxNLocator(**locator_kwargs)
         cbar.update_ticks()
     return cbar
 
@@ -757,30 +588,26 @@ def _add_corner_label(ax, text, corner, options):
     )
 
 
-def _add_half_plane_labels(ax, quadrants, corr2pcf2, label1, label2, options):
-    if quadrants is not None:
-        return
-    if corr2pcf2 is None:
-        if label1:
-            _add_corner_label(ax, label1, "upper_right", options)
-        return
-
-    if label1:
-        _add_corner_label(ax, label1, "upper_left", options)
-    if label2:
-        _add_corner_label(ax, label2, "upper_right", options)
-
-
-def _add_quadrant_labels(ax, plot_items, quadrants, quadrant_labels, options):
-    if quadrants is None or not quadrant_labels:
+def _add_plot_labels(ax, plot_items, quadrants, corr2pcf2, labels, options):
+    if quadrants is None:
+        if corr2pcf2 is None:
+            if labels["label1"]:
+                _add_corner_label(ax, labels["label1"], "upper_right", options)
+            return
+        if labels["label1"]:
+            _add_corner_label(ax, labels["label1"], "upper_left", options)
+        if labels["label2"]:
+            _add_corner_label(ax, labels["label2"], "upper_right", options)
         return
 
+    quadrant_labels = labels["quadrant_labels"]
+    if not quadrant_labels:
+        return
     plotted_quadrants = {item[0] for item in plot_items}
     for name, text in quadrant_labels.items():
-        quadrant = _normalize_quadrant_name(name)
-        if quadrant not in plotted_quadrants:
-            continue
-        _add_corner_label(ax, text, quadrant, options)
+        quadrant = _check_quadrant_name(name)
+        if quadrant in plotted_quadrants:
+            _add_corner_label(ax, text, quadrant, options)
 
 
 def _style_axes(ax, options):
@@ -810,8 +637,8 @@ def plot_corr2pcf_2d(
     *,
     quadrants=None,
     coordinates="smu",
-    style=None,
-    value=None,
+    add_contour=False,
+    value="s_power_xi",
     s_range=None,
     s_min=None,
     s_max=None,
@@ -820,7 +647,7 @@ def plot_corr2pcf_2d(
     label2=None,
     title=None,
     ax=None,
-    colorbar=True,
+    add_colorbar=True,
     **kwargs,
 ):
     """
@@ -844,33 +671,19 @@ def plot_corr2pcf_2d(
     ``s_range=(s_min, s_max)`` or ``s_min``/``s_max`` can restrict the plotted
     total separation. For rppi data this still uses ``sqrt(rp**2 + pi**2)``.
 
-    ``style="contour"`` switches to a single-panel contour style with a
-    plasma colormap, horizontal colorbar, yellow dash-dot contours, and
-    projected-separation axis labels.
-
-    Extra plotting controls are passed as keyword arguments: ``figsize``,
-    ``cmap``, ``n_levels``, ``vmin``, ``vmax``, ``percentile``, ``s_power``,
-    ``colorbar_kwargs``, font sizes, ``contour_levels``, and ``center_lines``.
+    ``add_contour=True`` enables contour lines. ``contour_levels`` and
+    ``contour_kwargs`` control the contour details.
     """
-    import matplotlib.pyplot as plt
-
-    plot_kwargs = _normalize_plot_kwargs(kwargs)
+    options, plot_kwargs = _plot_options(add_contour, value, title, kwargs)
     s_power = plot_kwargs["s_power"]
-    options = _resolve_plot_options(
-        style=style,
-        value=value,
-        title=title,
-        s_power=s_power,
-        plot_kwargs=plot_kwargs,
-    )
-    s_min, s_max = _normalize_s_limits(s_range, s_min, s_max)
+    s_min, s_max = _s_limits(s_range, s_min, s_max)
 
     if ax is None:
         fig, ax = plt.subplots(figsize=options["figsize"])
     else:
         fig = ax.figure
 
-    plot_items = _converted_plot_items(
+    plot_items = _plot_items(
         corr2pcf1=corr2pcf1,
         corr2pcf2=corr2pcf2,
         quadrants=quadrants,
@@ -878,9 +691,12 @@ def plot_corr2pcf_2d(
         s_power=s_power,
         value=options["value"],
     )
-    plot_items = _prepared_plot_items(plot_items, s_min, s_max, options["value"])
+    plot_items = [
+        _prepare_plot_item(name, x, y, z, s_min, s_max, options["value"])
+        for name, x, y, z in plot_items
+    ]
 
-    vmin, vmax = _resolve_value_limits(
+    vmin, vmax = _value_limits(
         plot_items=plot_items,
         vmin=plot_kwargs["vmin"],
         vmax=plot_kwargs["vmax"],
@@ -888,6 +704,7 @@ def plot_corr2pcf_2d(
         symmetric_limits=options["symmetric_limits"],
     )
     levels = np.linspace(vmin, vmax, options["n_levels"])
+
     _add_s_min_mask(ax, s_min, options)
     cf = _draw_plot_items(
         ax=ax,
@@ -899,11 +716,18 @@ def plot_corr2pcf_2d(
         contour_levels=plot_kwargs["contour_levels"],
     )
 
-    cbar = None
-    if colorbar:
-        cbar = _add_colorbar(fig, ax, cf, options, s_power)
-
-    _add_half_plane_labels(ax, quadrants, corr2pcf2, label1, label2, options)
-    _add_quadrant_labels(ax, plot_items, quadrants, quadrant_labels, options)
+    cbar = _add_colorbar(fig, ax, cf, options, s_power) if add_colorbar else None
+    _add_plot_labels(
+        ax,
+        plot_items,
+        quadrants,
+        corr2pcf2,
+        {
+            "label1": label1,
+            "label2": label2,
+            "quadrant_labels": quadrant_labels,
+        },
+        options,
+    )
     _style_axes(ax, options)
     return fig, ax, cbar

@@ -1,0 +1,115 @@
+{
+  "corr2pcf_2d": {
+    "base_options": {
+      "cmap": "plasma",
+      "n_levels": 121,
+      "figsize": [6.8, 6.8],
+      "label_fontsize": 18,
+      "tick_fontsize": 13,
+      "title_fontsize": 19,
+      "text_fontsize": 14,
+      "xlabel": "$s_\\perp\\,({\\rm Mpc}/h)$",
+      "ylabel": "$s_\\parallel\\,({\\rm Mpc}/h)$",
+      "tick_params": {
+        "direction": "in",
+        "top": true,
+        "right": true
+      },
+      "center_lines": true,
+      "center_line_kwargs": {
+        "color": "black",
+        "lw": 1.0,
+        "alpha": 1.0,
+        "zorder": 20
+      },
+      "s_min_mask": true,
+      "s_min_mask_kwargs": {
+        "facecolor": "white",
+        "edgecolor": "none",
+        "zorder": 0.5
+      },
+      "spine_linewidth": 1.0,
+      "symmetric_limits": false,
+      "contour_kwargs": {
+        "colors": "yellow",
+        "linewidths": 1.1,
+        "linestyles": "dashdot"
+      },
+      "colorbar_kwargs": {
+        "orientation": "vertical",
+        "shrink": 0.78,
+        "fraction": 0.07,
+        "pad": 0.03,
+        "aspect": 32
+      },
+      "colorbar_nbins": 5,
+      "colorbar_tick_prune": "both"
+    },
+    "kwarg_defaults": {
+      "figsize": null,
+      "cmap": null,
+      "n_levels": null,
+      "vmin": null,
+      "vmax": null,
+      "percentile": 98,
+      "s_power": 2,
+      "colorbar_kwargs": null,
+      "colorbar_nbins": null,
+      "colorbar_tick_prune": null,
+      "label_fontsize": null,
+      "tick_fontsize": null,
+      "title_fontsize": null,
+      "text_fontsize": null,
+      "xlabel": null,
+      "ylabel": null,
+      "tick_params": null,
+      "spine_linewidth": null,
+      "symmetric_limits": null,
+      "contour_kwargs": null,
+      "contour_levels": null,
+      "center_lines": null,
+      "center_line_kwargs": null,
+      "s_min_mask": null,
+      "s_min_mask_kwargs": null
+    },
+    "option_kwargs": [
+      "figsize",
+      "cmap",
+      "n_levels",
+      "label_fontsize",
+      "tick_fontsize",
+      "title_fontsize",
+      "text_fontsize",
+      "xlabel",
+      "ylabel",
+      "tick_params",
+      "spine_linewidth",
+      "symmetric_limits",
+      "contour_kwargs",
+      "colorbar_nbins",
+      "colorbar_tick_prune",
+      "center_lines",
+      "center_line_kwargs",
+      "s_min_mask",
+      "s_min_mask_kwargs"
+    ],
+    "merge_kwargs": [
+      "tick_params",
+      "contour_kwargs",
+      "center_line_kwargs",
+      "s_min_mask_kwargs"
+    ],
+    "corner_label_bbox": {
+      "boxstyle": "round,pad=0.25",
+      "facecolor": "white",
+      "edgecolor": "0.75",
+      "alpha": 0.95
+    },
+    "corner_label_positions": {
+      "upper_left": [0.02, 0.98, "left", "top"],
+      "upper_right": [0.98, 0.98, "right", "top"],
+      "lower_left": [0.02, 0.02, "left", "bottom"],
+      "lower_right": [0.98, 0.02, "right", "bottom"]
+    }
+  }
+}
