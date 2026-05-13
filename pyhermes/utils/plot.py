@@ -87,6 +87,13 @@ PLOT_CORR2PCF_2D_BASE_STYLE = {
         "top": True,
         "right": True,
     },
+    "center_lines": True,
+    "center_line_kwargs": {
+        "color": "black",
+        "lw": 1.0,
+        "alpha": 1.0,
+        "zorder": 20,
+    },
     "spine_linewidth": 1.0,
 }
 
@@ -97,7 +104,6 @@ PLOT_CORR2PCF_2D_STYLES = {
         "value": "s_power_xi",
         "cmap": "RdBu_r",
         "n_levels": 81,
-        "center_lines": True,
         "symmetric_limits": True,
         "draw_contours": False,
         "contour_kwargs": {},
@@ -114,7 +120,6 @@ PLOT_CORR2PCF_2D_STYLES = {
         "value": "log10_1p_xi",
         "cmap": "plasma",
         "n_levels": 121,
-        "center_lines": False,
         "symmetric_limits": False,
         "draw_contours": True,
         "contour_kwargs": {
@@ -198,6 +203,7 @@ def _style_options(style):
     options["colorbar_kwargs"] = dict(options["colorbar_kwargs"])
     options["contour_kwargs"] = dict(options["contour_kwargs"])
     options["tick_params"] = dict(options["tick_params"])
+    options["center_line_kwargs"] = dict(options["center_line_kwargs"])
     return options
 
 
@@ -779,8 +785,8 @@ def _add_quadrant_labels(ax, plot_items, quadrants, quadrant_labels, options):
 
 def _style_axes(ax, options):
     if options["center_lines"]:
-        ax.axvline(0.0, color="k", lw=0.8, alpha=0.5)
-        ax.axhline(0.0, color="k", lw=0.8, alpha=0.5)
+        ax.axvline(0.0, **options["center_line_kwargs"])
+        ax.axhline(0.0, **options["center_line_kwargs"])
 
     tick_params = {"labelsize": options["tick_fontsize"]}
     tick_params.update(options["tick_params"])

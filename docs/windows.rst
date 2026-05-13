@@ -34,15 +34,26 @@ just numerical settings, but part of the estimator definition.
 Built-In Windows
 ----------------
 
-PyHermes window functions are specified in Fourier space. Below,
-:math:`k=|\mathbf{k}|` and :math:`q = 2\pi kR` unless otherwise stated.
-All built-in windows are normalized so that :math:`\widehat W(0)=1`.
+PyHermes evaluates window functions in Fourier space, but each built-in
+window also has a coordinate-space interpretation. The formulas below use the
+Fourier convention
+
+.. math::
+
+   \widehat W(\mathbf{k})
+   =
+   \int d^3x\,W(\mathbf{x})\,
+   e^{-2\pi i\mathbf{k}\cdot\mathbf{x}}.
+
+For isotropic windows, :math:`r=|\mathbf{x}|`, :math:`k=|\mathbf{k}|`, and
+:math:`q=2\pi kR`. The standard windows below are normalized so that
+:math:`\int d^3x\,W(\mathbf{x})=1` and :math:`\widehat W(0)=1`.
 
 Isotropic Windows
 ~~~~~~~~~~~~~~~~~
 
-``sphere`` is a real-space spherical top-hat of radius :math:`R`. It is the
-standard choice for smoothing and count-in-cell style measurements:
+``sphere`` is a spherical top-hat of radius :math:`R`. It is the standard
+choice for smoothing and count-in-cell style measurements:
 
 .. math::
 
@@ -54,10 +65,15 @@ standard choice for smoothing and count-in-cell style measurements:
    =
    3\,{\sin q-q\cos q\over q^3}.
 
-``gaussian`` uses a Gaussian smoothing scale :math:`R`:
+``gaussian`` is a normalized 3D Gaussian with smoothing scale :math:`R`:
 
 .. math::
 
+   W_{\rm gaussian}(r;R)
+   =
+   {1\over (2\pi)^{3/2}R^3}
+   \exp\left(-{r^2\over 2R^2}\right),
+   \qquad
    \widehat W_{\rm gaussian}(k;R)
    =
    \exp\left(-{q^2\over 2}\right).
@@ -75,14 +91,36 @@ for :math:`\xi(r)`:
    =
    {\sin q\over q}.
 
-``Tshell`` is a finite-thickness shell between :math:`R_{\rm in}` and
-:math:`R_{\rm out}`. With
-:math:`q_{\rm in}=2\pi kR_{\rm in}` and
+``Tshell`` is a finite-thickness spherical shell between
+:math:`R_{\rm in}` and :math:`R_{\rm out}`. It is equivalently a
+volume-normalized difference of two spherical top-hats:
+
+.. math::
+
+   W_{\rm Tshell}(r;R_{\rm in},R_{\rm out})
+   =
+   {R_{\rm out}^3 W_{\rm sphere}(r;R_{\rm out})
+   -
+   R_{\rm in}^3 W_{\rm sphere}(r;R_{\rm in})
+   \over
+   R_{\rm out}^3-R_{\rm in}^3}
+   =
+   {3\,[\Theta(R_{\rm out}-r)-\Theta(R_{\rm in}-r)]
+   \over
+   4\pi(R_{\rm out}^3-R_{\rm in}^3)}.
+
+With :math:`q_{\rm in}=2\pi kR_{\rm in}` and
 :math:`q_{\rm out}=2\pi kR_{\rm out}`,
 
 .. math::
 
    \widehat W_{\rm Tshell}
+   =
+   {R_{\rm out}^3 \widehat W_{\rm sphere}(k;R_{\rm out})
+   -
+   R_{\rm in}^3 \widehat W_{\rm sphere}(k;R_{\rm in})
+   \over
+   R_{\rm out}^3-R_{\rm in}^3}
    =
    3\,{
    \sin q_{\rm out}
@@ -96,9 +134,47 @@ for :math:`\xi(r)`:
    q_{\rm out}^3-q_{\rm in}^3
    }.
 
-``gaussian_shell`` is a shell-like oscillatory window with Gaussian damping.
-It is useful when one wants a preferred shell scale without a hard thin-shell
-kernel:
+``gaussian_shell`` is a Gaussian-smoothed shell-like filter. Let
+:math:`a=R_{\rm shell}`, :math:`\sigma=R_{\rm smooth}`, and
+:math:`G_\sigma` be the normalized Gaussian above. Define the
+Gaussian-smoothed thin-shell term
+
+.. math::
+
+   S_{a,\sigma}(r)
+   =
+   {1\over (2\pi)^{3/2}\sigma^3}
+   \exp\left[-{r^2+a^2\over 2\sigma^2}\right]
+   {\sinh(ra/\sigma^2)\over ra/\sigma^2},
+
+and the Gaussian-smoothed cosine-shell term
+
+.. math::
+
+   C_{a,\sigma}(r)
+   =
+   {1\over (2\pi)^{3/2}\sigma^3}
+   \exp\left[-{r^2+a^2\over 2\sigma^2}\right]
+   \left[
+   \cosh\left({ra\over \sigma^2}\right)
+   -
+   {a\over r}
+   \sinh\left({ra\over \sigma^2}\right)
+   \right],
+
+with the :math:`r\to0` limit used at the origin. Then
+
+.. math::
+
+   W_{\rm gaussian\_shell}
+   =
+   {\sigma^2 C_{a,\sigma}(r)+a^2 S_{a,\sigma}(r)
+   \over
+   a^2+\sigma^2}.
+
+In Fourier space, with
+:math:`q_{\rm shell}=2\pi kR_{\rm shell}` and
+:math:`q_{\rm smooth}=2\pi kR_{\rm smooth}`,
 
 .. math::
 
@@ -122,60 +198,79 @@ The redshift-space windows use a line-of-sight vector
 
 .. math::
 
+   z = \mathbf{x}\cdot\hat{\mathbf{n}},
+   \qquad
+   \rho = \sqrt{r^2-z^2},
+   \qquad
    k_\parallel = \mathbf{k}\cdot\hat{\mathbf{n}},
    \qquad
    k_\perp = \sqrt{k^2-k_\parallel^2}.
 
-``ring`` is the thin redshift-space pair window used for
-``smu`` and ``rppi`` style measurements:
+The ``ring`` and ``disk`` kernels use a cosine factor in Fourier space, so
+their coordinate-space definitions below are symmetrized over
+:math:`z=\pm H`.
+
+``ring`` is a thin transverse ring at radius :math:`R` and line-of-sight
+offset :math:`H`:
 
 .. math::
 
+   W_{\rm ring}(\rho,z;R,H)
+   =
+   {\delta_{\rm D}(\rho-R)\over 2\pi R}
+   { \delta_{\rm D}(z-H)+\delta_{\rm D}(z+H) \over 2},
+   \qquad
    \widehat W_{\rm ring}
    =
    J_0(2\pi k_\perp R)\,
    \cos(2\pi k_\parallel H).
 
-``disk`` averages over a transverse disk at line-of-sight offset :math:`H`:
+``disk`` is a transverse disk of radius :math:`R` at line-of-sight offset
+:math:`H`:
 
 .. math::
 
+   W_{\rm disk}(\rho,z;R,H)
+   =
+   {\Theta(R-\rho)\over \pi R^2}
+   { \delta_{\rm D}(z-H)+\delta_{\rm D}(z+H) \over 2},
+   \qquad
    \widehat W_{\rm disk}
    =
    {2J_1(2\pi k_\perp R)\over 2\pi k_\perp R}\,
    \cos(2\pi k_\parallel H).
 
-``cylinder`` averages over a finite cylinder of radius :math:`R` and height
+``cylinder`` is a cylindrical top-hat of radius :math:`R` and total height
 :math:`H`:
 
 .. math::
 
+   W_{\rm cylinder}(\rho,z;R,H)
+   =
+   {\Theta(R-\rho)\over \pi R^2}
+   {\Theta(H/2-|z|)\over H},
+   \qquad
    \widehat W_{\rm cylinder}
    =
    {2J_1(2\pi k_\perp R)\over 2\pi k_\perp R}\,
    {\sin(\pi k_\parallel H)\over \pi k_\parallel H}.
 
-The fractions above are evaluated with their limiting value of one when the
-denominator is zero.
-
-``cylshell`` averages over the cylindrical side surface at radius :math:`R`
-and half-height :math:`H`:
+``cylshell`` is a cylindrical side surface at radius :math:`R` and half-height
+:math:`H`:
 
 .. math::
 
-   W_{\rm cylshell}(r,z;R,H)
+   W_{\rm cylshell}(\rho,z;R,H)
    =
-   {\delta_{\rm D}(R-r)\,\theta(H-|z|)\over 4\pi R H},
-
-.. math::
-
+   {\delta_{\rm D}(\rho-R)\,\Theta(H-|z|)\over 4\pi R H},
+   \qquad
    \widehat W_{\rm cylshell}
    =
    J_0(2\pi k_\perp R)\,
    {\sin(2\pi k_\parallel H)\over 2\pi k_\parallel H}.
 
-The parallel fraction is evaluated with its limiting value of one when
-:math:`k_\parallel H = 0`.
+All sinc-like fractions in this section are evaluated with their limiting
+value of one when the denominator is zero.
 
 Defining Windows In PyHermes
 ----------------------------
