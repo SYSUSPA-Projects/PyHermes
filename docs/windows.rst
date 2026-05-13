@@ -206,10 +206,13 @@ The redshift-space windows use a line-of-sight vector
    \qquad
    k_\perp = \sqrt{k^2-k_\parallel^2}.
 
-The ``ring`` and ``disk`` kernels use a cosine factor in Fourier space, so
-their coordinate-space definitions below are symmetrized over
-:math:`z=\pm H`; the factor
-:math:`\delta_{\rm D}(|z|-H)/2` keeps the line-of-sight part normalized.
+All line-of-sight windows below are even in :math:`z`, so their Fourier
+kernels are real. The ``ring`` and ``disk`` windows use two infinitesimally
+thin offsets at :math:`z=\pm H`, written compactly as
+:math:`\delta_{\rm D}(|z|-H)/2`; this gives the cosine factor in Fourier
+space. The ``cylshell`` and ``cylinder`` windows use the symmetric finite
+interval :math:`|z|\le H`, written as :math:`\Theta(H-|z|)/(2H)`, which gives
+the sinc factor. These prefactors keep the line-of-sight part normalized.
 
 ``ring`` is a thin transverse ring at radius :math:`R` and line-of-sight
 offset :math:`H`:
