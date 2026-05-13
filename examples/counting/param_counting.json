@@ -1,7 +1,0 @@
-{
-	"Counting": {
-		"n_tasks": 100,
-		"deltac_in_path": "../convols/convols_L512_r5_pywt.npy",
-		"fout_dir": "./"
-	}
-}
