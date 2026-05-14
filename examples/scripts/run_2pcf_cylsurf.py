@@ -36,7 +36,7 @@ CYLSURF_PAIR_WINDOW = {
     "los_args": {"nx": 0.0, "ny": 0.0, "nz": 1.0},
     "other_args": {},
     "mapping": "smu_to_RH",
-    "kernel_mode": "auto",
+    "kernel_mode": "octant",
 }
 
 params = read_param(config_path="./configs/param_2pcf_smu_disk.yaml")
