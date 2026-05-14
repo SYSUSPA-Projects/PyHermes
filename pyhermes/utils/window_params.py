@@ -89,6 +89,33 @@ def normalize_kernel_mode(kernel_mode):
     return kernel_mode
 
 
+def callable_metadata(value):
+    target = getattr(value, "py_func", value)
+    module = getattr(target, "__module__", getattr(value, "__module__", type(value).__module__))
+    name = getattr(target, "__qualname__", getattr(target, "__name__", type(value).__name__))
+    return {"kind": "callable", "name": f"{module}.{name}"}
+
+
+def serialize_window_params(value):
+    if isinstance(value, dict):
+        serialized = {}
+        for key, item in value.items():
+            if key == "func":
+                serialized["custom_func"] = callable_metadata(item)
+            else:
+                serialized[key] = serialize_window_params(item)
+        return serialized
+    if callable(value):
+        return callable_metadata(value)
+    if isinstance(value, np.ndarray):
+        return value.tolist()
+    if isinstance(value, (list, tuple)):
+        return [serialize_window_params(item) for item in value]
+    if isinstance(value, np.generic):
+        return value.item()
+    return copy.deepcopy(value)
+
+
 def apply_builtin_pair_window_defaults(pair_window):
     params = copy.deepcopy(pair_window)
     window_type = params.get("type")

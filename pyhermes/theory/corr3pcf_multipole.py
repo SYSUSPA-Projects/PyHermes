@@ -10,6 +10,7 @@ from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
 from pyhermes.utils.special_functions import solve_multipoles_from_ratio
+from pyhermes.utils.window_params import serialize_window_params
 
 
 PRODUCT_RULES = {
@@ -155,14 +156,14 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _serialize_window_input(self, value):
         if isinstance(value, dict):
-            return copy.deepcopy(value)
+            return serialize_window_params(value)
         if isinstance(value, WindowFunc):
             return {
                 "kind": "WindowFunc",
                 "type": getattr(value, "type", "custom"),
-                "len_args": copy.deepcopy(getattr(value, "len_args", {})),
-                "los_args": copy.deepcopy(getattr(value, "los_args", {})),
-                "other_args": copy.deepcopy(getattr(value, "other_args", {})),
+                "len_args": serialize_window_params(getattr(value, "len_args", {})),
+                "los_args": serialize_window_params(getattr(value, "los_args", {})),
+                "other_args": serialize_window_params(getattr(value, "other_args", {})),
             }
         return value
 
