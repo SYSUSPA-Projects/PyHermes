@@ -11,6 +11,7 @@ configuration and replaces only the pair window. Run it from ``examples``:
 from numba import njit
 from pyhermes.param.parambase import read_param
 from pyhermes.theory.corr2pcf import Corr_2PCF
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.window_functions import (
     window_function_cylshell_numba,
     window_function_disk_numba,
@@ -39,8 +40,9 @@ CYLSURF_PAIR_WINDOW = {
 }
 
 params = read_param(config_path="./configs/param_2pcf_smu_disk.yaml")
-params["Corr_2PCF"]["pair_window"] = CYLSURF_PAIR_WINDOW
-params["Corr_2PCF"]["fout_path"] = "./output/quijote8000_snap004_rsd_2pcf_smu_cylsurf.pkl"
+if MPI.COMM_WORLD.Get_rank() == 0:
+    params["Corr_2PCF"]["pair_window"] = CYLSURF_PAIR_WINDOW
+    params["Corr_2PCF"]["fout_path"] = "./output/quijote8000_snap004_rsd_2pcf_smu_cylsurf.pkl"
 
 task = Corr_2PCF(param_task=params)
 task.run(overwrite=True)
