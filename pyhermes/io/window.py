@@ -19,6 +19,7 @@ from pyhermes.utils.window_params import (
     default_kernel_mode,
     normalize_los_args,
     normalize_kernel_mode,
+    serialize_window_params,
 )
 
 
@@ -89,6 +90,7 @@ class WindowFunc(ConvolsData):
         self.window_args.update(self.los_args)
         self.window_args.update(self.other_args)
         self.w_kernel = None
+        self.is_composite_window = False
 
     def _resolve_kernel_mode(self, win_params, has_custom_func):
         kernel_mode = win_params.get("kernel_mode", None)
@@ -124,6 +126,10 @@ class WindowFunc(ConvolsData):
         return not self._los_is_axis_aligned()
 
     def _build_kernel(self):
+        if getattr(self, "is_composite_window", False):
+            if self.rank == 0:
+                self.logger.error("Composite WindowFunc already stores a materialized w_kernel and cannot rebuild it.")
+            func_util.safe_exit(1)
         if self._requires_full_rfft_kernel():
             self.w_kernel = build_real_window_rfft_kernel(
                 L=self.L,
@@ -144,8 +150,148 @@ class WindowFunc(ConvolsData):
 
     def as_array(self):
         if self.w_kernel is None:
+            if getattr(self, "is_composite_window", False):
+                if self.rank == 0:
+                    self.logger.error(
+                        "Composite WindowFunc has no w_kernel. Copy composite windows with copy_kernel=True."
+                    )
+                func_util.safe_exit(1)
             self._build_kernel()
         return self.w_kernel
+
+    def _window_operation_descriptor(self):
+        return serialize_window_params(getattr(self, "window_params", {}))
+
+    def _check_window_compatibility(self, other):
+        if not isinstance(other, WindowFunc):
+            return
+        for key in ("L", "bandwidth", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level"):
+            if getattr(self, key) != getattr(other, key):
+                if self.rank == 0:
+                    self.logger.error(
+                        f"Cannot combine WindowFunc objects with different {key}: "
+                        f"{getattr(self, key)} vs {getattr(other, key)}."
+                    )
+                func_util.safe_exit(1)
+
+    @staticmethod
+    def _is_real_scalar(value):
+        return np.isscalar(value) and not isinstance(value, (str, bytes)) and np.isrealobj(value)
+
+    def _spawn_composite(self, w_kernel, operation):
+        new = self.__class__.__new__(self.__class__)
+
+        new.comm = self.comm
+        new.rank = self.rank
+        new.logger = self.logger
+        new.saveflag = False
+        new.task_params = copy.deepcopy(getattr(self, "task_params", None))
+        new.threads = self.threads
+        new.convols_info = copy.deepcopy(getattr(self, "convols_info", {}))
+        new.epsilon = None
+
+        for key in (
+            "L",
+            "bandwidth",
+            "box_size",
+            "phi_resolution",
+            "wavelet_mode",
+            "wavelet_level",
+        ):
+            setattr(new, key, copy.deepcopy(getattr(self, key)))
+        new.phi_array = self.phi_array
+        new.phi_fourier_power = self.phi_fourier_power
+
+        new.type = "composite"
+        new.func = None
+        new.has_custom_func = False
+        new.kernel_mode = "materialized"
+        new.len_args = {}
+        new.rescale_len_args = {}
+        new.los_args = {}
+        new.other_args = {"operation": copy.deepcopy(operation)}
+        new.window_args = {}
+        new.window_params = {
+            "type": new.type,
+            "len_args": new.len_args,
+            "los_args": new.los_args,
+            "other_args": new.other_args,
+            "kernel_mode": new.kernel_mode,
+        }
+        new.input_params = {
+            **copy.deepcopy(new.window_params),
+            "J": int(np.log2(self.L)),
+            "box_size": self.box_size,
+            "phi_resolution": self.phi_resolution,
+            "wavelet_mode": self.wavelet_mode,
+            "wavelet_level": self.wavelet_level,
+            "bandwidth": self.bandwidth,
+        }
+        new.w_kernel = w_kernel
+        new.is_composite_window = True
+        return new
+
+    def _binary_window_op(self, other, op_name, op_func):
+        if not isinstance(other, WindowFunc):
+            return NotImplemented
+        self._check_window_compatibility(other)
+        left = self.as_array()
+        right = other.as_array()
+        if left.shape != right.shape:
+            if self.rank == 0:
+                self.logger.error(
+                    f"Cannot combine WindowFunc kernels with different shapes: {left.shape} vs {right.shape}."
+                )
+            func_util.safe_exit(1)
+        operation = {
+            "op": op_name,
+            "left": self._window_operation_descriptor(),
+            "right": other._window_operation_descriptor(),
+        }
+        return self._spawn_composite(op_func(left, right), operation)
+
+    def _scalar_window_op(self, scalar, op_name, op_func):
+        if not self._is_real_scalar(scalar):
+            return NotImplemented
+        scalar = float(scalar)
+        operation = {
+            "op": op_name,
+            "window": self._window_operation_descriptor(),
+            "scalar": scalar,
+        }
+        return self._spawn_composite(op_func(self.as_array(), scalar), operation)
+
+    def __add__(self, other):
+        return self._binary_window_op(other, "add", lambda left, right: left + right)
+
+    def __radd__(self, other):
+        if isinstance(other, WindowFunc):
+            return other.__add__(self)
+        return NotImplemented
+
+    def __sub__(self, other):
+        return self._binary_window_op(other, "sub", lambda left, right: left - right)
+
+    def __rsub__(self, other):
+        if isinstance(other, WindowFunc):
+            return other.__sub__(self)
+        return NotImplemented
+
+    def __neg__(self):
+        return self._scalar_window_op(-1.0, "mul", lambda window, scalar: window * scalar)
+
+    def __mul__(self, other):
+        return self._scalar_window_op(other, "mul", lambda window, scalar: window * scalar)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __truediv__(self, other):
+        if self._is_real_scalar(other) and float(other) == 0.0:
+            if self.rank == 0:
+                self.logger.error("Cannot divide WindowFunc by zero.")
+            func_util.safe_exit(1)
+        return self._scalar_window_op(other, "div", lambda window, scalar: window / scalar)
 
     def copy(self, copy_kernel=True):
         """
@@ -159,6 +305,10 @@ class WindowFunc(ConvolsData):
             parameters but will rebuild ``w_kernel`` on the next ``as_array()``
             call.
         """
+        if getattr(self, "is_composite_window", False) and not copy_kernel:
+            if self.rank == 0:
+                self.logger.error("Composite WindowFunc cannot be copied with copy_kernel=False.")
+            func_util.safe_exit(1)
         new = self.__class__.__new__(self.__class__)
         for key, value in self.__dict__.items():
             if key in ("comm", "logger", "func"):

@@ -286,6 +286,23 @@ In Python:
    )
    smoothed = convols_data @ window
 
+``WindowFunc`` objects can also be combined after their kernels are built. The
+operations act directly on ``w_kernel``:
+
+.. code-block:: python
+
+   W_shell = WindowFunc(shell_params, convols_data.convols_info, threads=8)
+   W_disk = WindowFunc(disk_params, convols_data.convols_info, threads=8)
+
+   W_mix = 0.7 * W_shell + 0.3 * W_disk
+   smoothed = convols_data @ W_mix
+
+Supported operations are ``W1 + W2``, ``W1 - W2``, ``a * W``, ``W * a``,
+``W / a``, and ``-W``. Both windows in a binary operation must share the same
+``J``, ``box_size``, ``phi_resolution``, ``wavelet_mode``, ``wavelet_level``,
+``bandwidth``, and kernel shape. Composite windows are materialized: they store
+the resulting ``w_kernel`` and do not rebuild from a window function.
+
 Important details:
 
 - ``type`` selects the built-in window function.
