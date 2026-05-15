@@ -387,60 +387,39 @@ In Python:
        "kernel_mode": "octant",
    }
 
-The same idea works for line-of-sight windows. This disk-pair example is
-equivalent to the built-in ``disk`` formula, but exposes the ingredients that a
-custom user-defined LOS window needs:
+The same idea works for line-of-sight windows. This example combines the
+cylindrical side surface and two disk caps into a closed cylinder surface. The
+weights follow the corresponding areas: the side area is proportional to
+:math:`2H`, while the two caps are proportional to :math:`R` after the common
+factor :math:`2\pi R` is removed:
 
 .. code-block:: python
 
-   import copy
-   import numpy as np
    from numba import njit
 
-   from pyhermes.utils.special_functions import jn_numba
+   from pyhermes.utils.window_functions import (
+       window_function_cylshell_numba,
+       window_function_disk_numba,
+   )
 
    @njit
-   def window_function_mydisk_los_numba(
+   def window_function_cylsurf_numba(
        ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0
    ):
-       norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-       if norm == 0.0:
-           return np.nan
-       nx = nx / norm
-       ny = ny / norm
-       nz = nz / norm
-
-       k_parallel = ki * nx + kj * ny + kk * nz
-       k2 = ki * ki + kj * kj + kk * kk
-       k_perp2 = k2 - k_parallel * k_parallel
-       if k_perp2 < 0.0:
-           k_perp2 = 0.0
-
-       k_perp = np.sqrt(k_perp2)
-       q_perp = 2.0 * np.pi * k_perp * R
-       q_parallel = 2.0 * np.pi * k_parallel * H
-
-       if q_perp == 0.0:
-           part_perp = 1.0
-       else:
-           part_perp = 2.0 * jn_numba(1, q_perp) / q_perp
-       return part_perp * np.cos(q_parallel)
-
-   def my_mapping_smu_to_RH_los(sample, pair_window):
-       s = sample["s"]
-       mu = sample["mu"]
-       params = copy.deepcopy(pair_window)
-       params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
-       params["len_args"]["H"] = s * mu
-       return params
+       denom = 2.0 * H + R
+       if denom == 0.0:
+           return 1.0
+       win_cylshell = window_function_cylshell_numba(ki, kj, kk, R, H, nx, ny, nz)
+       win_disk = window_function_disk_numba(ki, kj, kk, R, H, nx, ny, nz)
+       return (win_cylshell * 2.0 * H + win_disk * R) / denom
 
    pair_window = {
-       "type": "my_disk",
-       "func": window_function_mydisk_los_numba,
+       "type": "cylsurf",
+       "func": window_function_cylsurf_numba,
        "len_args": ["R", "H"],
-       "los_args": {"nx": 1.0, "ny": 1.0, "nz": 1.0},
-       "mapping": my_mapping_smu_to_RH_los,
-       "kernel_mode": "full_rfft",
+       "los_args": {"nx": 0.0, "ny": 0.0, "nz": 1.0},
+       "mapping": "smu_to_RH",
+       "kernel_mode": "auto",
    }
 
 Practical cautions:
@@ -473,8 +452,8 @@ Practical cautions:
   request ``octant`` if the Fourier kernel is invariant under independent sign
   flips of all grid axes:
   ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
-- For oblique LOS choices such as ``{"nx": 1, "ny": 1, "nz": 1}``, use
-  ``full_rfft``. Axis-aligned even windows can use ``octant`` or ``auto``.
+- For oblique LOS choices, use ``full_rfft``. Axis-aligned even windows can use
+  ``octant`` or ``auto``.
 - Custom functions are Python objects, so they are meant for Python-level task
   construction. YAML configs can describe built-in windows, but cannot store a
   live Python function.
