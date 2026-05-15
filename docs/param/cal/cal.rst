@@ -31,6 +31,7 @@ Common radial windows use the following length parameters:
 - ``sphere``, ``gaussian``, ``shell``: ``R``
 - ``gaussian_shell``: ``R_shell`` for the shell-like oscillation scale and
   ``R_smooth`` for the Gaussian damping scale
+- ``cubic``: ``Lx``, ``Ly``, and ``Lz`` for the three axis-aligned side lengths
 - ``ring``, ``disk``, and ``cylinder``: ``R`` and ``H``; optional
   line-of-sight components ``nx``, ``ny``, and ``nz`` belong in
   ``los_args``

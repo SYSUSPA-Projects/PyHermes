@@ -209,7 +209,7 @@ Notes
 
   Use descriptive length names for custom and compound windows. For example,
   a custom finite shell can use ``R_in`` and ``R_out``; ``gaussian_shell`` uses
-  ``R_shell`` and ``R_smooth``.
+  ``R_shell`` and ``R_smooth``; ``cubic`` uses ``Lx``, ``Ly``, and ``Lz``.
 
 - In most workflows, you only need to override a small subset of the defaults.
   The rest can safely remain untouched.

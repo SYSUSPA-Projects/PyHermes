@@ -45,9 +45,10 @@ Fourier convention
    \int d^3x\,W(\mathbf{x})\,
    e^{-2\pi i\mathbf{k}\cdot\mathbf{x}}.
 
-For isotropic windows, :math:`r=|\mathbf{x}|`, :math:`k=|\mathbf{k}|`, and
-:math:`q=2\pi kR`. The standard windows below are normalized so that
-:math:`\int d^3x\,W(\mathbf{x})=1` and :math:`\widehat W(0)=1`.
+The standard windows below are normalized so that
+:math:`\int d^3x\,W(\mathbf{x})=1` and :math:`\widehat W(0)=1`. For isotropic
+windows, :math:`r=|\mathbf{x}|`, :math:`k=|\mathbf{k}|`, and
+:math:`q=2\pi kR`.
 
 Isotropic Windows
 ~~~~~~~~~~~~~~~~~
@@ -145,6 +146,32 @@ In Fourier space, with
    R_{\rm shell}^2 + R_{\rm smooth}^2
    }
    \exp\left(-{q_{\rm smooth}^2\over 2}\right).
+
+Axis-Aligned Windows
+~~~~~~~~~~~~~~~~~~~~
+
+``cubic`` is an axis-aligned rectangular top-hat with side lengths
+:math:`L_x`, :math:`L_y`, and :math:`L_z`; it is a cube when all three lengths
+are equal:
+
+.. math::
+
+   \begin{aligned}
+   W_{\rm cubic}(\mathbf{x};L_x,L_y,L_z)
+   &=
+   \prod_{i=x,y,z}{1\over L_i}
+   \Theta\left({L_i\over2}-|x_i|\right),\\
+   \widehat W_{\rm cubic}(\mathbf{k};L_x,L_y,L_z)
+   &=
+   \prod_{i=x,y,z}
+   {\sin(\pi k_i L_i)\over \pi k_i L_i}.
+   \end{aligned}
+
+The factor of :math:`\pi` comes from PyHermes' Fourier convention
+:math:`e^{-2\pi i\mathbf{k}\cdot\mathbf{x}}`; the expression often appears as
+:math:`\sin(k_i L_i/2)/(k_i L_i/2)` when :math:`k_i` denotes angular
+wavenumber. Each sinc factor uses its limiting value of one when the
+denominator is zero.
 
 Line-Of-Sight Windows
 ~~~~~~~~~~~~~~~~~~~~~
@@ -612,6 +639,8 @@ Practical Rules Of Thumb
 ------------------------
 
 - Use ``sphere`` for smoothing before Counting, 2PCF, or 3PCF measurements.
+- Use ``cubic`` when the desired smoothing support is an axis-aligned box rather
+  than a radial ball.
 - Use ``shell`` for real-space pair separations, or compose custom shell-like
   windows from ``sphere`` when a finite radial thickness is needed.
 - Use ``ring`` for thin redshift-space pair bins, ``cylshell`` for cylindrical

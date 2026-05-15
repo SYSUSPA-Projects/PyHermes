@@ -86,7 +86,38 @@ def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     return result
 
 
-# Anisotropic windows.
+# Axis-aligned windows.
+@njit
+def window_function_cubic_numba(ki, kj, kk, Lx, Ly, Lz):
+    """
+    Axis-aligned rectangular top-hat window in k-space.
+
+    With the PyHermes Fourier convention exp(-2*pi*i*k*x), the one-dimensional
+    factor is sin(pi*k_i*L_i)/(pi*k_i*L_i), with value 1 when pi*k_i*L_i = 0.
+    """
+    qx = np.pi * ki * Lx
+    qy = np.pi * kj * Ly
+    qz = np.pi * kk * Lz
+
+    if qx == 0.0:
+        part_x = 1.0
+    else:
+        part_x = np.sin(qx) / qx
+
+    if qy == 0.0:
+        part_y = 1.0
+    else:
+        part_y = np.sin(qy) / qy
+
+    if qz == 0.0:
+        part_z = 1.0
+    else:
+        part_z = np.sin(qz) / qz
+
+    return part_x * part_y * part_z
+
+
+# Line-of-sight windows.
 @njit
 def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     """
@@ -267,6 +298,7 @@ WINDOW_TYPE_DICT = {
     "gaussian": window_function_gauss_numba,
     "shell": window_function_shell_numba,
     "gaussian_shell": window_function_gauss_shell_numba,
+    "cubic": window_function_cubic_numba,
     "ring": window_function_ring_numba,
     "disk": window_function_disk_numba,
     "cylshell": window_function_cylshell_numba,
