@@ -53,34 +53,6 @@ def window_function_shell_numba(ki, kj, kk, R):
     return result
 
 @njit
-def window_function_Tshell_numba(ki, kj, kk, R_in, R_out):
-    """
-    Finite-thickness spherical shell window in k-space.
-
-    ``R_in`` and ``R_out`` are the inner and outer shell radii.
-
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q_in = 2*pi*k*R_in,
-    and q_out = 2*pi*k*R_out.
-    W(k; R_in, R_out) =
-        3 * (sin(q_out) - q_out*cos(q_out) - sin(q_in) + q_in*cos(q_in))
-        / (q_out^3 - q_in^3),
-    with W(0; R_in, R_out) = 1.
-    """
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    if k == 0:
-        return 1
-    q_in = 2 * np.pi * k * R_in
-    q_out = 2 * np.pi * k * R_out
-    denom = q_out**3 - q_in**3
-    if denom == 0.0:
-        if q_out == 0.0:
-            return 1
-        return np.sin(q_out) / q_out
-    result = 3 * (np.sin(q_out) - np.sin(q_in) - q_out * np.cos(q_out) + q_in * np.cos(q_in)) / denom
-    return result
-
-
-@njit
 def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     """
     Gaussian-damped shell-like window in k-space.
@@ -294,7 +266,6 @@ WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
     "gaussian": window_function_gauss_numba,
     "shell": window_function_shell_numba,
-    "Tshell": window_function_Tshell_numba,
     "gaussian_shell": window_function_gauss_shell_numba,
     "ring": window_function_ring_numba,
     "disk": window_function_disk_numba,

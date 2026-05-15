@@ -91,49 +91,6 @@ for :math:`\xi(r)`:
    =
    {\sin q\over q}.
 
-``Tshell`` is a finite-thickness spherical shell between
-:math:`R_{\rm in}` and :math:`R_{\rm out}`. It is equivalently a
-volume-normalized difference of two spherical top-hats:
-
-.. math::
-
-   W_{\rm Tshell}(r;R_{\rm in},R_{\rm out})
-   =
-   {R_{\rm out}^3 W_{\rm sphere}(r;R_{\rm out})
-   -
-   R_{\rm in}^3 W_{\rm sphere}(r;R_{\rm in})
-   \over
-   R_{\rm out}^3-R_{\rm in}^3}
-   =
-   {3\,[\Theta(R_{\rm out}-r)-\Theta(R_{\rm in}-r)]
-   \over
-   4\pi(R_{\rm out}^3-R_{\rm in}^3)}.
-
-With :math:`q_{\rm in}=2\pi kR_{\rm in}` and
-:math:`q_{\rm out}=2\pi kR_{\rm out}`,
-
-.. math::
-
-   \widehat W_{\rm Tshell}
-   =
-   {R_{\rm out}^3 \widehat W_{\rm sphere}(k;R_{\rm out})
-   -
-   R_{\rm in}^3 \widehat W_{\rm sphere}(k;R_{\rm in})
-   \over
-   R_{\rm out}^3-R_{\rm in}^3}
-   =
-   3\,{
-   \sin q_{\rm out}
-   -
-   \sin q_{\rm in}
-   -
-   q_{\rm out}\cos q_{\rm out}
-   +
-   q_{\rm in}\cos q_{\rm in}
-   \over
-   q_{\rm out}^3-q_{\rm in}^3
-   }.
-
 ``gaussian_shell`` is a Gaussian-smoothed shell-like filter. Let
 :math:`a=R_{\rm shell}`, :math:`\sigma=R_{\rm smooth}`, and
 :math:`G_\sigma` be the normalized Gaussian above. Define the
@@ -376,6 +333,116 @@ For example:
        threads=8,
    )
 
+Custom windows can also compose existing windows. For example, a
+finite-thickness spherical shell can be written as a volume-normalized
+difference of two spherical top-hats:
+
+.. math::
+
+   \widehat W_{\rm thick\ shell}
+   =
+   {R_{\rm out}^3 \widehat W_{\rm sphere}(k;R_{\rm out})
+   -
+   R_{\rm in}^3 \widehat W_{\rm sphere}(k;R_{\rm in})
+   \over
+   R_{\rm out}^3-R_{\rm in}^3}.
+
+In Python:
+
+.. code-block:: python
+
+   import copy
+   import numpy as np
+   from numba import njit
+
+   from pyhermes.utils.window_functions import window_function_sphere_numba
+
+   @njit
+   def window_function_thick_shell_numba(ki, kj, kk, R_in, R_out):
+       V_in = R_in**3
+       V_out = R_out**3
+       denom = V_out - V_in
+       if denom == 0.0:
+           k = np.sqrt(ki**2 + kj**2 + kk**2)
+           q_out = 2.0 * np.pi * k * R_out
+           if q_out == 0.0:
+               return 1.0
+           return np.sin(q_out) / q_out
+
+       W_in = window_function_sphere_numba(ki, kj, kk, R_in)
+       W_out = window_function_sphere_numba(ki, kj, kk, R_out)
+       return (W_out * V_out - W_in * V_in) / denom
+
+   def mapping_s_to_R_thick_shell(sample, pair_window, T=10.0):
+       params = copy.deepcopy(pair_window)
+       params["len_args"]["R_in"] = sample["s"] - T / 2.0
+       params["len_args"]["R_out"] = sample["s"] + T / 2.0
+       return params
+
+   pair_window = {
+       "type": "thick_shell",
+       "func": window_function_thick_shell_numba,
+       "len_args": ["R_in", "R_out"],
+       "mapping": mapping_s_to_R_thick_shell,
+       "kernel_mode": "octant",
+   }
+
+The same idea works for line-of-sight windows. This disk-pair example is
+equivalent to the built-in ``disk`` formula, but exposes the ingredients that a
+custom user-defined LOS window needs:
+
+.. code-block:: python
+
+   import copy
+   import numpy as np
+   from numba import njit
+
+   from pyhermes.utils.special_functions import jn_numba
+
+   @njit
+   def window_function_mydisk_los_numba(
+       ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0
+   ):
+       norm = np.sqrt(nx * nx + ny * ny + nz * nz)
+       if norm == 0.0:
+           return np.nan
+       nx = nx / norm
+       ny = ny / norm
+       nz = nz / norm
+
+       k_parallel = ki * nx + kj * ny + kk * nz
+       k2 = ki * ki + kj * kj + kk * kk
+       k_perp2 = k2 - k_parallel * k_parallel
+       if k_perp2 < 0.0:
+           k_perp2 = 0.0
+
+       k_perp = np.sqrt(k_perp2)
+       q_perp = 2.0 * np.pi * k_perp * R
+       q_parallel = 2.0 * np.pi * k_parallel * H
+
+       if q_perp == 0.0:
+           part_perp = 1.0
+       else:
+           part_perp = 2.0 * jn_numba(1, q_perp) / q_perp
+       return part_perp * np.cos(q_parallel)
+
+   def my_mapping_smu_to_RH_los(sample, pair_window):
+       s = sample["s"]
+       mu = sample["mu"]
+       params = copy.deepcopy(pair_window)
+       params["len_args"]["R"] = s * np.sqrt(max(0.0, 1.0 - mu * mu))
+       params["len_args"]["H"] = s * mu
+       return params
+
+   pair_window = {
+       "type": "my_disk",
+       "func": window_function_mydisk_los_numba,
+       "len_args": ["R", "H"],
+       "los_args": {"nx": 1.0, "ny": 1.0, "nz": 1.0},
+       "mapping": my_mapping_smu_to_RH_los,
+       "kernel_mode": "full_rfft",
+   }
+
 Practical cautions:
 
 - Use the ``@njit`` style shown above. The kernel is evaluated inside Numba
@@ -388,10 +455,26 @@ Practical cautions:
   kernels.
 - Be careful with parameter placement. If a length scale is accidentally put in
   ``other_args``, PyHermes will not rescale it by ``J`` and ``box_size``.
+- When adding or subtracting windows, combine normalized kernels with the
+  correct volume, area, or line-of-sight weights if the result should remain
+  normalized. For pair windows this usually means checking that
+  :math:`\widehat W(0)=1`.
+- Handle degenerate limits explicitly, such as ``R_in == R_out`` in a
+  finite-thickness shell or ``q == 0`` in a sinc/Bessel factor. These limits are
+  often the difference between a stable custom window and a noisy one.
+- Keep physical length arguments in their valid domain. For the thick-shell
+  example above, choose the sampling range and thickness so that ``R_in`` is
+  non-negative, or clip it deliberately in the mapping if that is the desired
+  bin definition.
+- Custom mappings should fill only the length parameters that are meant to vary
+  with the current sample. Fixed numeric values in ``len_args`` are left as
+  user-defined constants.
 - Custom windows default to the conservative ``full_rfft`` kernel mode. Only
   request ``octant`` if the Fourier kernel is invariant under independent sign
   flips of all grid axes:
   ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
+- For oblique LOS choices such as ``{"nx": 1, "ny": 1, "nz": 1}``, use
+  ``full_rfft``. Axis-aligned even windows can use ``octant`` or ``auto``.
 - Custom functions are Python objects, so they are meant for Python-level task
   construction. YAML configs can describe built-in windows, but cannot store a
   live Python function.
@@ -550,7 +633,8 @@ Practical Rules Of Thumb
 ------------------------
 
 - Use ``sphere`` for smoothing before Counting, 2PCF, or 3PCF measurements.
-- Use ``shell`` or ``Tshell`` for real-space pair separations.
+- Use ``shell`` for real-space pair separations, or compose custom shell-like
+  windows from ``sphere`` when a finite radial thickness is needed.
 - Use ``ring`` for thin redshift-space pair bins, ``cylshell`` for cylindrical
   side surfaces, and ``disk`` or ``cylinder`` when a finite transverse or
   line-of-sight average is desired.

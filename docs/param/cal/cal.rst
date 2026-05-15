@@ -29,7 +29,6 @@ Window dictionaries pass ``len_args`` directly to the selected window function.
 Common radial windows use the following length parameters:
 
 - ``sphere``, ``gaussian``, ``shell``: ``R``
-- ``Tshell``: ``R_in`` and ``R_out`` for the inner and outer shell radii
 - ``gaussian_shell``: ``R_shell`` for the shell-like oscillation scale and
   ``R_smooth`` for the Gaussian damping scale
 - ``ring``, ``disk``, and ``cylinder``: ``R`` and ``H``; optional
