@@ -19,6 +19,27 @@ The notebook walks through:
 The last section is useful because it makes the estimator interpretation
 explicit: ``Counting`` is fundamentally a random-position probe of a field.
 
+Minimal YAML Shape
+------------------
+
+``Counting`` reads a saved ``ConvolsData`` field, optionally applies an ordinary
+smoothing window, and samples the resulting field at random positions:
+
+.. code-block:: yaml
+
+   Counting:
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      random_count: 10000000
+      window:
+         type: "sphere"
+         len_args:
+            R: 20
+      threads: 8
+      fout_path: "./output/quijote8000_snap004_counting_sph20.pkl"
+
+Omit ``window`` if you want to sample the raw field. When ``window`` is present,
+it is a normal smoothing ``WindowFunc``, not a 2PCF pair window.
+
 Inputs and outputs
 ------------------
 

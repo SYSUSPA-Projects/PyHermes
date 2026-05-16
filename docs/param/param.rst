@@ -3,7 +3,7 @@ Parameters
 
 This section is a reference appendix for PyHermes configuration files. The
 fastest way to learn the parameter structure is still to read the example YAML
-files under ``examples/configs/`` alongside the five tutorial notebooks.
+files under ``examples/configs/`` alongside the tutorial notebooks.
 
 Supported top-level task sections include:
 

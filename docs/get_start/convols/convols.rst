@@ -53,6 +53,33 @@ Generated locally while following the notebook:
   - ``quijote8000_snap004_rsd_diag_sfc.pkl``
   - ``random_sfc.pkl``
 
+Minimal YAML Shape
+------------------
+
+The standard field-construction config starts from an input catalog, defines the
+multiresolution grid, and writes a reusable ``ConvolsData`` object:
+
+.. code-block:: yaml
+
+   Convols:
+      fin:
+         path: "./data/quijote_halos/8000"
+         format: "fof"
+         reader_params:
+            snapnum: 4
+      box_size: 1000
+      J: 8
+      wavelet_mode: "db2"
+      wavelet_level: 10
+      phi_resolution: 1024
+      threads: 2
+      save_particle_data: True
+      particle_data_path: "./data/quijote_halos/8000/groups_004/group_tab_004.pos.npz"
+      fout_path: "./output/quijote8000_snap004_sfc.pkl"
+
+The notebook shows this shape before the command-line run so that the YAML file
+and driver script can be read together.
+
 Recommended usage modes
 -----------------------
 

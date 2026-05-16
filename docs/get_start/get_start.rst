@@ -1,7 +1,7 @@
 Getting Started
 ===============
 
-This section mirrors the five notebooks in ``examples/notebooks/``. The goal
+This section mirrors the main notebooks in ``examples/notebooks/``. The goal
 is not to duplicate every cell, but to explain what each notebook is for, what
 inputs it expects, and which outputs are lightweight enough to create inside
 the notebook versus better produced by a separate script run.
@@ -11,9 +11,10 @@ Recommended order
 
 1. ``quick_start.ipynb`` for the smallest conceptual example
 2. ``convols.ipynb`` for interactive data preparation and field construction
-3. ``counting.ipynb`` for one-point statistics
-4. ``corr2pcf.ipynb`` for real-space and redshift-space 2PCF
-5. ``corr3pcf.ipynb`` for 3PCF, low-level reconstruction, and multipoles
+3. ``window.ipynb`` for ``ConvolsData`` and ``WindowFunc`` arithmetic
+4. ``counting.ipynb`` for one-point statistics
+5. ``corr2pcf.ipynb`` for real-space and redshift-space 2PCF
+6. ``corr3pcf.ipynb`` for 3PCF, low-level reconstruction, and multipoles
 
 How the examples are organized
 ------------------------------
@@ -49,6 +50,7 @@ Notebook Guide
 
    quick_start
    convols/convols
+   window/window
    counting/counting
    corr_2pcf/corr_2pcf
    corr_3pcf/corr_3pcf

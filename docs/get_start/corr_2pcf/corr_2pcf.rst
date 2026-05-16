@@ -18,6 +18,82 @@ It also contains lower-level sections for custom pair windows and direct
 estimator comparisons. Those sections are useful when you want to understand
 what the task wrapper is doing under the hood.
 
+Minimal YAML Shapes
+-------------------
+
+The current ``Corr_2PCF`` interface separates the sampled coordinates from the
+pair-window geometry. ``sampling`` names the output grid, while ``pair_window``
+describes how each sampled point becomes a Fourier-space bin window.
+
+For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
+``s``:
+
+.. code-block:: yaml
+
+   Corr_2PCF:
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      random: "uniform"
+      pair_window: "shell"
+      sampling:
+         s:
+            min: 0.0
+            max: 150.0
+            n: 31
+      products: "xi"
+      threads: 2
+      fout_path: "./output/quijote8000_snap004_2pcf.pkl"
+
+For redshift-space ``xi(s, mu)``, use a line-of-sight pair window such as
+``ring``. Built-in string windows fill their own length arguments and default to
+the z-axis line of sight:
+
+.. code-block:: yaml
+
+   Corr_2PCF:
+      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+      random: "uniform"
+      pair_window: "ring"
+      sampling:
+         s:
+            min: 0.0
+            max: 180.0
+            n: 46
+         mu:
+            min: 0.0
+            max: 1.0
+            n: 51
+      products: "xi"
+      threads: 8
+      fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
+
+For ``xi(rp, pi)``, make the mapping explicit because the sampled coordinates
+are already the transverse and line-of-sight separations:
+
+.. code-block:: yaml
+
+   Corr_2PCF:
+      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+      random: "./output/random_sfc.pkl"
+      window:
+         type: "sphere"
+         len_args:
+            R: 5
+      pair_window:
+         type: "ring"
+         mapping: "rppi_to_RH"
+      sampling:
+         rp:
+            min: 0.0
+            max: 180.0
+            n: 46
+         pi:
+            min: 0.0
+            max: 180.0
+            n: 46
+      products: "xi"
+      threads: 8
+      fout_path: "./output/quijote8000_snap004_rsd_2pcf_rppi_sph5_with_random.pkl"
+
 What is lightweight and what is not
 -----------------------------------
 
@@ -57,7 +133,9 @@ Instead of hard-coding one estimator shape, the task combines:
 - a sampling grid
 
 That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
-``xi(rp, pi)`` in one interface.
+``xi(rp, pi)`` in one interface. The notebook also uses custom Python pair
+windows to build a finite-thickness shell and a cylinder-surface pair window
+from existing Fourier kernels.
 
 What to carry forward
 ---------------------
@@ -92,16 +170,18 @@ limit,
    \qquad
    \widehat W_{\rm shell}(k;R)
    =
-   {\sin(kR)\over kR}.
+   {\sin(2\pi kR)\over 2\pi kR}.
 
 For redshift-space ``(s, mu)`` and ``(rp, pi)`` measurements, the same
-estimator uses line-of-sight-aware windows. A thin ring window has
+estimator uses line-of-sight-aware windows. A thin ring window has the
+Fourier-space form
 
 .. math::
 
-   \widehat W(k_\perp,k_\parallel)
+   \widehat W_{\rm ring}(k_\perp,k_\parallel)
    =
-   e^{i k_\parallel r_\parallel}J_0(k_\perp r_\perp),
+   J_0(2\pi k_\perp r_\perp)\,
+   \cos(2\pi k_\parallel r_\parallel),
 
 with finite-bin and real-valued variants implemented by the built-in ring,
 disk, cylinder, and ``cylshell`` windows. Random fields provide the ``RR``

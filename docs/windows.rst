@@ -8,6 +8,9 @@ angular window filters. The mathematical background page explains the shared
 convolution viewpoint; this page focuses on the practical window vocabulary
 used by the code and examples.
 
+For the notebook-style walkthrough of ``ConvolsData`` and ``WindowFunc``
+arithmetic, see :doc:`get_start/window/window`.
+
 Why Windows Matter
 ------------------
 

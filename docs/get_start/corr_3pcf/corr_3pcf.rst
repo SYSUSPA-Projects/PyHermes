@@ -29,6 +29,40 @@ The main progression is:
 This is the notebook to read when you want both the practical workflow and the
 estimator logic.
 
+Minimal YAML Shapes
+-------------------
+
+For the standard reduced 3PCF, the minimal shape fixes the field inputs,
+triangle side lengths, angular sampling, center strategy, and products:
+
+.. code-block:: yaml
+
+   Corr_3PCF:
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      random: "uniform"
+      window:
+         type: "sphere"
+         len_args:
+            R: 5
+      r12: 20.0
+      r13: 40.0
+      theta:
+         n_theta: 20
+      n_rot: 20
+      center: "particle"
+      products: ["ddd", "Q"]
+      threads: 2
+      fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
+
+For random box centers, switch the center strategy and provide the number of
+box centers:
+
+.. code-block:: yaml
+
+   Corr_3PCF:
+      center: "box_random"
+      n_box_centers: 1000000
+
 Heavy outputs and external runs
 -------------------------------
 
@@ -51,6 +85,35 @@ Typical commands look like:
    cd examples
    mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
    mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
+   mpirun -np 4 python ./scripts/run_3pcf_multipole.py ./configs/param_3pcf_multipole_lmax7.yaml
+
+Advanced topic: 3PCF multipoles
+-------------------------------
+
+The final section switches from direct angular curves to a multipole
+representation. The cells below do not rerun the estimator from scratch;
+instead, they load saved multipole outputs and compare how the result changes
+with the truncation order ``l_max`` and the field resolution parameter ``J``.
+
+The saved multipole outputs used below can be produced from a config with this
+shape:
+
+.. code-block:: yaml
+
+   Corr_3PCF_Multipole:
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      random: "uniform"
+      window:
+         type: "sphere"
+         len_args:
+            R: 5
+      r12: 20.0
+      r13: 40.0
+      l_max: 7
+      execution_mode: "pair_mpi"
+      products: "zeta_l"
+      threads: 4
+      fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
 
 Choosing The Center Mode
 ------------------------

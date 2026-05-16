@@ -91,11 +91,14 @@ The standard PyHermes workflow is:
 
 1. read or prepare a particle catalog
 2. build a field with ``Convols``
-3. optionally construct a matching random field
-4. run ``Counting``, ``Corr_2PCF``, or ``Corr_3PCF`` on top of the saved field
+3. use ``ConvolsData`` and ``WindowFunc`` operations to define derived fields or
+   smoothing filters
+4. optionally construct a matching random field
+5. run ``Counting``, ``Corr_2PCF``, or ``Corr_3PCF`` on top of the saved field
 
 This structure is why the notebooks are split the way they are. The field
-construction notebook comes first, and every later notebook assumes that stage
+construction notebook comes first, the window notebook explains the reusable
+field/window operations, and every measurement notebook assumes that stage
 already exists.
 
 Learn through the notebooks
@@ -105,6 +108,7 @@ The example documentation follows these notebooks in order:
 
 - ``quick_start.ipynb`` for the smallest possible end-to-end example
 - ``convols.ipynb`` for interactive data preparation and field construction
+- ``window.ipynb`` for field/window algebra and ordinary smoothing windows
 - ``counting.ipynb`` for one-point sampling and smoothing
 - ``corr2pcf.ipynb`` for isotropic and anisotropic 2PCF
 - ``corr3pcf.ipynb`` for standard 3PCF, low-level ``Q`` reconstruction, and
