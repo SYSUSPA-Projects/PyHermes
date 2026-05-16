@@ -115,6 +115,24 @@ class ConvolsData(HermesData):
             return other._conv(self)  
         return NotImplemented
 
+    def __add__(self, other):
+        if isinstance(other, ConvolsData):
+            return self._add_field(other)
+
+        if np.isscalar(other):
+            return self._add_scalar(other)
+
+        return NotImplemented
+
+    def __radd__(self, other):
+        if np.isscalar(other):
+            return self._add_scalar(other)
+
+        if isinstance(other, ConvolsData):
+            return other._add_field(self)
+
+        return NotImplemented
+
     def __mul__(self, other):
         if isinstance(other, ConvolsData):
             return self._mul_field(other)
@@ -132,6 +150,44 @@ class ConvolsData(HermesData):
             return other._mul_field(self)
 
         return NotImplemented
+
+    def __truediv__(self, other):
+        if np.isscalar(other) and not isinstance(other, (str, bytes)) and np.isrealobj(other):
+            return self._div_scalar(float(other))
+
+        return NotImplemented
+
+    # ---------- field + field ----------
+    def _add_field(self, other):
+        a = self.epsilon
+        b = other.epsilon
+
+        if a is None or b is None:
+            self.logger.error("Cannot add: epsilon is None.")
+            func_util.safe_exit(1)
+
+        if a.shape != b.shape:
+            self.logger.error(
+                f"Shape mismatch in addition: {a.shape} vs {b.shape}"
+            )
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = a + b
+        new.format_convols_params()
+        return new
+
+    # ---------- field + scalar ----------
+    def _add_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot add scalar: epsilon is None.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon + scalar
+        new.format_convols_params()
+        return new
+
     # ---------- field × field ----------
     def _mul_field(self, other):
         a = self.epsilon
@@ -161,6 +217,20 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon * scalar
+        new.format_convols_params()
+        return new
+
+    # ---------- field / scalar ----------
+    def _div_scalar(self, scalar):
+        if self.epsilon is None:
+            self.logger.error("Cannot divide by scalar: epsilon is None.")
+            func_util.safe_exit(1)
+        if scalar == 0.0:
+            self.logger.error("Cannot divide ConvolsData by zero.")
+            func_util.safe_exit(1)
+
+        new = self._spawn_like()
+        new.epsilon = self.epsilon / scalar
         new.format_convols_params()
         return new
 
