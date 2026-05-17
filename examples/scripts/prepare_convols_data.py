@@ -260,13 +260,27 @@ def build_mass_weighted_field(threads: int):
     return task
 
 
-def build_redshift_space_field(pos: np.ndarray, threads: int, diag: bool = False):
+def build_redshift_space_field(
+    pos: np.ndarray,
+    threads: int,
+    diag: bool = False,
+    particle_weight: np.ndarray | None = None,
+):
     suffix = "rsd_diag" if diag else "rsd"
-    task = base_convols_task(threads, f"./output/quijote8000_snap004_{suffix}_sfc.pkl")
+    weight_suffix = "_massweight" if particle_weight is not None else ""
+    task = base_convols_task(
+        threads,
+        f"./output/quijote8000_snap004_{suffix}_sfc{weight_suffix}.pkl",
+    )
     task.particle_pos = pos
-    task.particle_weight = np.ones(pos.shape[0], dtype=np.float32)
+    if particle_weight is None:
+        task.particle_weight = np.ones(pos.shape[0], dtype=np.float32)
+    else:
+        task.particle_weight = np.asarray(particle_weight, dtype=np.float32)
     task.save_particle_data = True
-    task.particle_data_path = f"./data/quijote_halos/8000/groups_004/group_tab_004.pos.{suffix}.npz"
+    task.particle_data_path = (
+        f"./data/quijote_halos/8000/groups_004/group_tab_004.pos.{suffix}{weight_suffix}.npz"
+    )
     return task
 
 
@@ -343,6 +357,17 @@ def main() -> None:
         OUTPUT_DIR / "quijote8000_snap004_rsd_sfc.pkl",
         args.overwrite,
         lambda: build_redshift_space_field(pos_z, args.threads, diag=False),
+    )
+    run_if_needed(
+        "Building mass-weighted redshift-space ConvolsData with z-axis LOS",
+        OUTPUT_DIR / "quijote8000_snap004_rsd_sfc_massweight.pkl",
+        args.overwrite,
+        lambda: build_redshift_space_field(
+            pos_z,
+            args.threads,
+            diag=False,
+            particle_weight=fof_data["mass"],
+        ),
     )
     run_if_needed(
         "Building redshift-space ConvolsData with diagonal LOS",
