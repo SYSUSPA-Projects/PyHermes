@@ -1,0 +1,16 @@
+Corr_2PCF:
+   convols_data: "./output/quijote8000_snap004_rsd_sfc_massweight.pkl"
+   random: "uniform"
+   pair_window: "ring"
+   sampling:
+      s:
+         min: 0.0
+         max: 180.0
+         n: 46
+      mu:
+         min: 0.0
+         max: 1.0
+         n: 51
+   threads: 8
+   products: "xi"
+   fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu_massweight.pkl"
