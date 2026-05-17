@@ -19,6 +19,7 @@
 		"wavelet_mode": "db2",
 		"wavelet_level": 10,
 		"phi_resolution": 1024,
+		"normalize_by_weight_sum": true,
 		"save_particle_data": false,
 		"particle_data_path": "",
 		"threads": 1,
