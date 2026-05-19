@@ -111,11 +111,12 @@ plt.show()
 
 ## Start Here
 
-The repository is organized around five notebooks in `examples/notebooks/`:
+The repository is organized around six notebooks in `examples/notebooks/`:
 
 - `quick_start.ipynb`: the smallest end-to-end example
 - `convols.ipynb`: build `ConvolsData` from particle catalogs
 - `counting.ipynb`: sample the field at random positions
+- `weighted_fields.ipynb`: build velocity and momentum-density fields by changing particle weights
 - `corr2pcf.ipynb`: isotropic and anisotropic 2PCF, including redshift-space examples
 - `corr3pcf.ipynb`: standard 3PCF, low-level `Q` reconstruction, and multipoles
 
@@ -124,8 +125,9 @@ The recommended reading order is:
 1. `quick_start.ipynb`
 2. `convols.ipynb`
 3. `counting.ipynb`
-4. `corr2pcf.ipynb`
-5. `corr3pcf.ipynb`
+4. `weighted_fields.ipynb`
+5. `corr2pcf.ipynb`
+6. `corr3pcf.ipynb`
 
 ## Example Layout
 
