@@ -294,20 +294,19 @@ def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
 
 
 @njit
-def window_function_gaussian_directional_derivative_numba(ki, kj, kk, R, nx=0.0, ny=0.0, nz=1.0):
+def window_function_directional_derivative_numba(ki, kj, kk, nx=0.0, ny=0.0, nz=1.0):
     """
-    Gaussian-smoothed directional derivative window in k-space.
+    Directional derivative window in k-space.
 
-    ``R`` sets the Gaussian smoothing scale. ``(nx, ny, nz)`` sets the
-    derivative direction and is normalized internally.
+    ``(nx, ny, nz)`` sets the derivative direction and is normalized
+    internally.
 
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
-    k_parallel = k dot n_hat.
-    W(k; R, n_hat) = 2*pi*i*k_parallel * exp(-q^2 / 2).
+    Let k_parallel = k dot n_hat.
+    W(k; n_hat) = 2*pi*i*k_parallel.
 
     The derivative is with respect to the same coordinate system used by the
     Fourier variables passed to the window function. In ``WindowFunc`` this is
-    the grid coordinate system after ``R`` has been rescaled from box units.
+    the grid coordinate system.
     """
     norm = np.sqrt(nx * nx + ny * ny + nz * nz)
     if norm == 0.0:
@@ -316,11 +315,20 @@ def window_function_gaussian_directional_derivative_numba(ki, kj, kk, R, nx=0.0,
     ny = ny / norm
     nz = nz / norm
 
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    q = 2.0 * np.pi * k * R
     k_parallel = ki * nx + kj * ny + kk * nz
-    imag_part = 2.0 * np.pi * k_parallel * np.exp(-(q**2) / 2.0)
-    return 0.0 + 1.0j * imag_part
+    return 0.0 + 1.0j * 2.0 * np.pi * k_parallel
+
+
+@njit
+def window_function_laplacian_numba(ki, kj, kk):
+    """
+    Laplacian operator window in k-space.
+
+    With the inverse-FFT basis exp(2*pi*i*k*x),
+    W(k) = -(2*pi)^2 * |k|^2, corresponding to the operator nabla^2.
+    """
+    k2 = ki * ki + kj * kj + kk * kk
+    return -((2.0 * np.pi) ** 2) * k2
 
 
 WINDOW_TYPE_DICT = {
@@ -334,7 +342,8 @@ WINDOW_TYPE_DICT = {
     "cylshell": window_function_cylshell_numba,
     "cylinder": window_function_cylinder_numba,
     "gaussian_derivative_wavalet": window_function_gauss_derivative_wavalet_numba,
-    "gaussian_directional_derivative": window_function_gaussian_directional_derivative_numba,
+    "directional_derivative": window_function_directional_derivative_numba,
+    "laplacian": window_function_laplacian_numba,
 }
 
 

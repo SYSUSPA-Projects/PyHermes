@@ -4,7 +4,7 @@ import numpy as np
 
 
 ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell"}
-COMPLEX_RFFT_WINDOW_TYPES = {"gaussian_directional_derivative"}
+COMPLEX_RFFT_WINDOW_TYPES = {"directional_derivative"}
 VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft"}
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}

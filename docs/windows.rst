@@ -289,35 +289,57 @@ Differentiating term by term gives
 More generally, a directional derivative along
 :math:`\widehat{\mathbf n}` is multiplication by
 :math:`2\pi i(\mathbf{k}\cdot\widehat{\mathbf n})`. This means a derivative
-can be represented as a Fourier-space window. To keep the operation stable on
-discrete tracer fields, PyHermes provides the Gaussian-smoothed directional
-derivative window:
+can be represented as a Fourier-space window:
+
+.. math::
+
+   \widehat W_{\partial_{\widehat n}}(\mathbf{k})
+   =
+   2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n}).
+
+In code this is ``directional_derivative``. The derivative direction
+:math:`\widehat{\mathbf n}` is passed through ``los_args``; no ``len_args`` are
+needed. This window is not a normalized smoothing window: its zero mode is
+zero, so it removes constant backgrounds. It also uses the ``complex_rfft``
+kernel mode because the Fourier-space derivative multiplier is imaginary and
+odd.
+
+Applied to a scalar field, the result is the directional derivative of the
+PyHermes field, :math:`\partial_{\widehat n}f`, in grid-coordinate units. To
+convert the derivative to physical box units, multiply the output by
+:math:`L/L_{\rm box}`. To keep derivatives stable on discrete tracer fields,
+combine this operator with an ordinary smoothing window such as ``gaussian``:
 
 .. math::
 
    \widehat W_{\partial_{\widehat n}G}(\mathbf{k};R)
    =
+   \widehat W_{\rm gaussian}(\mathbf{k};R)
+   \widehat W_{\partial_{\widehat n}}(\mathbf{k})
+   =
    2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n})
    \exp\left[-{(2\pi kR)^2\over 2}\right].
 
-In code this is ``gaussian_directional_derivative``. The smoothing scale
-:math:`R` is passed through ``len_args`` and the derivative direction
-:math:`\widehat{\mathbf n}` is passed through ``los_args``. This window is not
-a normalized smoothing window: its zero mode is zero, so it removes constant
-backgrounds. It also uses the ``complex_rfft`` kernel mode because the
-Fourier-space derivative multiplier is imaginary and odd.
+PyHermes also provides ``laplacian`` for the scalar operator
+:math:`\nabla^2`:
 
-Applied to a scalar field, the result is the directional derivative of the
-Gaussian-smoothed PyHermes field,
-:math:`\partial_{\widehat n}(G_R\circ f)`, in grid-coordinate units. To convert
-the derivative to physical box units, multiply the output by
-:math:`L/L_{\rm box}`.
+.. math::
+
+   \widehat W_{\nabla^2}(\mathbf{k})
+   =
+   -(2\pi)^2|\mathbf{k}|^2.
+
+The existing ``gaussian_derivative_wavalet`` window is kept as a
+scale-normalized Gaussian-derivative wavelet. It is related to combining a
+Gaussian with the negative Laplacian, but includes its own scale and
+:math:`L^2` normalization factors.
 
 This construction is natural for ``ConvolsData`` because PyHermes stores a
 periodic scaling-function representation of the particle field and applies
 ``WindowFunc`` objects through Fourier-space convolution. The derivative is
-therefore the derivative of the PyHermes-represented, Gaussian-smoothed field,
-not an unsmoothed derivative of the original delta-function particle catalog.
+therefore the derivative of the PyHermes-represented field, optionally after
+whatever smoothing windows you compose with the derivative operator; it is not
+an unsmoothed derivative of the original delta-function particle catalog.
 
 For a scalar field :math:`f`, the gradient can be built from three directional
 windows. For a linear vector field :math:`\mathbf{p}`, the divergence and curl
@@ -553,7 +575,7 @@ Practical cautions:
 - Return a real scalar for ordinary smoothing and pair windows. Complex
   Hermitian-preserving kernels are supported through ``kernel_mode:
   "complex_rfft"``; this is the mode used by the built-in
-  ``gaussian_directional_derivative`` window.
+  ``directional_derivative`` window.
 - Be careful with parameter placement. If a length scale is accidentally put in
   ``other_args``, PyHermes will not rescale it by ``J`` and ``box_size``.
 - When adding or subtracting windows, combine normalized kernels with the

@@ -82,7 +82,11 @@ class WindowFunc(ConvolsData):
         self.kernel_mode = self._resolve_kernel_mode(win_params, has_custom_func)
         self.input_params["kernel_mode"] = self.kernel_mode
         self.window_params["kernel_mode"] = self.kernel_mode
-        self.len_args = win_params['len_args']
+        self.len_args = copy.deepcopy(win_params.get('len_args', {}))
+        if self.len_args is None:
+            self.len_args = {}
+        self.input_params["len_args"] = copy.deepcopy(self.len_args)
+        self.window_params["len_args"] = copy.deepcopy(self.len_args)
         self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
         self.los_args = normalize_los_args(win_params.get('los_args', {}), self.type)
         self.other_args = win_params.get('other_args', {})
