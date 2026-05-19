@@ -278,7 +278,7 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
 
 # Special-purpose windows.
 @njit
-def window_function_gauss_direvative_wavalet_numba(ki, kj, kk, R):
+def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
     """
     Gaussian-derivative wavelet window in k-space.
 
@@ -303,7 +303,7 @@ WINDOW_TYPE_DICT = {
     "disk": window_function_disk_numba,
     "cylshell": window_function_cylshell_numba,
     "cylinder": window_function_cylinder_numba,
-    "gaussian_direvative_wavalet": window_function_gauss_direvative_wavalet_numba,
+    "gaussian_derivative_wavalet": window_function_gauss_derivative_wavalet_numba,
 }
 
 
