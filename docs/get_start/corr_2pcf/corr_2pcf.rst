@@ -137,6 +137,51 @@ That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
 windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
+Example outputs
+---------------
+
+The isotropic examples show how weighting and ordinary smoothing affect the
+real-space two-point statistic.
+
+.. figure:: ../../_static/corr2pcf/corr2pcf_xi_s_weight_smoothing.png
+   :alt: Isotropic 2PCF comparison for raw, mass-weighted, and smoothed fields
+   :align: center
+   :width: 90%
+
+   Isotropic :math:`s^2\xi(s)` for the raw field, a mass-weighted field, and a
+   spherically smoothed field.
+
+Changing the pair-window family changes the bin geometry used by the estimator.
+The one-dimensional shell and cosine examples are a compact check of that
+choice.
+
+.. figure:: ../../_static/corr2pcf/corr2pcf_pair_window_shell_cosine.png
+   :alt: Isotropic 2PCF comparison for shell and cosine pair windows
+   :align: center
+   :width: 90%
+
+   Isotropic :math:`s^2\xi(s)` measured with shell and cosine pair windows.
+
+For redshift-space analyses, the notebook compares real-space and redshift-space
+``xi(s, mu)`` views directly.
+
+.. figure:: ../../_static/corr2pcf/corr2pcf_real_vs_rsd_smu.png
+   :alt: Real-space and redshift-space anisotropic 2PCF comparison
+   :align: center
+   :width: 95%
+
+   Real-space and redshift-space anisotropic 2PCF comparison in ``(s, mu)``.
+
+The final diagnostic keeps the redshift-space field fixed and changes the
+line-of-sight-aware pair-window family.
+
+.. figure:: ../../_static/corr2pcf/corr2pcf_rsd_pair_windows_2d.png
+   :alt: Redshift-space 2PCF comparison across pair-window families
+   :align: center
+   :width: 95%
+
+   Redshift-space 2PCF morphology for several pair-window families.
+
 What to carry forward
 ---------------------
 

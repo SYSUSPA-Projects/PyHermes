@@ -29,6 +29,41 @@ an independent regular grid, computes velocity divergence and curl, and compares
 the velocity-divergence distribution with the normalized momentum-density
 divergence.
 
+Example outputs
+---------------
+
+The random-point slice gives a direct visual check of the interpolated velocity
+field before taking derivatives.
+
+.. figure:: ../../_static/weighted_fields/weighted_fields_velocity_slice.png
+   :alt: Random-point velocity slice from weighted_fields.ipynb
+   :align: center
+   :width: 95%
+
+   Random-point velocity slice. Point colors show velocity magnitude and arrows
+   show the transverse velocity direction.
+
+Sampling the velocity field on an independent regular grid makes it possible to
+estimate divergence and curl with periodic finite differences.
+
+.. figure:: ../../_static/weighted_fields/weighted_fields_velocity_derivatives_pdf.png
+   :alt: Velocity divergence and curl magnitude PDFs
+   :align: center
+   :width: 95%
+
+   PDFs of the velocity divergence and curl magnitude measured from the regular
+   evaluation grid.
+
+Finally, the notebook compares the velocity divergence to the momentum-density
+divergence after normalizing the latter by the mean halo mass density.
+
+.. figure:: ../../_static/weighted_fields/weighted_fields_velocity_momentum_divergence_pdf.png
+   :alt: Velocity divergence and scaled momentum-density divergence PDFs
+   :align: center
+   :width: 95%
+
+   Velocity-divergence PDF compared with the scaled momentum-density divergence.
+
 Why it comes last
 -----------------
 

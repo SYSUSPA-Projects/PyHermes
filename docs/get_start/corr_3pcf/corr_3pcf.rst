@@ -63,6 +63,32 @@ box centers:
       center: "box_random"
       n_box_centers: 1000000
 
+Choosing The Center Mode
+------------------------
+
+PyHermes provides two standard 3PCF center modes.
+
+``center: "particle"`` uses the input particles themselves as the first
+triangle vertex. This is usually the right choice for sparse tracer samples,
+such as halo or galaxy catalogs with particle counts below roughly a million.
+It is efficient because the number of centers is modest and the estimator
+samples physically occupied positions directly. The important limitation is
+that the first leg is a discrete center catalog, so ``window1`` cannot be
+applied to the center leg. Window convolutions only apply to the second and
+third legs in this mode.
+
+``center: "box_random"`` samples Monte Carlo centers uniformly in the periodic
+box. This is usually better for dense simulation fields, especially dark
+matter particle samples with counts at the ten-million level or above, where
+using every particle as a center would dominate the runtime. Because all three
+legs are evaluated as continuous convolved fields at the sampled box centers,
+this mode also allows the first leg to be window-convolved. Use
+``n_box_centers`` to control the Monte Carlo center count.
+
+In short: use particle centers for sparse halo/galaxy tracers, and box-random
+centers for very dense particle fields or whenever the center leg must carry a
+window convolution.
+
 Heavy outputs and external runs
 -------------------------------
 
@@ -115,31 +141,48 @@ shape:
       threads: 4
       fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
 
-Choosing The Center Mode
-------------------------
+Example outputs
+---------------
 
-PyHermes provides two standard 3PCF center modes.
+The standard 3PCF diagnostics first check convergence with the number of random
+triangle rotations.
 
-``center: "particle"`` uses the input particles themselves as the first
-triangle vertex. This is usually the right choice for sparse tracer samples,
-such as halo or galaxy catalogs with particle counts below roughly a million.
-It is efficient because the number of centers is modest and the estimator
-samples physically occupied positions directly. The important limitation is
-that the first leg is a discrete center catalog, so ``window1`` cannot be
-applied to the center leg. Window convolutions only apply to the second and
-third legs in this mode.
+.. figure:: ../../_static/corr3pcf/corr3pcf_nrot_convergence.png
+   :alt: Reduced 3PCF convergence with number of triangle rotations
+   :align: center
+   :width: 90%
 
-``center: "box_random"`` samples Monte Carlo centers uniformly in the periodic
-box. This is usually better for dense simulation fields, especially dark
-matter particle samples with counts at the ten-million level or above, where
-using every particle as a center would dominate the runtime. Because all three
-legs are evaluated as continuous convolved fields at the sampled box centers,
-this mode also allows the first leg to be window-convolved. Use
-``n_box_centers`` to control the Monte Carlo center count.
+   Particle-center reduced 3PCF curves for several values of ``n_rot``.
 
-In short: use particle centers for sparse halo/galaxy tracers, and box-random
-centers for very dense particle fields or whenever the center leg must carry a
-window convolution.
+The center-mode comparison separates the particle-center estimator from the
+box-random-center estimator and also shows the effect of using an explicit
+random field.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_center_estimators.png
+   :alt: Reduced 3PCF comparison between particle-center and box-random-center estimators
+   :align: center
+   :width: 90%
+
+   Reduced 3PCF curves for different center strategies and random-field
+   treatments.
+
+The multipole examples then show how truncation order and field resolution
+affect the recovered angular spectrum.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_lmax.png
+   :alt: 3PCF multipoles for different lmax values
+   :align: center
+   :width: 90%
+
+   Multipole spectra for several choices of ``l_max`` at fixed field
+   resolution.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_resolution.png
+   :alt: 3PCF multipoles for different field resolutions
+   :align: center
+   :width: 90%
+
+   Multipole spectra at fixed ``l_max`` for two field resolutions.
 
 How to read the notebook
 ------------------------

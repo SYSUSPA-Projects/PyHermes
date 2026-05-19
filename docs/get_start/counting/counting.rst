@@ -69,6 +69,32 @@ shows how smoothing radius changes the sampled distribution and how the saved
 In other words, if ``Convols`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
 
+Example outputs
+---------------
+
+The first diagnostic compares the one-point PDFs obtained from the same halo
+catalog under different field choices: the real-space number-density field, the
+mass-density field, and the redshift-space number-density field.
+
+.. figure:: ../../_static/counting/counting_density_mass_rsd_pdf.png
+   :alt: Counting PDFs for number density, mass density, and redshift-space number density
+   :align: center
+   :width: 90%
+
+   Count-in-cell PDFs for number-density, mass-density, and redshift-space
+   fields using the same spherical smoothing scale.
+
+The second diagnostic keeps the input field fixed and varies the spherical
+smoothing radius. This is the simplest way to see how the window scale changes
+the sampled one-point distribution.
+
+.. figure:: ../../_static/counting/counting_smoothing_radius_pdf.png
+   :alt: Counting PDFs for different spherical smoothing radii
+   :align: center
+   :width: 90%
+
+   One-point PDFs after applying several top-hat smoothing radii.
+
 Mathematical idea
 -----------------
 
