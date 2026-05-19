@@ -150,27 +150,6 @@ In Fourier space, with
    }
    \exp\left(-{q_{\rm smooth}^2\over 2}\right).
 
-Special-Purpose Windows
-~~~~~~~~~~~~~~~~~~~~~~~
-
-``gaussian_directional_derivative`` is a Gaussian-smoothed directional
-derivative filter. It is not a normalized smoothing window: its zero mode is
-zero, so it removes constant backgrounds. The smoothing scale :math:`R` is
-passed through ``len_args`` and the derivative direction
-:math:`\widehat{\mathbf n}` is passed through ``los_args``:
-
-.. math::
-
-   \widehat W_{\partial_{\widehat n}G}(\mathbf{k};R)
-   =
-   2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n})
-   \exp\left[-{(2\pi kR)^2\over 2}\right].
-
-Applied to a scalar field, this returns the directional derivative of the
-Gaussian-smoothed field in grid-coordinate units,
-:math:`\partial_{\widehat n}(G_R\circ n)`. To convert the derivative to
-physical box units, multiply the output by :math:`L/L_{\rm box}`.
-
 Axis-Aligned Windows
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -284,6 +263,77 @@ offset :math:`H`:
 
 All sinc-like fractions in this section are evaluated with their limiting
 value of one when the denominator is zero.
+
+Special-Purpose Windows
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The standard windows above mostly average or select parts of a field. PyHermes
+can also express differential operations as windows, because derivatives have a
+simple Fourier-space form. In a periodic box, write
+
+.. math::
+
+   f(\mathbf{x})
+   =
+   \sum_{\mathbf{k}}\widetilde f(\mathbf{k})
+   e^{2\pi i\mathbf{k}\cdot\mathbf{x}}.
+
+Differentiating term by term gives
+
+.. math::
+
+   \widetilde{\partial_x f}(\mathbf{k})
+   =
+   2\pi i k_x\,\widetilde f(\mathbf{k}).
+
+More generally, a directional derivative along
+:math:`\widehat{\mathbf n}` is multiplication by
+:math:`2\pi i(\mathbf{k}\cdot\widehat{\mathbf n})`. This means a derivative
+can be represented as a Fourier-space window. To keep the operation stable on
+discrete tracer fields, PyHermes provides the Gaussian-smoothed directional
+derivative window:
+
+.. math::
+
+   \widehat W_{\partial_{\widehat n}G}(\mathbf{k};R)
+   =
+   2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n})
+   \exp\left[-{(2\pi kR)^2\over 2}\right].
+
+In code this is ``gaussian_directional_derivative``. The smoothing scale
+:math:`R` is passed through ``len_args`` and the derivative direction
+:math:`\widehat{\mathbf n}` is passed through ``los_args``. This window is not
+a normalized smoothing window: its zero mode is zero, so it removes constant
+backgrounds. It also uses the ``complex_rfft`` kernel mode because the
+Fourier-space derivative multiplier is imaginary and odd.
+
+Applied to a scalar field, the result is the directional derivative of the
+Gaussian-smoothed PyHermes field,
+:math:`\partial_{\widehat n}(G_R\circ f)`, in grid-coordinate units. To convert
+the derivative to physical box units, multiply the output by
+:math:`L/L_{\rm box}`.
+
+This construction is natural for ``ConvolsData`` because PyHermes stores a
+periodic scaling-function representation of the particle field and applies
+``WindowFunc`` objects through Fourier-space convolution. The derivative is
+therefore the derivative of the PyHermes-represented, Gaussian-smoothed field,
+not an unsmoothed derivative of the original delta-function particle catalog.
+
+For a scalar field :math:`f`, the gradient can be built from three directional
+windows. For a linear vector field :math:`\mathbf{p}`, the divergence and curl
+follow from the usual component combinations,
+:math:`\nabla\cdot\mathbf{p}=\partial_x p_x+\partial_y p_y+\partial_z p_z`
+and :math:`\nabla\times\mathbf{p}`. For nonlinear derived fields, apply the
+chain rule. For example, if
+:math:`v_i(\mathbf{x})=n_{v_i}(\mathbf{x})/n(\mathbf{x})`, then
+
+.. math::
+
+   \partial_j v_i
+   =
+   {\partial_j n_{v_i}\over n}
+   -
+   {n_{v_i}\,\partial_j n\over n^2}.
 
 Defining Windows In PyHermes
 ----------------------------
