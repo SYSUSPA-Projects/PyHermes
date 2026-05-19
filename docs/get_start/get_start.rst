@@ -15,6 +15,8 @@ Recommended order
 4. ``counting.ipynb`` for one-point statistics
 5. ``corr2pcf.ipynb`` for real-space and redshift-space 2PCF
 6. ``corr3pcf.ipynb`` for 3PCF, low-level reconstruction, and multipoles
+7. ``weighted_fields.ipynb`` for weighted-field applications beyond the
+   standard multipoint-statistics workflow
 
 How the examples are organized
 ------------------------------
@@ -54,3 +56,16 @@ Notebook Guide
    counting/counting
    corr_2pcf/corr_2pcf
    corr_3pcf/corr_3pcf
+
+Beyond Multipoint Statistics
+----------------------------
+
+The notebooks above form the main counting, 2PCF, and 3PCF tutorial path.
+``weighted_fields.ipynb`` is an additional application: it keeps the same
+``Convols`` field-construction idea, but changes particle weights to build
+velocity and momentum-density fields.
+
+.. toctree::
+   :maxdepth: 1
+
+   weighted_fields/weighted_fields

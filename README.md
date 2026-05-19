@@ -111,23 +111,25 @@ plt.show()
 
 ## Start Here
 
-The repository is organized around six notebooks in `examples/notebooks/`:
+The repository is organized around seven notebooks in `examples/notebooks/`:
 
 - `quick_start.ipynb`: the smallest end-to-end example
 - `convols.ipynb`: build `ConvolsData` from particle catalogs
+- `window.ipynb`: work with `ConvolsData` and `WindowFunc` arithmetic
 - `counting.ipynb`: sample the field at random positions
-- `weighted_fields.ipynb`: build velocity and momentum-density fields by changing particle weights
 - `corr2pcf.ipynb`: isotropic and anisotropic 2PCF, including redshift-space examples
 - `corr3pcf.ipynb`: standard 3PCF, low-level `Q` reconstruction, and multipoles
+- `weighted_fields.ipynb`: an extra weighted-field application that builds velocity and momentum-density fields
 
 The recommended reading order is:
 
 1. `quick_start.ipynb`
 2. `convols.ipynb`
-3. `counting.ipynb`
-4. `weighted_fields.ipynb`
+3. `window.ipynb`
+4. `counting.ipynb`
 5. `corr2pcf.ipynb`
 6. `corr3pcf.ipynb`
+7. `weighted_fields.ipynb`
 
 ## Example Layout
 
@@ -177,5 +179,7 @@ called out directly in `corr2pcf.ipynb` and `corr3pcf.ipynb`.
 
 ## Documentation
 
-The full written guide lives in `docs/` and follows the same five-notebook
-learning path as the examples.
+The full written guide lives in `docs/` and follows the same notebook learning
+path as the examples: the traditional multipoint-statistics workflow first,
+then `weighted_fields.ipynb` as an additional PyHermes application beyond that
+main line.

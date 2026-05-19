@@ -104,7 +104,7 @@ already exists.
 Learn through the notebooks
 ---------------------------
 
-The example documentation follows these notebooks in order:
+The main multipoint-statistics path follows these notebooks in order:
 
 - ``quick_start.ipynb`` for the smallest possible end-to-end example
 - ``convols.ipynb`` for interactive data preparation and field construction
@@ -113,6 +113,11 @@ The example documentation follows these notebooks in order:
 - ``corr2pcf.ipynb`` for isotropic and anisotropic 2PCF
 - ``corr3pcf.ipynb`` for standard 3PCF, low-level ``Q`` reconstruction, and
   multipoles
+
+After that main path, the "Beyond Multipoint Statistics" section introduces
+``weighted_fields.ipynb``: by changing particle weights, the same ``Convols``
+construction can represent velocity and momentum-density fields rather than
+only the fields used by the traditional counting, 2PCF, and 3PCF examples.
 
 If you only need the local example catalog and saved ``ConvolsData`` products,
 you can run the non-MPI helper script instead of opening the notebook:
