@@ -150,6 +150,27 @@ In Fourier space, with
    }
    \exp\left(-{q_{\rm smooth}^2\over 2}\right).
 
+Special-Purpose Windows
+~~~~~~~~~~~~~~~~~~~~~~~
+
+``gaussian_directional_derivative`` is a Gaussian-smoothed directional
+derivative filter. It is not a normalized smoothing window: its zero mode is
+zero, so it removes constant backgrounds. The smoothing scale :math:`R` is
+passed through ``len_args`` and the derivative direction
+:math:`\widehat{\mathbf n}` is passed through ``los_args``:
+
+.. math::
+
+   \widehat W_{\partial_{\widehat n}G}(\mathbf{k};R)
+   =
+   2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n})
+   \exp\left[-{(2\pi kR)^2\over 2}\right].
+
+Applied to a scalar field, this returns the directional derivative of the
+Gaussian-smoothed field in grid-coordinate units,
+:math:`\partial_{\widehat n}(G_R\circ n)`. To convert the derivative to
+physical box units, multiply the output by :math:`L/L_{\rm box}`.
+
 Axis-Aligned Windows
 ~~~~~~~~~~~~~~~~~~~~
 
@@ -319,7 +340,9 @@ Important details:
 - ``kernel_mode`` controls kernel construction. ``octant`` is fastest but only
   valid when the Fourier-space window has the required sign-flip symmetries.
   ``full_rfft`` is more general. ``auto`` uses the fast path for axis-aligned
-  LOS windows and the general path for oblique LOS windows.
+  LOS windows and the general path for oblique LOS windows. ``complex_rfft``
+  supports complex Hermitian-preserving kernels such as directional derivative
+  filters.
 
 There is no universal default ``WindowFunc`` object. Task-level parameters may
 choose to apply no additional smoothing, but an explicit ``WindowFunc`` needs a
@@ -477,8 +500,10 @@ Practical cautions:
 - Handle the zero mode explicitly when the formula contains divisions by
   :math:`k`, :math:`q`, or Bessel-like factors. Most normalized smoothing or
   counting windows should return ``1`` at ``k = 0``.
-- Return a real scalar. ``WindowFunc`` is designed for real convolution
-  kernels.
+- Return a real scalar for ordinary smoothing and pair windows. Complex
+  Hermitian-preserving kernels are supported through ``kernel_mode:
+  "complex_rfft"``; this is the mode used by the built-in
+  ``gaussian_directional_derivative`` window.
 - Be careful with parameter placement. If a length scale is accidentally put in
   ``other_args``, PyHermes will not rescale it by ``J`` and ``box_size``.
 - When adding or subtracting windows, combine normalized kernels with the
@@ -501,6 +526,8 @@ Practical cautions:
   ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
 - For oblique LOS choices, use ``full_rfft``. Axis-aligned even windows can use
   ``octant`` or ``auto``.
+- For complex rFFT windows, request ``complex_rfft`` unless you are using a
+  built-in window that selects that mode automatically.
 - Custom functions are Python objects, so they are meant for Python-level task
   construction. YAML configs can describe built-in windows, but cannot store a
   live Python function.

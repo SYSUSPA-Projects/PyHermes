@@ -7,6 +7,7 @@ import numpy as np
 from .convols import ConvolsData
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import (
+    build_complex_window_rfft_kernel,
     build_real_window_octant_array,
     build_real_window_rfft_kernel,
     fold_octant_window_to_rfft_kernel,
@@ -15,6 +16,7 @@ from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_f
 from pyhermes.utils.window_functions import set_window_function
 from pyhermes.utils.window_params import (
     ANISOTROPIC_AUTO_WINDOW_TYPES,
+    COMPLEX_RFFT_WINDOW_TYPES,
     LOS_ARG_KEYS,
     default_kernel_mode,
     normalize_los_args,
@@ -125,11 +127,32 @@ class WindowFunc(ConvolsData):
             return False
         return not self._los_is_axis_aligned()
 
+    def _requires_complex_rfft_kernel(self):
+        if self.kernel_mode == "complex_rfft":
+            return True
+        return self.kernel_mode in ("auto", "full_rfft") and self.type in COMPLEX_RFFT_WINDOW_TYPES
+
     def _build_kernel(self):
         if getattr(self, "is_composite_window", False):
             if self.rank == 0:
                 self.logger.error("Composite WindowFunc already stores a materialized w_kernel and cannot rebuild it.")
             func_util.safe_exit(1)
+        if self.type in COMPLEX_RFFT_WINDOW_TYPES and self.kernel_mode == "octant":
+            if self.rank == 0:
+                self.logger.error(
+                    f"Window type '{self.type}' is complex and directional; "
+                    "use kernel_mode='complex_rfft' or kernel_mode='auto'."
+                )
+            func_util.safe_exit(1)
+        if self._requires_complex_rfft_kernel():
+            self.w_kernel = build_complex_window_rfft_kernel(
+                L=self.L,
+                bandwidth=self.bandwidth,
+                phi_fourier_power=self.phi_fourier_power,
+                window_function_numba=self.func,
+                **self.window_args,
+            )
+            return
         if self._requires_full_rfft_kernel():
             self.w_kernel = build_real_window_rfft_kernel(
                 L=self.L,
