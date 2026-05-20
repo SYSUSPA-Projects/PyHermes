@@ -7,7 +7,7 @@ import numpy as np
 from .base import HermesData
 from .readers import read_particle_data, resolve_particle_weight
 from pyhermes.utils import func_util
-from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.convolution import specialized_convolution_3d, specialized_convolution_3d_complex
 from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
@@ -71,23 +71,30 @@ class ConvolsData(HermesData):
         if a.ndim != 3 or b.ndim != 3:
             if self.rank == 0:
                 self.logger.error(
-                    f"specialized_convolution_3d expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
+                    f"Convolution expects 3D arrays; got a.ndim={a.ndim}, b.ndim={b.ndim}."
                 )
             func_util.safe_exit(1)
-        # Window is calculated through rfft, so here to match half dimension
         nx, ny, nz = a.shape
-        expected = (nx, ny, nz // 2 + 1)
-        if b.shape != expected:
+        expected_rfft = (nx, ny, nz // 2 + 1)
+        expected_full_fft = (nx, ny, nz)
+        if b.shape == expected_rfft:
+            conv = specialized_convolution_3d(
+                a, b, threads=self.threads
+            )
+        elif b.shape == expected_full_fft and np.iscomplexobj(b):
+            conv = specialized_convolution_3d_complex(
+                a, b, threads=self.threads
+            )
+        else:
             if self.rank == 0:
                 self.logger.error(
                     f"Convolution requires same shape; got a.shape={a.shape}, b.shape={b.shape}. "
+                    f"Expected an rFFT kernel with shape {expected_rfft} or a complex full-FFT kernel "
+                    f"with shape {expected_full_fft}. "
                     "In this API, the convolution window is expected on the right-hand side "
                     "(signal @ window). "
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
-        conv = specialized_convolution_3d(
-            a, b, threads=self.threads
-        )
 
         # --- spawn new ConvolsData ---
         new = self._spawn_like()

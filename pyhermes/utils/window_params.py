@@ -5,7 +5,8 @@ import numpy as np
 
 ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell"}
 COMPLEX_RFFT_WINDOW_TYPES = {"directional_derivative"}
-VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft"}
+COMPLEX_FULL_FFT_WINDOW_TYPES = {"legendre_multipole"}
+VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft", "complex_full_fft"}
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 LOS_AWARE_WINDOW_TYPES = ANISOTROPIC_AUTO_WINDOW_TYPES | COMPLEX_RFFT_WINDOW_TYPES
@@ -73,6 +74,8 @@ def normalize_los_args(los_args, window_type=None):
 
 
 def default_kernel_mode(window_type, has_custom_func=False):
+    if window_type in COMPLEX_FULL_FFT_WINDOW_TYPES:
+        return "complex_full_fft"
     if window_type in COMPLEX_RFFT_WINDOW_TYPES:
         return "complex_rfft"
     if window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:

@@ -408,7 +408,8 @@ Important details:
   ``full_rfft`` is more general. ``auto`` uses the fast path for axis-aligned
   LOS windows and the general path for oblique LOS windows. ``complex_rfft``
   supports complex Hermitian-preserving kernels such as directional derivative
-  filters.
+  filters. ``complex_full_fft`` is reserved for full complex kernels such as
+  the built-in 3PCF multipole filters.
 
 There is no universal default ``WindowFunc`` object. Task-level parameters may
 choose to apply no additional smoothing, but an explicit ``WindowFunc`` needs a
@@ -594,6 +595,10 @@ Practical cautions:
   ``octant`` or ``auto``.
 - For complex rFFT windows, request ``complex_rfft`` unless you are using a
   built-in window that selects that mode automatically.
+- Full complex FFT kernels are used by specialized built-in windows such as
+  ``legendre_multipole``. They are useful for spherical-harmonic multipole
+  filters, but require an ``(L,L,L)`` complex kernel rather than the usual
+  rFFT-shaped kernel.
 - Custom functions are Python objects, so they are meant for Python-level task
   construction. YAML configs can describe built-in windows, but cannot store a
   live Python function.
@@ -734,8 +739,10 @@ smooths the input legs, just as in standard 3PCF:
      r13: 40.0
      l_max: 10
 
-Second, the multipole calculation constructs angular filters internally. For
-one leg, the filtered field has the schematic form
+Second, the multipole calculation constructs angular filters internally as
+``WindowFunc`` objects with ``type: legendre_multipole`` and
+``kernel_mode: complex_full_fft``. For one leg, the filtered field has the
+schematic form
 
 .. math::
 
@@ -746,7 +753,8 @@ one leg, the filtered field has the schematic form
 where :math:`W_{\ell m}` contains the radial scale and spherical harmonic
 angular dependence. The user controls this layer mainly through ``r12``,
 ``r13``, and ``l_max`` rather than by writing a separate YAML window for each
-``(\ell,m)`` mode.
+``(\ell,m)`` mode. Internally, the implementation still uses the optimized
+Legendre kernels for supported low-order modes.
 
 Practical Rules Of Thumb
 ------------------------

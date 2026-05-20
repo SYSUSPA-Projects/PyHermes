@@ -16,6 +16,7 @@ from pyhermes.utils.wavelet_grid import fourier_power_spectrum, sample_scaling_f
 from pyhermes.utils.window_functions import set_window_function
 from pyhermes.utils.window_params import (
     ANISOTROPIC_AUTO_WINDOW_TYPES,
+    COMPLEX_FULL_FFT_WINDOW_TYPES,
     COMPLEX_RFFT_WINDOW_TYPES,
     LOS_ARG_KEYS,
     default_kernel_mode,
@@ -26,7 +27,15 @@ from pyhermes.utils.window_params import (
 
 
 class WindowFunc(ConvolsData):
-    def __init__(self, win_params, convols_params, bandwidth=1, threads=1):
+    def __init__(
+        self,
+        win_params,
+        convols_params,
+        bandwidth=1,
+        threads=1,
+        phi_array=None,
+        phi_fourier_power=None,
+    ):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
         missing = [k for k in self._REQUIRED_ARGV if k not in convols_params]
@@ -54,11 +63,14 @@ class WindowFunc(ConvolsData):
             "wavelet_level": self.wavelet_level,
             "bandwidth": self.bandwidth,
         }
-        phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
+        if phi_array is None:
+            phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
         self.phi_array = phi_array
-        self.phi_fourier_power = fourier_power_spectrum(
-            phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution
-        )
+        if phi_fourier_power is None:
+            phi_fourier_power = fourier_power_spectrum(
+                phi_array, 0, self.bandwidth, self.L * self.bandwidth, self.phi_resolution
+            )
+        self.phi_fourier_power = phi_fourier_power
         if not isinstance(self.phi_fourier_power, np.ndarray):
             if self.rank == 0:
                 self.logger.error("WindowFunc requires phi_fourier_power to be a numpy.ndarray.")
@@ -75,6 +87,9 @@ class WindowFunc(ConvolsData):
         if has_custom_func:
             self.type = win_params.get('type', None) or "custom"
             self.func = win_params["func"]
+        elif win_params.get("type") in COMPLEX_FULL_FFT_WINDOW_TYPES:
+            self.type = win_params["type"]
+            self.func = None
         else:
             assert "type" in win_params
             self.type = win_params['type']
@@ -136,6 +151,44 @@ class WindowFunc(ConvolsData):
             return True
         return self.kernel_mode in ("auto", "full_rfft") and self.type in COMPLEX_RFFT_WINDOW_TYPES
 
+    def _requires_complex_full_fft_kernel(self):
+        if self.kernel_mode == "complex_full_fft":
+            return True
+        return self.kernel_mode == "auto" and self.type in COMPLEX_FULL_FFT_WINDOW_TYPES
+
+    def _build_complex_full_fft_kernel(self):
+        if self.type != "legendre_multipole":
+            if self.rank == 0:
+                self.logger.error(f"Unsupported complex full-FFT window type: {self.type}")
+            func_util.safe_exit(1)
+        if self.bandwidth != 1:
+            if self.rank == 0:
+                self.logger.error("legendre_multipole currently supports only bandwidth=1.")
+            func_util.safe_exit(1)
+        if "R" not in self.rescale_len_args:
+            if self.rank == 0:
+                self.logger.error("legendre_multipole requires len_args={'R': ...}.")
+            func_util.safe_exit(1)
+        try:
+            radius = float(self.rescale_len_args["R"])
+            l = int(self.other_args["l"])
+            m = int(self.other_args["m"])
+            use_fast = bool(self.other_args.get("use_fast", True))
+        except KeyError as exc:
+            if self.rank == 0:
+                self.logger.error(f"legendre_multipole missing required other_args key: {exc}")
+            func_util.safe_exit(1)
+        from pyhermes.utils.legendre_windows import calculate_legendre_window_array
+
+        self.w_kernel = calculate_legendre_window_array(
+            self.L,
+            self.phi_fourier_power,
+            radius,
+            l,
+            m,
+            use_fast=use_fast,
+        )
+
     def _build_kernel(self):
         if getattr(self, "is_composite_window", False):
             if self.rank == 0:
@@ -148,6 +201,15 @@ class WindowFunc(ConvolsData):
                     "use kernel_mode='complex_rfft' or kernel_mode='auto'."
                 )
             func_util.safe_exit(1)
+        if self.type in COMPLEX_FULL_FFT_WINDOW_TYPES and self.kernel_mode not in ("auto", "complex_full_fft"):
+            if self.rank == 0:
+                self.logger.error(
+                    f"Window type '{self.type}' requires kernel_mode='complex_full_fft' or kernel_mode='auto'."
+                )
+            func_util.safe_exit(1)
+        if self._requires_complex_full_fft_kernel():
+            self._build_complex_full_fft_kernel()
+            return
         if self._requires_complex_rfft_kernel():
             self.w_kernel = build_complex_window_rfft_kernel(
                 L=self.L,

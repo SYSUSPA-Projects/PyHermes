@@ -7,8 +7,7 @@ import numba
 import numpy as np
 from numba import cuda
 
-from pyhermes.utils.convolution import specialized_convolution_3d_complex
-from pyhermes.utils.legendre_windows import calculate_legendre_window_array
+from pyhermes.io.window import WindowFunc
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum
 
 
@@ -133,7 +132,6 @@ def _stream_convolution_fields(
     if conv_context is None:
         conv_context = _prepare_legendre_convolution_context(field)
     phi_fourier_power = conv_context["phi_fourier_power"]
-    rescaleR = radius * field.scale_factor
     if m_values is None:
         m_values = range(-l, l + 1)
     m_fields = []
@@ -145,8 +143,20 @@ def _stream_convolution_fields(
             if cache_path.exists():
                 cached = np.load(cache_path)
         if cached is None:
-            window_array = calculate_legendre_window_array(field.L, phi_fourier_power, rescaleR, l, m)
-            cached = specialized_convolution_3d_complex(field.epsilon, window_array, threads=threads)
+            window = WindowFunc(
+                {
+                    "type": "legendre_multipole",
+                    "len_args": {"R": radius},
+                    "other_args": {"l": int(l), "m": int(m)},
+                    "kernel_mode": "complex_full_fft",
+                },
+                field.convols_info,
+                bandwidth=1,
+                threads=threads,
+                phi_array=field.phi_array,
+                phi_fourier_power=phi_fourier_power,
+            )
+            cached = (field @ window).epsilon
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 np.save(cache_path, cached)
