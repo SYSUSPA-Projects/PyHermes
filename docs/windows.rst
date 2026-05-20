@@ -264,12 +264,13 @@ offset :math:`H`:
 All sinc-like fractions in this section are evaluated with their limiting
 value of one when the denominator is zero.
 
-Special-Purpose Windows
-~~~~~~~~~~~~~~~~~~~~~~~
+Field-Derivative Windows
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 The standard windows above mostly average or select parts of a field. PyHermes
-can also express differential operations as windows, because derivatives have a
-simple Fourier-space form. In a periodic box, write
+also provides field-derivative operator windows, which apply differential
+operators to the field represented by a ``ConvolsData`` object. This works
+because derivatives have a simple Fourier-space form. In a periodic box, write
 
 .. math::
 
@@ -297,18 +298,22 @@ can be represented as a Fourier-space window:
    =
    2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n}).
 
-In code this is ``directional_derivative``. The derivative direction
-:math:`\widehat{\mathbf n}` is passed through ``los_args``; no ``len_args`` are
-needed. This window is not a normalized smoothing window: its zero mode is
-zero, so it removes constant backgrounds. It also uses the ``complex_rfft``
-kernel mode because the Fourier-space derivative multiplier is imaginary and
-odd.
+In code this field-derivative window is ``directional_derivative``. The
+derivative direction :math:`\widehat{\mathbf n}` is passed through
+``los_args``; no ``len_args`` are needed. This window is not a normalized
+smoothing window: its zero mode is zero, so it removes constant backgrounds.
+It also uses the ``complex_rfft`` kernel mode because the Fourier-space
+derivative multiplier is imaginary and odd.
 
 Applied to a scalar field, the result is the directional derivative of the
 PyHermes field, :math:`\partial_{\widehat n}f`, in grid-coordinate units. To
 convert the derivative to physical box units, multiply the output by
-:math:`L/L_{\rm box}`. To keep derivatives stable on discrete tracer fields,
-combine this operator with an ordinary smoothing window such as ``gaussian``:
+:math:`L/L_{\rm box}`; this factor is available as
+``ConvolsData.scale_factor``. To keep derivatives stable on discrete tracer
+fields, combine this operator with an ordinary smoothing window such as
+``gaussian``. In PyHermes this can be done with the same convolution syntax,
+for example ``D @ W_G @ W_deriv`` for a ``ConvolsData`` object ``D``, a
+Gaussian window ``W_G``, and a derivative window ``W_deriv``:
 
 .. math::
 
@@ -320,7 +325,8 @@ combine this operator with an ordinary smoothing window such as ``gaussian``:
    2\pi i\,(\mathbf{k}\cdot\widehat{\mathbf n})
    \exp\left[-{(2\pi kR)^2\over 2}\right].
 
-PyHermes also provides ``laplacian`` for the scalar operator
+PyHermes also provides the field-derivative window ``laplacian`` for the
+scalar operator
 :math:`\nabla^2`:
 
 .. math::
@@ -341,21 +347,9 @@ therefore the derivative of the PyHermes-represented field, optionally after
 whatever smoothing windows you compose with the derivative operator; it is not
 an unsmoothed derivative of the original delta-function particle catalog.
 
-For a scalar field :math:`f`, the gradient can be built from three directional
-windows. For a linear vector field :math:`\mathbf{p}`, the divergence and curl
-follow from the usual component combinations,
-:math:`\nabla\cdot\mathbf{p}=\partial_x p_x+\partial_y p_y+\partial_z p_z`
-and :math:`\nabla\times\mathbf{p}`. For nonlinear derived fields, apply the
-chain rule. For example, if
-:math:`v_i(\mathbf{x})=n_{v_i}(\mathbf{x})/n(\mathbf{x})`, then
-
-.. math::
-
-   \partial_j v_i
-   =
-   {\partial_j n_{v_i}\over n}
-   -
-   {n_{v_i}\,\partial_j n\over n^2}.
+For a worked example using these windows to build velocity and
+momentum-density divergence and curl fields, see
+:doc:`get_start/weighted_fields/weighted_fields`.
 
 Defining Windows In PyHermes
 ----------------------------

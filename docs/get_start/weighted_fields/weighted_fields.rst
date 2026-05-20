@@ -2,9 +2,27 @@ Weighted Fields
 ===============
 
 ``weighted_fields.ipynb`` is an additional application notebook to read after
-the main counting, 2PCF, and 3PCF workflow. It uses the same ``Convols`` field
-construction introduced earlier, but changes particle weights to represent
-physical fields beyond the standard multipoint-statistics examples.
+the main counting, 2PCF, and 3PCF workflow. PyHermes accepts particle weights
+when constructing a field, so the same Hermes representation is not limited to
+the halo number-density field. With different weights it can reconstruct a
+mass-density field and even component-wise vector fields, such as velocity and
+momentum density.
+
+The second ingredient is the field-derivative window. Since derivatives are
+simple Fourier-space multipliers, PyHermes can compute derivatives through the
+same convolution machinery used for ordinary windows. Combining weighted fields
+with derivative windows gives a compact way to measure velocity and
+momentum-density divergence and curl, which are useful quantities in
+large-scale-structure analyses and in observables related to line-of-sight
+momentum, such as the kinetic Sunyaev-Zel'dovich effect.
+
+The derivative-window method does not require choosing a finite-difference
+spacing ``dx`` or evaluating the field only on a regular grid. It can evaluate
+the derivative at arbitrary positions, with the accuracy controlled by the
+underlying PyHermes field resolution, especially ``J``, and by any smoothing
+window that is applied. The notebook therefore uses derivative windows as the
+main estimator and includes a finite-difference calculation only as a
+consistency check.
 
 What this notebook covers
 -------------------------
@@ -27,6 +45,64 @@ can be reused for several related fields:
 It then visualizes the velocity field on a two-dimensional slice, computes
 velocity and momentum-density derivatives with directional-derivative windows,
 and uses a finite-difference grid only as a reference check.
+
+Derivatives of weighted fields
+------------------------------
+
+For a scalar field :math:`f`, the gradient can be built from three
+directional-derivative windows:
+
+.. math::
+
+   \nabla f =
+   \left(
+   \partial_x f,\,
+   \partial_y f,\,
+   \partial_z f
+   \right).
+
+For a vector field whose components are constructed directly as weighted
+fields, such as the momentum-density field
+:math:`\mathbf{p}=(p_x,p_y,p_z)`, the divergence and curl follow from the
+usual component combinations:
+
+.. math::
+
+   \nabla\cdot\mathbf{p}
+   =
+   \partial_x p_x+\partial_y p_y+\partial_z p_z,
+   \qquad
+   \nabla\times\mathbf{p}
+   =
+   \begin{pmatrix}
+   \partial_y p_z-\partial_z p_y\\
+   \partial_z p_x-\partial_x p_z\\
+   \partial_x p_y-\partial_y p_x
+   \end{pmatrix}.
+
+For nonlinear derived fields, apply the chain rule. The velocity field is the
+main example here. If
+
+.. math::
+
+   v_i(\mathbf{x})
+   =
+   {n_{v_i}(\mathbf{x})\over n(\mathbf{x})},
+
+then
+
+.. math::
+
+   \partial_j v_i
+   =
+   {\partial_j n_{v_i}\over n}
+   -
+   {n_{v_i}\,\partial_j n\over n^2}.
+
+The notebook evaluates these derivative-window expressions directly at the
+random points used for the velocity slice, and later repeats the calculation on
+a subset of regular-grid positions to compare with periodic finite
+differences.
 
 Example outputs
 ---------------

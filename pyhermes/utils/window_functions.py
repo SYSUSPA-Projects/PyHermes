@@ -276,7 +276,7 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     return part_perp * part_parallel
 
 
-# Special-purpose windows.
+# Field-derivative windows.
 @njit
 def window_function_directional_derivative_numba(ki, kj, kk, nx=0.0, ny=0.0, nz=1.0):
     """
