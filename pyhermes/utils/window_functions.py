@@ -278,22 +278,6 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
 
 # Special-purpose windows.
 @njit
-def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
-    """
-    Gaussian-derivative wavelet window in k-space.
-
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
-    A(R) = 2^(7/4) / sqrt(15) * (2*pi)^(3/4) * R^(3/2).
-    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
-    """
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    q = 2 * np.pi * k * R
-    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
-    result = norm * q**2 * np.exp(-(q**2) / 2)
-    return result
-
-
-@njit
 def window_function_directional_derivative_numba(ki, kj, kk, nx=0.0, ny=0.0, nz=1.0):
     """
     Directional derivative window in k-space.
@@ -331,6 +315,22 @@ def window_function_laplacian_numba(ki, kj, kk):
     return -((2.0 * np.pi) ** 2) * k2
 
 
+@njit
+def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
+    """
+    Gaussian-derivative wavelet window in k-space.
+
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
+    A(R) = 2^(7/4) / sqrt(15) * (2*pi)^(3/4) * R^(3/2).
+    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
+    """
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    q = 2 * np.pi * k * R
+    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
+    result = norm * q**2 * np.exp(-(q**2) / 2)
+    return result
+
+
 WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
     "gaussian": window_function_gauss_numba,
@@ -341,9 +341,9 @@ WINDOW_TYPE_DICT = {
     "disk": window_function_disk_numba,
     "cylshell": window_function_cylshell_numba,
     "cylinder": window_function_cylinder_numba,
-    "gaussian_derivative_wavalet": window_function_gauss_derivative_wavalet_numba,
     "directional_derivative": window_function_directional_derivative_numba,
     "laplacian": window_function_laplacian_numba,
+    "gaussian_derivative_wavalet": window_function_gauss_derivative_wavalet_numba,
 }
 
 
