@@ -700,6 +700,64 @@ When the LOS is axis-aligned, ``auto`` can use the faster symmetry-folded
 kernel. For diagonal or oblique LOS choices, PyHermes uses the more general
 full real-FFT kernel, which is slower but mathematically safe.
 
+Windows In 2PCF Multipoles
+--------------------------
+
+2PCF multipoles are a natural future extension of the same pair-window
+language. In the traditional workflow, one first measures
+:math:`\xi(s,\mu)` on a two-dimensional grid and then projects along
+:math:`\mu`:
+
+.. math::
+
+   \xi_\ell(s)
+   =
+   {2\ell+1\over 2}
+   \int_{-1}^{1}d\mu\,
+   \xi(s,\mu)\,\mathcal{L}_\ell(\mu).
+
+That approach makes the result depend on the chosen :math:`(s,\mu)` sampling:
+too few :math:`\mu` bins under-resolve the projection, while many narrow bins
+increase cost and make each intermediate bin noisier.
+
+In the PyHermes window-convolution picture, the projection can instead be
+absorbed into the pair window itself. For a fixed plane-parallel line of sight
+:math:`\widehat{\mathbf n}`, the real-space pair filter can be written
+schematically as
+
+.. math::
+
+   W_\ell(\mathbf{r};s,\widehat{\mathbf n})
+   =
+   {1\over 4\pi s^2}
+   \delta_{\rm D}(|\mathbf{r}|-s)\,
+   \mathcal{L}_\ell(\widehat{\mathbf r}\cdot\widehat{\mathbf n}).
+
+Then the multipole can be estimated directly as a windowed-field product,
+
+.. math::
+
+   \xi_\ell(s)
+   \propto
+   \left\langle
+   \delta(\mathbf{x})\,
+   (W_\ell\circ\delta)(\mathbf{x})
+   \right\rangle,
+
+with the conventional :math:`2\ell+1` normalization applied either in the
+window or in the final estimator. The :math:`\ell=0` case reduces to the
+ordinary shell pair window used by :math:`\xi(s)`, while higher multipoles use
+Legendre-weighted shell windows.
+
+This planned route is one of the advantages of the Hermes framework: it can
+skip the coordinate-space :math:`(s,\mu)` sampling step and perform the angular
+projection through a Fourier-space convolution. The resulting accuracy is then
+controlled mainly by the field resolution ``J`` and by any smoothing/window
+choice, rather than by an auxiliary :math:`\mu` grid. As with the current
+redshift-space pair windows, this simple convolution form assumes a fixed LOS;
+local-LOS survey estimators would require a separate treatment because the
+window would no longer be purely translation invariant.
+
 Windows In 3PCF
 ---------------
 
