@@ -25,6 +25,7 @@ Project links:
 
 - Documentation: [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
 - Source code: [github.com/PyHermes/PyHermes](https://github.com/PyHermes/PyHermes)
+- Package code map: [pyhermes/README.md](pyhermes/README.md)
 
 ![PyHermes workflow](docs/_static/pyhermes_workflow.png)
 
