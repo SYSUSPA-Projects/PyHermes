@@ -18,6 +18,17 @@ Recommended order
 7. ``weighted_fields.ipynb`` for weighted-field applications beyond the
    standard multipoint-statistics workflow
 
+If you are reading selectively, use the same ordering by goal:
+
+- start with ``quick_start.ipynb`` if you only want to see the API shape
+- use ``convols.ipynb`` when you need to prepare or inspect input fields
+- use ``window.ipynb`` when you want to understand field/window algebra before
+  a measurement task
+- jump to ``counting.ipynb``, ``corr2pcf.ipynb``, or ``corr3pcf.ipynb`` for
+  the standard statistics workflow
+- read ``weighted_fields.ipynb`` after the main path when you want to use
+  PyHermes as a general weighted-field and derivative engine
+
 How the examples are organized
 ------------------------------
 

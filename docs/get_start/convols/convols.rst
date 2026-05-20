@@ -106,7 +106,10 @@ Key idea
 
 ``Convols`` builds a weighted multiresolution field and stores it in a reusable
 format. Once that field exists, downstream tasks no longer need to reread and
-repartition the original particle catalog.
+repartition the original particle catalog. Most tutorials start with unit
+weights, but the same construction also supports mass weights, velocity
+weights, and other particle marks; the later
+:doc:`../weighted_fields/weighted_fields` notebook uses this directly.
 
 Mathematical idea
 -----------------

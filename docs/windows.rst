@@ -34,6 +34,29 @@ Changing :math:`W` changes the statistic.
 This is why window definitions appear repeatedly in the examples: they are not
 just numerical settings, but part of the estimator definition.
 
+The same ``WindowFunc`` machinery appears in several roles:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 22 34 44
+
+   * - Role
+     - Typical examples
+     - Where it appears
+   * - Field smoothing or filtering
+     - ``sphere``, ``gaussian``, ``cubic``
+     - ``window``, ``window1``, ``window2``, ``window3`` in Counting, 2PCF,
+       and 3PCF tasks
+   * - Pair geometry
+     - ``shell``, ``ring``, ``disk``, ``cylinder``, ``cylshell``
+     - ``pair_window`` in 2PCF tasks
+   * - Angular multipole filters
+     - ``legendre_multipole`` and internal spherical-harmonic filters
+     - 3PCF multipoles, with 2PCF multipoles planned as a future extension
+   * - Field derivatives
+     - ``directional_derivative``, ``laplacian``
+     - gradients, divergence, and curl of weighted fields
+
 Built-In Windows
 ----------------
 
@@ -703,8 +726,9 @@ full real-FFT kernel, which is slower but mathematically safe.
 Windows In 2PCF Multipoles
 --------------------------
 
-2PCF multipoles are a natural future extension of the same pair-window
-language. In the traditional workflow, one first measures
+This section describes a planned extension rather than a released
+``Corr_2PCF`` interface. 2PCF multipoles are a natural future use of the same
+pair-window language. In the traditional workflow, one first measures
 :math:`\xi(s,\mu)` on a two-dimensional grid and then projects along
 :math:`\mu`:
 
@@ -827,6 +851,9 @@ Practical Rules Of Thumb
   line-of-sight average is desired.
 - Keep the LOS axis-aligned when possible if runtime matters. Oblique LOS is
   supported, but it uses a more general kernel path.
+- Use ``directional_derivative`` and ``laplacian`` as operator windows, usually
+  composed with a smoothing window, when you need gradients, divergence, curl,
+  or Poisson-like operations on a represented field.
 - Use ``pair_window_cache`` for heavy 2PCF runs when many pair windows are
   rebuilt under a memory-saving strategy.
 - Treat window choices as part of the science definition of the statistic, not

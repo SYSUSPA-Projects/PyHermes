@@ -32,6 +32,28 @@ catalog for every task.
    :alt: PyHermes workflow
    :class: workflow-diagram
 
+The Core Abstractions
+---------------------
+
+Most of the package can be read as four layers:
+
+1. **Catalog layer**: particle positions and optional weights define a weighted
+   point process.
+2. **Field layer**: ``Convols`` turns that point process into a reusable
+   ``ConvolsData`` multiresolution field.
+3. **Window layer**: ``WindowFunc`` objects smooth, select separations, encode
+   angular filters, or apply field derivatives through convolution.
+4. **Task layer**: ``Counting``, ``Corr_2PCF``, ``Corr_3PCF``, and the
+   weighted-field examples combine those fields and windows into the requested
+   measurements.
+
+This is the main organizing principle of the documentation. The ordinary
+statistics notebooks follow the classic counting, 2PCF, and 3PCF path. The
+weighted-field notebook shows what else the same field/window algebra can do:
+with different particle weights and derivative windows, PyHermes can also
+construct velocity, mass-density, and momentum-density fields and measure their
+divergence or curl.
+
 Hermes vs. Traditional Counting
 -------------------------------
 
@@ -73,6 +95,15 @@ This field-and-window viewpoint gives PyHermes several practical advantages:
   one consistent window-function language;
 - complex redshift-space geometries and line-of-sight choices fit naturally
   into the same framework;
+- 2PCF multipoles can be viewed as Legendre-weighted pair windows, so the
+  angular projection can be folded into the convolution rather than performed
+  after sampling a dense :math:`(s,\mu)` grid; this is a natural planned
+  extension of the current pair-window framework;
+- 3PCF multipoles are built from angular window filters on the field itself,
+  avoiding direct triplet enumeration for every angular basis component;
+- field derivatives can be computed with derivative windows, so gradients,
+  divergence, and curl are obtained by Fourier-space convolution without
+  choosing a finite-difference grid spacing;
 - high-order statistics avoid returning to raw catalog triplet counting for
   every requested configuration;
 - dense particle samples can be handled with field evaluations and box-random
@@ -104,7 +135,7 @@ already exists.
 Learn through the notebooks
 ---------------------------
 
-The main multipoint-statistics path follows these notebooks in order:
+The main tutorial path follows these notebooks in order:
 
 - ``quick_start.ipynb`` for the smallest possible end-to-end example
 - ``convols.ipynb`` for interactive data preparation and field construction
@@ -118,6 +149,8 @@ After that main path, the "Beyond Multipoint Statistics" section introduces
 ``weighted_fields.ipynb``: by changing particle weights, the same ``Convols``
 construction can represent velocity and momentum-density fields rather than
 only the fields used by the traditional counting, 2PCF, and 3PCF examples.
+
+For the task-oriented reading order, see :doc:`get_start/get_start`.
 
 If you only need the local example catalog and saved ``ConvolsData`` products,
 you can run the non-MPI helper script instead of opening the notebook:

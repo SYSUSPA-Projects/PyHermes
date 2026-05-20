@@ -8,6 +8,20 @@ convolutions, and statistics are read out as field averages or sampled products.
 For a task-oriented reference to the built-in windows and their YAML/Python
 definitions, see :doc:`windows`.
 
+Fourier conventions follow the rest of the documentation:
+
+.. math::
+
+   \widehat f(\mathbf{k})
+   =
+   \int d^3x\,f(\mathbf{x})\,
+   e^{-2\pi i\mathbf{k}\cdot\mathbf{x}},
+   \qquad
+   f(\mathbf{x})
+   =
+   \int d^3k\,\widehat f(\mathbf{k})\,
+   e^{2\pi i\mathbf{k}\cdot\mathbf{x}}.
+
 Point Catalogs And Window Counts
 --------------------------------
 
@@ -75,6 +89,47 @@ operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
 
+Weighted Fields And Derivatives
+-------------------------------
+
+The weight :math:`w_i` is not restricted to a unit count. Choosing
+:math:`w_i=m_i` gives a mass-density field, while choosing one component of a
+mark, such as :math:`w_i=v_{x,i}` or :math:`w_i=m_i v_{x,i}`, gives one
+component of a velocity-weighted or momentum-density field. Component fields
+can then be combined after evaluation. For example, the halo velocity field can
+be estimated as
+
+.. math::
+
+   v_\alpha(\mathbf{x})
+   =
+   {n_{v_\alpha}(\mathbf{x})\over n(\mathbf{x})},
+   \qquad
+   n_{v_\alpha}(\mathbf{x})
+   =
+   \sum_i v_{\alpha,i}\,
+   \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
+
+Field derivatives also fit into the same convolution language. With the Fourier
+convention above,
+
+.. math::
+
+   \widehat{\partial_\alpha f}(\mathbf{k})
+   =
+   2\pi i k_\alpha\,\widehat f(\mathbf{k}),
+   \qquad
+   \widehat{\nabla^2 f}(\mathbf{k})
+   =
+   -(2\pi)^2|\mathbf{k}|^2\,\widehat f(\mathbf{k}).
+
+Therefore a derivative can be represented as a special Fourier-space window.
+This is useful for gradients of scalar fields and for divergence or curl of
+vector fields constructed from weighted ``ConvolsData`` objects. The
+field-derivative windows are documented in :doc:`windows`, and the full
+velocity and momentum-density example is in
+:doc:`get_start/weighted_fields/weighted_fields`.
+
 Counting
 --------
 
@@ -124,7 +179,7 @@ spherical shell has
    \qquad
    \widehat{W}_{\rm shell}(k;R)
    =
-   {\sin(kR)\over kR}.
+   {\sin(2\pi kR)\over 2\pi kR}.
 
 The finite-bin version is a normalized spherical shell between
 :math:`R_{\rm in}` and :math:`R_{\rm out}`. In Fourier space it is the
@@ -148,8 +203,8 @@ and its Fourier-space form contains the Bessel factor
 
    \widehat{W}_{r_\perp,r_\parallel}(k_\perp,k_\parallel)
    =
-   e^{i k_\parallel r_\parallel}
-   J_0(k_\perp r_\perp).
+   e^{2\pi i k_\parallel r_\parallel}
+   J_0(2\pi k_\perp r_\perp).
 
 In practice PyHermes can use shell, ring, disk, cylinder, or cylindrical-shell
 pair windows, all with the same coefficient-level machinery.

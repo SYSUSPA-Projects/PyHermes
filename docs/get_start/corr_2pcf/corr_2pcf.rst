@@ -191,6 +191,11 @@ If you care about redshift-space distortions, the second half is the more
 important reference because it shows how line-of-sight choice, smoothing, and
 window family affect the result.
 
+The same pair-window viewpoint also suggests a future direct route to 2PCF
+multipoles: instead of first sampling ``xi(s, mu)`` and then projecting over
+``mu``, one can absorb the Legendre projection into a specialized pair window.
+That planned extension is discussed in :doc:`../../windows`.
+
 Mathematical idea
 -----------------
 

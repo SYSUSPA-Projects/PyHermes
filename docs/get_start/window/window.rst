@@ -16,9 +16,10 @@ The notebook is organized around four practical ideas:
 3. ``WindowFunc`` arithmetic for composite smoothing filters
 4. built-in and custom ordinary smoothing windows
 
-These are ordinary smoothing/filter windows. They are not yet the 2PCF
-``pair_window`` definitions used to select separation bins. That second role is
-introduced in ``corr2pcf.ipynb``.
+This notebook focuses on ordinary field filters and window arithmetic. The same
+``WindowFunc`` abstraction is reused later for 2PCF ``pair_window`` objects,
+3PCF multipole filters, and field-derivative windows, but those task-specific
+roles are introduced in the later notebooks and in :doc:`../../windows`.
 
 Inputs and outputs
 ------------------
@@ -89,8 +90,8 @@ Supported operations are ``W1 + W2``, ``W1 - W2``, ``a * W``, ``W * a``,
 ``W / a``, and ``-W``. Both windows in a binary operation must be built for the
 same grid and wavelet setup.
 
-Built-in smoothing windows
---------------------------
+Built-in window examples
+------------------------
 
 The built-in window dictionaries used in this notebook follow the same compact
 shape:
@@ -163,3 +164,5 @@ Use this notebook when you want to reason about what a window does before using
 it in a task. ``Counting`` uses the same ordinary smoothing-window role.
 ``Corr_2PCF`` additionally uses windows as ``pair_window`` objects, where the
 window selects a separation bin instead of smoothing the input field.
+``weighted_fields.ipynb`` uses the same composition rules with derivative
+windows to compute gradients, divergence, and curl.

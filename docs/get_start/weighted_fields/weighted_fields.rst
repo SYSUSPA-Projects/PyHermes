@@ -8,6 +8,10 @@ the halo number-density field. With different weights it can reconstruct a
 mass-density field and even component-wise vector fields, such as velocity and
 momentum density.
 
+The most useful prerequisites are ``convols.ipynb`` and ``window.ipynb``:
+``Convols`` explains how the weighted fields are built, and ``WindowFunc``
+explains how those fields are filtered or differentiated.
+
 The second ingredient is the field-derivative window. Since derivatives are
 simple Fourier-space multipliers, PyHermes can compute derivatives through the
 same convolution machinery used for ordinary windows. Combining weighted fields
