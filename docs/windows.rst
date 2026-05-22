@@ -47,6 +47,9 @@ The same ``WindowFunc`` machinery appears in several roles:
      - ``sphere``, ``gaussian``, ``cubic``
      - ``window``, ``window1``, ``window2``, ``window3`` in Counting, 2PCF,
        and 3PCF tasks
+   * - High-pass or band-pass filtering
+     - ``cw``, ``cws``, ``gdw``
+     - scale-localized power and wavelet-like filtered fields
    * - Pair geometry
      - ``shell``, ``ring``, ``disk``, ``cylinder``, ``cylshell``
      - ``pair_window`` in 2PCF tasks
@@ -287,6 +290,55 @@ offset :math:`H`:
 All sinc-like fractions in this section are evaluated with their limiting
 value of one when the denominator is zero.
 
+High-Pass And Wavelet-Like Filters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The ``cw``, ``cws``, and ``gdw`` windows suppress the zero mode and respond to
+a finite band of wavenumbers. They are useful when a statistic should measure
+scale-localized fluctuation power rather than low-pass smoothed density.
+
+For the cosine-wavelet windows define
+
+.. math::
+
+   G_{\rm CW}(q)
+   =
+   q\,[q\cosh q-\sinh q]\,\exp(-q^2/2).
+
+``cw`` implements the one-dimensional cosine-wavelet response as an isotropic
+radial kernel in :math:`|\mathbf{k}|`:
+
+.. math::
+
+   \widehat W_{\rm cw}(k;R)
+   =
+   (2\pi)^{1/2}C_{\rm CW}R^{1/2}G_{\rm CW}(q),
+   \qquad
+   C_{\rm CW}
+   =
+   {2\sqrt{2}\over \sqrt{1+5e}\,\pi^{1/4}}.
+
+``cws`` is the corresponding three-dimensional spherical cosine wavelet:
+
+.. math::
+
+   \widehat W_{\rm cws}(k;R)
+   =
+   (2\pi)^{3/2}C_{\rm CWS}R^{3/2}G_{\rm CW}(q),
+   \qquad
+   C_{\rm CWS}
+   =
+   {2\sqrt{2}\over \sqrt{9+55e}\,\pi^{3/4}}.
+
+``gdw`` is the Gaussian-derivative wavelet:
+
+.. math::
+
+   \widehat W_{\rm gdw}(k;R)
+   =
+   {2^{5/2}\pi^{3/4}\over \sqrt{15}}\,R^{3/2}
+   q^2\exp(-q^2/2).
+
 Field-Derivative Windows
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -358,10 +410,9 @@ scalar operator
    =
    -(2\pi)^2|\mathbf{k}|^2.
 
-The existing ``gaussian_derivative_wavalet`` window is kept as a
-scale-normalized Gaussian-derivative wavelet. It is related to combining a
-Gaussian with the negative Laplacian, but includes its own scale and
-:math:`L^2` normalization factors.
+The ``gdw`` window is a scale-normalized Gaussian-derivative wavelet. It is
+related to combining a Gaussian with the negative Laplacian, but includes its
+own scale and :math:`L^2` normalization factors.
 
 This construction is natural for ``ConvolsData`` because PyHermes stores a
 periodic scaling-function representation of the particle field and applies

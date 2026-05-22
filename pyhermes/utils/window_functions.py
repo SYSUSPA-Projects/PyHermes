@@ -294,7 +294,72 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     return part_perp * part_parallel
 
 
-# Field-derivative windows.
+# High-pass and wavelet-like filters.
+@njit
+def _cosine_wavelet_g_numba(q):
+    q_abs = np.abs(q)
+    if q_abs == 0.0:
+        return 0.0
+    if q_abs < 1.0e-4:
+        return q_abs**4 / 3.0
+    if q_abs > 50.0:
+        return 0.0
+    return q_abs * (q_abs * np.cosh(q_abs) - np.sinh(q_abs)) * np.exp(-0.5 * q_abs * q_abs)
+
+
+@njit
+def window_function_cw_numba(ki, kj, kk, R):
+    """
+    One-dimensional cosine wavelet transfer kernel.
+
+    This is the non-unitary transfer-kernel counterpart of the CW row in the
+    paper's window table, evaluated as an isotropic radial response in
+    |k|. Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
+    C_CW = 2*sqrt(2) / (sqrt(1 + 5*e) * pi^(1/4)).
+    W(k; R) = sqrt(2*pi) * C_CW * R^(1/2) * G_CW(q), where
+    G_CW(q) = q * (q*cosh(q) - sinh(q)) * exp(-q^2 / 2).
+    """
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    q = 2 * np.pi * k * R
+    c_cw = 2 * np.sqrt(2.0) / (np.sqrt(1.0 + 5.0 * np.e) * np.pi ** 0.25)
+    norm = np.sqrt(2.0 * np.pi) * c_cw * R ** 0.5
+    return norm * _cosine_wavelet_g_numba(q)
+
+
+@njit
+def window_function_cws_numba(ki, kj, kk, R):
+    """
+    Spherical cosine wavelet transfer kernel.
+
+    This is the three-dimensional spherical version of the cosine wavelet.
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
+    C_CWS = 2*sqrt(2) / (sqrt(9 + 55*e) * pi^(3/4)).
+    W(k; R) = (2*pi)^(3/2) * C_CWS * R^(3/2) * G_CW(q).
+    """
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    q = 2 * np.pi * k * R
+    c_cws = 2 * np.sqrt(2.0) / (np.sqrt(9.0 + 55.0 * np.e) * np.pi ** 0.75)
+    norm = (2.0 * np.pi) ** 1.5 * c_cws * R ** 1.5
+    return norm * _cosine_wavelet_g_numba(q)
+
+
+@njit
+def window_function_gdw_numba(ki, kj, kk, R):
+    """
+    Gaussian-derivative wavelet window in k-space.
+
+    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
+    A(R) = 2^(5/2) * pi^(3/4) / sqrt(15) * R^(3/2).
+    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
+    """
+    k = np.sqrt(ki**2 + kj**2 + kk**2)
+    q = 2 * np.pi * k * R
+    norm = 2 ** (5 / 2) * np.pi ** (3 / 4) / np.sqrt(15) * R ** (3 / 2)
+    result = norm * q**2 * np.exp(-(q**2) / 2)
+    return result
+
+
+# Field-derivative operator windows.
 @njit
 def window_function_directional_derivative_numba(ki, kj, kk, nx=0.0, ny=0.0, nz=1.0):
     """
@@ -333,22 +398,6 @@ def window_function_laplacian_numba(ki, kj, kk):
     return -((2.0 * np.pi) ** 2) * k2
 
 
-@njit
-def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
-    """
-    Gaussian-derivative wavelet window in k-space.
-
-    Let k = sqrt(ki^2 + kj^2 + kk^2), q = 2*pi*k*R, and
-    A(R) = 2^(7/4) / sqrt(15) * (2*pi)^(3/4) * R^(3/2).
-    W(k; R) = A(R) * q^2 * exp(-q^2 / 2).
-    """
-    k = np.sqrt(ki**2 + kj**2 + kk**2)
-    q = 2 * np.pi * k * R
-    norm = 2 ** (5 / 2) * np.pi ** (3 / 4) / np.sqrt(15) * R ** (3 / 2)
-    result = norm * q**2 * np.exp(-(q**2) / 2)
-    return result
-
-
 WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
     "gaussian": window_function_gauss_numba,
@@ -359,9 +408,11 @@ WINDOW_TYPE_DICT = {
     "disk": window_function_disk_numba,
     "cylshell": window_function_cylshell_numba,
     "cylinder": window_function_cylinder_numba,
+    "cw": window_function_cw_numba,
+    "cws": window_function_cws_numba,
+    "gdw": window_function_gdw_numba,
     "directional_derivative": window_function_directional_derivative_numba,
     "laplacian": window_function_laplacian_numba,
-    "gaussian_derivative_wavalet": window_function_gauss_derivative_wavalet_numba,
 }
 
 
