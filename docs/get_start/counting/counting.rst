@@ -15,6 +15,7 @@ The notebook walks through:
 3. task-object overrides
 4. manual preparation of ``ConvolsData`` and ``WindowFunc``
 5. direct low-level sampling of the smoothed field
+6. one-field RMS fluctuation measurements with low-pass and high-pass windows
 
 The last section is useful because it makes the estimator interpretation
 explicit: ``Counting`` is fundamentally a random-position probe of a field.
@@ -100,6 +101,32 @@ the sampled one-point distribution.
    :width: 90%
 
    One-point PDFs after applying several top-hat smoothing radii.
+
+The notebook then constructs the density-contrast field and measures the RMS
+fluctuation of the smoothed field,
+:math:`\sigma_W(R)=\langle\delta_W^2\rangle^{1/2}`. The low-pass example
+compares the spherical top-hat and Gaussian windows. The dashed line marks
+:math:`R=8\,h^{-1}{\rm Mpc}`, and the marker gives the directly computed
+top-hat value for this halo field.
+
+.. figure:: ../../_static/counting/counting_sigma_lowpass.png
+   :alt: Smoothed RMS fluctuation for top-hat and Gaussian windows
+   :align: center
+   :width: 90%
+
+   Low-pass :math:`\sigma_W(R)` curves for top-hat and Gaussian smoothing
+   windows.
+
+The same operation can be applied to high-pass windows. In this example CWS and
+GDW suppress the constant background and probe the fluctuation amplitude
+selected by their scale-dependent Fourier-space response.
+
+.. figure:: ../../_static/counting/counting_sigma_highpass.png
+   :alt: Smoothed RMS fluctuation for CWS and GDW high-pass windows
+   :align: center
+   :width: 90%
+
+   High-pass :math:`\sigma_W(R)` curves for CWS and GDW windows.
 
 Mathematical idea
 -----------------
