@@ -1,3 +1,21 @@
+"""Built-in Fourier-space window transfer kernels.
+
+The functions in this module return the kernels multiplied onto FFT
+coefficients by ``WindowFunc``. They use a non-unitary Fourier convention in
+cycle-frequency coordinates,
+
+    T_W(k_cyc) = int d^d x W(x) exp(-2*pi*i*k_cyc dot x).
+
+Equivalently, with angular wavenumber K = 2*pi*k_cyc, this is the
+non-unitary transform W_hat(K) = int d^d x W(x) exp(-i*K dot x).
+
+These kernels are not unitary Fourier transforms. For a unit-integral
+smoothing window the transfer kernel satisfies T_W(0) = 1, while a unitary
+Fourier transform would carry extra factors such as (2*pi)^(-d/2). Inside
+``WindowFunc`` the k components are cycles per grid unit, and length arguments
+are rescaled to grid units before the kernels are evaluated.
+"""
+
 import numpy as np
 from numba import njit
 
@@ -326,7 +344,7 @@ def window_function_gauss_derivative_wavalet_numba(ki, kj, kk, R):
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     q = 2 * np.pi * k * R
-    norm = 2 ** (7 / 4) / np.sqrt(15) * (2 * np.pi) ** (3 / 4) * R ** (3 / 2)
+    norm = 2 ** (5 / 2) * np.pi ** (3 / 4) / np.sqrt(15) * R ** (3 / 2)
     result = norm * q**2 * np.exp(-(q**2) / 2)
     return result
 
