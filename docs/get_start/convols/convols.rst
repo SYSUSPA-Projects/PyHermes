@@ -16,7 +16,7 @@ The notebook is organized in five steps:
    task-object overrides
 3. construct a matching random field
 4. reload data and random fields from disk
-5. build ``delta`` and apply a window
+5. visualize how the field resolution changes the represented halo field
 
 It also includes a redshift-space preparation section, so this is the right
 place to understand how the real-space and redshift-space example fields are
@@ -146,3 +146,44 @@ positions along a chosen line of sight,
 
 with periodic wrapping in the simulation box, and then build the same
 coefficient field from :math:`\mathbf{s}`.
+
+Resolution intuition
+--------------------
+
+The multiresolution level ``J`` controls the spatial scale of the represented
+field. It is useful to distinguish the scaling-function basis from the field
+reconstructed with that basis: the figure below is not a plot of the wavelet or
+scaling function alone. Instead, it sketches the same point field after
+projection to several values of ``J``. At lower resolution, each point is spread
+over a broader support and the field appears smoother. At higher resolution,
+the support becomes narrower, so the same particles are represented by sharper
+and more localized peaks.
+
+.. figure:: ../../_static/convols/hmFig0_delta.png
+   :alt: Reconstructed point field at different multiresolution levels
+   :align: center
+   :width: 95%
+
+   Schematic reconstruction of the same point field at ``J=5``, ``J=6``, and
+   ``J=8``. Increasing ``J`` moves the representation from a coarse-grained
+   density field toward a more localized particle-like field.
+
+Example outputs
+---------------
+
+The notebook also includes a direct visual diagnostic using the Quijote halo
+catalog. It projects a central slab of the stored ``epsilon`` field at several
+resolutions and compares those maps with the halo positions in the same slab.
+This is a practical check that the multiresolution field preserves the
+large-scale structure while sharpening the tracer distribution as ``J``
+increases.
+
+.. figure:: ../../_static/convols/convols_epsilon_slice_j7_j8_j9_scatter.png
+   :alt: Projected epsilon slices at J=7, J=8, and J=9 compared with halo positions
+   :align: center
+   :width: 95%
+
+   Projected ``epsilon`` slices for ``J=7``, ``J=8``, and ``J=9``, compared
+   with the halo scatter plot in the same spatial cut. Higher ``J`` resolves
+   thinner and more localized structures, while the lower-resolution field
+   gives a smoother view of the same halo distribution.

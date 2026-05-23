@@ -89,6 +89,16 @@ operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
 
+.. figure:: _static/convols/hmFig0_delta.png
+   :alt: Reconstructed point field at different multiresolution levels
+   :align: center
+   :width: 92%
+
+   The multiresolution level ``J`` controls the effective support of the
+   reconstructed field. Lower ``J`` values give a smoother coarse-grained
+   representation, while higher ``J`` values retain sharper particle-scale
+   structure.
+
 Weighted Fields And Derivatives
 -------------------------------
 
@@ -130,6 +140,27 @@ field-derivative windows are documented in :doc:`windows`, and the full
 velocity and momentum-density example is in
 :doc:`get_start/weighted_fields/weighted_fields`.
 
+.. figure:: _static/weighted_fields/weighted_fields_velocity_divergence_slice.png
+   :alt: Velocity arrows over a velocity-divergence slice
+   :align: center
+   :width: 92%
+
+   Weighted fields turn particle marks into spatial fields before any
+   derivative is taken. In this example, transverse velocity arrows are shown
+   together with the velocity-divergence field on a two-dimensional slice,
+   illustrating how the same field representation can support both vector-field
+   reconstruction and derivative-window measurements.
+
+.. figure:: _static/weighted_fields/weighted_fields_derivative_window_comparison.png
+   :alt: Derivative-window estimates compared with finite differences
+   :align: center
+   :width: 92%
+
+   Derivative windows implement the Fourier-space multipliers directly on the
+   represented field. The close agreement with finite-difference estimates
+   provides a practical check that gradients and divergences are being computed
+   on the same reconstructed field.
+
 Counting
 --------
 
@@ -153,6 +184,25 @@ such as
    \sigma_W^2
    =
    \langle \delta_W, \delta_W\rangle.
+
+.. figure:: _static/counting/counting_smoothing_radius_pdf.png
+   :alt: Count-in-cell PDFs for different smoothing radii
+   :align: center
+   :width: 82%
+
+   The full one-point PDF responds to the smoothing scale. Smaller windows
+   retain sharper high-density tails and stronger discreteness effects, while
+   larger windows average over more structure and move the distribution toward
+   a narrower, more Gaussian-like form.
+
+.. figure:: _static/counting/counting_sigma_lowpass.png
+   :alt: Low-pass RMS fluctuation curves for top-hat and Gaussian smoothing windows
+   :align: center
+   :width: 82%
+
+   The one-point moment :math:`\sigma_W(R)` depends on the smoothing window.
+   Compact top-hat and Gaussian low-pass windows keep similar large-scale
+   information but weight the transition to smaller scales differently.
 
 Two-Point Correlations
 ----------------------
@@ -209,12 +259,22 @@ and its Fourier-space form contains the Bessel factor
 In practice PyHermes can use shell, ring, disk, cylinder, or cylindrical-shell
 pair windows, all with the same coefficient-level machinery.
 
-Random Fields And Estimators
-----------------------------
+.. figure:: _static/corr2pcf/corr2pcf_rsd_pair_windows_2d.png
+   :alt: Redshift-space pair-window geometries in the transverse and line-of-sight plane
+   :align: center
+   :width: 86%
+
+   Redshift-space windows make the axial geometry explicit. Ring-like windows
+   isolate localized transverse and line-of-sight separations, while disk and
+   cylindrical windows integrate over extended regions of the same
+   :math:`(s_\perp,s_\parallel)` plane.
+
+Field Form Of Landy-Szalay
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Random fields encode the survey volume or selection function and provide the
-normalization for correlation measurements. The familiar Landy-Szalay estimator
-is
+normalization for correlation measurements. In ordinary pair-counting language,
+the Landy-Szalay estimator is
 
 .. math::
 
@@ -222,7 +282,55 @@ is
    =
    {DD - 2DR + RR\over RR}.
 
-The same idea extends compactly to higher orders as the
+In the Hermes field formulation this expression has a more compact
+implementation. Once the data and random catalogs have been projected to
+compatible fields, PyHermes can form the difference field
+:math:`\Delta = D-R` directly at the coefficient level. The numerator is then a
+single windowed-field product,
+
+.. math::
+
+   \left\langle
+   \Delta(\mathbf{x})\,
+   (W_P\circ \Delta)(\mathbf{x})
+   \right\rangle
+   =
+   DD - DR - RD + RR,
+
+which reduces to the usual Landy-Szalay numerator for symmetric pair windows.
+Thus the two-point estimator can be read schematically as
+
+.. math::
+
+   \widehat{\xi}_P
+   =
+   {
+   \left\langle
+   (D-R)(\mathbf{x})\,
+   \bigl(W_P\circ(D-R)\bigr)(\mathbf{x})
+   \right\rangle
+   \over
+   \left\langle
+   R(\mathbf{x})\,
+   (W_P\circ R)(\mathbf{x})
+   \right\rangle
+   }.
+
+This is one of the main advantages of the framework: the code does not need to
+repeat four separate pair-counting passes for ``DD``, ``DR``, ``RD``, and
+``RR``. It constructs the field-level difference once, lets the pair window
+define the separation bin or redshift-space geometry, and evaluates the
+required product in the represented field.
+
+Three-Point Correlations
+------------------------
+
+For a triangle with two sides measured from a chosen center, the monopole
+triplet count combines one center leg with two displaced legs. PyHermes
+supports two center choices, and the distinction matters because it determines
+whether the first leg is a discrete catalog sample or a convolved field.
+
+The same random-field logic extends to higher orders through the
 Szapudi-Szalay form,
 
 .. math::
@@ -232,16 +340,8 @@ Szapudi-Szalay form,
    {\prod_{i=1}^N (D_i-R_i)\over \prod_{i=1}^N R_i}.
 
 PyHermes implements this idea by forming data, random, and difference fields at
-the coefficient level, then evaluating the required products for the requested
-geometry.
-
-Three-Point Correlations
-------------------------
-
-For a triangle with two sides measured from a chosen center, the monopole
-triplet count combines one center leg with two displaced legs. PyHermes
-supports two center choices, and the distinction matters because it determines
-whether the first leg is a discrete catalog sample or a convolved field.
+the coefficient level, then evaluating the requested products with the triangle
+windows and center strategy described below.
 
 Particle Centers
 ~~~~~~~~~~~~~~~~
@@ -314,6 +414,16 @@ The low-level ``Q`` reconstruction in ``corr3pcf.ipynb`` follows exactly this
 dependency chain: triplet products give :math:`\zeta`, pair products give
 :math:`\zeta_H`, and their ratio gives :math:`Q`.
 
+.. figure:: _static/corr3pcf/corr3pcf_center_estimators.png
+   :alt: Reduced 3PCF curves for particle-center and box-random-center estimators
+   :align: center
+   :width: 82%
+
+   The particle-center and box-random-center formulations evaluate different
+   Monte Carlo versions of the same windowed-field products. Agreement between
+   the resulting :math:`Q(\theta)` curves is a useful consistency check of the
+   estimator normalization and center treatment.
+
 Multipoles
 ----------
 
@@ -340,3 +450,13 @@ Products of these filtered legs are coupled into rotationally invariant
 multipole components. Truncating at ``lmax`` keeps a finite angular basis; the
 ``corr3pcf.ipynb`` multipole section shows how changing ``lmax`` and field
 resolution changes the recovered spectrum.
+
+.. figure:: _static/corr3pcf/corr3pcf_multipole_lmax.png
+   :alt: 3PCF multipole spectra at J=8 for different lmax values
+   :align: center
+   :width: 82%
+
+   A fixed-resolution ``J=8`` multipole example. Varying ``lmax`` changes the
+   angular basis retained in the triangle expansion, so convergence of the
+   curves indicates that the chosen truncation captures the dominant angular
+   structure.

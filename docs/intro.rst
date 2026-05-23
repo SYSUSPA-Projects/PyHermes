@@ -28,9 +28,15 @@ You start from a particle catalog, project it onto a multiresolution grid, and
 then reuse that field for downstream measurements instead of rereading the raw
 catalog for every task.
 
-.. image:: _static/pyhermes_workflow.png
-   :alt: PyHermes workflow
-   :class: workflow-diagram
+.. figure:: _static/pyhermes_workflow.png
+   :alt: PyHermes field and window workflow
+   :align: center
+
+   PyHermes rewrites particle counting as a sequence of reusable field
+   operations: construct a multiresolution field once, apply windows to encode
+   the requested geometry, and form sampled values or field products for the
+   target statistic.
+
 
 The Core Abstractions
 ---------------------
