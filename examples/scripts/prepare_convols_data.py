@@ -285,9 +285,9 @@ def build_redshift_space_field(
 
 
 def build_random_field(random_count: int, threads: int):
-    from pyhermes.utils.sampling import random_points_box
+    from pyhermes.utils.sampling import random_box_positions
 
-    random_pos = random_points_box(N=random_count, box_size=1000, seed=42).astype(
+    random_pos = random_box_positions(count=random_count, box_size=1000, seed=42).astype(
         np.float32, copy=False
     )
     task = base_convols_task(threads, "./output/random_sfc.pkl")

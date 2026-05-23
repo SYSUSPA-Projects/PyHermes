@@ -7,7 +7,7 @@ import numpy as np
 
 from pyhermes.io import CountingData, ConvolsData, WindowFunc
 from pyhermes.utils import func_util
-from pyhermes.utils.sampling import random_points_box
+from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
 from pyhermes.pipeline import TaskBase
 
@@ -193,7 +193,7 @@ class Counting(TaskBase):
             
             # --- generate random positions on each rank ---
             # assume positions are uniform in the simulation box [0, box_size)
-            pos = random_points_box(_local_n_tasks, _local_convols.box_size, seed=self.seed + rank)
+            pos = random_box_positions(_local_n_tasks, _local_convols.box_size, seed=self.seed + rank)
             # --- evaluate number density at positions ---
             _data_local = _local_convols.n_at_pos(pos).astype(np.float64, copy=False)
 

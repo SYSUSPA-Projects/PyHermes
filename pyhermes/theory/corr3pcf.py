@@ -11,7 +11,7 @@ from pyhermes.utils.corr3pcf_kernels import (
     third_side_from_mu,
 )
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.utils.sampling import random_points_box
+from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
 from pyhermes.pipeline import TaskBase
 
@@ -1313,7 +1313,7 @@ class Corr_3PCF(TaskBase):
                     counts = None
                 n_local = int(comm.scatter(counts, root=0))
                 seed_center_rank = self.base_seed + 1000003 * (rank + 1)
-                pos_local = random_points_box(N=n_local, box_size=geometry_L, seed=seed_center_rank)
+                pos_local = random_box_positions(count=n_local, box_size=geometry_L, seed=seed_center_rank)
             else:
                 pos_local = self._scatter_positions(pos_all)
                 weight_local = self._scatter_weights(weight_all)

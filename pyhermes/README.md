@@ -146,7 +146,7 @@ more internal than `io/` and `theory/`, but it contains many important pieces.
 
 #### Runtime, sampling, and plotting helpers
 
-- `sampling.py`: random points in a periodic box.
+- `sampling.py`: random-box and regular-grid positions.
 - `redshift_space.py`: Hubble-factor helper and redshift-space coordinate
   mapping.
 - `mpi_util.py`: MPI-related utilities.
