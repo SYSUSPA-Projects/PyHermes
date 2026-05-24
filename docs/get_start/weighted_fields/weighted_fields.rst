@@ -103,6 +103,39 @@ then
    -
    {n_{v_i}\,\partial_j n\over n^2}.
 
+In code the same chain rule is assembled from ordinary ``WindowFunc`` objects.
+Here ``D`` is the unit-weight number-density field and ``Ux`` is the
+x-velocity-weighted field built from the same catalog:
+
+.. code-block:: python
+
+   from pyhermes.io import WindowFunc
+
+   smooth = WindowFunc(
+       {"type": "gaussian", "len_args": {"R": 8.0}},
+       D.convols_info,
+       threads=8,
+   )
+   dx = WindowFunc(
+       {
+           "type": "directional_derivative",
+           "los_args": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
+       },
+       D.convols_info,
+       threads=8,
+   )
+
+   N = (D @ smooth).as_array()
+   Nx = (Ux @ smooth).as_array()
+   dN_dx = (D @ smooth @ dx).as_array() * D.scale_factor
+   dNx_dx = (Ux @ smooth @ dx).as_array() * D.scale_factor
+   dvx_dx = dNx_dx / N - Nx * dN_dx / N**2
+
+The factor ``D.scale_factor`` converts the derivative from grid-coordinate
+units to physical box units. Repeating this pattern for the three velocity
+components and three derivative directions gives the full velocity-gradient
+tensor.
+
 The notebook evaluates these derivative-window expressions directly at the
 random points used for the velocity slice, and later repeats the calculation on
 a subset of regular-grid positions to compare with periodic finite

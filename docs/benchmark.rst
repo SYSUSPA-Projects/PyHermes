@@ -18,7 +18,106 @@ The ``main`` column reports the core measurement loop exposed in the log. The
 ``task`` column includes setup, post-processing, and output writing. Resource
 labels are written as ``MPI ranks x threads per rank``. The logs do not record
 the CPU model. The multipole logs record an ``NVIDIA GeForce RTX 4090`` with
-CUDA 12.4.
+CUDA 12.4; the CUDA product kernel uses an ``(8, 8, 8)`` layout, i.e. 512 GPU
+threads per block.
+
+The memory values below are the Slurm batch-step ``MaxRSS`` values collected
+with ``sacct``. They should be read as job-level planning numbers for these
+example workflows, not as universal minima. At fixed task structure, increasing
+``J`` by one increases the number of grid coefficients by a factor of eight.
+For memory-heavy jobs this can be partly balanced by reducing the number of
+MPI ranks and increasing the number of threads per rank, so fewer rank-local
+field buffers are replicated.
+
+Compact Planning Summary
+------------------------
+
+The table below mirrors the compact benchmark summary used in the paper. The
+3PCF rows use ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``. The later sections keep
+the fuller log-level breakdowns, including explicit-random variants and staged
+multipole products.
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 34 7 12 12 13 10
+
+   * - Product
+     - Representative setup
+     - ``J``
+     - Resources
+     - Total loop
+     - Average
+     - ``MaxRSS``
+   * - ``DD(s,mu)``
+     - Octant kernel, ``n_s=46``, ``n_mu=51``
+     - ``8``
+     - ``16 x 8``
+     - ``78 s``
+     - ``33.21 ms/sample``
+     - ``16.5 GB``
+   * - ``DD(s,mu)``
+     - Full ``rfft`` kernel, ``n_s=46``, ``n_mu=51``
+     - ``8``
+     - ``16 x 8``
+     - ``149.5 s``
+     - ``63.5 ms/sample``
+     - ``15.5 GB``
+   * - ``DDD(theta; r12,r13)``
+     - Particle centres, ``N_cen=406728``, ``n_rot=1000``, ``n_theta=20``
+     - ``8``
+     - ``16 x 8``
+     - ``110 s``
+     - ``14 ns/comb.``
+     - ``11.5 GB``
+   * - ``DDD(theta; r12,r13)``
+     - Box-random centres, ``N_cen=8.0e6``, ``n_rot=200``, ``n_theta=20``
+     - ``8``
+     - ``16 x 8``
+     - ``467 s``
+     - ``14 ns/comb.``
+     - ``15.7 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=7`` (``N_m=36``)
+     - ``8``
+     - ``24 x 4``
+     - ``31 s``
+     - ``0.86 s/m``
+     - ``23.3 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=10`` (``N_m=66``)
+     - ``8``
+     - ``24 x 4``
+     - ``62 s``
+     - ``0.94 s/m``
+     - ``24.1 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=14`` (``N_m=120``)
+     - ``8``
+     - ``24 x 4``
+     - ``109 s``
+     - ``0.91 s/m``
+     - ``22.5 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=20`` (``N_m=231``)
+     - ``8``
+     - ``24 x 4``
+     - ``231 s``
+     - ``1.00 s/m``
+     - ``22.8 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=7`` (``N_m=36``)
+     - ``9``
+     - ``12 x 8``
+     - ``221 s``
+     - ``6.1 s/m``
+     - ``77.4 GB``
+   * - ``DDD_ell(r12,r13)``
+     - ``lmax=14`` (``N_m=120``)
+     - ``9``
+     - ``12 x 8``
+     - ``849 s``
+     - ``7.1 s/m``
+     - ``81.7 GB``
 
 2PCF
 ----
@@ -87,6 +186,11 @@ sample point does more coordinate work and memory access is less direct.
 Explicit random fields are also slower than the uniform shortcut because the
 random density field must be read and convolved rather than represented by an
 analytic constant.
+
+The representative ``J=8`` memory footprint is ``16--17 GB`` for the
+axis-aligned uniform-shortcut runs. The more general ``full_rfft`` path changes
+runtime more than memory, because the main field buffers are still set by the
+same grid resolution and pair-window construction.
 
 Standard 3PCF
 -------------
@@ -168,6 +272,11 @@ That is why ``main / center-rot-angle`` is the better metric for comparing
 particle-center and box-random-center kernels, while raw ``main`` time is the
 more useful metric for planning how long a full example will take.
 
+The particle-center ``J=8`` runs use about ``11.5 GB`` in the representative
+``nrot=1000`` benchmark. The box-random-center run uses about ``15.7 GB``
+because it carries the larger Monte Carlo center sample and associated sampled
+field values in addition to the shared convolved fields.
+
 The explicit-random 3PCF workflows are split into products, because their
 total time combines physically different stages.
 
@@ -237,6 +346,13 @@ Label notes: ``J8`` and ``J9`` are the multiresolution grid levels. ``lmax`` is
 the maximum multipole order. ``shortcut`` means the uniform random contribution
 uses the analytic shortcut. ``full`` means explicit random-field products are
 computed. ``24 x 4`` means 24 MPI ranks with 4 threads per rank.
+
+For the shortcut runs summarized in the paper, ``J=8`` uses about
+``23--24 GB`` for ``lmax=7--20``. The ``J=9`` shortcut runs use ``77--82 GB``:
+the grid volume is eight times larger, while the MPI rank count is halved from
+24 to 12, so the observed job-level memory increase is closer to four than to
+eight. The CUDA product-kernel layout is ``(8, 8, 8)`` on the RTX 4090 for
+these multipole runs.
 
 .. list-table::
    :header-rows: 1

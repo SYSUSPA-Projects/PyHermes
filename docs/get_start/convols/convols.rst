@@ -80,6 +80,32 @@ multiresolution grid, and writes a reusable ``ConvolsData`` object:
 The notebook shows this shape before the command-line run so that the YAML file
 and driver script can be read together.
 
+Minimal Python task object
+--------------------------
+
+The same construction can be driven from Python by filling the task object
+directly. This is useful in notebooks when the input catalog has already been
+loaded or when only one or two parameters need to be changed interactively:
+
+.. code-block:: python
+
+   from pyhermes.theory import Convols
+
+   task = Convols()
+   task.fin = {
+       "path": "./data/quijote_halos/8000",
+       "format": "fof",
+       "reader_params": {"snapnum": 4},
+   }
+   task.box_size = 1000.0
+   task.J = 8
+   D = task.run()
+
+The returned ``D`` is a ``ConvolsData`` object. Its ``epsilon`` array stores
+the scaling-function coefficients of the represented field, while
+``D.convols_info`` carries the grid and wavelet metadata needed by compatible
+``WindowFunc`` objects in later notebooks.
+
 Recommended usage modes
 -----------------------
 

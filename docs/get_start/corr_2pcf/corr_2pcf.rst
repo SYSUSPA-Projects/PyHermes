@@ -137,6 +137,39 @@ That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
 windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
+The field formulation also makes the Landy-Szalay structure more direct. Once
+the data and random catalogs have been represented as compatible
+``ConvolsData`` fields, PyHermes can build the field-level difference
+``Delta = D - R`` and evaluate the pair-window product
+
+.. math::
+
+   \xi_P =
+   { \left\langle
+      \Delta(\mathbf{x})
+      (W_P\circ\Delta)(\mathbf{x})
+     \right\rangle
+   \over
+     \left\langle
+      R(\mathbf{x})
+      (W_P\circ R)(\mathbf{x})
+     \right\rangle }.
+
+For symmetric pair windows the numerator is the usual
+``DD - DR - RD + RR`` combination. The important implementation difference is
+that PyHermes does not need four independent catalogue pair loops; the
+subtraction is done at the field level and the pair window defines the
+separation geometry.
+
+Changing the pair window changes the statistic itself. ``shell`` gives the
+usual isotropic ``xi(s)``, while replacing its Fourier response by a cosine
+kernel gives a generalized two-point statistic with a different phase weighting
+of Fourier modes. In redshift space, ``ring`` gives the familiar
+``xi(s,mu)`` or ``xi(rp,pi)`` geometry, whereas ``disk``, ``cylshell``, and
+custom combinations such as ``cylsurf`` average over different transverse and
+line-of-sight surfaces. The resulting maps are therefore responses to different
+estimator geometries, not just different plotting styles.
+
 Example outputs
 ---------------
 
@@ -161,6 +194,9 @@ choice.
    :width: 90%
 
    Isotropic :math:`s^2\xi(s)` measured with shell and cosine pair windows.
+   The two curves use the same field product, but the cosine transfer has a
+   different Fourier phase from the shell transfer and therefore probes a
+   different generalized two-point statistic.
 
 For redshift-space analyses, the notebook compares real-space and redshift-space
 ``xi(s, mu)`` views directly.
@@ -180,7 +216,10 @@ line-of-sight-aware pair-window family.
    :align: center
    :width: 95%
 
-   Redshift-space 2PCF morphology for several pair-window families.
+   Redshift-space 2PCF morphology for several pair-window families. Ring,
+   disk, cylindrical-shell, and cylindrical-surface windows average over
+   different regions of the transverse/line-of-sight plane, so they respond
+   differently to redshift-space distortions.
 
 What to carry forward
 ---------------------

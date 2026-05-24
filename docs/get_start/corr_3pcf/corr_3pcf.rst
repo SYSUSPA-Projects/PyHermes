@@ -89,6 +89,54 @@ In short: use particle centers for sparse halo/galaxy tracers, and box-random
 centers for very dense particle fields or whenever the center leg must carry a
 window convolution.
 
+Estimator logic
+---------------
+
+Both center modes estimate the same reduced three-point statistic, but they
+sample the first triangle vertex differently. The task parameters ``r12`` and
+``r13`` are the two side lengths measured from the center vertex; in the
+formulae below ``R_2`` and ``R_3`` denote the radii of the corresponding leg
+windows. For the standard shell-leg examples, ``R_2 = r12`` and
+``R_3 = r13``. In particle-center mode the first vertex is drawn from the
+tracer catalog itself:
+
+.. math::
+
+   DDD_{\rm p}(\theta; r_{12}, r_{13})
+   =
+   {1\over\sum_i w_i}
+   \sum_i w_i\,
+   n_{R_2}(\mathbf{x}_i)\,
+   n_{R_3,\theta}(\mathbf{x}_i).
+
+In box-random-center mode the centers are Monte Carlo positions in the periodic
+volume, so all three legs are evaluated as fields:
+
+.. math::
+
+   DDD_{\rm b}(\theta; r_{12}, r_{13})
+   \simeq
+   {1\over N_c}
+   \sum_{a=1}^{N_c}
+   n(\mathbf{y}_a)\,
+   n_{R_2}(\mathbf{y}_a)\,
+   n_{R_3,\theta}(\mathbf{y}_a).
+
+The random-normalized products stored by the task give the connected
+three-point statistic ``zeta``. The reduced statistic ``Q`` then divides by the
+hierarchical two-point denominator,
+
+.. math::
+
+   Q(\theta; r_{12}, r_{13})
+   =
+   {\zeta(\theta; r_{12}, r_{13})\over
+    \xi_{12}\xi_{13}+\xi_{12}\xi_{23}+\xi_{13}\xi_{23}}.
+
+The low-level reconstruction section of the notebook follows exactly this
+dependency chain: triplet products build ``zeta``, pair products build the
+denominator, and their ratio rebuilds ``Q``.
+
 Heavy outputs and external runs
 -------------------------------
 
@@ -121,6 +169,26 @@ representation. The cells below do not rerun the estimator from scratch;
 instead, they load saved multipole outputs and compare how the result changes
 with the truncation order ``l_max`` and the field resolution parameter ``J``.
 
+Conceptually, the multipole workflow replaces the ordinary shell legs by
+spherical-harmonic-filtered legs,
+
+.. math::
+
+   n_{\ell m}(\mathbf{x};R)
+   =
+   (W_{\ell m}(R)\circ n)(\mathbf{x}),
+   \qquad
+   \widehat W_{\ell m}(\mathbf{k};R)
+   \propto
+   j_\ell(2\pi kR)Y_{\ell m}(\widehat{\mathbf{k}}),
+
+with the multiresolution basis response included internally by ``WindowFunc``.
+The product is then coupled into rotationally invariant multipoles. PyHermes
+streams only the non-negative ``m`` fields explicitly and reconstructs the
+negative-``m`` contribution from spherical-harmonic conjugation symmetry. The
+convolution work is distributed over MPI ranks and Numba threads; the final
+summation stage uses the CUDA path documented in :doc:`../../benchmark`.
+
 The saved multipole outputs used below can be produced from a config with this
 shape:
 
@@ -152,7 +220,8 @@ triangle rotations.
    :align: center
    :width: 90%
 
-   Particle-center reduced 3PCF curves for several values of ``n_rot``.
+   Particle-center reduced 3PCF curves for several values of ``n_rot`` at
+   ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
 
 The center-mode comparison separates the particle-center estimator from the
 box-random-center estimator and also shows the effect of using an explicit
@@ -164,7 +233,7 @@ random field.
    :width: 90%
 
    Reduced 3PCF curves for different center strategies and random-field
-   treatments.
+   treatments at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
 
 The multipole examples then show how truncation order and field resolution
 affect the recovered angular spectrum.
@@ -175,14 +244,15 @@ affect the recovered angular spectrum.
    :width: 90%
 
    Multipole spectra for several choices of ``l_max`` at fixed field
-   resolution.
+   resolution and radial pair ``(r12,r13)=(20,40) Mpc/h``.
 
 .. figure:: ../../_static/corr3pcf/corr3pcf_multipole_resolution.png
    :alt: 3PCF multipoles for different field resolutions
    :align: center
    :width: 90%
 
-   Multipole spectra at fixed ``l_max`` for two field resolutions.
+   Multipole spectra at fixed ``l_max`` and ``(r12,r13)=(20,40) Mpc/h`` for
+   two field resolutions.
 
 How to read the notebook
 ------------------------
@@ -206,11 +276,11 @@ triangle. For a center :math:`\mathbf{x}` and two triangle legs,
 
 .. math::
 
-   DDD =
+   DDD(\theta; r_{12}, r_{13}) =
    \left\langle
    n(\mathbf{x})\,
-   \widetilde n_{R_1}(\mathbf{x})\,
-   \widetilde n_{R_2,\theta}(\mathbf{x})
+   \widetilde n_{R_2}(\mathbf{x})\,
+   \widetilde n_{R_3,\theta}(\mathbf{x})
    \right\rangle.
 
 After the matching random normalization, PyHermes stores the connected
@@ -229,7 +299,8 @@ and the reduced statistic
 
 .. math::
 
-   Q = {\zeta\over\zeta_H}.
+   Q(\theta; r_{12}, r_{13}) =
+   {\zeta(\theta; r_{12}, r_{13})\over\zeta_H}.
 
 The low-level reconstruction section is therefore not a separate estimator; it
 rebuilds :math:`Q` from the same saved ingredients. The multipole section

@@ -44,7 +44,7 @@ The same ``WindowFunc`` machinery appears in several roles:
      - Typical examples
      - Where it appears
    * - Field smoothing or filtering
-     - ``sphere``, ``gaussian``, ``cubic``
+     - ``sphere``, ``gaussian``, ``gaussian_shell``, ``cubic``
      - ``window``, ``window1``, ``window2``, ``window3`` in Counting, 2PCF,
        and 3PCF tasks
    * - High-pass or band-pass filtering
@@ -78,6 +78,13 @@ The standard windows below are normalized so that
 :math:`\int d^3x\,W(\mathbf{x})=1` and :math:`\widehat W(0)=1`. For isotropic
 windows, :math:`r=|\mathbf{x}|`, :math:`k=|\mathbf{k}|`, and
 :math:`q=2\pi kR`.
+
+The current built-in window vocabulary contains fourteen named windows:
+``shell``, ``sphere``, ``gaussian``, ``gaussian_shell``, ``cubic``,
+``cylinder``, ``cylshell``, ``disk``, ``ring``, ``cw``, ``cws``, ``gdw``,
+``directional_derivative``, and ``laplacian``. The first nine are ordinary
+low-pass or pair-geometry windows, ``cw``/``cws``/``gdw`` are high-pass or
+wavelet-like filters, and the last two are differential-operator windows.
 
 Isotropic Windows
 ~~~~~~~~~~~~~~~~~
@@ -122,31 +129,31 @@ for :math:`\xi(r)`:
    {\sin q\over q}.
 
 ``gaussian_shell`` is a Gaussian-smoothed shell-like filter. Let
-:math:`a=R_{\rm shell}`, :math:`\sigma=R_{\rm smooth}`, and
+:math:`R_s` be the shell scale, :math:`R_g` be the Gaussian smoothing scale, and
 :math:`G_\sigma` be the normalized Gaussian above. Define the
 Gaussian-smoothed thin-shell term
 
 .. math::
 
-   S_{a,\sigma}(r)
+   S_{R_s,R_g}(r)
    =
-   {1\over (2\pi)^{3/2}\sigma^3}
-   \exp\left[-{r^2+a^2\over 2\sigma^2}\right]
-   {\sinh(ra/\sigma^2)\over ra/\sigma^2},
+   {1\over (2\pi)^{3/2}R_g^3}
+   \exp\left[-{r^2+R_s^2\over 2R_g^2}\right]
+   {\sinh(rR_s/R_g^2)\over rR_s/R_g^2},
 
 and the Gaussian-smoothed cosine-shell term
 
 .. math::
 
-   C_{a,\sigma}(r)
+   C_{R_s,R_g}(r)
    =
-   {1\over (2\pi)^{3/2}\sigma^3}
-   \exp\left[-{r^2+a^2\over 2\sigma^2}\right]
+   {1\over (2\pi)^{3/2}R_g^3}
+   \exp\left[-{r^2+R_s^2\over 2R_g^2}\right]
    \left[
-   \cosh\left({ra\over \sigma^2}\right)
+   \cosh\left({rR_s\over R_g^2}\right)
    -
-   {a\over r}
-   \sinh\left({ra\over \sigma^2}\right)
+   {R_s\over r}
+   \sinh\left({rR_s\over R_g^2}\right)
    \right],
 
 with the :math:`r\to0` limit used at the origin. Then
@@ -155,26 +162,29 @@ with the :math:`r\to0` limit used at the origin. Then
 
    W_{\rm gaussian\_shell}
    =
-   {\sigma^2 C_{a,\sigma}(r)+a^2 S_{a,\sigma}(r)
+   {R_g^2 C_{R_s,R_g}(r)+R_s^2 S_{R_s,R_g}(r)
    \over
-   a^2+\sigma^2}.
+   R_s^2+R_g^2}.
 
 In Fourier space, with
-:math:`q_{\rm shell}=2\pi kR_{\rm shell}` and
-:math:`q_{\rm smooth}=2\pi kR_{\rm smooth}`,
+:math:`q_s=2\pi kR_s` and :math:`q_g=2\pi kR_g`,
 
 .. math::
 
    \widehat W_{\rm gaussian\_shell}
    =
    {
-   R_{\rm smooth}^2\cos q_{\rm shell}
+   R_g^2\cos q_s
    +
-   R_{\rm shell}^2\,{\sin q_{\rm shell}\over q_{\rm shell}}
+   R_s^2\,{\sin q_s\over q_s}
    \over
-   R_{\rm shell}^2 + R_{\rm smooth}^2
+   R_s^2 + R_g^2
    }
-   \exp\left(-{q_{\rm smooth}^2\over 2}\right).
+   \exp\left(-{q_g^2\over 2}\right).
+
+In code, these two length arguments are named ``R_shell`` and ``R_smooth`` for
+backward compatibility with existing configuration files; they correspond to
+:math:`R_s` and :math:`R_g` in the formulas above.
 
 Axis-Aligned Windows
 ~~~~~~~~~~~~~~~~~~~~

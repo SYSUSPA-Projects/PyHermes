@@ -14,7 +14,8 @@ The notebook is organized around four practical ideas:
 1. ``ConvolsData`` arithmetic for derived fields
 2. ``WindowFunc`` construction and application through ``D @ W``
 3. ``WindowFunc`` arithmetic for composite smoothing filters
-4. built-in and custom ordinary smoothing windows
+4. built-in and custom windows, including appendix k-space sketches for the
+   built-in window family
 
 This notebook focuses on ordinary field filters and window arithmetic. The same
 ``WindowFunc`` abstraction is reused later for 2PCF ``pair_window`` objects,
@@ -101,11 +102,17 @@ shape:
    {"type": "sphere", "len_args": {"R": 20.0}}
    {"type": "gaussian", "len_args": {"R": 8.0}}
    {"type": "shell", "len_args": {"R": 20.0}}
+   {"type": "gaussian_shell", "len_args": {"R_shell": 20.0, "R_smooth": 5.0}}
    {"type": "cubic", "len_args": {"Lx": 20.0, "Ly": 20.0, "Lz": 20.0}}
    {"type": "ring", "len_args": {"R": 20.0, "H": 10.0}}
    {"type": "disk", "len_args": {"R": 20.0, "H": 10.0}}
    {"type": "cylshell", "len_args": {"R": 20.0, "H": 10.0}}
    {"type": "cylinder", "len_args": {"R": 20.0, "H": 10.0}}
+   {"type": "cw", "len_args": {"R": 8.0}}
+   {"type": "cws", "len_args": {"R": 8.0}}
+   {"type": "gdw", "len_args": {"R": 8.0}}
+   {"type": "directional_derivative", "los_args": {"nx": 0.0, "ny": 0.0, "nz": 1.0}}
+   {"type": "laplacian"}
 
 For line-of-sight windows, add ``los_args`` when the default z-axis line of
 sight is not the intended direction:
@@ -121,6 +128,11 @@ sight is not the intended direction:
 
 Here ``H`` is a distance along the line of sight. For ``cylshell`` and
 ``cylinder``, it is the half-height of the finite cylinder.
+
+The appendix cells plot the Fourier-space responses of all fourteen built-in
+windows. Those plots are useful when choosing whether a window acts as a
+low-pass smoother, a pair-geometry selector, a high-pass filter, or a
+differential operator.
 
 Custom and composite windows
 ----------------------------

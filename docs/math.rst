@@ -8,6 +8,11 @@ convolutions, and statistics are read out as field averages or sampled products.
 For a task-oriented reference to the built-in windows and their YAML/Python
 definitions, see :doc:`windows`.
 
+The order below follows the practical PyHermes workflow: construct a
+multiresolution field, choose windows, form one-point and correlation
+statistics, and then reuse the same field/window algebra for multipoles and
+weighted-field derivatives.
+
 Fourier conventions follow the rest of the documentation:
 
 .. math::
@@ -236,8 +241,8 @@ The finite-bin version is a normalized spherical shell between
 corresponding difference of two spherical top-hat windows.
 
 In redshift space the line of sight introduces axial symmetry. With transverse
-separation :math:`r_\perp` and line-of-sight separation :math:`r_\parallel`,
-the thin ring window is
+separation :math:`r_\perp` and line-of-sight offset :math:`r_\parallel`, the
+real even-in-line-of-sight thin ring window used by PyHermes is
 
 .. math::
 
@@ -245,7 +250,7 @@ the thin ring window is
    =
    {1\over 2\pi r_\perp}
    \delta_{\rm D}(\rho-r_\perp)
-   \delta_{\rm D}(z-r_\parallel),
+   {\delta_{\rm D}(|z|-r_\parallel)\over2},
 
 and its Fourier-space form contains the Bessel factor
 
@@ -253,11 +258,15 @@ and its Fourier-space form contains the Bessel factor
 
    \widehat{W}_{r_\perp,r_\parallel}(k_\perp,k_\parallel)
    =
-   e^{2\pi i k_\parallel r_\parallel}
-   J_0(2\pi k_\perp r_\perp).
+   J_0(2\pi k_\perp r_\perp)
+   \cos(2\pi k_\parallel r_\parallel).
 
 In practice PyHermes can use shell, ring, disk, cylinder, or cylindrical-shell
-pair windows, all with the same coefficient-level machinery.
+pair windows, all with the same coefficient-level machinery. Replacing the
+window changes the estimator geometry: a shell gives the usual isotropic
+``xi(s)``, a cosine transfer gives a generalized phase-weighted 2PCF, and the
+line-of-sight windows probe different averages over the
+:math:`(s_\perp,s_\parallel)` plane.
 
 .. figure:: _static/corr2pcf/corr2pcf_rsd_pair_windows_2d.png
    :alt: Redshift-space pair-window geometries in the transverse and line-of-sight plane
@@ -329,6 +338,10 @@ For a triangle with two sides measured from a chosen center, the monopole
 triplet count combines one center leg with two displaced legs. PyHermes
 supports two center choices, and the distinction matters because it determines
 whether the first leg is a discrete catalog sample or a convolved field.
+In the task configuration these two side lengths are named ``r12`` and ``r13``.
+In the formulae below, ``R_2`` and ``R_3`` denote the radii of the corresponding
+second- and third-leg windows; for standard shell legs, ``R_2 = r12`` and
+``R_3 = r13``.
 
 The same random-field logic extends to higher orders through the
 Szapudi-Szalay form,
@@ -351,7 +364,7 @@ schematic triplet product is
 
 .. math::
 
-   DDD_{\rm pcenter}(R_2,R_3,\theta)
+   DDD_{\rm pcenter}(\theta; r_{12}, r_{13})
    =
    {1\over W_1}
    \sum_{i\in D_1} w_i\,
@@ -376,7 +389,7 @@ legs as fields at those centers:
 
 .. math::
 
-   DDD_{\rm rcenter}(R_1,R_2,R_3,\theta)
+   DDD_{\rm rcenter}(\theta; r_{12}, r_{13})
    \simeq
    {1\over N_{\rm c}}
    \sum_{a=1}^{N_{\rm c}}
@@ -399,8 +412,8 @@ three-point statistic :math:`\zeta` and reduced statistic
 
 .. math::
 
-   Q =
-   {\zeta\over \zeta_H},
+   Q(\theta; r_{12}, r_{13}) =
+   {\zeta(\theta; r_{12}, r_{13})\over \zeta_H},
    \qquad
    \zeta_H
    =
@@ -421,8 +434,9 @@ dependency chain: triplet products give :math:`\zeta`, pair products give
 
    The particle-center and box-random-center formulations evaluate different
    Monte Carlo versions of the same windowed-field products. Agreement between
-   the resulting :math:`Q(\theta)` curves is a useful consistency check of the
-   estimator normalization and center treatment.
+   the resulting :math:`Q(\theta; r_{12}, r_{13})` curves is a useful consistency
+   check of the estimator normalization and center treatment; the example uses
+   :math:`(r_{12},r_{13})=(20,40)\ h^{-1}{\rm Mpc}`.
 
 Multipoles
 ----------
@@ -442,21 +456,42 @@ with a Fourier-space window of the schematic form
 
    \widehat W_{\ell m}(\mathbf{k};r)
    \propto
-   \widehat G(k)\widehat\Phi(k)\,
-   j_\ell(kr)\,
+   \widehat\Pi_j(\mathbf{k})\,
+   j_\ell(2\pi kr)\,
    Y_{\ell m}(\widehat{\mathbf{k}}).
 
-Products of these filtered legs are coupled into rotationally invariant
-multipole components. Truncating at ``lmax`` keeps a finite angular basis; the
-``corr3pcf.ipynb`` multipole section shows how changing ``lmax`` and field
-resolution changes the recovered spectrum.
+Here :math:`\widehat\Pi_j` denotes the multiresolution basis response included
+by ``WindowFunc``. Products of these filtered legs are coupled into
+rotationally invariant multipole components, schematically
+
+.. math::
+
+   DDD_\ell(r_{12},r_{13})
+   =
+   4\pi(-1)^\ell
+   \sum_{m=-\ell}^{\ell}(-1)^m
+   \left\langle
+   n(\mathbf{x})
+   n_{\ell m}(\mathbf{x};R_2)
+   n_{\ell,-m}(\mathbf{x};R_3)
+   \right\rangle.
+
+For the standard shell-leg measurements, the window radii are
+:math:`R_2=r_{12}` and :math:`R_3=r_{13}`.
+
+The implementation streams only non-negative ``m`` fields explicitly and uses
+the conjugation symmetry of spherical harmonics for the negative-``m`` terms.
+Truncating at ``lmax`` keeps a finite angular basis; the ``corr3pcf.ipynb``
+multipole section shows how changing ``lmax`` and field resolution changes the
+recovered spectrum.
 
 .. figure:: _static/corr3pcf/corr3pcf_multipole_lmax.png
    :alt: 3PCF multipole spectra at J=8 for different lmax values
    :align: center
    :width: 82%
 
-   A fixed-resolution ``J=8`` multipole example. Varying ``lmax`` changes the
-   angular basis retained in the triangle expansion, so convergence of the
+   A fixed-resolution ``J=8`` multipole example with
+   :math:`(r_{12},r_{13})=(20,40)\ h^{-1}{\rm Mpc}`. Varying ``lmax`` changes
+   the angular basis retained in the triangle expansion, so convergence of the
    curves indicates that the chosen truncation captures the dominant angular
    structure.
