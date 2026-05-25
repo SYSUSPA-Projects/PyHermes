@@ -40,8 +40,9 @@ A particle or halo catalog is treated as a weighted spatial point process,
 
 Here :math:`w_i` can be a unit weight, a mass weight, or another mark carried by
 the object. In PyHermes the stored example fields are normalized by the total
-input weight, so the resulting field integrates to one and the uniform density
-in a periodic box is :math:`1/V`.
+input weight unless this behavior is disabled, so :math:`\sum_i w_i=1`, the
+resulting field integrates to one, and the uniform density in a periodic box is
+:math:`1/V`.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
@@ -80,6 +81,23 @@ coefficients on a compact multiresolution basis,
    =
    \sum_i w_i \phi_{j\ell}(\mathbf{x}_i).
 
+The scaling functions are assumed to be orthonormal under the ordinary
+:math:`L^2` inner product,
+
+.. math::
+
+   \int d^3x\,
+   \phi_{j\ell}(\mathbf{x})\phi_{jm}(\mathbf{x})
+   =
+   \delta_{\ell m}.
+
+With this convention, the basis functions carry dimensions of
+:math:`V^{-1/2}` in physical coordinates. The coefficients
+:math:`\epsilon_{j\ell}` therefore also carry dimensions of
+:math:`V^{-1/2}`, and the product
+:math:`\epsilon_{j\ell}\phi_{j\ell}` has the dimensions of a number density.
+No extra :math:`1/V` factor is included in the projection coefficient.
+
 Applying a window to the field becomes a linear operation on those
 coefficients,
 
@@ -93,6 +111,16 @@ For homogeneous windows, :math:`W^j_{\ell m}` has convolution structure, so the
 operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
+
+Internally, PyHermes evaluates these expressions in dimensionless grid
+coordinates :math:`\mathbf{u}=(L/L_{\rm box})\mathbf{x}`, where
+:math:`L=2^J`. In that coordinate system the represented volume is
+:math:`V_{\rm grid}=L^3`. Thus a coefficient product that appears in continuum
+notation as :math:`V^{-1}\sum_\ell \epsilon_\ell\widetilde\epsilon_\ell` is
+implemented as a mean over the stored grid. The physical-coordinate and
+grid-coordinate forms differ only by the coordinate scaling convention, and
+the common factors cancel in normalized statistics such as :math:`\xi` and
+:math:`Q`.
 
 .. figure:: _static/convols/hmFig0_delta.png
    :alt: Reconstructed point field at different multiresolution levels
@@ -295,7 +323,7 @@ In the Hermes field formulation this expression has a more compact
 implementation. Once the data and random catalogs have been projected to
 compatible fields, PyHermes can form the difference field
 :math:`\Delta = D-R` directly at the coefficient level. The numerator is then a
-single windowed-field product,
+single volume-averaged windowed-field product,
 
 .. math::
 
@@ -329,7 +357,9 @@ This is one of the main advantages of the framework: the code does not need to
 repeat four separate pair-counting passes for ``DD``, ``DR``, ``RD``, and
 ``RR``. It constructs the field-level difference once, lets the pair window
 define the separation bin or redshift-space geometry, and evaluates the
-required product in the represented field.
+required product in the represented field. The symbols ``DD``, ``DR``, and
+``RR`` therefore denote volume-averaged field products in this documentation,
+not unnormalized raw pair counts.
 
 Three-Point Correlations
 ------------------------

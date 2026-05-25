@@ -147,6 +147,10 @@ The input catalog is a weighted point process,
    n(\mathbf{x}) =
    \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
+By default, PyHermes normalizes the input weights by their total sum. For a
+unit-weight catalog this means :math:`\sum_i w_i=1`, so the reconstructed field
+integrates to one and has the dimensions of a number density.
+
 ``Convols`` projects it onto scaling-function coefficients,
 
 .. math::
@@ -156,6 +160,14 @@ The input catalog is a weighted point process,
    \qquad
    \epsilon_{j\ell} =
    \sum_i w_i\phi_{j\ell}(\mathbf{x}_i).
+
+These coefficients are standard :math:`L^2` projection coefficients. The
+scaling functions are orthonormal under
+:math:`\int\phi_{j\ell}\phi_{jm}\,d^3x=\delta_{\ell m}`, so no extra
+:math:`1/V` factor is included in :math:`\epsilon_{j\ell}`. In physical
+coordinates both :math:`\phi_{j\ell}` and :math:`\epsilon_{j\ell}` carry
+:math:`V^{-1/2}` dimensions, and their product reconstructs a number-density
+field.
 
 The saved ``ConvolsData`` object stores these normalized coefficients and the
 metadata needed to apply later windows. The redshift-space cells first map
@@ -172,6 +184,12 @@ positions along a chosen line of sight,
 
 with periodic wrapping in the simulation box, and then build the same
 coefficient field from :math:`\mathbf{s}`.
+
+For computation, the physical box is mapped to dimensionless grid coordinates
+:math:`\mathbf{u}=(L/L_{\rm box})\mathbf{x}`, with :math:`L=2^J`. This is why
+downstream pair products use a mean over the ``epsilon`` grid: it represents
+the continuum prefactor :math:`1/V` in grid coordinates, where
+:math:`V_{\rm grid}=L^3`.
 
 Resolution intuition
 --------------------
