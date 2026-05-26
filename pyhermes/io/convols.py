@@ -332,11 +332,11 @@ class ConvolsData(HermesData):
 
     def to_unit_weight(self):
         """
-        Return a temporary field rescaled to unit total weight.
+        Return a new field rescaled to unit total weight.
 
         Raw weighted coefficients are the public field representation. Correlation
-        estimators use this conversion internally so their normalized statistics
-        retain the conventional unit-selection-field interpretation.
+        estimators apply the same conversion internally without modifying public
+        raw fields.
         """
         weight_sum = getattr(self, "weight_sum", None)
         if weight_sum is None or not np.isfinite(weight_sum) or np.isclose(weight_sum, 0.0):
@@ -346,13 +346,34 @@ class ConvolsData(HermesData):
         new.format_convols_params()
         return new
 
+    def _normalize_for_estimator_inplace(self):
+        """
+        Convert an estimator-owned temporary field to unit total weight in place.
+
+        Callers must ensure that this object is not a user-visible raw input field.
+        This avoids allocating another full epsilon array after a leg has already
+        been copied or convolved for an estimator.
+        """
+        if getattr(self, "field_kind", None) in {"unit_weight_density", "contrast"}:
+            return self
+        weight_sum = getattr(self, "weight_sum", None)
+        if weight_sum is None or not np.isfinite(weight_sum) or np.isclose(weight_sum, 0.0):
+            raise ValueError("Cannot rescale a field without a finite, non-zero weight_sum.")
+        self.epsilon /= weight_sum
+        self.convols_info["weight_sum"] = 1.0
+        self.convols_info["field_kind"] = "unit_weight_density"
+        self.format_convols_params()
+        return self
+
     def as_estimator_field(self):
         """
-        Return this field in the normalization expected by correlation estimators.
+        Return a new field in the normalization expected by correlation estimators.
 
         Density-like fields are converted to unit total weight. A pre-constructed
         contrast field already carries the desired estimator normalization and is
-        therefore passed through unchanged.
+        therefore copied without additional rescaling. Estimator implementations
+        use an internal in-place conversion on their own temporary leg fields to
+        avoid an unnecessary full-array allocation.
         """
         if getattr(self, "field_kind", None) == "contrast":
             return self.copy()

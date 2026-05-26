@@ -263,8 +263,10 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _materialize_uniform_random(self, reference_field, rho, leg_idx):
         field = reference_field._spawn_like()
-        field.epsilon = np.full_like(reference_field.epsilon, rho, dtype=np.float64)
+        field.epsilon = np.full((reference_field.L,) * 3, rho, dtype=np.float64)
         field.convols_info.update({
+            "weight_sum": 1.0,
+            "field_kind": "unit_weight_density",
             "uniform_random_materialized": True,
             "uniform_random_leg": int(leg_idx),
         })
@@ -408,7 +410,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 label="Corr_3PCF multipole input fields",
             )
             shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
-            self.reference_convols = compatibility_fields[0]
+            self.reference_convols = compatibility_fields[0]._spawn_like()
+            self.reference_convols.format_convols_params()
             self.rho = 1.0 / self.reference_convols.V
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
@@ -422,7 +425,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_convols = base_convols.copy()
                         final_convols.format_convols_params()
-                    final_convols = final_convols.as_estimator_field()
+                    final_convols = final_convols._normalize_for_estimator_inplace()
 
                     setattr(self, f"convols_data{i}", final_convols)
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
@@ -445,7 +448,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
-                    final_random = final_random.as_estimator_field()
+                    final_random = final_random._normalize_for_estimator_inplace()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
