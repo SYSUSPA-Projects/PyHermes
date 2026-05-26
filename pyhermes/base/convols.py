@@ -82,7 +82,6 @@ class Convols(TaskBase):
         self.wavelet_mode = self.task_params['wavelet_mode']
         self.wavelet_level = self.task_params['wavelet_level']
         self.phi_resolution = int(self.task_params['phi_resolution'])
-        self.normalize_by_weight_sum = bool(self.task_params.get('normalize_by_weight_sum', True))
         self.save_particle_data = bool(self.task_params['save_particle_data'])
         self.particle_data_path = self.task_params['particle_data_path']
         self.threads = int(self.task_params['threads'])
@@ -111,7 +110,6 @@ class Convols(TaskBase):
             'wavelet_mode': self.wavelet_mode,
             'wavelet_level': self.wavelet_level,
             'phi_resolution': self.phi_resolution,
-            'normalize_by_weight_sum': self.normalize_by_weight_sum,
             'save_particle_data': self.save_particle_data,
             'particle_data_path': self.particle_data_path,
             'threads': self.threads,
@@ -228,15 +226,6 @@ class Convols(TaskBase):
                     f"Particle weights produced a non-finite total weight: {self.weight_sum!r}."
                 )
                 func_util.safe_exit(1)
-            if self.normalize_by_weight_sum:
-                if np.isclose(self.weight_sum, 0.0):
-                    self.logger.error(
-                        "Particle weights sum to zero, so Convols cannot normalize epsilon to unit total weight."
-                    )
-                    func_util.safe_exit(1)
-                self.norm_factor = 1 / self.weight_sum
-            else:
-                self.norm_factor = 1.0
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} "
                 f"| weight_key={self.fin['weight_key']} | weight_sum={self.weight_sum:.6e}"
@@ -337,8 +326,8 @@ class Convols(TaskBase):
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "norm_factor"    : self.norm_factor,
-                    "normalize_by_weight_sum": self.normalize_by_weight_sum,
+                    "coefficient_convention": "raw_weighted",
+                    "field_kind"     : "raw_weighted_density",
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "phi_resolution"      : self.phi_resolution,
@@ -351,10 +340,7 @@ class Convols(TaskBase):
                 self.convols_data.format_convols_params()
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
-                if self.normalize_by_weight_sum:
-                    self.convols_data.epsilon = _epsilon * self.norm_factor
-                else:
-                    self.convols_data.epsilon = _epsilon
+                self.convols_data.epsilon = _epsilon
                 if save_result and self.fout_path:
                     self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
         except Exception as e:

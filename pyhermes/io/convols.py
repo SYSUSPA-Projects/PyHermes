@@ -181,6 +181,10 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a + b
+        if getattr(self, "weight_sum", None) is not None and getattr(other, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum + other.weight_sum
+        else:
+            new.convols_info["weight_sum"] = None
         new.format_convols_params()
         return new
 
@@ -192,6 +196,10 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon + scalar
+        if getattr(self, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum + scalar * self.V
+        else:
+            new.convols_info["weight_sum"] = None
         new.format_convols_params()
         return new
 
@@ -212,7 +220,8 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a * b
-        new.convols_info['norm_factor'] = self.norm_factor * other.norm_factor
+        new.convols_info["weight_sum"] = None
+        new.convols_info["field_kind"] = "product"
         new.format_convols_params()
         return new
 
@@ -224,6 +233,10 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon * scalar
+        if getattr(self, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum * scalar
+        else:
+            new.convols_info["weight_sum"] = None
         new.format_convols_params()
         return new
 
@@ -238,6 +251,10 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon / scalar
+        if getattr(self, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum / scalar
+        else:
+            new.convols_info["weight_sum"] = None
         new.format_convols_params()
         return new
 
@@ -279,6 +296,17 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a - b
+        if getattr(self, "weight_sum", None) is not None and getattr(other, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum - other.weight_sum
+        else:
+            new.convols_info["weight_sum"] = None
+        if (
+            getattr(self, "field_kind", None) == "unit_weight_density"
+            and getattr(other, "field_kind", None) == "unit_weight_density"
+            and new.convols_info["weight_sum"] is not None
+            and np.isclose(new.convols_info["weight_sum"], 0.0)
+        ):
+            new.convols_info["field_kind"] = "contrast"
         new.format_convols_params()
         return new
 
@@ -289,8 +317,46 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon - scalar
+        if getattr(self, "weight_sum", None) is not None:
+            new.convols_info["weight_sum"] = self.weight_sum - scalar * self.V
+        else:
+            new.convols_info["weight_sum"] = None
+        if (
+            getattr(self, "field_kind", None) == "unit_weight_density"
+            and new.convols_info["weight_sum"] is not None
+            and np.isclose(new.convols_info["weight_sum"], 0.0)
+        ):
+            new.convols_info["field_kind"] = "contrast"
         new.format_convols_params()
         return new
+
+    def to_unit_weight(self):
+        """
+        Return a temporary field rescaled to unit total weight.
+
+        Raw weighted coefficients are the public field representation. Correlation
+        estimators use this conversion internally so their normalized statistics
+        retain the conventional unit-selection-field interpretation.
+        """
+        weight_sum = getattr(self, "weight_sum", None)
+        if weight_sum is None or not np.isfinite(weight_sum) or np.isclose(weight_sum, 0.0):
+            raise ValueError("Cannot rescale a field without a finite, non-zero weight_sum.")
+        new = self / weight_sum
+        new.convols_info["field_kind"] = "unit_weight_density"
+        new.format_convols_params()
+        return new
+
+    def as_estimator_field(self):
+        """
+        Return this field in the normalization expected by correlation estimators.
+
+        Density-like fields are converted to unit total weight. A pre-constructed
+        contrast field already carries the desired estimator normalization and is
+        therefore passed through unchanged.
+        """
+        if getattr(self, "field_kind", None) == "contrast":
+            return self.copy()
+        return self.to_unit_weight()
     
     def get_particle_data(self):
         particle_data_path = getattr(self, "particle_data_path", "")
@@ -330,17 +396,14 @@ class ConvolsData(HermesData):
     def phi_at_pos(self, pos):
         return scaling_stencil_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
     
-    def n_at_pos(self, pos, epsilon=None, filter=None, normalize=False, physical=True):
+    def n_at_pos(self, pos, epsilon=None, filter=None, physical=True):
         """
-        Evaluate number density n(x) at positions.
+        Evaluate the represented field at positions.
 
-        normalize:
-            True  -> return the normalized/grid-space nx (as in interpolate_grid_at_pos_numba)
-            False -> return scaled output:
-                     if physical: nx / norm_factor * scale_factor**3
-                     else:        nx / norm_factor
         physical:
-            Only used when normalize is False.
+            True  -> convert a raw weighted density field from grid to physical coordinates.
+            False -> return the grid-coordinate value. Use this for derived fields
+                     such as a dimensionless density contrast.
         """
         if epsilon is None:
             if filter is not None:
@@ -355,20 +418,12 @@ class ConvolsData(HermesData):
             nx, pos_scaled, epsilon, self.phi_array, self.L, self.phi_resolution, self.phi_support
         )
 
-        if normalize:
-            return nx
-        else:
-            nx /= self.norm_factor
-            if physical:
-                return nx * (self.scale_factor ** 3)
-            else:
-                return nx
+        if physical:
+            return nx * (self.scale_factor ** 3)
+        return nx
 
-    def as_array(self, normlize=True):
-        if normlize:
-            return self.epsilon
-        else:
-            return self.epsilon / self.norm_factor
+    def as_array(self):
+        return self.epsilon
 
     def format_convols_params(self):
         missing = [k for k in self._REQUIRED_ARGV if k not in self.convols_info]
@@ -400,6 +455,11 @@ class ConvolsData(HermesData):
             _convols_info = dataset.get('convols_info')
             if _convols_info:
                 self.convols_info.update(_convols_info)
+            if self.convols_info.get("coefficient_convention") != "raw_weighted":
+                raise ValueError(
+                    "This ConvolsData file does not use the raw-weighted coefficient convention. "
+                    "Regenerate it with the current Convols task before loading it."
+                )
             self.format_convols_params()
 
     def _save_convols(self, f_out):

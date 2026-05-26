@@ -31,7 +31,7 @@ For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       pair_window: "shell"
       sampling:
@@ -41,7 +41,7 @@ For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
             n: 31
       products: "xi"
       threads: 2
-      fout_path: "./output/quijote8000_snap004_2pcf.pkl"
+      fout_path: "./output_new/quijote8000_snap004_2pcf.pkl"
 
 For redshift-space ``xi(s, mu)``, use a line-of-sight pair window such as
 ``ring``. Built-in string windows fill their own length arguments and default to
@@ -50,7 +50,7 @@ the z-axis line of sight:
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+      convols_data: "./output_new/quijote8000_snap004_rsd_sfc.pkl"
       random: "uniform"
       pair_window: "ring"
       sampling:
@@ -64,7 +64,7 @@ the z-axis line of sight:
             n: 51
       products: "xi"
       threads: 8
-      fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
+      fout_path: "./output_new/quijote8000_snap004_rsd_2pcf_smu.pkl"
 
 For ``xi(rp, pi)``, make the mapping explicit because the sampled coordinates
 are already the transverse and line-of-sight separations:
@@ -72,8 +72,8 @@ are already the transverse and line-of-sight separations:
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
-      random: "./output/random_sfc.pkl"
+      convols_data: "./output_new/quijote8000_snap004_rsd_sfc.pkl"
+      random: "./output_new/random_sfc.pkl"
       window:
          type: "sphere"
          len_args:
@@ -92,7 +92,7 @@ are already the transverse and line-of-sight separations:
             n: 46
       products: "xi"
       threads: 8
-      fout_path: "./output/quijote8000_snap004_rsd_2pcf_rppi_sph5_with_random.pkl"
+      fout_path: "./output_new/quijote8000_snap004_rsd_2pcf_rppi_sph5_with_random.pkl"
 
 What is lightweight and what is not
 -----------------------------------
@@ -137,10 +137,12 @@ That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
 windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
-The field formulation also makes the Landy-Szalay structure more direct. Once
-the data and random catalogs have been represented as compatible
-``ConvolsData`` fields, PyHermes can build the field-level difference
-``Delta = D - R`` and evaluate the pair-window product
+The field formulation also makes the Landy-Szalay structure more direct. The
+saved ``ConvolsData`` inputs retain their raw total weights; at the estimator
+boundary PyHermes forms ``d = D / D.weight_sum`` and
+``r = R / R.weight_sum`` (or uses ``r = 1 / V`` for a uniform random
+shortcut). It then builds ``Delta = d - r`` and evaluates the pair-window
+product
 
 .. math::
 
@@ -151,8 +153,8 @@ the data and random catalogs have been represented as compatible
      \right\rangle
    \over
      \left\langle
-      R(\mathbf{x})
-      (W_P\circ R)(\mathbf{x})
+      r(\mathbf{x})
+      (W_P\circ r)(\mathbf{x})
      \right\rangle }.
 
 For symmetric pair windows the numerator is the usual

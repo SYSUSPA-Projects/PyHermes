@@ -30,8 +30,8 @@ The examples read the field products created by ``convols.ipynb`` or
 
 .. code-block:: text
 
-   examples/output/quijote8000_snap004_sfc.pkl
-   examples/output/random_sfc.pkl
+   examples/output_new/quijote8000_snap004_sfc.pkl
+   examples/output_new/random_sfc.pkl
 
 No new production output is required. Most cells build objects in memory so that
 the algebra is visible.
@@ -46,17 +46,22 @@ the algebra is visible.
 
    from pyhermes.io import ConvolsData
 
-   D = ConvolsData(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
-   R = ConvolsData(data_path="./output/random_sfc.pkl", threads=8)
-   rho = 1.0 / D.V
+   D = ConvolsData(data_path="./output_new/quijote8000_snap004_sfc.pkl", threads=8)
+   R = ConvolsData(data_path="./output_new/random_sfc.pkl", threads=8)
+   D_stat = D.to_unit_weight()
+   R_stat = R.to_unit_weight()
+   rho = 1.0 / D_stat.V
 
-   delta_from_random = D - R
-   delta_from_uniform = D - rho
+   delta_from_random = D_stat - R_stat
+   delta_from_uniform = D_stat - rho
    mean_field = (D + R) / 2.0
 
 Supported field operations include addition, subtraction, and multiplication.
 Supported scalar operations include addition, subtraction, multiplication, and
-division. Binary field operations require compatible field metadata.
+division. Binary field operations require compatible field metadata. ``D`` and
+``R`` above are raw weighted fields, so their arithmetic preserves amplitudes;
+``to_unit_weight()`` is used only when constructing normalized correlation
+estimator fields.
 
 ``WindowFunc`` construction
 ---------------------------

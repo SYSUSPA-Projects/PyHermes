@@ -104,7 +104,8 @@ then
    {n_{v_i}\,\partial_j n\over n^2}.
 
 In code the same chain rule is assembled from ordinary ``WindowFunc`` objects.
-Here ``D`` is the unit-weight number-density field and ``Ux`` is the
+Here ``D`` is the raw number-density field constructed with per-halo unit
+weights, not a field rescaled to unit total weight, and ``Ux`` is the
 x-velocity-weighted field built from the same catalog:
 
 .. code-block:: python

@@ -698,6 +698,7 @@ class Corr_2PCF(TaskBase):
         else:
             final_field = base_field.copy()
             final_field.format_convols_params()
+        final_field = final_field.as_estimator_field()
         if self.rank == 0:
             setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(final_field.convols_info))
         window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
@@ -945,6 +946,7 @@ class Corr_2PCF(TaskBase):
                 else:
                     final_convols = base_convols.copy()
                     final_convols.format_convols_params()
+                final_convols = final_convols.as_estimator_field()
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
@@ -968,6 +970,7 @@ class Corr_2PCF(TaskBase):
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
+                    final_random = final_random.as_estimator_field()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window={window_desc}"

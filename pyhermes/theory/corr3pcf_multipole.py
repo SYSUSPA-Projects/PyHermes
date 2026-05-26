@@ -422,6 +422,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_convols = base_convols.copy()
                         final_convols.format_convols_params()
+                    final_convols = final_convols.as_estimator_field()
 
                     setattr(self, f"convols_data{i}", final_convols)
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
@@ -444,6 +445,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
+                    final_random = final_random.as_estimator_field()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 

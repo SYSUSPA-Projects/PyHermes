@@ -3,6 +3,8 @@
 **/*.bin
 examples/output/**
 !examples/output/.gitkeep
+examples/output_new/**
+!examples/output_new/.gitkeep
 examples/data/**
 !examples/data/.gitkeep
 examples/figs/**

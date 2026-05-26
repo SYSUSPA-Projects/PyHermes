@@ -1,6 +1,6 @@
 Corr_3PCF:
-   convols_data: "./output/quijote8000_snap004_sfc.pkl"
-   random: "./output/random_sfc.pkl"
+   convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
+   random: "./output_new/random_sfc.pkl"
    window2:
       type: "sphere"
       len_args:

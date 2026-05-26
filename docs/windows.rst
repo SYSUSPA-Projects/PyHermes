@@ -698,7 +698,7 @@ before pair counting:
 .. code-block:: yaml
 
    Corr_2PCF:
-     convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+     convols_data: "./output_new/quijote8000_snap004_rsd_sfc.pkl"
      random: "uniform"
      window:
        type: "sphere"
@@ -872,7 +872,7 @@ smooths the input legs, just as in standard 3PCF:
 .. code-block:: yaml
 
    Corr_3PCF_Multipole:
-     convols_data: "./output/quijote8000_snap004_sfc.pkl"
+     convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
      random: "uniform"
      window:
        type: "sphere"

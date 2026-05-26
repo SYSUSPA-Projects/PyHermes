@@ -39,10 +39,11 @@ A particle or halo catalog is treated as a weighted spatial point process,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
 Here :math:`w_i` can be a unit weight, a mass weight, or another mark carried by
-the object. In PyHermes the stored example fields are normalized by the total
-input weight unless this behavior is disabled, so :math:`\sum_i w_i=1`, the
-resulting field integrates to one, and the uniform density in a periodic box is
-:math:`1/V`.
+the object. A ``ConvolsData`` object stores this raw weighted field: its total
+weight is :math:`S_n=\sum_i w_i`, and a uniform version of the same field in a
+periodic box has density :math:`S_n/V`. Consequently field algebra remains
+linear in the input marks; for example, doubling every particle weight is
+equivalent to multiplying the stored field by two.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
@@ -111,6 +112,22 @@ For homogeneous windows, :math:`W^j_{\ell m}` has convolution structure, so the
 operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
+
+The stored coefficients retain the raw total weight. Correlation tasks apply a
+separate estimator convention at their boundary: each density-like catalog leg
+is rescaled to
+
+.. math::
+
+   d(\mathbf{x}) = {n_D(\mathbf{x})\over S_D},
+   \qquad
+   r(\mathbf{x}) = {n_R(\mathbf{x})\over S_R},
+   \qquad
+   S_D=\sum_{i\in D}w_i,\quad S_R=\sum_{i\in R}w_i.
+
+Thus an explicit random catalog does not need to be generated with the same
+total weight as the data catalog. In the unit-total-weight estimator fields,
+the uniform-random shortcut is simply :math:`r=1/V`.
 
 Internally, PyHermes evaluates these expressions in dimensionless grid
 coordinates :math:`\mathbf{u}=(L/L_{\rm box})\mathbf{x}`, where
@@ -320,9 +337,10 @@ the Landy-Szalay estimator is
    {DD - 2DR + RR\over RR}.
 
 In the Hermes field formulation this expression has a more compact
-implementation. Once the data and random catalogs have been projected to
-compatible fields, PyHermes can form the difference field
-:math:`\Delta = D-R` directly at the coefficient level. The numerator is then a
+implementation. The stored raw fields are first converted to the estimator
+fields :math:`d=D/S_D` and :math:`r=R/S_R` (or :math:`r=1/V` for a uniform
+random shortcut). PyHermes then forms
+:math:`\Delta=d-r` directly at the coefficient level. The numerator is a
 single volume-averaged windowed-field product,
 
 .. math::
@@ -343,13 +361,13 @@ Thus the two-point estimator can be read schematically as
    =
    {
    \left\langle
-   (D-R)(\mathbf{x})\,
-   \bigl(W_P\circ(D-R)\bigr)(\mathbf{x})
+   (d-r)(\mathbf{x})\,
+   \bigl(W_P\circ(d-r)\bigr)(\mathbf{x})
    \right\rangle
    \over
    \left\langle
-   R(\mathbf{x})\,
-   (W_P\circ R)(\mathbf{x})
+   r(\mathbf{x})\,
+   (W_P\circ r)(\mathbf{x})
    \right\rangle
    }.
 

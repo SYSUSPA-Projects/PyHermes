@@ -46,7 +46,7 @@ Generated locally while following the notebook:
 - the downloaded and unpacked example halo catalog under ``examples/data/``
 - the compact FoF-derived binary table documented by
   ``examples/data/quijote_halos/quijote_halo_bin_schema.yaml``
-- the main field products in ``examples/output/``, such as:
+- the main field products in ``examples/output_new/``, such as:
 
   - ``quijote8000_snap004_sfc.pkl``
   - ``quijote8000_snap004_rsd_sfc.pkl``
@@ -75,7 +75,7 @@ multiresolution grid, and writes a reusable ``ConvolsData`` object:
       threads: 2
       save_particle_data: True
       particle_data_path: "./data/quijote_halos/8000/groups_004/group_tab_004.pos.npz"
-      fout_path: "./output/quijote8000_snap004_sfc.pkl"
+      fout_path: "./output_new/quijote8000_snap004_sfc.pkl"
 
 The notebook shows this shape before the command-line run so that the YAML file
 and driver script can be read together.
@@ -147,9 +147,11 @@ The input catalog is a weighted point process,
    n(\mathbf{x}) =
    \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
-By default, PyHermes normalizes the input weights by their total sum. For a
-unit-weight catalog this means :math:`\sum_i w_i=1`, so the reconstructed field
-integrates to one and has the dimensions of a number density.
+PyHermes stores the input weights without pre-normalizing their sum. For a
+unit-weight catalog, :math:`\sum_i w_i=N_{\rm halo}`; for a marked catalog it
+retains the corresponding total mark. The reconstructed field therefore keeps
+its physical amplitude and field arithmetic is linear: ``2 * D`` represents
+the same field obtained by doubling every input weight.
 
 ``Convols`` projects it onto scaling-function coefficients,
 
@@ -169,8 +171,11 @@ coordinates both :math:`\phi_{j\ell}` and :math:`\epsilon_{j\ell}` carry
 :math:`V^{-1/2}` dimensions, and their product reconstructs a number-density
 field.
 
-The saved ``ConvolsData`` object stores these normalized coefficients and the
-metadata needed to apply later windows. The redshift-space cells first map
+The saved ``ConvolsData`` object stores these raw weighted coefficients, its
+``weight_sum`` metadata, and the information needed to apply later windows.
+Correlation drivers convert each density-like leg to unit total weight
+internally before forming normalized estimators; ``Counting`` continues to
+sample the physical weighted field itself. The redshift-space cells first map
 positions along a chosen line of sight,
 
 .. math::

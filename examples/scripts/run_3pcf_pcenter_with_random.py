@@ -6,7 +6,8 @@ data/random ConvolsData objects, attaches heavy arrays to each Corr_3PCF task,
 and lets Corr_3PCF broadcast only the fields needed by each product.
 
 Stage 1 computes random-center ``r_delta_dd`` through the existing box-random
-``ddd`` product by setting leg 1 to the random field and legs 2/3 to ``D-R``.
+``ddd`` product by setting leg 1 to the unit-weight random field and legs 2/3
+to the already normalized contrast field ``d-r``.
 Stage 2 computes particle-center ``d_delta_dd`` and the reduced denominator
 ``zeta_H``. Rank 0 then combines both stages and saves the final result.
 """
@@ -21,9 +22,9 @@ from pyhermes.theory.corr3pcf import Corr_3PCF
 from pyhermes.utils.mpi_util import MPI
 
 
-DATA_PATH = "./output/quijote8000_snap004_sfc.pkl"
-RANDOM_PATH = "./output/random_sfc.pkl"
-OUTPUT_PATH = "./output/quijote8000_snap004_3pcf_pcenter_with_random.pkl"
+DATA_PATH = "./output_new/quijote8000_snap004_sfc.pkl"
+RANDOM_PATH = "./output_new/random_sfc.pkl"
+OUTPUT_PATH = "./output_new/quijote8000_snap004_3pcf_pcenter_with_random.pkl"
 
 WINDOW = {"type": "sphere", "len_args": {"R": 5}}
 R12 = 20.0
@@ -53,9 +54,13 @@ rank = comm.Get_rank()
 if rank == 0:
     data = ConvolsData(data_path=DATA_PATH)
     random = ConvolsData(data_path=RANDOM_PATH)
+    data_stat = data.to_unit_weight()
+    random_stat = random.to_unit_weight()
 else:
     data = None
     random = None
+    data_stat = None
+    random_stat = None
 
 
 # ---------------------------------------------------------------------------
@@ -74,13 +79,13 @@ random_center_task = Corr_3PCF(
 )
 
 if rank == 0:
-    delta_field = data - random
-    random_center_task.convols_data1 = random.copy()
+    delta_field = data_stat - random_stat
+    random_center_task.convols_data1 = random_stat.copy()
     random_center_task.convols_data2 = delta_field
     random_center_task.convols_data3 = delta_field.copy()
-    random_center_task.random1 = random.copy()
-    random_center_task.random2 = random.copy()
-    random_center_task.random3 = random.copy()
+    random_center_task.random1 = random_stat.copy()
+    random_center_task.random2 = random_stat.copy()
+    random_center_task.random3 = random_stat.copy()
 
 random_center_result = random_center_task.run(save_result=False)
 
@@ -143,7 +148,7 @@ if rank == 0:
             "center": "box_random",
             "n_rot": 200,
             "n_box_centers": 8_000_000,
-            "r_delta_dd_source": "box_random ddd with leg1=R and legs2/3=D-R",
+            "r_delta_dd_source": "box_random ddd with leg1=r and legs2/3=d-r",
         },
         "d_delta_dd_zeta_H": {
             "center": "particle",

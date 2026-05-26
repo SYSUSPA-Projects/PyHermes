@@ -1,6 +1,6 @@
 Corr_2PCF:
-   convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
-   random: "./output/random_sfc.pkl"
+   convols_data: "./output_new/quijote8000_snap004_rsd_sfc.pkl"
+   random: "./output_new/random_sfc.pkl"
    window:
       type: "sphere"
       len_args:
@@ -17,6 +17,6 @@ Corr_2PCF:
          n: 51
    threads: 8
    products: "xi"
-   fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu_sph5_with_random.pkl"
+   fout_path: "./output_new/quijote8000_snap004_rsd_2pcf_smu_sph5_with_random.pkl"
    # memory_strategy: "memory"
-   # fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu_sph5_with_random_memory.pkl"
+   # fout_path: "./output_new/quijote8000_snap004_rsd_2pcf_smu_sph5_with_random_memory.pkl"

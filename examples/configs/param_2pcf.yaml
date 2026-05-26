@@ -1,5 +1,5 @@
 Corr_2PCF:
-   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
    random: "uniform"
    pair_window: "shell"
    sampling:
@@ -9,4 +9,4 @@ Corr_2PCF:
          n: 31
    products: ["dd", "dr", "rd", "xi"]
    threads: 2
-   fout_path: "./output/quijote8000_snap004_2pcf.pkl"
+   fout_path: "./output_new/quijote8000_snap004_2pcf.pkl"

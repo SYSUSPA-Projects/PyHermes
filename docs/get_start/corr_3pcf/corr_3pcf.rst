@@ -38,7 +38,7 @@ triangle side lengths, angular sampling, center strategy, and products:
 .. code-block:: yaml
 
    Corr_3PCF:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"
@@ -52,7 +52,7 @@ triangle side lengths, angular sampling, center strategy, and products:
       center: "particle"
       products: ["ddd", "Q"]
       threads: 2
-      fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
+      fout_path: "./output_new/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
 
 For random box centers, switch the center strategy and provide the number of
 box centers:
@@ -122,9 +122,12 @@ volume, so all three legs are evaluated as fields:
    n_{R_2}(\mathbf{y}_a)\,
    n_{R_3,\theta}(\mathbf{y}_a).
 
-The random-normalized products stored by the task give the connected
-three-point statistic ``zeta``. The reduced statistic ``Q`` then divides by the
-hierarchical two-point denominator,
+The raw input fields retain their original total weights. Before constructing
+the random-normalized products, the task converts each density-like field leg
+to unit total weight; an explicit random field therefore need not have the
+same number of particles or total input weight as the data field. These
+products give the connected three-point statistic ``zeta``. The reduced
+statistic ``Q`` then divides by the hierarchical two-point denominator,
 
 .. math::
 
@@ -195,7 +198,7 @@ shape:
 .. code-block:: yaml
 
    Corr_3PCF_Multipole:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"
@@ -207,7 +210,7 @@ shape:
       execution_mode: "pair_mpi"
       products: "zeta_l"
       threads: 4
-      fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
+      fout_path: "./output_new/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
 
 Example outputs
 ---------------
