@@ -40,8 +40,12 @@ Particle input parameters
 - ``particle_pos``:
   optional in-memory particle position array. If provided, it can be used
   instead of reading particle positions from file.
-- ``particle_weight``:
-  optional in-memory particle weights. If omitted, unit weights are assumed.
+- ``catalog_weight``:
+  optional in-memory observational or selection weights. If omitted, unit
+  catalogue weights are assumed.
+- ``field_value``:
+  optional in-memory per-object physical values, such as mass or one velocity
+  component. If omitted, unit values are assumed.
 - ``save_particle_data``:
   whether to save particle positions and weights to a companion ``.npz`` file.
 - ``particle_data_path``:
@@ -53,8 +57,10 @@ Particle input parameters
   particle file format, for example ``bin``.
 - ``fin.reader_params``:
   format-specific reader options.
-- ``fin.weight_key``:
-  one-dimensional particle weight field name, or ``null`` for unit weights.
+- ``fin.catalog_weight_key``:
+  one-dimensional catalogue-weight field name, or ``null`` for unit weights.
+- ``fin.field_value_key``:
+  one-dimensional physical-field value name, or ``null`` for unit values.
 
 Output
 ^^^^^^
@@ -117,6 +123,11 @@ Corr_2PCF
   ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
 - ``threads``:
   CPU threads per MPI rank.
+- ``normalization``:
+  estimator-field normalization. ``catalog_integral`` (default) divides each
+  leg by :math:`\sum w_g` for ordinary tracer-density statistics;
+  ``field_integral`` divides by :math:`\sum w_g x` for positive marked fields
+  such as mass; ``none`` leaves signed physical fields unnormalized.
 - ``memory_strategy``:
   ``speed`` keeps all required fields resident and reuses each pair window
   across products at a sampling point. ``memory`` computes product groups in
@@ -158,6 +169,9 @@ Corr_3PCF
   random seed controlling reproducibility.
 - ``threads``:
   CPU threads per MPI rank.
+- ``normalization``:
+  same estimator-field normalization choices as ``Corr_2PCF``. With particle
+  centers, the automatically recovered center weights follow this choice.
 - ``fout_path``:
   output path for the 3PCF result.
 
@@ -188,6 +202,8 @@ Corr_3PCF_Multipole
   directory used for the optional intermediate cache.
 - ``verbose_m_progress``:
   whether to print detailed progress and timing information for each multipole.
+- ``normalization``:
+  same estimator-field normalization choices as ``Corr_2PCF``.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:

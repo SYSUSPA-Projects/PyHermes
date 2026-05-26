@@ -5,7 +5,7 @@ import os
 import numpy as np
 
 from pyhermes.io import ConvolsData
-from pyhermes.io.readers import read_particle_data, resolve_particle_weight
+from pyhermes.io.readers import read_particle_data, resolve_particle_value
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
     project_scaling_grid_numba,
@@ -75,7 +75,8 @@ class Convols(TaskBase):
     def format_params(self):
         self.fin = copy.deepcopy(self.task_params['fin'])
         self.particle_pos = self.task_params['particle_pos']
-        self.particle_weight = self.task_params['particle_weight']
+        self.catalog_weight = self.task_params['catalog_weight']
+        self.field_value = self.task_params['field_value']
         self.box_size = self.task_params['box_size']
         self.J = self.task_params['J']
         self.L = 1 << self.J
@@ -100,11 +101,24 @@ class Convols(TaskBase):
             self.logger.error("Convols.fin.url is no longer supported. Download the data first and set Convols.fin.path.")
             func_util.safe_exit(1)
         self.fin.setdefault("reader_params", {})
-        self.fin.setdefault("weight_key", None)
+        if (
+            self.fin.get("weight_key") is not None
+            or self.task_params.get("particle_weight") is not None
+            or getattr(self, "particle_weight", None) is not None
+        ):
+            raise ValueError(
+                "The ambiguous Convols weight interface has been removed. Use "
+                "catalog_weight/catalog_weight_key for observational weights and "
+                "field_value/field_value_key for the measured physical quantity."
+            )
+        self.fin.pop("weight_key", None)
+        self.fin.setdefault("catalog_weight_key", None)
+        self.fin.setdefault("field_value_key", None)
         self.task_params = {
             'fin': copy.deepcopy(self.fin),
             'particle_pos': self.particle_pos,
-            'particle_weight': self.particle_weight,
+            'catalog_weight': self.catalog_weight,
+            'field_value': self.field_value,
             'box_size': self.box_size,
             'J': self.J,
             'wavelet_mode': self.wavelet_mode,
@@ -122,15 +136,21 @@ class Convols(TaskBase):
         if self.particle_pos is not None:
             p_pos = self.particle_pos
             self.particle_count = p_pos.shape[0]
-            if self.particle_weight is None:
+            if self.catalog_weight is None:
                 self.logger.info(
-                    f"No particle_weight provided; using unit weights for {self.particle_count} particles."
+                    f"No catalog_weight provided; using unit catalogue weights for {self.particle_count} particles."
                 )
-                p_wei = np.ones(self.particle_count, dtype=np.float32)
-                self.fin["weight_key"] = None
+                catalog_weight = np.ones(self.particle_count, dtype=np.float32)
+                self.fin["catalog_weight_key"] = None
             else:
-                p_wei = self.particle_weight
-                self.fin["weight_key"] = "custom"
+                catalog_weight = self.catalog_weight
+                self.fin["catalog_weight_key"] = "custom"
+            if self.field_value is None:
+                field_value = np.ones(self.particle_count, dtype=np.float32)
+                self.fin["field_value_key"] = None
+            else:
+                field_value = self.field_value
+                self.fin["field_value_key"] = "custom"
             source_desc = "custom particle_pos array"
         else:
             input_format = self.fin.get("format", None)
@@ -140,12 +160,20 @@ class Convols(TaskBase):
                 **self.fin.get("reader_params", {}),
             )
             p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']
-            p_wei, resolved_weight_key = resolve_particle_weight(
+            catalog_weight, resolved_catalog_key = resolve_particle_value(
                 p_dict_all,
-                self.fin.get("weight_key", None),
+                self.fin.get("catalog_weight_key", None),
+                label="Catalogue weight",
                 logger=self.logger,
             )
-            self.fin["weight_key"] = resolved_weight_key
+            field_value, resolved_value_key = resolve_particle_value(
+                p_dict_all,
+                self.fin.get("field_value_key", None),
+                label="Field value",
+                logger=self.logger,
+            )
+            self.fin["catalog_weight_key"] = resolved_catalog_key
+            self.fin["field_value_key"] = resolved_value_key
             source_desc = f"file=path={self.fin['path']} format={input_format or 'auto'}"
 
         if not (isinstance(p_pos, np.ndarray) and p_pos.ndim == 2 and p_pos.shape[1] == 3):
@@ -154,19 +182,24 @@ class Convols(TaskBase):
                 f"but got type={type(p_pos)} with shape={getattr(p_pos, 'shape', None)}."
             )
             func_util.safe_exit(1)
-        if np.isscalar(p_wei):
-            self.logger.info(f"Input weight is scalar; broadcasting to a uniform per-particle weight array of length {self.particle_count}.")
-            p_wei = np.full(self.particle_count, p_wei, dtype=np.float32)
-        if not isinstance(p_wei, np.ndarray):
-            self.logger.error(f"Wrong input of particle weight! 'particle_weight' must be a numpy array, but got type={type(p_wei)}.")
-            func_util.safe_exit(1)
-        if not (p_wei.ndim == 1 and p_wei.shape[0] == self.particle_count):
-            self.logger.error(
-                f"Wrong input of particle weight! 'particle_weight' must have shape (N,), "
-                f"but got shape={getattr(p_wei, 'shape', None)} while N={self.particle_count}."
-            )
-            func_util.safe_exit(1)
-        return p_pos, p_wei.astype(np.float32, copy=False), source_desc
+        factors = {}
+        for name, value in (("catalog_weight", catalog_weight), ("field_value", field_value)):
+            if np.isscalar(value):
+                self.logger.info(
+                    f"Input {name} is scalar; broadcasting to a per-particle array of length {self.particle_count}."
+                )
+                value = np.full(self.particle_count, value, dtype=np.float32)
+            if not isinstance(value, np.ndarray) or value.ndim != 1 or value.shape[0] != self.particle_count:
+                self.logger.error(
+                    f"Wrong input of {name}! Expected a numpy array with shape (N,), "
+                    f"but got type={type(value)} shape={getattr(value, 'shape', None)} while N={self.particle_count}."
+                )
+                func_util.safe_exit(1)
+            if not np.all(np.isfinite(value)):
+                self.logger.error(f"Wrong input of {name}! Values must all be finite.")
+                func_util.safe_exit(1)
+            factors[name] = value.astype(np.float32, copy=False)
+        return p_pos, factors["catalog_weight"], factors["field_value"], source_desc
 
     def _resolve_particle_data_path(self):
         if self.particle_data_path:
@@ -188,20 +221,23 @@ class Convols(TaskBase):
         np.savez(
             particle_data_path,
             pos=np.ascontiguousarray(self.particle_pos, dtype=np.float32),
-            weight=np.ascontiguousarray(self.particle_weight, dtype=np.float32),
+            catalog_weight=np.ascontiguousarray(self.catalog_weight, dtype=np.float32),
+            field_value=np.ascontiguousarray(self.field_value, dtype=np.float32),
         )
         self.particle_data_path = particle_data_path
-        self.logger.info(f"Saved particle positions and weights to {particle_data_path}")
+        self.logger.info(f"Saved particle positions, catalogue weights, and field values to {particle_data_path}")
 
-    def prepare_input_fields(self, particle_pos=None, particle_weight=None, fin=None):
+    def prepare_input_fields(self, particle_pos=None, catalog_weight=None, field_value=None, fin=None):
         if fin is not None:
             merged_fin = copy.deepcopy(self.fin)
             merged_fin.update(fin)
             self.fin = merged_fin
         if particle_pos is not None:
             self.particle_pos = particle_pos
-        if particle_weight is not None:
-            self.particle_weight = particle_weight
+        if catalog_weight is not None:
+            self.catalog_weight = catalog_weight
+        if field_value is not None:
+            self.field_value = field_value
         self._sync_runtime_options()
         self.convols_data = ConvolsData(threads=self.threads)
         self.phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
@@ -217,25 +253,39 @@ class Convols(TaskBase):
             if self.size != 1 and (self.size & (self.size - 1)) != 0:
                 self.logger.error(f"MPI rank number {self.size} is not a power of two. Please adjust your configuration.")
                 func_util.safe_exit(1)
-            p_pos, p_wei, source_desc = self._load_particle_input()
+            p_pos, catalog_weight, field_value, source_desc = self._load_particle_input()
             self.particle_pos = p_pos
-            self.particle_weight = p_wei
-            self.weight_sum = float(np.sum(self.particle_weight, dtype=np.float64))
-            if not np.isfinite(self.weight_sum):
+            self.catalog_weight = catalog_weight
+            self.field_value = field_value
+            self.projection_weight = self.catalog_weight * self.field_value
+            self.catalog_weight_sum = float(np.sum(self.catalog_weight, dtype=np.float64))
+            self.field_weighted_sum = float(np.sum(self.projection_weight, dtype=np.float64))
+            if not np.isfinite(self.catalog_weight_sum) or np.isclose(self.catalog_weight_sum, 0.0):
                 self.logger.error(
-                    f"Particle weights produced a non-finite total weight: {self.weight_sum!r}."
+                    f"Catalogue weights must have a finite, non-zero sum, got {self.catalog_weight_sum!r}."
                 )
                 func_util.safe_exit(1)
+            if not np.isfinite(self.field_weighted_sum):
+                self.logger.error(
+                    "The product catalog_weight * field_value produced a non-finite summed field value."
+                )
+                func_util.safe_exit(1)
+            self.field_value_mean = self.field_weighted_sum / self.catalog_weight_sum
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} "
-                f"| weight_key={self.fin['weight_key']} | weight_sum={self.weight_sum:.6e}"
+                f"| catalog_weight_key={self.fin['catalog_weight_key']} | field_value_key={self.fin['field_value_key']} "
+                f"| catalog_weight_sum={self.catalog_weight_sum:.6e} | field_weighted_sum={self.field_weighted_sum:.6e}"
             )
             if self.save_particle_data:
                 self._save_particle_dataset()
         else:
             self.particle_pos = None
-            self.particle_weight = None
-            self.weight_sum = None
+            self.catalog_weight = None
+            self.field_value = None
+            self.projection_weight = None
+            self.catalog_weight_sum = None
+            self.field_weighted_sum = None
+            self.field_value_mean = None
         self._fields_prepared = True
 
     def run(self, save_result=True, overwrite=False):
@@ -249,7 +299,7 @@ class Convols(TaskBase):
             if not self._fields_prepared:
                 self.prepare_input_fields()
             p_pos = self.particle_pos
-            p_wei = self.particle_weight
+            p_wei = self.projection_weight
             if rank == 0 and self.size == 1:
                 self.logger.info("Single process mode")
                 time_start = time.perf_counter()
@@ -320,14 +370,18 @@ class Convols(TaskBase):
                 _convols_info = {
                     "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
-                    "weight_sum"      : self.weight_sum,
+                    "catalog_weight_sum": self.catalog_weight_sum,
+                    "field_weighted_sum": self.field_weighted_sum,
+                    "field_value_mean": self.field_value_mean,
                     "box_size"       : self.box_size,
                     "J"             : self.J,
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "coefficient_convention": "raw_weighted",
-                    "field_kind"     : "raw_weighted_density",
+                    "coefficient_convention": "raw_catalog_field_value",
+                    "field_kind"     : "raw_weighted_field",
+                    "normalization": "none",
+                    "normalization_sum": None,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "phi_resolution"      : self.phi_resolution,

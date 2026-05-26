@@ -38,6 +38,7 @@ def corr3pcf_params(**updates):
     params = {
         "r12": R12,
         "r13": R13,
+        "normalization": "field_integral",
         "angle_param": "theta",
         "theta": THETA.tolist(),
         "base_seed": BASE_SEED,

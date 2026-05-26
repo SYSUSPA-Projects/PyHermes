@@ -30,20 +30,31 @@ Fourier conventions follow the rest of the documentation:
 Point Catalogs And Window Counts
 --------------------------------
 
-A particle or halo catalog is treated as a weighted spatial point process,
+A particle or halo catalog is treated as a weighted spatial point process. We
+separate an observational/catalogue weight :math:`w_{g,i}` from the
+per-object value :math:`x_i` carried by the physical field,
 
 .. math::
 
    n(\mathbf{x}) =
-   \sum_{i=1}^{N} w_i\,
+   \sum_{i=1}^{N} w_{g,i}x_i\,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
-Here :math:`w_i` can be a unit weight, a mass weight, or another mark carried by
-the object. A ``ConvolsData`` object stores this raw weighted field: its total
-weight is :math:`S_n=\sum_i w_i`, and a uniform version of the same field in a
-periodic box has density :math:`S_n/V`. Consequently field algebra remains
-linear in the input marks; for example, doubling every particle weight is
-equivalent to multiplying the stored field by two.
+Here :math:`w_g` contains completeness, selection, or other catalogue
+corrections, while :math:`x=1` produces number density, :math:`x=m` produces
+mass density, and :math:`x=v_\alpha` produces a signed velocity-weighted
+field. A ``ConvolsData`` object stores this raw field and retains the two
+distinct sums
+
+.. math::
+
+   S_g=\sum_i w_{g,i},
+   \qquad
+   S_x=\sum_iw_{g,i}x_i.
+
+Thus changing the physical quantity does not accidentally change the catalogue
+normalization. Field algebra remains linear in :math:`x`: doubling every
+``field_value`` is equivalent to multiplying the stored field by two.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
@@ -56,7 +67,7 @@ window function,
    =
    \int W(\mathbf{x}-\mathbf{x}') n(\mathbf{x}')\,d^3x'
    =
-   \sum_i w_i W(\mathbf{x}-\mathbf{x}_i),
+   \sum_i w_{g,i}x_i W(\mathbf{x}-\mathbf{x}_i),
    \qquad
    \int W(\mathbf{x})\,d^3x = 1.
 
@@ -80,7 +91,7 @@ coefficients on a compact multiresolution basis,
    =
    \int n(\mathbf{x})\phi_{j\ell}(\mathbf{x})\,d^3x
    =
-   \sum_i w_i \phi_{j\ell}(\mathbf{x}_i).
+   \sum_i w_{g,i}x_i \phi_{j\ell}(\mathbf{x}_i).
 
 The scaling functions are assumed to be orthonormal under the ordinary
 :math:`L^2` inner product,
@@ -113,21 +124,23 @@ operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
 
-The stored coefficients retain the raw total weight. Correlation tasks apply a
-separate estimator convention at their boundary: each density-like catalog leg
-is rescaled to
+The stored coefficients retain both raw input sums. For ordinary tracer
+density, correlation tasks use ``catalog_integral`` and rescale each leg to
 
 .. math::
 
-   d(\mathbf{x}) = {n_D(\mathbf{x})\over S_D},
+   d(\mathbf{x}) = {n_D(\mathbf{x})\over S_{g,D}},
    \qquad
-   r(\mathbf{x}) = {n_R(\mathbf{x})\over S_R},
+   r(\mathbf{x}) = {n_R(\mathbf{x})\over S_{g,R}},
    \qquad
-   S_D=\sum_{i\in D}w_i,\quad S_R=\sum_{i\in R}w_i.
+   S_{g,D}=\sum_{i\in D}w_{g,i},\quad
+   S_{g,R}=\sum_{i\in R}w_{g,i}.
 
-Thus an explicit random catalog does not need to be generated with the same
-total weight as the data catalog. In the unit-total-weight estimator fields,
-the uniform-random shortcut is simply :math:`r=1/V`.
+For a positive marked-density contrast, ``field_integral`` replaces
+:math:`S_g` with :math:`S_x=\sum_iw_{g,i}x_i`. Thus an explicit random
+catalog does not need to be generated with the same total normalization as the
+data catalog. In either unit-integral estimator field, the uniform-random
+shortcut is simply :math:`r=1/V`.
 
 Internally, PyHermes evaluates these expressions in dimensionless grid
 coordinates :math:`\mathbf{u}=(L/L_{\rm box})\mathbf{x}`, where
@@ -152,10 +165,11 @@ the common factors cancel in normalized statistics such as :math:`\xi` and
 Weighted Fields And Derivatives
 -------------------------------
 
-The weight :math:`w_i` is not restricted to a unit count. Choosing
-:math:`w_i=m_i` gives a mass-density field, while choosing one component of a
-mark, such as :math:`w_i=v_{x,i}` or :math:`w_i=m_i v_{x,i}`, gives one
-component of a velocity-weighted or momentum-density field. Component fields
+The value :math:`x_i` is not restricted to a unit count. Choosing
+:math:`x_i=m_i` gives a mass-density field, while choosing one component of a
+mark, such as :math:`x_i=v_{x,i}` or :math:`x_i=m_i v_{x,i}`, gives one
+component of a velocity-weighted or momentum-density field without altering
+the observational weight :math:`w_{g,i}`. Component fields
 can then be combined after evaluation. For example, the halo velocity field can
 be estimated as
 
@@ -167,7 +181,7 @@ be estimated as
    \qquad
    n_{v_\alpha}(\mathbf{x})
    =
-   \sum_i v_{\alpha,i}\,
+   \sum_i w_{g,i}v_{\alpha,i}\,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
 Field derivatives also fit into the same convolution language. With the Fourier
@@ -337,9 +351,15 @@ the Landy-Szalay estimator is
    {DD - 2DR + RR\over RR}.
 
 In the Hermes field formulation this expression has a more compact
-implementation. The stored raw fields are first converted to the estimator
-fields :math:`d=D/S_D` and :math:`r=R/S_R` (or :math:`r=1/V` for a uniform
-random shortcut). PyHermes then forms
+implementation. The stored raw fields retain :math:`S_g` and :math:`S_x`
+separately. Ordinary density statistics use
+:math:`d=D/S_g` and :math:`r=R/S_g^R`; positive marked-density statistics,
+such as a mass-weighted contrast, can instead use :math:`S_x`. These choices
+are exposed as ``normalization: catalog_integral`` and
+``normalization: field_integral``. Signed quantities such as velocity or
+momentum components normally use ``normalization: none`` because their
+near-zero signed integral is not a density normalization. For a normalized
+uniform random shortcut, :math:`r=1/V`. PyHermes then forms
 :math:`\Delta=d-r` directly at the coefficient level. The numerator is a
 single volume-averaged windowed-field product,
 
@@ -415,11 +435,17 @@ schematic triplet product is
    DDD_{\rm pcenter}(\theta; r_{12}, r_{13})
    =
    {1\over W_1}
-   \sum_{i\in D_1} w_i\,
+   \sum_{i\in D_1} q_i\,
    \widetilde n_{2,R_2}(\mathbf{x}_i)\,
    \widetilde n_{3,R_3,\theta}(\mathbf{x}_i),
    \qquad
-   W_1=\sum_{i\in D_1}w_i.
+   W_1=\sum_{i\in D_1}q_i,
+   \qquad
+   q_i =
+   \begin{cases}
+   w_{g,i}, & \texttt{catalog_integral},\\
+   w_{g,i}x_i, & \texttt{field_integral}.
+   \end{cases}
 
 The center positions :math:`\mathbf{x}_i` are real particles, halos, or
 galaxies. The second and third legs are windowed fields evaluated at those

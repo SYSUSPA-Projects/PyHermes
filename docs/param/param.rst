@@ -50,7 +50,8 @@ Minimal example
             ncols: 3
             pos_cols: [0, 1, 2]
             fields: {}
-         weight_key: null
+         catalog_weight_key: null
+         field_value_key: null
       fout_path: "./output/convols.pkl"
 
    Corr_2PCF:

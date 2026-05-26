@@ -35,11 +35,14 @@ Binary table format
             vel_y: 4
             vel_z: 5
             mass: 6
-      weight_key: "mass"
+      catalog_weight_key: null
+      field_value_key: "mass"
 
 Scalar field mappings return one-dimensional arrays. List mappings return
-two-dimensional arrays. ``weight_key`` must refer to a one-dimensional field;
-use ``null`` for unit weights.
+two-dimensional arrays. ``catalog_weight_key`` selects observational or
+selection weights :math:`w_g`, while ``field_value_key`` selects the measured
+per-object quantity :math:`x`; both must refer to one-dimensional fields. Use
+``null`` for unit values.
 
 NPZ format
 ----------
@@ -54,8 +57,9 @@ NPZ format
       reader_params:
          pos_key: "pos"
          fields:
-            weight: "weight"
-      weight_key: "weight"
+            completeness: "weight"
+      catalog_weight_key: "completeness"
+      field_value_key: null
 
 FoF format
 ----------
@@ -76,7 +80,15 @@ optional fields; ``pos`` and ``size`` are always retained.
          fields:
             mass: "mass"
             vel_x: "vel_x"
-      weight_key: "vel_x"
+      catalog_weight_key: null
+      field_value_key: "vel_x"
+
+The projected coefficient field always uses the product
+:math:`w_g x`. Keeping these two inputs separate lets PyHermes retain both the
+catalogue normalization :math:`\sum_i w_{g,i}` and the physical-field integral
+:math:`\sum_i w_{g,i}x_i`. For example, use ``field_value_key: "mass"`` for a
+mass-density field and ``field_value_key: "vel_x"`` for a signed
+velocity-weighted field; neither changes the survey/completeness weight.
 
 Task outputs
 ------------
@@ -99,5 +111,6 @@ Relevant fields
 - ``fin.format``: declared input format; when omitted or ``null``, PyHermes
   infers simple file formats from the suffix, such as ``.bin`` or ``.npz``
 - ``fin.reader_params``: format-specific reader options
-- ``fin.weight_key``: optional one-dimensional weight selector; ``null`` means unit weights
+- ``fin.catalog_weight_key``: optional one-dimensional selection-weight selector; ``null`` means unit catalogue weights
+- ``fin.field_value_key``: optional one-dimensional physical-field selector; ``null`` means unit field values
 - ``fout_path``: output file path for the current task

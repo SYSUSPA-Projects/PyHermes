@@ -11,7 +11,8 @@ Convols:
       #       vel_y: "vel_y"
       #       vel_z: "vel_z"
       #       npart: "npart"
-      # weight_key: null
+      # catalog_weight_key: null
+      # field_value_key: null
    box_size: 1000
    J: 8
    wavelet_mode: "db2"

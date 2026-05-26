@@ -35,16 +35,20 @@ The notebook demonstrates how the weighted point-process view,
 
 .. math::
 
-   n(\mathbf{x}) =
-   \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
+   n_x(\mathbf{x}) =
+   \sum_i w_{g,i}x_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
 
 can be reused for several related fields:
 
-- unit weights produce the halo number-density field
-- velocity weights produce velocity-weighted fields, which are divided by the
+- ``field_value=1`` produces the halo number-density field
+- velocity ``field_value`` components produce velocity-weighted fields, which are divided by the
   number-density field to estimate the velocity field
-- mass and mass-times-velocity weights produce halo mass-density and
+- mass and mass-times-velocity ``field_value`` arrays produce halo mass-density and
   momentum-density fields
+
+Throughout these constructions, ``catalog_weight`` remains available for
+completeness or selection corrections. In particular, a signed velocity
+component is a physical field value, not a normalization weight.
 
 It then visualizes the velocity field on a two-dimensional slice, computes
 velocity and momentum-density derivatives with directional-derivative windows,

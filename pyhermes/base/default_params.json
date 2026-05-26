@@ -10,10 +10,12 @@
 				"pos_cols": [0, 1, 2],
 				"fields": {}
 			},
-			"weight_key": null
+			"catalog_weight_key": null,
+			"field_value_key": null
 		},
 		"particle_pos": null,
-		"particle_weight": null,
+		"catalog_weight": null,
+		"field_value": null,
 		"box_size": 1000,
 		"J": 8,
 		"wavelet_mode": "db2",

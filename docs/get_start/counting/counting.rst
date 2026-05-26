@@ -71,8 +71,8 @@ In other words, if ``Convols`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
 
 The examples also make the role of particle weights explicit. With unit
-weights the sampled field is the halo number-density field. With mass weights
-the sampled field is a halo mass-density field. This is the simplest version of
+field values the sampled field is the halo number-density field. With mass as
+``field_value`` the sampled field is a halo mass-density field. This is the simplest version of
 the broader weighted-field idea developed later in
 :doc:`../weighted_fields/weighted_fields`.
 

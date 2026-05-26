@@ -466,25 +466,30 @@ def read_particle_data(path, data_format=None, **reader_params):
     return FORMAT_READERS[data_format](path, **reader_params)
 
 
-# Weight selection used by Convols and ConvolsData.
-def resolve_particle_weight(particle_data, weight_key, logger=None):
-    """Resolve a unit or named one-dimensional particle weight array."""
+# Per-particle scalar selection used by Convols and ConvolsData.
+def resolve_particle_value(particle_data, value_key, label="Particle value", logger=None):
+    """Resolve a unit or named one-dimensional particle scalar array."""
     size = int(particle_data["size"])
-    if weight_key is None:
+    if value_key is None:
         return np.ones(size, dtype=np.float32), None
-    if weight_key not in particle_data:
+    if value_key not in particle_data:
         available = list(particle_data.keys())
-        message = f"Weight key '{weight_key}' not found in particle data. Available keys: {available}."
+        message = f"{label} key '{value_key}' not found in particle data. Available keys: {available}."
         if logger is not None:
             logger.error(message)
         raise KeyError(message)
-    weight = np.asarray(particle_data[weight_key])
-    if weight.ndim != 1 or weight.shape[0] != size:
+    value = np.asarray(particle_data[value_key])
+    if value.ndim != 1 or value.shape[0] != size:
         message = (
-            f"Weight key '{weight_key}' must refer to a 1D array with length {size}, "
-            f"but got shape {weight.shape}."
+            f"{label} key '{value_key}' must refer to a 1D array with length {size}, "
+            f"but got shape {value.shape}."
         )
         if logger is not None:
             logger.error(message)
         raise ValueError(message)
-    return np.ascontiguousarray(weight, dtype=np.float32), weight_key
+    return np.ascontiguousarray(value, dtype=np.float32), value_key
+
+
+def resolve_particle_weight(particle_data, weight_key, logger=None):
+    """Backward-compatible reader helper for selecting one particle weight column."""
+    return resolve_particle_value(particle_data, weight_key, label="Weight", logger=logger)

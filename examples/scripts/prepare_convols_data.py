@@ -255,7 +255,7 @@ def build_mass_weighted_field(threads: int):
             "snapnum": 4,
             "fields": {"mass": "mass"},
         },
-        "weight_key": "mass",
+        "field_value_key": "mass",
     }
     return task
 
@@ -264,19 +264,17 @@ def build_redshift_space_field(
     pos: np.ndarray,
     threads: int,
     diag: bool = False,
-    particle_weight: np.ndarray | None = None,
+    field_value: np.ndarray | None = None,
 ):
     suffix = "rsd_diag" if diag else "rsd"
-    weight_suffix = "_massweight" if particle_weight is not None else ""
+    weight_suffix = "_massweight" if field_value is not None else ""
     task = base_convols_task(
         threads,
         f"./output_new/quijote8000_snap004_{suffix}_sfc{weight_suffix}.pkl",
     )
     task.particle_pos = pos
-    if particle_weight is None:
-        task.particle_weight = np.ones(pos.shape[0], dtype=np.float32)
-    else:
-        task.particle_weight = np.asarray(particle_weight, dtype=np.float32)
+    if field_value is not None:
+        task.field_value = np.asarray(field_value, dtype=np.float32)
     task.save_particle_data = True
     task.particle_data_path = (
         f"./data/quijote_halos/8000/groups_004/group_tab_004.pos.{suffix}{weight_suffix}.npz"
@@ -366,7 +364,7 @@ def main() -> None:
             pos_z,
             args.threads,
             diag=False,
-            particle_weight=fof_data["mass"],
+            field_value=fof_data["mass"],
         ),
     )
     run_if_needed(

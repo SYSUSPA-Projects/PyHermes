@@ -5,14 +5,25 @@ import copy
 import numpy as np
 
 from .base import HermesData
-from .readers import read_particle_data, resolve_particle_weight
+from .readers import read_particle_data, resolve_particle_value
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d, specialized_convolution_3d_complex
 from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
+def normalize_field_normalization(normalization):
+    mode = str(normalization if normalization is not None else "catalog_integral").strip().lower()
+    if mode not in {"catalog_integral", "field_integral", "none"}:
+        raise ValueError("normalization must be 'catalog_integral', 'field_integral', or 'none'.")
+    return mode
+
+
 class ConvolsData(HermesData):
     _REQUIRED_ARGV = ("J", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level")
+    _NORMALIZATION_KEYS = {
+        "catalog_integral": "catalog_weight_sum",
+        "field_integral": "field_weighted_sum",
+    }
 
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
@@ -181,10 +192,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a + b
-        if getattr(self, "weight_sum", None) is not None and getattr(other, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum + other.weight_sum
-        else:
-            new.convols_info["weight_sum"] = None
+        self._mark_derived(new)
         new.format_convols_params()
         return new
 
@@ -196,10 +204,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon + scalar
-        if getattr(self, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum + scalar * self.V
-        else:
-            new.convols_info["weight_sum"] = None
+        self._mark_derived(new)
         new.format_convols_params()
         return new
 
@@ -220,8 +225,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a * b
-        new.convols_info["weight_sum"] = None
-        new.convols_info["field_kind"] = "product"
+        self._mark_derived(new, field_kind="product")
         new.format_convols_params()
         return new
 
@@ -233,10 +237,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon * scalar
-        if getattr(self, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum * scalar
-        else:
-            new.convols_info["weight_sum"] = None
+        self._scale_linear_metadata(new, scalar)
         new.format_convols_params()
         return new
 
@@ -251,10 +252,7 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon / scalar
-        if getattr(self, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum / scalar
-        else:
-            new.convols_info["weight_sum"] = None
+        self._scale_linear_metadata(new, 1.0 / scalar)
         new.format_convols_params()
         return new
 
@@ -296,17 +294,13 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = a - b
-        if getattr(self, "weight_sum", None) is not None and getattr(other, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum - other.weight_sum
-        else:
-            new.convols_info["weight_sum"] = None
         if (
-            getattr(self, "field_kind", None) == "unit_weight_density"
-            and getattr(other, "field_kind", None) == "unit_weight_density"
-            and new.convols_info["weight_sum"] is not None
-            and np.isclose(new.convols_info["weight_sum"], 0.0)
+            getattr(self, "normalization", "none") != "none"
+            and getattr(self, "normalization", "none") == getattr(other, "normalization", "none")
         ):
-            new.convols_info["field_kind"] = "contrast"
+            self._mark_derived(new, field_kind="contrast", preserve_normalization=True)
+        else:
+            self._mark_derived(new)
         new.format_convols_params()
         return new
 
@@ -317,80 +311,124 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon - scalar
-        if getattr(self, "weight_sum", None) is not None:
-            new.convols_info["weight_sum"] = self.weight_sum - scalar * self.V
-        else:
-            new.convols_info["weight_sum"] = None
-        if (
-            getattr(self, "field_kind", None) == "unit_weight_density"
-            and new.convols_info["weight_sum"] is not None
-            and np.isclose(new.convols_info["weight_sum"], 0.0)
-        ):
-            new.convols_info["field_kind"] = "contrast"
+        field_kind = "contrast" if getattr(self, "normalization", "none") != "none" else "derived_field"
+        self._mark_derived(new, field_kind=field_kind, preserve_normalization=(field_kind == "contrast"))
         new.format_convols_params()
         return new
+
+    def _mark_derived(self, field, field_kind="derived_field", preserve_normalization=False):
+        field.convols_info.update({
+            "catalog_weight_sum": None,
+            "field_weighted_sum": None,
+            "field_value_mean": None,
+            "normalization_sum": None,
+            "field_kind": field_kind,
+        })
+        if not preserve_normalization:
+            field.convols_info["normalization"] = "none"
+
+    def _scale_linear_metadata(self, field, scalar):
+        if (
+            getattr(self, "normalization", "none") == "none"
+            and getattr(self, "field_kind", None) == "raw_weighted_field"
+        ):
+            weighted_sum = getattr(self, "field_weighted_sum", None)
+            value_mean = getattr(self, "field_value_mean", None)
+            field.convols_info["field_weighted_sum"] = None if weighted_sum is None else weighted_sum * scalar
+            field.convols_info["field_value_mean"] = None if value_mean is None else value_mean * scalar
+            return
+        self._mark_derived(field)
+
+    def _normalization_value(self, normalization):
+        normalization = normalize_field_normalization(normalization)
+        if normalization == "none":
+            return normalization, None
+        key = self._NORMALIZATION_KEYS[normalization]
+        value = getattr(self, key, None)
+        if value is None or not np.isfinite(value) or np.isclose(value, 0.0):
+            raise ValueError(
+                f"Cannot apply normalization='{normalization}' without a finite, non-zero {key}."
+            )
+        return normalization, float(value)
+
+    def normalized(self, normalization="field_integral"):
+        """
+        Return a new field scaled by a selected input integral.
+
+        ``catalog_integral`` divides by sum(catalog_weight), whereas
+        ``field_integral`` divides by sum(catalog_weight * field_value).
+        ``none`` copies the field without rescaling.
+        """
+        new = self.copy()
+        return new._normalize_for_estimator_inplace(normalization)
 
     def to_unit_weight(self):
         """
-        Return a new field rescaled to unit total weight.
+        Return a new field rescaled to unit field-weighted integral.
 
-        Raw weighted coefficients are the public field representation. Correlation
-        estimators apply the same conversion internally without modifying public
-        raw fields.
+        This public convenience interface is equivalent to
+        ``normalized("field_integral")``. For catalogue-normalized estimators,
+        use ``normalized("catalog_integral")`` or task ``normalization``.
         """
-        weight_sum = getattr(self, "weight_sum", None)
-        if weight_sum is None or not np.isfinite(weight_sum) or np.isclose(weight_sum, 0.0):
-            raise ValueError("Cannot rescale a field without a finite, non-zero weight_sum.")
-        new = self / weight_sum
-        new.convols_info["field_kind"] = "unit_weight_density"
-        new.format_convols_params()
-        return new
+        return self.normalized("field_integral")
 
-    def _normalize_for_estimator_inplace(self):
+    def _normalize_for_estimator_inplace(self, normalization="catalog_integral"):
         """
-        Convert an estimator-owned temporary field to unit total weight in place.
+        Normalize an estimator-owned temporary field in place.
 
         Callers must ensure that this object is not a user-visible raw input field.
         This avoids allocating another full epsilon array after a leg has already
         been copied or convolved for an estimator.
         """
-        if getattr(self, "field_kind", None) in {"unit_weight_density", "contrast"}:
+        if getattr(self, "field_kind", None) == "contrast":
             return self
-        weight_sum = getattr(self, "weight_sum", None)
-        if weight_sum is None or not np.isfinite(weight_sum) or np.isclose(weight_sum, 0.0):
-            raise ValueError("Cannot rescale a field without a finite, non-zero weight_sum.")
-        self.epsilon /= weight_sum
-        self.convols_info["weight_sum"] = 1.0
-        self.convols_info["field_kind"] = "unit_weight_density"
+        normalization, normalizer = self._normalization_value(normalization)
+        if normalization == "none":
+            return self
+        current = getattr(self, "normalization", "none")
+        if current == normalization:
+            return self
+        if current != "none":
+            raise ValueError(
+                f"Cannot apply normalization='{normalization}' to a field already normalized as '{current}'."
+            )
+        self.epsilon /= normalizer
+        weighted_sum = getattr(self, "field_weighted_sum", None)
+        value_mean = getattr(self, "field_value_mean", None)
+        self.convols_info["field_weighted_sum"] = None if weighted_sum is None else weighted_sum / normalizer
+        self.convols_info["field_value_mean"] = None if value_mean is None else value_mean / normalizer
+        self.convols_info["normalization"] = normalization
+        self.convols_info["normalization_sum"] = normalizer
+        self.convols_info["field_kind"] = "normalized_field"
         self.format_convols_params()
         return self
 
-    def as_estimator_field(self):
+    def as_estimator_field(self, normalization="catalog_integral"):
         """
         Return a new field in the normalization expected by correlation estimators.
 
-        Density-like fields are converted to unit total weight. A pre-constructed
-        contrast field already carries the desired estimator normalization and is
-        therefore copied without additional rescaling. Estimator implementations
-        use an internal in-place conversion on their own temporary leg fields to
-        avoid an unnecessary full-array allocation.
+        Estimator implementations use an internal in-place conversion on their
+        own temporary leg fields to avoid an unnecessary full-array allocation.
         """
-        if getattr(self, "field_kind", None) == "contrast":
-            return self.copy()
-        return self.to_unit_weight()
+        return self.normalized(normalization)
     
     def get_particle_data(self):
         particle_data_path = getattr(self, "particle_data_path", "")
         if particle_data_path:
             with np.load(particle_data_path) as particle_data:
-                if "pos" not in particle_data or "weight" not in particle_data:
+                required = {"pos", "catalog_weight", "field_value"}
+                if not required.issubset(particle_data.files):
                     self.logger.error(
-                        f"Particle dataset '{particle_data_path}' must contain 'pos' and 'weight' arrays."
+                        f"Particle dataset '{particle_data_path}' must contain {sorted(required)} arrays."
                     )
                     func_util.safe_exit(1)
+                catalog_weight = particle_data["catalog_weight"]
+                field_value = particle_data["field_value"]
                 return {
                     "pos": particle_data["pos"],
-                    "weight": particle_data["weight"],
+                    "catalog_weight": catalog_weight,
+                    "field_value": field_value,
+                    "projection_weight": catalog_weight * field_value,
                 }
 
         fin = getattr(self, "fin", {})
@@ -406,12 +444,19 @@ class ConvolsData(HermesData):
             **fin.get("reader_params", {}),
         )
         try:
-            weight, _ = resolve_particle_weight(particle_data, fin.get("weight_key", None), logger=self.logger)
+            catalog_weight, _ = resolve_particle_value(
+                particle_data, fin.get("catalog_weight_key", None), label="Catalogue weight", logger=self.logger
+            )
+            field_value, _ = resolve_particle_value(
+                particle_data, fin.get("field_value_key", None), label="Field value", logger=self.logger
+            )
         except Exception:
             func_util.safe_exit(1)
         return {
             "pos": particle_data["pos"],
-            "weight": weight,
+            "catalog_weight": catalog_weight,
+            "field_value": field_value,
+            "projection_weight": catalog_weight * field_value,
         }
     
     def phi_at_pos(self, pos):
@@ -476,9 +521,9 @@ class ConvolsData(HermesData):
             _convols_info = dataset.get('convols_info')
             if _convols_info:
                 self.convols_info.update(_convols_info)
-            if self.convols_info.get("coefficient_convention") != "raw_weighted":
+            if self.convols_info.get("coefficient_convention") != "raw_catalog_field_value":
                 raise ValueError(
-                    "This ConvolsData file does not use the raw-weighted coefficient convention. "
+                    "This ConvolsData file does not use the split catalogue-weight/field-value convention. "
                     "Regenerate it with the current Convols task before loading it."
                 )
             self.format_convols_params()

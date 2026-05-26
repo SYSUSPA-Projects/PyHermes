@@ -60,8 +60,11 @@ Supported field operations include addition, subtraction, and multiplication.
 Supported scalar operations include addition, subtraction, multiplication, and
 division. Binary field operations require compatible field metadata. ``D`` and
 ``R`` above are raw weighted fields, so their arithmetic preserves amplitudes;
-``to_unit_weight()`` is used only when constructing normalized correlation
-estimator fields.
+``to_unit_weight()`` divides by ``field_weighted_sum`` and is used here because
+both inputs are ordinary unit-value density fields. A task estimator can
+instead choose ``normalization: catalog_integral`` (ordinary tracer density),
+``field_integral`` (positive marked density), or ``none`` (signed physical
+fields).
 
 ``WindowFunc`` construction
 ---------------------------

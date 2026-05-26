@@ -138,11 +138,17 @@ windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
 The field formulation also makes the Landy-Szalay structure more direct. The
-saved ``ConvolsData`` inputs retain their raw total weights; at the estimator
-boundary PyHermes forms ``d = D / D.weight_sum`` and
-``r = R / R.weight_sum`` (or uses ``r = 1 / V`` for a uniform random
-shortcut). It then builds ``Delta = d - r`` and evaluates the pair-window
-product
+saved ``ConvolsData`` inputs retain raw :math:`w_g x` amplitudes together with
+both input sums. At the estimator boundary,
+``normalization: catalog_integral`` forms
+``d = D / D.catalog_weight_sum`` for ordinary
+catalogue-density statistics. For a positive marked field such as halo mass,
+set ``normalization: field_integral`` so that the field is divided by
+``D.field_weighted_sum`` instead. Signed fields such as velocity components
+should generally use ``normalization: none`` and be interpreted as physical
+weighted-field products rather than an ordinary density contrast. With either
+unit-integral choice, an analytic uniform random shortcut is ``r = 1 / V``.
+PyHermes then builds ``Delta = d - r`` and evaluates the pair-window product
 
 .. math::
 

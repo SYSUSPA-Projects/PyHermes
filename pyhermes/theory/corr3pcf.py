@@ -3,7 +3,7 @@ import pickle
 import copy
 import numpy as np
 
-from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData
+from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData, normalize_field_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.corr3pcf_kernels import (
     estimate_triplet_product_box_random_centers,
@@ -137,6 +137,7 @@ class Corr_3PCF(TaskBase):
         self.task_params["products"] = copy.deepcopy(self.products)
         self.task_params["particle_weight1"] = self.particle_weight1
         self.task_params["random_weight1"] = self.random_weight1
+        self.task_params["normalization"] = self.normalization
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
@@ -159,6 +160,7 @@ class Corr_3PCF(TaskBase):
             self.random3 = self.random
         self.random_pos1 = self.task_params.get("random_pos1", None)
         self.random_weight1 = self.task_params.get("random_weight1", None)
+        self.normalization = normalize_field_normalization(self.task_params.get("normalization", "catalog_integral"))
 
         window = self.task_params.get("window", None)
         self.window = window if (window and (window.get("type") or window.get("func"))) else None
@@ -375,6 +377,7 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.random_weight1)
             params["random_weight1"] = {"kind": "random_weight1", "shape": tuple(arr.shape)}
+        params["normalization"] = self.normalization
         params["window"] = self._serialize_window_input(self.window)
         params["window1"] = self._serialize_window_input(self.window1)
         params["window2"] = self._serialize_window_input(self.window2)
@@ -525,7 +528,12 @@ class Corr_3PCF(TaskBase):
         try:
             particle_data = fallback_field.get_particle_data()
             pos_arr = self._normalize_particle_data(particle_data["pos"])
-            raw_weight = provided_weight if provided_weight is not None else particle_data["weight"]
+            if provided_weight is not None:
+                raw_weight = provided_weight
+            elif self.normalization == "catalog_integral":
+                raw_weight = particle_data["catalog_weight"]
+            else:
+                raw_weight = particle_data["projection_weight"]
             weight_arr = self._normalize_particle_weight(raw_weight, pos_arr.shape[0], label=f"{label} particle weight")
             return pos_arr, weight_arr, f"from {label}.get_particle_data()"
         except Exception:
@@ -950,7 +958,7 @@ class Corr_3PCF(TaskBase):
             else:
                 final_convols = base_convols.copy()
                 final_convols.format_convols_params()
-            final_convols = final_convols._normalize_for_estimator_inplace()
+            final_convols = final_convols._normalize_for_estimator_inplace(self.normalization)
             setattr(self, f"convols_data{i}", final_convols)
             setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
             self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
@@ -979,6 +987,11 @@ class Corr_3PCF(TaskBase):
                 setattr(self, "random1", rho)
                 continue
             if base_random == "uniform":
+                if self.normalization == "none":
+                    raise ValueError(
+                        "random='uniform' requires catalog_integral or field_integral normalization; "
+                        "provide explicit random fields for normalization='none'."
+                    )
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"convols_data{i}", None),
                     *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
@@ -1000,7 +1013,7 @@ class Corr_3PCF(TaskBase):
                 else:
                     final_random = base_random.copy()
                     final_random.format_convols_params()
-                final_random = final_random._normalize_for_estimator_inplace()
+                final_random = final_random._normalize_for_estimator_inplace(self.normalization)
                 setattr(self, f"random{i}", final_random)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
@@ -1283,7 +1296,10 @@ class Corr_3PCF(TaskBase):
                             func_util.safe_exit(1)
                         particle_data = self.convols_data1.get_particle_data()
                         pos_all = particle_data["pos"] * self.convols_data1.scale_factor
-                        weight_all = particle_data["weight"]
+                        if self.normalization == "catalog_integral":
+                            weight_all = particle_data["catalog_weight"]
+                        else:
+                            weight_all = particle_data["projection_weight"]
                     if has_random_pos1:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         weight_all_random1 = self.random_weight1

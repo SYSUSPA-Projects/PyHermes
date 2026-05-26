@@ -53,6 +53,10 @@ Generated locally while following the notebook:
   - ``quijote8000_snap004_rsd_diag_sfc.pkl``
   - ``random_sfc.pkl``
 
+``ConvolsData`` files produced with the former single ``weight_sum`` metadata
+do not encode this distinction and must be regenerated with the current
+``Convols`` task before use.
+
 Minimal YAML Shape
 ------------------
 
@@ -132,26 +136,30 @@ Key idea
 
 ``Convols`` builds a weighted multiresolution field and stores it in a reusable
 format. Once that field exists, downstream tasks no longer need to reread and
-repartition the original particle catalog. Most tutorials start with unit
-weights, but the same construction also supports mass weights, velocity
-weights, and other particle marks; the later
+repartition the original particle catalog. PyHermes separates catalogue
+weights, such as completeness weights, from per-object field values, such as
+mass or velocity. Most tutorials use unit values for both, while the later
 :doc:`../weighted_fields/weighted_fields` notebook uses this directly.
 
 Mathematical idea
 -----------------
 
-The input catalog is a weighted point process,
+The input catalog carries a catalogue weight :math:`w_{g,i}` and an optional
+physical field value :math:`x_i`,
 
 .. math::
 
    n(\mathbf{x}) =
-   \sum_i w_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
+   \sum_i w_{g,i}x_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
-PyHermes stores the input weights without pre-normalizing their sum. For a
-unit-weight catalog, :math:`\sum_i w_i=N_{\rm halo}`; for a marked catalog it
-retains the corresponding total mark. The reconstructed field therefore keeps
-its physical amplitude and field arithmetic is linear: ``2 * D`` represents
-the same field obtained by doubling every input weight.
+PyHermes projects the product :math:`w_{g,i}x_i` without pre-normalizing it,
+and retains both :math:`S_g=\sum_iw_{g,i}` and
+:math:`S_x=\sum_iw_{g,i}x_i`. For a number-density field :math:`x_i=1`; for
+a mass-density or velocity-weighted field, :math:`x_i` is mass or a velocity
+component while :math:`w_g` can remain the same observational weight. The
+reconstructed field therefore keeps its physical amplitude and field
+arithmetic is linear: ``2 * D`` represents the field obtained by doubling
+``field_value``.
 
 ``Convols`` projects it onto scaling-function coefficients,
 
@@ -161,7 +169,7 @@ the same field obtained by doubling every input weight.
    \sum_\ell \epsilon_{j\ell}\phi_{j\ell}(\mathbf{x}),
    \qquad
    \epsilon_{j\ell} =
-   \sum_i w_i\phi_{j\ell}(\mathbf{x}_i).
+   \sum_i w_{g,i}x_i\phi_{j\ell}(\mathbf{x}_i).
 
 These coefficients are standard :math:`L^2` projection coefficients. The
 scaling functions are orthonormal under
@@ -172,10 +180,13 @@ coordinates both :math:`\phi_{j\ell}` and :math:`\epsilon_{j\ell}` carry
 field.
 
 The saved ``ConvolsData`` object stores these raw weighted coefficients, its
-``weight_sum`` metadata, and the information needed to apply later windows.
-Correlation drivers convert each density-like leg to unit total weight
-internally before forming normalized estimators; ``Counting`` continues to
-sample the physical weighted field itself. The redshift-space cells first map
+``catalog_weight_sum`` and ``field_weighted_sum`` metadata, and the information
+needed to apply later windows. Correlation drivers make normalization explicit:
+``normalization: catalog_integral`` is appropriate for ordinary tracer-density
+statistics, ``field_integral`` for positive marked fields such as mass, and
+``none`` for signed fields whose physical amplitude must be retained.
+``Counting`` continues to sample the physical weighted field itself. The
+redshift-space cells first map
 positions along a chosen line of sight,
 
 .. math::

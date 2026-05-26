@@ -104,10 +104,15 @@ tracer catalog itself:
 
    DDD_{\rm p}(\theta; r_{12}, r_{13})
    =
-   {1\over\sum_i w_i}
-   \sum_i w_i\,
+   {1\over\sum_i q_i}
+   \sum_i q_i\,
    n_{R_2}(\mathbf{x}_i)\,
    n_{R_3,\theta}(\mathbf{x}_i).
+
+Here :math:`q_i=w_{g,i}` for the default
+``normalization: catalog_integral``; for a positive marked field with
+``normalization: field_integral``, :math:`q_i=w_{g,i}x_i`. A signed field
+should not generally be used as a particle-center normalization.
 
 In box-random-center mode the centers are Monte Carlo positions in the periodic
 volume, so all three legs are evaluated as fields:
