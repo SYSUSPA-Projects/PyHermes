@@ -1,6 +1,7 @@
 import os
 import pickle
 import copy
+import uuid
 
 import numpy as np
 
@@ -11,19 +12,15 @@ from pyhermes.utils.convolution import specialized_convolution_3d, specialized_c
 from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
-def normalize_field_normalization(normalization):
-    mode = str(normalization if normalization is not None else "catalog_integral").strip().lower()
-    if mode not in {"catalog_integral", "field_integral", "none"}:
-        raise ValueError("normalization must be 'catalog_integral', 'field_integral', or 'none'.")
+def normalize_field_normalization(field_normalization):
+    mode = str(field_normalization if field_normalization is not None else "none").strip().lower()
+    if mode not in {"none", "mean"}:
+        raise ValueError("field_normalization must be 'none' or 'mean'.")
     return mode
 
 
 class ConvolsData(HermesData):
     _REQUIRED_ARGV = ("J", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level")
-    _NORMALIZATION_KEYS = {
-        "catalog_integral": "catalog_weight_sum",
-        "field_integral": "field_weighted_sum",
-    }
 
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
@@ -177,22 +174,13 @@ class ConvolsData(HermesData):
 
     # ---------- field + field ----------
     def _add_field(self, other):
-        a = self.epsilon
-        b = other.epsilon
-
-        if a is None or b is None:
-            self.logger.error("Cannot add: epsilon is None.")
-            func_util.safe_exit(1)
-
-        if a.shape != b.shape:
-            self.logger.error(
-                f"Shape mismatch in addition: {a.shape} vs {b.shape}"
-            )
-            func_util.safe_exit(1)
-
+        self._validate_field_array_operation(other, "addition")
         new = self._spawn_like()
-        new.epsilon = a + b
-        self._mark_derived(new)
+        new.epsilon = self.epsilon + other.epsilon
+        if self._same_catalog_measure(other):
+            self._propagate_catalog_linear(new, other, sign=1.0)
+        else:
+            self._mark_derived(new)
         new.format_convols_params()
         return new
 
@@ -204,28 +192,17 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon + scalar
-        self._mark_derived(new)
+        integral = self._shifted_integral(scalar)
+        self._mark_derived(new, field_integral=integral)
         new.format_convols_params()
         return new
 
     # ---------- field × field ----------
     def _mul_field(self, other):
-        a = self.epsilon
-        b = other.epsilon
-
-        if a is None or b is None:
-            self.logger.error("Cannot multiply: epsilon is None.")
-            func_util.safe_exit(1)
-
-        if a.shape != b.shape:
-            self.logger.error(
-                f"Shape mismatch in multiplication: {a.shape} vs {b.shape}"
-            )
-            func_util.safe_exit(1)
-
+        self._validate_field_array_operation(other, "multiplication")
         new = self._spawn_like()
-        new.epsilon = a * b
-        self._mark_derived(new, field_kind="product")
+        new.epsilon = self.epsilon * other.epsilon
+        self._mark_derived(new, field_kind="derived_field")
         new.format_convols_params()
         return new
 
@@ -279,26 +256,14 @@ class ConvolsData(HermesData):
         return NotImplemented
 
     def _sub_field(self, other):
-        a = self.epsilon
-        b = other.epsilon
-
-        if a is None or b is None:
-            self.logger.error("Cannot subtract: epsilon is None.")
-            func_util.safe_exit(1)
-
-        if a.shape != b.shape:
-            self.logger.error(
-                f"Shape mismatch in subtraction: {a.shape} vs {b.shape}"
-            )
-            func_util.safe_exit(1)
-
+        self._validate_field_array_operation(other, "subtraction")
         new = self._spawn_like()
-        new.epsilon = a - b
-        if (
-            getattr(self, "normalization", "none") != "none"
-            and getattr(self, "normalization", "none") == getattr(other, "normalization", "none")
-        ):
-            self._mark_derived(new, field_kind="contrast", preserve_normalization=True)
+        new.epsilon = self.epsilon - other.epsilon
+        if self._same_catalog_measure(other):
+            self._propagate_catalog_linear(new, other, sign=-1.0)
+        elif getattr(self, "field_kind", None) == "catalog_field" and getattr(other, "field_kind", None) == "catalog_field":
+            integral = self._difference_integral(other)
+            self._mark_contrast(new, integral, (self.catalog_weight_sum, other.catalog_weight_sum))
         else:
             self._mark_derived(new)
         new.format_convols_params()
@@ -311,68 +276,130 @@ class ConvolsData(HermesData):
 
         new = self._spawn_like()
         new.epsilon = self.epsilon - scalar
-        field_kind = "contrast" if getattr(self, "normalization", "none") != "none" else "derived_field"
-        self._mark_derived(new, field_kind=field_kind, preserve_normalization=(field_kind == "contrast"))
+        integral = self._shifted_integral(-scalar)
+        if getattr(self, "field_kind", None) == "catalog_field":
+            self._mark_contrast(new, integral, self.catalog_weight_sum)
+        else:
+            self._mark_derived(new, field_integral=integral)
         new.format_convols_params()
         return new
 
-    def _mark_derived(self, field, field_kind="derived_field", preserve_normalization=False):
+    def _validate_field_array_operation(self, other, operation):
+        if self.epsilon is None or other.epsilon is None:
+            self.logger.error(f"Cannot perform {operation}: epsilon is None.")
+            func_util.safe_exit(1)
+        if self.epsilon.shape != other.epsilon.shape:
+            self.logger.error(
+                f"Shape mismatch in {operation}: {self.epsilon.shape} vs {other.epsilon.shape}"
+            )
+            func_util.safe_exit(1)
+
+    def _same_catalog_measure(self, other):
+        return (
+            getattr(self, "field_kind", None) == "catalog_field"
+            and getattr(other, "field_kind", None) == "catalog_field"
+            and bool(getattr(self, "catalog_recombinable", False))
+            and bool(getattr(other, "catalog_recombinable", False))
+            and getattr(self, "catalog_id", None) is not None
+            and self.catalog_id == getattr(other, "catalog_id", None)
+            and self.convols_info.get("convolution_of", []) == other.convols_info.get("convolution_of", [])
+        )
+
+    def _propagate_catalog_linear(self, field, other, sign):
+        raw_self = getattr(self, "raw_field_weighted_sum", None)
+        raw_other = getattr(other, "raw_field_weighted_sum", None)
+        integral_self = getattr(self, "field_integral", None)
+        integral_other = getattr(other, "field_integral", None)
+        scale_self = getattr(self, "particle_projection_scale", None)
+        scale_other = getattr(other, "particle_projection_scale", None)
+        field.convols_info.update({
+            "raw_field_weighted_sum": None if raw_self is None or raw_other is None else raw_self + sign * raw_other,
+            "field_integral": None if integral_self is None or integral_other is None else integral_self + sign * integral_other,
+            "particle_projection_scale": None if scale_self is None or scale_other is None else scale_self + sign * scale_other,
+            "field_kind": "catalog_field",
+        })
+
+    def _shifted_integral(self, scalar):
+        value = getattr(self, "field_integral", None)
+        if value is None or not hasattr(self, "V"):
+            return None
+        return float(value + scalar * self.V)
+
+    def _difference_integral(self, other):
+        left = getattr(self, "field_integral", None)
+        right = getattr(other, "field_integral", None)
+        return None if left is None or right is None else float(left - right)
+
+    def _mark_derived(self, field, field_kind="derived_field", field_integral=None):
         field.convols_info.update({
             "catalog_weight_sum": None,
-            "field_weighted_sum": None,
-            "field_value_mean": None,
-            "normalization_sum": None,
+            "catalog_weight_sq_sum": None,
+            "raw_field_weighted_sum": None,
+            "field_integral": field_integral,
+            "catalog_id": None,
+            "field_normalization": "none",
+            "field_normalization_value": None,
+            "catalog_recombinable": False,
+            "particle_data_retrievable": False,
+            "particle_projection_scale": None,
             "field_kind": field_kind,
         })
-        if not preserve_normalization:
-            field.convols_info["normalization"] = "none"
+
+    def _mark_contrast(self, field, field_integral, source_weight_sum):
+        self._mark_derived(field, field_kind="contrast_field", field_integral=field_integral)
+        field.convols_info["source_catalog_weight_sum"] = source_weight_sum
 
     def _scale_linear_metadata(self, field, scalar):
-        if (
-            getattr(self, "normalization", "none") == "none"
-            and getattr(self, "field_kind", None) == "raw_weighted_field"
-        ):
-            weighted_sum = getattr(self, "field_weighted_sum", None)
-            value_mean = getattr(self, "field_value_mean", None)
-            field.convols_info["field_weighted_sum"] = None if weighted_sum is None else weighted_sum * scalar
-            field.convols_info["field_value_mean"] = None if value_mean is None else value_mean * scalar
+        if getattr(self, "field_kind", None) == "catalog_field":
+            weighted_sum = getattr(self, "raw_field_weighted_sum", None)
+            integral = getattr(self, "field_integral", None)
+            projection_scale = getattr(self, "particle_projection_scale", None)
+            field.convols_info["raw_field_weighted_sum"] = (
+                None if weighted_sum is None else weighted_sum * scalar
+            )
+            field.convols_info["field_integral"] = None if integral is None else integral * scalar
+            field.convols_info["particle_projection_scale"] = (
+                None if projection_scale is None else projection_scale * scalar
+            )
             return
-        self._mark_derived(field)
+        if getattr(self, "field_kind", None) == "contrast_field":
+            integral = getattr(self, "field_integral", None)
+            field.convols_info["field_integral"] = None if integral is None else integral * scalar
+            return
+        self._mark_derived(field, field_integral=None)
 
-    def _normalization_value(self, normalization):
-        normalization = normalize_field_normalization(normalization)
-        if normalization == "none":
-            return normalization, None
-        key = self._NORMALIZATION_KEYS[normalization]
-        value = getattr(self, key, None)
+    def _field_normalization_value(self, field_normalization):
+        field_normalization = normalize_field_normalization(field_normalization)
+        if field_normalization == "none":
+            return field_normalization, None
+        value = getattr(self, "field_integral", None)
         if value is None or not np.isfinite(value) or np.isclose(value, 0.0):
             raise ValueError(
-                f"Cannot apply normalization='{normalization}' without a finite, non-zero {key}."
+                "Cannot apply field_normalization='mean' without a finite, non-zero field_integral."
             )
-        return normalization, float(value)
+        return field_normalization, float(value)
 
-    def normalized(self, normalization="field_integral"):
+    def normalized(self, field_normalization="mean"):
         """
-        Return a new field scaled by a selected input integral.
+        Return a new field optionally divided by its catalogue-weighted mean.
 
-        ``catalog_integral`` divides by sum(catalog_weight), whereas
-        ``field_integral`` divides by sum(catalog_weight * field_value).
-        ``none`` copies the field without rescaling.
+        Catalogue weights have already been normalized when the field is
+        constructed. ``mean`` divides a physical-value field by
+        ``field_integral``; ``none`` copies it without additional scaling.
         """
         new = self.copy()
-        return new._normalize_for_estimator_inplace(normalization)
+        return new._normalize_for_estimator_inplace(field_normalization)
 
     def to_unit_weight(self):
         """
-        Return a new field rescaled to unit field-weighted integral.
+        Return a new field rescaled to unit catalogue-weighted field mean.
 
-        This public convenience interface is equivalent to
-        ``normalized("field_integral")``. For catalogue-normalized estimators,
-        use ``normalized("catalog_integral")`` or task ``normalization``.
+        This public convenience interface is equivalent to ``normalized("mean")``.
+        For an ordinary count field the operation is numerically a no-op.
         """
-        return self.normalized("field_integral")
+        return self.normalized("mean")
 
-    def _normalize_for_estimator_inplace(self, normalization="catalog_integral"):
+    def _normalize_for_estimator_inplace(self, field_normalization="none"):
         """
         Normalize an estimator-owned temporary field in place.
 
@@ -380,39 +407,116 @@ class ConvolsData(HermesData):
         This avoids allocating another full epsilon array after a leg has already
         been copied or convolved for an estimator.
         """
-        if getattr(self, "field_kind", None) == "contrast":
+        field_normalization, normalizer = self._field_normalization_value(field_normalization)
+        if field_normalization == "none":
             return self
-        normalization, normalizer = self._normalization_value(normalization)
-        if normalization == "none":
-            return self
-        current = getattr(self, "normalization", "none")
-        if current == normalization:
+        if getattr(self, "field_kind", None) == "contrast_field":
+            raise ValueError("field_normalization cannot be applied after constructing a contrast field.")
+        current = getattr(self, "field_normalization", "none")
+        if current == field_normalization:
             return self
         if current != "none":
             raise ValueError(
-                f"Cannot apply normalization='{normalization}' to a field already normalized as '{current}'."
+                f"Cannot apply field_normalization='{field_normalization}' to a field already normalized as '{current}'."
             )
         self.epsilon /= normalizer
-        weighted_sum = getattr(self, "field_weighted_sum", None)
-        value_mean = getattr(self, "field_value_mean", None)
-        self.convols_info["field_weighted_sum"] = None if weighted_sum is None else weighted_sum / normalizer
-        self.convols_info["field_value_mean"] = None if value_mean is None else value_mean / normalizer
-        self.convols_info["normalization"] = normalization
-        self.convols_info["normalization_sum"] = normalizer
-        self.convols_info["field_kind"] = "normalized_field"
+        self.convols_info["raw_field_weighted_sum"] = None
+        self.convols_info["field_integral"] = 1.0
+        self.convols_info["field_normalization"] = field_normalization
+        self.convols_info["field_normalization_value"] = normalizer
+        self.convols_info["catalog_recombinable"] = False
         self.format_convols_params()
         return self
 
-    def as_estimator_field(self, normalization="catalog_integral"):
+    def as_estimator_field(self, field_normalization="none"):
         """
         Return a new field in the normalization expected by correlation estimators.
 
         Estimator implementations use an internal in-place conversion on their
         own temporary leg fields to avoid an unnecessary full-array allocation.
         """
-        return self.normalized(normalization)
+        return self.normalized(field_normalization)
+
+    def _validate_catalog_operation(self, other, operation):
+        if not isinstance(other, ConvolsData):
+            raise TypeError(f"{operation} requires another ConvolsData object.")
+        self._validate_field_array_operation(other, operation)
+        for field, label in ((self, "left"), (other, "right")):
+            if getattr(field, "field_kind", None) != "catalog_field" or not bool(
+                getattr(field, "catalog_recombinable", False)
+            ):
+                raise ValueError(
+                    f"{operation} requires catalogue fields before contrast/product construction "
+                    f"or field-mean normalization; the {label} field is not recombinable."
+                )
+        required = self._REQUIRED_ARGV + ("L",)
+        mismatched = [
+            key for key in required
+            if getattr(self, key, None) != getattr(other, key, None)
+        ]
+        if mismatched:
+            raise ValueError(f"{operation} requires matching grid metadata; mismatched keys: {mismatched}.")
+        if self.convols_info.get("convolution_of", []) != other.convols_info.get("convolution_of", []):
+            raise ValueError(f"{operation} requires matching linear window histories.")
+        left_value = getattr(self, "fin", {}).get("field_value_key")
+        right_value = getattr(other, "fin", {}).get("field_value_key")
+        if left_value not in (None, "custom") and right_value not in (None, "custom") and left_value != right_value:
+            raise ValueError(f"{operation} requires fields carrying the same physical quantity.")
+
+    def _catalog_recombine(self, other, sign, operation):
+        self._validate_catalog_operation(other, operation)
+        left_sum = float(self.catalog_weight_sum)
+        right_sum = float(other.catalog_weight_sum)
+        total_sum = left_sum + sign * right_sum
+        if not np.isfinite(total_sum) or total_sum <= 0.0:
+            raise ValueError(f"{operation} requires a positive remaining catalogue_weight_sum.")
+        new = self._spawn_like()
+        new.epsilon = (left_sum * self.epsilon + sign * right_sum * other.epsilon) / total_sum
+        left_raw = getattr(self, "raw_field_weighted_sum", None)
+        right_raw = getattr(other, "raw_field_weighted_sum", None)
+        raw_total = None if left_raw is None or right_raw is None else left_raw + sign * right_raw
+        left_sq = getattr(self, "catalog_weight_sq_sum", None)
+        right_sq = getattr(other, "catalog_weight_sq_sum", None)
+        sq_total = None if left_sq is None or right_sq is None else left_sq + sign * right_sq
+        left_count = getattr(self, "particle_count", None)
+        right_count = getattr(other, "particle_count", None)
+        particle_count = (
+            None if left_count is None or right_count is None
+            else int(left_count + int(sign) * right_count)
+        )
+        new.convols_info.update({
+            "particle_count": particle_count,
+            "catalog_weight_sum": total_sum,
+            "catalog_weight_sq_sum": sq_total,
+            "raw_field_weighted_sum": raw_total,
+            "field_integral": None if raw_total is None else raw_total / total_sum,
+            "catalog_id": uuid.uuid4().hex,
+            "field_kind": "catalog_field",
+            "field_normalization": "none",
+            "field_normalization_value": None,
+            "catalog_recombinable": True,
+            "particle_data_retrievable": False,
+            "particle_projection_scale": None,
+            "catalog_operation": operation,
+        })
+        new.format_convols_params()
+        return new
+
+    def combine_catalog(self, other):
+        """Return the catalogue-normalized union of two disjoint catalogue fields."""
+        return self._catalog_recombine(other, sign=1.0, operation="combine_catalog")
+
+    def exclude_catalog(self, removed):
+        """Return the catalogue-normalized field after removing a projected subset."""
+        return self._catalog_recombine(removed, sign=-1.0, operation="exclude_catalog")
     
     def get_particle_data(self):
+        if not bool(getattr(self, "particle_data_retrievable", True)):
+            raise ValueError(
+                "This field no longer maps to one retrievable particle catalogue. "
+                "Provide particle_pos1 and particle_weight1 explicitly for particle-centred statistics."
+            )
+        projection_scale = getattr(self, "particle_projection_scale", 1.0)
         particle_data_path = getattr(self, "particle_data_path", "")
         if particle_data_path:
             with np.load(particle_data_path) as particle_data:
@@ -423,12 +527,14 @@ class ConvolsData(HermesData):
                     )
                     func_util.safe_exit(1)
                 catalog_weight = particle_data["catalog_weight"]
-                field_value = particle_data["field_value"]
+                field_value = particle_data["field_value"] * projection_scale
+                catalog_weight_sum = float(self.catalog_weight_sum)
                 return {
                     "pos": particle_data["pos"],
                     "catalog_weight": catalog_weight,
+                    "normalized_catalog_weight": catalog_weight / catalog_weight_sum,
                     "field_value": field_value,
-                    "projection_weight": catalog_weight * field_value,
+                    "projection_weight": catalog_weight * field_value / catalog_weight_sum,
                 }
 
         fin = getattr(self, "fin", {})
@@ -452,11 +558,13 @@ class ConvolsData(HermesData):
             )
         except Exception:
             func_util.safe_exit(1)
+        field_value = field_value * projection_scale
         return {
             "pos": particle_data["pos"],
             "catalog_weight": catalog_weight,
+            "normalized_catalog_weight": catalog_weight / float(self.catalog_weight_sum),
             "field_value": field_value,
-            "projection_weight": catalog_weight * field_value,
+            "projection_weight": catalog_weight * field_value / float(self.catalog_weight_sum),
         }
     
     def phi_at_pos(self, pos):
@@ -467,7 +575,7 @@ class ConvolsData(HermesData):
         Evaluate the represented field at positions.
 
         physical:
-            True  -> convert a raw weighted density field from grid to physical coordinates.
+            True  -> convert a catalogue-normalized field from grid to physical coordinates.
             False -> return the grid-coordinate value. Use this for derived fields
                      such as a dimensionless density contrast.
         """
@@ -521,9 +629,9 @@ class ConvolsData(HermesData):
             _convols_info = dataset.get('convols_info')
             if _convols_info:
                 self.convols_info.update(_convols_info)
-            if self.convols_info.get("coefficient_convention") != "raw_catalog_field_value":
+            if self.convols_info.get("coefficient_convention") != "normalized_catalog_weight_field_value":
                 raise ValueError(
-                    "This ConvolsData file does not use the split catalogue-weight/field-value convention. "
+                    "This ConvolsData file does not use the catalogue-normalized field convention. "
                     "Regenerate it with the current Convols task before loading it."
                 )
             self.format_convols_params()

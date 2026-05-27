@@ -488,8 +488,3 @@ def resolve_particle_value(particle_data, value_key, label="Particle value", log
             logger.error(message)
         raise ValueError(message)
     return np.ascontiguousarray(value, dtype=np.float32), value_key
-
-
-def resolve_particle_weight(particle_data, weight_key, logger=None):
-    """Backward-compatible reader helper for selecting one particle weight column."""
-    return resolve_particle_value(particle_data, weight_key, label="Weight", logger=logger)

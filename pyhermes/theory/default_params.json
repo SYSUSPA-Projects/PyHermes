@@ -20,7 +20,7 @@
 		"random": null,
 		"random1": "",
 		"random2": "",
-		"normalization": "catalog_integral",
+		"field_normalization": "none",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -74,7 +74,7 @@
 		"random3": "",
 		"random_pos1": null,
 		"random_weight1": null,
-		"normalization": "catalog_integral",
+		"field_normalization": "none",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -129,7 +129,7 @@
 		"random1": "",
 		"random2": "",
 		"random3": "",
-		"normalization": "catalog_integral",
+		"field_normalization": "none",
 		"window": {
 			"type": "",
 			"len_args": {},

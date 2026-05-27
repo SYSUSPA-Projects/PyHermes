@@ -123,11 +123,11 @@ Corr_2PCF
   ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
 - ``threads``:
   CPU threads per MPI rank.
-- ``normalization``:
-  estimator-field normalization. ``catalog_integral`` (default) divides each
-  leg by :math:`\sum w_g` for ordinary tracer-density statistics;
-  ``field_integral`` divides by :math:`\sum w_g x` for positive marked fields
-  such as mass; ``none`` leaves signed physical fields unnormalized.
+- ``field_normalization``:
+  additional physical-value normalization. ``none`` (default) leaves the
+  catalogue-normalized field amplitude unchanged. ``mean`` divides by
+  ``field_integral`` for positive marked fields such as mass before comparing
+  them with a unit-integral random field.
 - ``memory_strategy``:
   ``speed`` keeps all required fields resident and reuses each pair window
   across products at a sampling point. ``memory`` computes product groups in
@@ -169,9 +169,9 @@ Corr_3PCF
   random seed controlling reproducibility.
 - ``threads``:
   CPU threads per MPI rank.
-- ``normalization``:
-  same estimator-field normalization choices as ``Corr_2PCF``. With particle
-  centers, the automatically recovered center weights follow this choice.
+- ``field_normalization``:
+  same physical-value normalization choices as ``Corr_2PCF``. With particle
+  centers, automatically recovered center marks follow this choice.
 - ``fout_path``:
   output path for the 3PCF result.
 
@@ -202,8 +202,8 @@ Corr_3PCF_Multipole
   directory used for the optional intermediate cache.
 - ``verbose_m_progress``:
   whether to print detailed progress and timing information for each multipole.
-- ``normalization``:
-  same estimator-field normalization choices as ``Corr_2PCF``.
+- ``field_normalization``:
+  same physical-value normalization choices as ``Corr_2PCF``.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:

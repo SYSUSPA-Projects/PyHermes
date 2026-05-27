@@ -38,7 +38,7 @@ smoothing window, and samples the resulting field at random positions:
       threads: 8
       fout_path: "./output_new/quijote8000_snap004_counting_sph20.pkl"
 
-Omit ``window`` if you want to sample the raw field. When ``window`` is present,
+Omit ``window`` if you want to sample the unfiltered field. When ``window`` is present,
 it is a normal smoothing ``WindowFunc``, not a 2PCF pair window.
 
 Inputs and outputs
@@ -70,9 +70,10 @@ shows how smoothing radius changes the sampled distribution and how the saved
 In other words, if ``Convols`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
 
-The examples also make the role of particle weights explicit. With unit
-field values the sampled field is the halo number-density field. With mass as
-``field_value`` the sampled field is a halo mass-density field. This is the simplest version of
+The examples also make the role of per-object values explicit. With unit
+field values the sampled field is the catalogue-normalized tracer-density
+field. With mass as ``field_value`` the sampled field carries the
+catalogue-weighted mean mass amplitude. This is the simplest version of
 the broader weighted-field idea developed later in
 :doc:`../weighted_fields/weighted_fields`.
 
@@ -80,15 +81,15 @@ Example outputs
 ---------------
 
 The first diagnostic compares the one-point PDFs obtained from the same halo
-catalog under different field choices: the real-space number-density field, the
-mass-density field, and the redshift-space number-density field.
+catalog under different field choices: the real-space tracer-density field, the
+mass-valued field, and the redshift-space tracer-density field.
 
 .. figure:: ../../_static/counting/counting_density_mass_rsd_pdf.png
-   :alt: Counting PDFs for number density, mass density, and redshift-space number density
+   :alt: Counting PDFs for tracer density, a mass-valued field, and redshift-space tracer density
    :align: center
    :width: 90%
 
-   Count-in-cell PDFs for number-density, mass-density, and redshift-space
+   Count-in-cell PDFs for tracer-density, mass-valued, and redshift-space
    fields using the same spherical smoothing scale.
 
 The second diagnostic keeps the input field fixed and varies the spherical

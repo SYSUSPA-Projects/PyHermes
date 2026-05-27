@@ -401,11 +401,16 @@ class Corr_2PCF(TaskBase):
         self.task_params['memory_strategy'] = self.memory_strategy
         self.task_params['pair_window_cache'] = self.pair_window_cache
         self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
-        self.task_params['normalization'] = self.normalization
+        self.task_params['field_normalization'] = self.field_normalization
         if log_runtime:
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
+        if "normalization" in self.task_params:
+            raise TypeError(
+                "Corr_2PCF.normalization has been removed. "
+                "Use field_normalization='none' or field_normalization='mean'."
+            )
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
         self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data
@@ -416,7 +421,7 @@ class Corr_2PCF(TaskBase):
             self.random1 = self.random
         if self.random2 in (None, ""):
             self.random2 = self.random
-        self.normalization = normalize_field_normalization(self.task_params.get("normalization", "catalog_integral"))
+        self.field_normalization = normalize_field_normalization(self.task_params.get("field_normalization", "none"))
 
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
@@ -484,7 +489,7 @@ class Corr_2PCF(TaskBase):
         params['memory_strategy'] = self.memory_strategy
         params['pair_window_cache'] = self.pair_window_cache
         params['pair_window_cache_dir'] = self.pair_window_cache_dir
-        params['normalization'] = self.normalization
+        params['field_normalization'] = self.field_normalization
         params['fout_path'] = self.fout_path
         return params
 
@@ -569,6 +574,17 @@ class Corr_2PCF(TaskBase):
             needs_data = needs_data or product_needs_data
             needs_random = needs_random or product_needs_random
         return needs_data, needs_random
+
+    def _validate_uniform_random_signal(self, field):
+        if self.field_normalization == "mean":
+            return
+        integral = getattr(field, "field_integral", None)
+        if integral is None or not np.isfinite(integral) or not np.isclose(integral, 1.0):
+            raise ValueError(
+                "random='uniform' requires a unit-integral signal field. "
+                "Ordinary count fields already satisfy this; for a positive marked field "
+                "set field_normalization='mean'."
+            )
 
     # Pair-product computation.
     def calc_pair_product(self, sample, field1, field2=None, pair_window=None):
@@ -687,12 +703,8 @@ class Corr_2PCF(TaskBase):
                 )
                 func_util.safe_exit(1)
             if base_field == "uniform":
-                if self.normalization == "none":
-                    raise ValueError(
-                        "random='uniform' requires catalog_integral or field_integral normalization; "
-                        "provide an explicit random field for normalization='none'."
-                    )
                 signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+                self._validate_uniform_random_signal(signal_ref)
                 rho = 1.0 / signal_ref.V
                 if self.rank == 0:
                     setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(signal_ref.convols_info))
@@ -706,7 +718,7 @@ class Corr_2PCF(TaskBase):
         else:
             final_field = base_field.copy()
             final_field.format_convols_params()
-        final_field = final_field._normalize_for_estimator_inplace(self.normalization)
+        final_field = final_field._normalize_for_estimator_inplace(self.field_normalization)
         if self.rank == 0:
             setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(final_field.convols_info))
         window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
@@ -954,7 +966,7 @@ class Corr_2PCF(TaskBase):
                 else:
                     final_convols = base_convols.copy()
                     final_convols.format_convols_params()
-                final_convols = final_convols._normalize_for_estimator_inplace(self.normalization)
+                final_convols = final_convols._normalize_for_estimator_inplace(self.field_normalization)
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
@@ -963,14 +975,10 @@ class Corr_2PCF(TaskBase):
 
             for i, base_random, source_desc, win in resolved_random_legs:
                 if base_random == "uniform":
-                    if self.normalization == "none":
-                        raise ValueError(
-                            "random='uniform' requires catalog_integral or field_integral normalization; "
-                            "provide an explicit random field for normalization='none'."
-                        )
                     signal_ref = getattr(self, f"convols_data{i}", None)
                     if not isinstance(signal_ref, ConvolsData):
                         signal_ref, _ = self._resolve_base_convols(i, None, base_convols_cache)
+                    self._validate_uniform_random_signal(signal_ref)
                     rho = 1.0 / signal_ref.V
                     setattr(self, f"random{i}", rho)
                     self.logger.info(
@@ -983,7 +991,7 @@ class Corr_2PCF(TaskBase):
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
-                    final_random = final_random._normalize_for_estimator_inplace(self.normalization)
+                    final_random = final_random._normalize_for_estimator_inplace(self.field_normalization)
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window={window_desc}"

@@ -40,6 +40,11 @@ class Corr_3PCF_Multipole(TaskBase):
         self._fields_prepared = False
 
     def format_params(self):
+        if "normalization" in self.task_params:
+            raise TypeError(
+                "Corr_3PCF_Multipole.normalization has been removed. "
+                "Use field_normalization='none' or field_normalization='mean'."
+            )
         self.convols_data = self.task_params.get("convols_data", "")
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
@@ -51,7 +56,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.random1 = self._fallback_random(self.random1)
         self.random2 = self._fallback_random(self.random2)
         self.random3 = self._fallback_random(self.random3)
-        self.normalization = normalize_field_normalization(self.task_params.get("normalization", "catalog_integral"))
+        self.field_normalization = normalize_field_normalization(self.task_params.get("field_normalization", "none"))
 
         window = self.task_params.get("window", None)
         self.window = window if (isinstance(window, dict) and window.get("type")) else None
@@ -98,7 +103,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.products = self._normalize_products(self.products)
         self.task_params["threads"] = self.threads
         self.task_params["products"] = copy.deepcopy(self.products)
-        self.task_params["normalization"] = self.normalization
+        self.task_params["field_normalization"] = self.field_normalization
         self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
 
     def _normalize_products(self, products):
@@ -179,7 +184,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "random1": self._serialize_convols_input(self.random1),
             "random2": self._serialize_convols_input(self.random2),
             "random3": self._serialize_convols_input(self.random3),
-            "normalization": self.normalization,
+            "field_normalization": self.field_normalization,
             "window": self._serialize_window_input(self.window),
             "window1": self._serialize_window_input(self.window1),
             "window2": self._serialize_window_input(self.window2),
@@ -268,12 +273,16 @@ class Corr_3PCF_Multipole(TaskBase):
         field = reference_field._spawn_like()
         field.epsilon = np.full((reference_field.L,) * 3, rho, dtype=np.float64)
         field.convols_info.update({
-            "catalog_weight_sum": 1.0,
-            "field_weighted_sum": 1.0,
-            "field_value_mean": 1.0,
-            "normalization": self.normalization,
-            "normalization_sum": None,
-            "field_kind": "normalized_field",
+            "catalog_weight_sum": None,
+            "catalog_weight_sq_sum": None,
+            "raw_field_weighted_sum": None,
+            "field_integral": 1.0,
+            "field_normalization": "none",
+            "field_normalization_value": None,
+            "catalog_recombinable": False,
+            "particle_data_retrievable": False,
+            "particle_projection_scale": None,
+            "field_kind": "derived_field",
             "uniform_random_materialized": True,
             "uniform_random_leg": int(leg_idx),
         })
@@ -432,7 +441,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_convols = base_convols.copy()
                         final_convols.format_convols_params()
-                    final_convols = final_convols._normalize_for_estimator_inplace(self.normalization)
+                    final_convols = final_convols._normalize_for_estimator_inplace(self.field_normalization)
 
                     setattr(self, f"convols_data{i}", final_convols)
                     setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
@@ -444,10 +453,15 @@ class Corr_3PCF_Multipole(TaskBase):
             if needs_random:
                 for i, base_random, source_desc, win in random_legs:
                     if isinstance(base_random, str) and base_random == "uniform":
-                        if self.normalization == "none":
+                        signal_ref = getattr(self, f"convols_data{i}", None)
+                        if (
+                            self.field_normalization == "none"
+                            and isinstance(signal_ref, ConvolsData)
+                            and not np.isclose(getattr(signal_ref, "field_integral", np.nan), 1.0)
+                        ):
                             raise ValueError(
-                                "random='uniform' requires catalog_integral or field_integral normalization; "
-                                "provide explicit random fields for normalization='none'."
+                                "random='uniform' requires a unit-integral signal field. "
+                                "For a positive marked field set field_normalization='mean'."
                             )
                         setattr(self, f"random{i}", self.rho)
                         self.logger.info(
@@ -460,7 +474,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
-                    final_random = final_random._normalize_for_estimator_inplace(self.normalization)
+                    final_random = final_random._normalize_for_estimator_inplace(self.field_normalization)
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 

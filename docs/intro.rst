@@ -56,8 +56,8 @@ Most of the package can be read as four layers:
 This is the main organizing principle of the documentation. The ordinary
 statistics notebooks follow the classic counting, 2PCF, and 3PCF path. The
 weighted-field notebook shows what else the same field/window algebra can do:
-with different particle weights and derivative windows, PyHermes can also
-construct velocity, mass-density, and momentum-density fields and measure their
+with different physical field values and derivative windows, PyHermes can also
+construct velocity, mass-valued, and momentum-valued fields and measure their
 divergence or curl.
 
 Hermes vs. Traditional Counting

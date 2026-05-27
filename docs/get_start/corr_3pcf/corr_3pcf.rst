@@ -109,10 +109,17 @@ tracer catalog itself:
    n_{R_2}(\mathbf{x}_i)\,
    n_{R_3,\theta}(\mathbf{x}_i).
 
-Here :math:`q_i=w_{g,i}` for the default
-``normalization: catalog_integral``; for a positive marked field with
-``normalization: field_integral``, :math:`q_i=w_{g,i}x_i`. A signed field
-should not generally be used as a particle-center normalization.
+Here :math:`q_i=\bar w_{g,i}x_i`, where
+:math:`\bar w_{g,i}=w_{g,i}/\sum_j w_{g,j}`. For ordinary tracer density
+:math:`x_i=1`. For a positive marked field,
+``field_normalization: mean`` additionally divides the marks by their
+catalogue-weighted mean. A signed field should not generally be used as a
+particle-center normalization.
+Scalar field operations preserve these center marks, so ``2 * D`` uses
+twice the original mark when it supplies particle centers. A field returned
+by ``combine_catalog()`` or ``exclude_catalog()`` has no single recoverable
+particle list; pass ``particle_pos1`` and ``particle_weight1`` explicitly
+when using it with ``center: "particle"``.
 
 In box-random-center mode the centers are Monte Carlo positions in the periodic
 volume, so all three legs are evaluated as fields:

@@ -83,12 +83,14 @@ optional fields; ``pos`` and ``size`` are always retained.
       catalog_weight_key: null
       field_value_key: "vel_x"
 
-The projected coefficient field always uses the product
-:math:`w_g x`. Keeping these two inputs separate lets PyHermes retain both the
-catalogue normalization :math:`\sum_i w_{g,i}` and the physical-field integral
-:math:`\sum_i w_{g,i}x_i`. For example, use ``field_value_key: "mass"`` for a
-mass-density field and ``field_value_key: "vel_x"`` for a signed
-velocity-weighted field; neither changes the survey/completeness weight.
+The projected coefficient field uses
+:math:`(w_g/\sum_i w_{g,i})x`. Keeping these two inputs separate means that
+an arbitrary global rescaling of the catalogue weight does not change the
+field, while PyHermes still retains ``catalog_weight_sum``,
+``catalog_weight_sq_sum``, ``raw_field_weighted_sum`` and
+``field_integral``. For example, use ``field_value_key: "mass"`` for a
+mass-valued field and ``field_value_key: "vel_x"`` for a signed
+velocity-weighted field; neither changes the survey/completeness measure.
 
 Task outputs
 ------------

@@ -38,7 +38,7 @@ def corr3pcf_params(**updates):
     params = {
         "r12": R12,
         "r13": R13,
-        "normalization": "field_integral",
+        "field_normalization": "none",
         "angle_param": "theta",
         "theta": THETA.tolist(),
         "base_seed": BASE_SEED,
@@ -55,8 +55,8 @@ rank = comm.Get_rank()
 if rank == 0:
     data = ConvolsData(data_path=DATA_PATH)
     random = ConvolsData(data_path=RANDOM_PATH)
-    data_stat = data.to_unit_weight()
-    random_stat = random.to_unit_weight()
+    data_stat = data
+    random_stat = random
 else:
     data = None
     random = None

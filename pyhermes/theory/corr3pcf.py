@@ -137,11 +137,16 @@ class Corr_3PCF(TaskBase):
         self.task_params["products"] = copy.deepcopy(self.products)
         self.task_params["particle_weight1"] = self.particle_weight1
         self.task_params["random_weight1"] = self.random_weight1
-        self.task_params["normalization"] = self.normalization
+        self.task_params["field_normalization"] = self.field_normalization
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
 
     def format_params(self):
         """Read user-facing task parameters into runtime attributes."""
+        if "normalization" in self.task_params:
+            raise TypeError(
+                "Corr_3PCF.normalization has been removed. "
+                "Use field_normalization='none' or field_normalization='mean'."
+            )
         self.convols_data = self.task_params.get("convols_data", "")
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
@@ -160,7 +165,7 @@ class Corr_3PCF(TaskBase):
             self.random3 = self.random
         self.random_pos1 = self.task_params.get("random_pos1", None)
         self.random_weight1 = self.task_params.get("random_weight1", None)
-        self.normalization = normalize_field_normalization(self.task_params.get("normalization", "catalog_integral"))
+        self.field_normalization = normalize_field_normalization(self.task_params.get("field_normalization", "none"))
 
         window = self.task_params.get("window", None)
         self.window = window if (window and (window.get("type") or window.get("func"))) else None
@@ -377,7 +382,7 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.random_weight1)
             params["random_weight1"] = {"kind": "random_weight1", "shape": tuple(arr.shape)}
-        params["normalization"] = self.normalization
+        params["field_normalization"] = self.field_normalization
         params["window"] = self._serialize_window_input(self.window)
         params["window1"] = self._serialize_window_input(self.window1)
         params["window2"] = self._serialize_window_input(self.window2)
@@ -517,6 +522,17 @@ class Corr_3PCF(TaskBase):
             raise ValueError(f"{label} must have a positive sum.")
         return arr
 
+    def _center_projection_weight(self, field, particle_data):
+        weight = np.asarray(particle_data["projection_weight"], dtype=np.float64)
+        if self.field_normalization == "mean":
+            normalizer = getattr(field, "field_normalization_value", None)
+            if normalizer is None:
+                normalizer = getattr(field, "field_integral", None)
+            if normalizer is None or not np.isfinite(normalizer) or np.isclose(normalizer, 0.0):
+                raise ValueError("Cannot normalize particle-center field without a non-zero field_integral.")
+            weight = weight / normalizer
+        return weight
+
     def _resolve_pos1_array(self, provided_pos, provided_weight, fallback_field, label, explicit_name):
         """Resolve leg-1 center coordinates from explicit arrays or from a ConvolsData source."""
         pos_arr = self._normalize_particle_data(provided_pos)
@@ -530,10 +546,8 @@ class Corr_3PCF(TaskBase):
             pos_arr = self._normalize_particle_data(particle_data["pos"])
             if provided_weight is not None:
                 raw_weight = provided_weight
-            elif self.normalization == "catalog_integral":
-                raw_weight = particle_data["catalog_weight"]
             else:
-                raw_weight = particle_data["projection_weight"]
+                raw_weight = self._center_projection_weight(fallback_field, particle_data)
             weight_arr = self._normalize_particle_weight(raw_weight, pos_arr.shape[0], label=f"{label} particle weight")
             return pos_arr, weight_arr, f"from {label}.get_particle_data()"
         except Exception:
@@ -958,7 +972,7 @@ class Corr_3PCF(TaskBase):
             else:
                 final_convols = base_convols.copy()
                 final_convols.format_convols_params()
-            final_convols = final_convols._normalize_for_estimator_inplace(self.normalization)
+            final_convols = final_convols._normalize_for_estimator_inplace(self.field_normalization)
             setattr(self, f"convols_data{i}", final_convols)
             setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
             self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
@@ -987,11 +1001,6 @@ class Corr_3PCF(TaskBase):
                 setattr(self, "random1", rho)
                 continue
             if base_random == "uniform":
-                if self.normalization == "none":
-                    raise ValueError(
-                        "random='uniform' requires catalog_integral or field_integral normalization; "
-                        "provide explicit random fields for normalization='none'."
-                    )
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"convols_data{i}", None),
                     *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
@@ -1003,6 +1012,14 @@ class Corr_3PCF(TaskBase):
                         f"Please provide at least one ConvolsData input field or an explicit random field."
                     )
                     func_util.safe_exit(1)
+                if self.field_normalization == "none":
+                    integral = getattr(signal_ref, "field_integral", None)
+                    if integral is None or not np.isfinite(integral) or not np.isclose(integral, 1.0):
+                        raise ValueError(
+                            "random='uniform' requires a unit-integral signal field. "
+                            "Ordinary count fields already satisfy this; for a positive marked field "
+                            "set field_normalization='mean'."
+                        )
                 rho = self._shared_density() if self.rho is not None else (1.0 / signal_ref.V)
                 setattr(self, f"random{i}", rho)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
@@ -1013,7 +1030,7 @@ class Corr_3PCF(TaskBase):
                 else:
                     final_random = base_random.copy()
                     final_random.format_convols_params()
-                final_random = final_random._normalize_for_estimator_inplace(self.normalization)
+                final_random = final_random._normalize_for_estimator_inplace(self.field_normalization)
                 setattr(self, f"random{i}", final_random)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
@@ -1296,10 +1313,7 @@ class Corr_3PCF(TaskBase):
                             func_util.safe_exit(1)
                         particle_data = self.convols_data1.get_particle_data()
                         pos_all = particle_data["pos"] * self.convols_data1.scale_factor
-                        if self.normalization == "catalog_integral":
-                            weight_all = particle_data["catalog_weight"]
-                        else:
-                            weight_all = particle_data["projection_weight"]
+                        weight_all = self._center_projection_weight(self.convols_data1, particle_data)
                     if has_random_pos1:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         weight_all_random1 = self.random_weight1

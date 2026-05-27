@@ -48,23 +48,22 @@ the algebra is visible.
 
    D = ConvolsData(data_path="./output_new/quijote8000_snap004_sfc.pkl", threads=8)
    R = ConvolsData(data_path="./output_new/random_sfc.pkl", threads=8)
-   D_stat = D.to_unit_weight()
-   R_stat = R.to_unit_weight()
-   rho = 1.0 / D_stat.V
+   rho = 1.0 / D.V
 
-   delta_from_random = D_stat - R_stat
-   delta_from_uniform = D_stat - rho
+   delta_from_random = D - R
+   delta_from_uniform = (D - rho) / rho
    mean_field = (D + R) / 2.0
 
 Supported field operations include addition, subtraction, and multiplication.
 Supported scalar operations include addition, subtraction, multiplication, and
-division. Binary field operations require compatible field metadata. ``D`` and
-``R`` above are raw weighted fields, so their arithmetic preserves amplitudes;
-``to_unit_weight()`` divides by ``field_weighted_sum`` and is used here because
-both inputs are ordinary unit-value density fields. A task estimator can
-instead choose ``normalization: catalog_integral`` (ordinary tracer density),
-``field_integral`` (positive marked density), or ``none`` (signed physical
-fields).
+division. Ordinary ``D`` and ``R`` fields already use catalogue-normalized
+weights. Scalar multiplication and division change field intensity, not
+``catalog_weight_sum``. For catalogue recombination, use the explicit
+``D.combine_catalog(other)`` and ``D.exclude_catalog(removed)`` methods rather
+than ordinary ``+`` or ``-``. A correlation task uses
+``field_normalization: mean`` only when a positive marked field should be
+reduced to unit integral; signed physical fields retain
+``field_normalization: none``.
 
 ``WindowFunc`` construction
 ---------------------------

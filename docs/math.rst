@@ -36,38 +36,64 @@ per-object value :math:`x_i` carried by the physical field,
 
 .. math::
 
-   n(\mathbf{x}) =
-   \sum_{i=1}^{N} w_{g,i}x_i\,
+   S_g=\sum_iw_{g,i},\qquad
+   \bar w_{g,i}={w_{g,i}\over S_g},\qquad
+   F_x(\mathbf{x}) =
+   \sum_{i=1}^{N} \bar w_{g,i}x_i\,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
 Here :math:`w_g` contains completeness, selection, or other catalogue
-corrections, while :math:`x=1` produces number density, :math:`x=m` produces
-mass density, and :math:`x=v_\alpha` produces a signed velocity-weighted
-field. A ``ConvolsData`` object stores this raw field and retains the two
-distinct sums
+corrections and is treated as a relative weight: multiplying all
+:math:`w_g` by one constant does not change the represented field.
+:math:`x=1` produces a unit-integral tracer-density field, :math:`x=m`
+produces a mass-valued field, and :math:`x=v_\alpha` produces a signed
+velocity-weighted field. A ``ConvolsData`` object stores this
+catalogue-normalized field while retaining the input sums
 
 .. math::
 
    S_g=\sum_i w_{g,i},
    \qquad
-   S_x=\sum_iw_{g,i}x_i.
+   S_x=\sum_iw_{g,i}x_i,
+   \qquad
+   I_x={S_x\over S_g}=\int F_x(\mathbf{x})\,d^3x.
 
 Thus changing the physical quantity does not accidentally change the catalogue
 normalization. Field algebra remains linear in :math:`x`: doubling every
 ``field_value`` is equivalent to multiplying the stored field by two.
+Ordinary ``+`` and ``-`` likewise operate on already constructed field
+intensities. Catalogue union and subset removal have a separate meaning
+because they require re-normalizing the catalogue measure:
+
+.. math::
+
+   F_{A\cup B}[x]
+   =
+   {S_A F_A[x]+S_B F_B[x]\over S_A+S_B},
+   \qquad
+   F_{A\setminus B}[x]
+   =
+   {S_A F_A[x]-S_B F_B[x]\over S_A-S_B}.
+
+PyHermes exposes these operations as ``combine_catalog()`` and
+``exclude_catalog()``; the latter supports leave-one-region-out jackknife
+fields without projecting the retained catalogue again. Linear scalar
+operations retain the corresponding particle marks, whereas a combined or
+subtracted catalogue field no longer identifies one stored center catalogue;
+particle-centred estimators then require centers and their weights explicitly.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
 
 .. math::
 
-   n_W(\mathbf{x})
+   F_{x,W}(\mathbf{x})
    =
-   (W \circ n)(\mathbf{x})
+   (W \circ F_x)(\mathbf{x})
    =
-   \int W(\mathbf{x}-\mathbf{x}') n(\mathbf{x}')\,d^3x'
+   \int W(\mathbf{x}-\mathbf{x}') F_x(\mathbf{x}')\,d^3x'
    =
-   \sum_i w_{g,i}x_i W(\mathbf{x}-\mathbf{x}_i),
+   \sum_i \bar w_{g,i}x_i W(\mathbf{x}-\mathbf{x}_i),
    \qquad
    \int W(\mathbf{x})\,d^3x = 1.
 
@@ -84,14 +110,14 @@ coefficients on a compact multiresolution basis,
 
 .. math::
 
-   n_j(\mathbf{x}) =
+   F_{x,j}(\mathbf{x}) =
    \sum_{\ell} \epsilon_{j\ell}\,\phi_{j\ell}(\mathbf{x}),
    \qquad
    \epsilon_{j\ell}
    =
-   \int n(\mathbf{x})\phi_{j\ell}(\mathbf{x})\,d^3x
+   \int F_x(\mathbf{x})\phi_{j\ell}(\mathbf{x})\,d^3x
    =
-   \sum_i w_{g,i}x_i \phi_{j\ell}(\mathbf{x}_i).
+   \sum_i \bar w_{g,i}x_i \phi_{j\ell}(\mathbf{x}_i).
 
 The scaling functions are assumed to be orthonormal under the ordinary
 :math:`L^2` inner product,
@@ -124,23 +150,24 @@ operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
 
-The stored coefficients retain both raw input sums. For ordinary tracer
-density, correlation tasks use ``catalog_integral`` and rescale each leg to
+The stored coefficients already use normalized catalogue weights. For ordinary
+tracer density, :math:`x=1` therefore gives
 
 .. math::
 
-   d(\mathbf{x}) = {n_D(\mathbf{x})\over S_{g,D}},
+   \int d(\mathbf{x})\,d^3x
+   =
+   \int r(\mathbf{x})\,d^3x=1,
    \qquad
-   r(\mathbf{x}) = {n_R(\mathbf{x})\over S_{g,R}},
-   \qquad
-   S_{g,D}=\sum_{i\in D}w_{g,i},\quad
-   S_{g,R}=\sum_{i\in R}w_{g,i}.
+   r_{\rm uniform}={1\over V}.
 
-For a positive marked-density contrast, ``field_integral`` replaces
-:math:`S_g` with :math:`S_x=\sum_iw_{g,i}x_i`. Thus an explicit random
-catalog does not need to be generated with the same total normalization as the
-data catalog. In either unit-integral estimator field, the uniform-random
-shortcut is simply :math:`r=1/V`.
+For a positive marked-density contrast, a correlation task can set
+``field_normalization: mean`` and divide the marked field by
+:math:`I_x=S_x/S_g`. Signed fields such as velocity components retain their
+amplitude with ``field_normalization: none``. An explicit random catalogue
+does not need to contain the same number of points as the data catalogue:
+each ordinary random field is already normalized by its own
+:math:`S_{g,R}`.
 
 Internally, PyHermes evaluates these expressions in dimensionless grid
 coordinates :math:`\mathbf{u}=(L/L_{\rm box})\mathbf{x}`, where
@@ -166,9 +193,9 @@ Weighted Fields And Derivatives
 -------------------------------
 
 The value :math:`x_i` is not restricted to a unit count. Choosing
-:math:`x_i=m_i` gives a mass-density field, while choosing one component of a
-mark, such as :math:`x_i=v_{x,i}` or :math:`x_i=m_i v_{x,i}`, gives one
-component of a velocity-weighted or momentum-density field without altering
+:math:`x_i=m_i` gives a mass-valued tracer field, while choosing one component
+of a mark, such as :math:`x_i=v_{x,i}` or :math:`x_i=m_i v_{x,i}`, gives one
+component of a velocity-weighted or momentum-valued field without altering
 the observational weight :math:`w_{g,i}`. Component fields
 can then be combined after evaluation. For example, the halo velocity field can
 be estimated as
@@ -181,7 +208,7 @@ be estimated as
    \qquad
    n_{v_\alpha}(\mathbf{x})
    =
-   \sum_i w_{g,i}v_{\alpha,i}\,
+   \sum_i \bar w_{g,i}v_{\alpha,i}\,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
 Field derivatives also fit into the same convolution language. With the Fourier
@@ -351,14 +378,12 @@ the Landy-Szalay estimator is
    {DD - 2DR + RR\over RR}.
 
 In the Hermes field formulation this expression has a more compact
-implementation. The stored raw fields retain :math:`S_g` and :math:`S_x`
-separately. Ordinary density statistics use
-:math:`d=D/S_g` and :math:`r=R/S_g^R`; positive marked-density statistics,
-such as a mass-weighted contrast, can instead use :math:`S_x`. These choices
-are exposed as ``normalization: catalog_integral`` and
-``normalization: field_integral``. Signed quantities such as velocity or
-momentum components normally use ``normalization: none`` because their
-near-zero signed integral is not a density normalization. For a normalized
+implementation. The stored fields are already built with normalized
+catalogue weights, so ordinary density statistics use :math:`d=D` and
+:math:`r=R` directly. Positive marked-density statistics, such as a
+mass-valued contrast, can additionally use ``field_normalization: mean`` to
+divide by :math:`I_x`; signed quantities such as velocity components usually
+retain their amplitude with ``field_normalization: none``. For an ordinary
 uniform random shortcut, :math:`r=1/V`. PyHermes then forms
 :math:`\Delta=d-r` directly at the coefficient level. The numerator is a
 single volume-averaged windowed-field product,
@@ -441,11 +466,11 @@ schematic triplet product is
    \qquad
    W_1=\sum_{i\in D_1}q_i,
    \qquad
-   q_i =
-   \begin{cases}
-   w_{g,i}, & \texttt{catalog_integral},\\
-   w_{g,i}x_i, & \texttt{field_integral}.
-   \end{cases}
+   q_i = \bar w_{g,i}x_i,
+
+with an additional division by :math:`I_x` when
+``field_normalization: mean`` is requested. For the ordinary tracer-density
+case :math:`x_i=1`, this reduces to :math:`q_i=\bar w_{g,i}`.
 
 The center positions :math:`\mathbf{x}_i` are real particles, halos, or
 galaxies. The second and third legs are windowed fields evaluated at those

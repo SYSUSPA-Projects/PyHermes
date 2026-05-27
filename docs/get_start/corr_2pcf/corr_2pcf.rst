@@ -137,17 +137,16 @@ That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
 windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
-The field formulation also makes the Landy-Szalay structure more direct. The
-saved ``ConvolsData`` inputs retain raw :math:`w_g x` amplitudes together with
-both input sums. At the estimator boundary,
-``normalization: catalog_integral`` forms
-``d = D / D.catalog_weight_sum`` for ordinary
-catalogue-density statistics. For a positive marked field such as halo mass,
-set ``normalization: field_integral`` so that the field is divided by
-``D.field_weighted_sum`` instead. Signed fields such as velocity components
-should generally use ``normalization: none`` and be interpreted as physical
-weighted-field products rather than an ordinary density contrast. With either
-unit-integral choice, an analytic uniform random shortcut is ``r = 1 / V``.
+The field formulation also makes the Landy-Szalay structure more direct.
+``ConvolsData`` already normalizes catalogue weights, so an ordinary
+unit-value field has unit integral without any estimator-side rescaling. For
+a positive marked field such as halo mass, set
+``field_normalization: mean`` so that it is divided by
+``D.field_integral`` before comparison with a unit-integral random field.
+Signed fields such as velocity components should generally use
+``field_normalization: none`` and be interpreted as physical weighted-field
+products rather than an ordinary density contrast. For an ordinary count
+field, an analytic uniform random shortcut is ``r = 1 / V``.
 PyHermes then builds ``Delta = d - r`` and evaluates the pair-window product
 
 .. math::
@@ -189,7 +188,7 @@ real-space two-point statistic.
    :align: center
    :width: 90%
 
-   Isotropic :math:`s^2\xi(s)` for the raw field, a mass-weighted field, and a
+   Isotropic :math:`s^2\xi(s)` for the tracer field, a mass-weighted field, and a
    spherically smoothed field.
 
 Changing the pair-window family changes the bin geometry used by the estimator.

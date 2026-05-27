@@ -2,11 +2,11 @@ Weighted Fields
 ===============
 
 ``weighted_fields.ipynb`` is an additional application notebook to read after
-the main counting, 2PCF, and 3PCF workflow. PyHermes accepts particle weights
-when constructing a field, so the same Hermes representation is not limited to
-the halo number-density field. With different weights it can reconstruct a
-mass-density field and even component-wise vector fields, such as velocity and
-momentum density.
+the main counting, 2PCF, and 3PCF workflow. PyHermes separates relative
+catalogue weights from per-object physical values, so the same Hermes
+representation is not limited to the tracer-density field. With different
+``field_value`` arrays it can reconstruct mass-valued and component-wise
+vector fields, such as velocity and momentum density.
 
 The most useful prerequisites are ``convols.ipynb`` and ``window.ipynb``:
 ``Convols`` explains how the weighted fields are built, and ``WindowFunc``
@@ -35,16 +35,17 @@ The notebook demonstrates how the weighted point-process view,
 
 .. math::
 
-   n_x(\mathbf{x}) =
-   \sum_i w_{g,i}x_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
+   F_x(\mathbf{x}) =
+   \sum_i {w_{g,i}\over\sum_jw_{g,j}}x_i\,
+   \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
 
 can be reused for several related fields:
 
-- ``field_value=1`` produces the halo number-density field
+- ``field_value=1`` produces the catalogue-normalized tracer-density field
 - velocity ``field_value`` components produce velocity-weighted fields, which are divided by the
-  number-density field to estimate the velocity field
-- mass and mass-times-velocity ``field_value`` arrays produce halo mass-density and
-  momentum-density fields
+  tracer-density field to estimate the velocity field
+- mass and mass-times-velocity ``field_value`` arrays produce mass-valued and
+  momentum-valued tracer fields
 
 Throughout these constructions, ``catalog_weight`` remains available for
 completeness or selection corrections. In particular, a signed velocity
@@ -108,9 +109,9 @@ then
    {n_{v_i}\,\partial_j n\over n^2}.
 
 In code the same chain rule is assembled from ordinary ``WindowFunc`` objects.
-Here ``D`` is the raw number-density field constructed with per-halo unit
-weights, not a field rescaled to unit total weight, and ``Ux`` is the
-x-velocity-weighted field built from the same catalog:
+Here ``D`` is the catalogue-normalized tracer-density field constructed with
+per-halo unit field values, and ``Ux`` is the x-velocity-weighted field built
+from the same catalogue measure:
 
 .. code-block:: python
 
@@ -175,9 +176,10 @@ requiring a regular evaluation grid for the main derivative estimate.
    PDFs of the velocity divergence and curl magnitude from the
    derivative-window method.
 
-The same derivative-window machinery applies to the momentum-density field
-built from mass-times-velocity weights. The divergence and curl are normalized
-by the mean halo mass density so their units match the velocity-gradient scale.
+The same derivative-window machinery applies to the momentum-valued field
+built from mass-times-velocity values. The divergence and curl are normalized
+by the mean mass-field amplitude so their units match the velocity-gradient
+scale.
 
 .. figure:: ../../_static/weighted_fields/weighted_fields_momentum_derivatives_pdf.png
    :alt: Scaled momentum-density divergence and curl magnitude PDFs

@@ -1,6 +1,7 @@
 import time
 import copy
 import os
+import uuid
 
 import numpy as np
 
@@ -73,6 +74,18 @@ class Convols(TaskBase):
         self._fields_prepared = False
 
     def format_params(self):
+        removed_params = []
+        if "particle_weight" in self.task_params:
+            removed_params.append("particle_weight")
+        if "weight_key" in self.task_params.get("fin", {}):
+            removed_params.append("fin.weight_key")
+        if removed_params:
+            raise TypeError(
+                "Removed Convols input parameter(s): "
+                + ", ".join(removed_params)
+                + ". Use catalog_weight/catalog_weight_key for relative catalogue weights "
+                  "and field_value/field_value_key for physical values."
+            )
         self.fin = copy.deepcopy(self.task_params['fin'])
         self.particle_pos = self.task_params['particle_pos']
         self.catalog_weight = self.task_params['catalog_weight']
@@ -90,6 +103,9 @@ class Convols(TaskBase):
 
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
+        removed_params = []
+        if "particle_weight" in self.task_params or hasattr(self, "particle_weight"):
+            removed_params.append("particle_weight")
         base_fin = copy.deepcopy(self.task_params.get('fin', {}))
         if self.fin is None:
             self.fin = base_fin
@@ -97,21 +113,19 @@ class Convols(TaskBase):
             merged_fin = base_fin
             merged_fin.update(self.fin)
             self.fin = merged_fin
+        if "weight_key" in self.fin:
+            removed_params.append("fin.weight_key")
+        if removed_params:
+            raise TypeError(
+                "Removed Convols input parameter(s): "
+                + ", ".join(removed_params)
+                + ". Use catalog_weight/catalog_weight_key for relative catalogue weights "
+                  "and field_value/field_value_key for physical values."
+            )
         if self.fin.get("url"):
             self.logger.error("Convols.fin.url is no longer supported. Download the data first and set Convols.fin.path.")
             func_util.safe_exit(1)
         self.fin.setdefault("reader_params", {})
-        if (
-            self.fin.get("weight_key") is not None
-            or self.task_params.get("particle_weight") is not None
-            or getattr(self, "particle_weight", None) is not None
-        ):
-            raise ValueError(
-                "The ambiguous Convols weight interface has been removed. Use "
-                "catalog_weight/catalog_weight_key for observational weights and "
-                "field_value/field_value_key for the measured physical quantity."
-            )
-        self.fin.pop("weight_key", None)
         self.fin.setdefault("catalog_weight_key", None)
         self.fin.setdefault("field_value_key", None)
         self.task_params = {
@@ -257,24 +271,32 @@ class Convols(TaskBase):
             self.particle_pos = p_pos
             self.catalog_weight = catalog_weight
             self.field_value = field_value
-            self.projection_weight = self.catalog_weight * self.field_value
             self.catalog_weight_sum = float(np.sum(self.catalog_weight, dtype=np.float64))
-            self.field_weighted_sum = float(np.sum(self.projection_weight, dtype=np.float64))
+            catalog_weight64 = self.catalog_weight.astype(np.float64, copy=False)
+            self.catalog_weight_sq_sum = float(np.sum(catalog_weight64 ** 2, dtype=np.float64))
             if not np.isfinite(self.catalog_weight_sum) or np.isclose(self.catalog_weight_sum, 0.0):
                 self.logger.error(
                     f"Catalogue weights must have a finite, non-zero sum, got {self.catalog_weight_sum!r}."
                 )
                 func_util.safe_exit(1)
-            if not np.isfinite(self.field_weighted_sum):
+            self.raw_field_weighted_sum = float(
+                np.sum(self.catalog_weight * self.field_value, dtype=np.float64)
+            )
+            if not np.isfinite(self.raw_field_weighted_sum):
                 self.logger.error(
                     "The product catalog_weight * field_value produced a non-finite summed field value."
                 )
                 func_util.safe_exit(1)
-            self.field_value_mean = self.field_weighted_sum / self.catalog_weight_sum
+            self.projection_weight = (
+                self.catalog_weight * self.field_value / self.catalog_weight_sum
+            ).astype(np.float32, copy=False)
+            self.field_integral = self.raw_field_weighted_sum / self.catalog_weight_sum
+            self.catalog_id = uuid.uuid4().hex
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} "
                 f"| catalog_weight_key={self.fin['catalog_weight_key']} | field_value_key={self.fin['field_value_key']} "
-                f"| catalog_weight_sum={self.catalog_weight_sum:.6e} | field_weighted_sum={self.field_weighted_sum:.6e}"
+                f"| catalog_weight_sum={self.catalog_weight_sum:.6e} "
+                f"| field_integral={self.field_integral:.6e}"
             )
             if self.save_particle_data:
                 self._save_particle_dataset()
@@ -284,8 +306,10 @@ class Convols(TaskBase):
             self.field_value = None
             self.projection_weight = None
             self.catalog_weight_sum = None
-            self.field_weighted_sum = None
-            self.field_value_mean = None
+            self.catalog_weight_sq_sum = None
+            self.raw_field_weighted_sum = None
+            self.field_integral = None
+            self.catalog_id = None
         self._fields_prepared = True
 
     def run(self, save_result=True, overwrite=False):
@@ -371,17 +395,22 @@ class Convols(TaskBase):
                     "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
                     "catalog_weight_sum": self.catalog_weight_sum,
-                    "field_weighted_sum": self.field_weighted_sum,
-                    "field_value_mean": self.field_value_mean,
+                    "catalog_weight_sq_sum": self.catalog_weight_sq_sum,
+                    "raw_field_weighted_sum": self.raw_field_weighted_sum,
+                    "field_integral": self.field_integral,
+                    "catalog_id": self.catalog_id,
                     "box_size"       : self.box_size,
                     "J"             : self.J,
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "coefficient_convention": "raw_catalog_field_value",
-                    "field_kind"     : "raw_weighted_field",
-                    "normalization": "none",
-                    "normalization_sum": None,
+                    "coefficient_convention": "normalized_catalog_weight_field_value",
+                    "field_kind"     : "catalog_field",
+                    "field_normalization": "none",
+                    "field_normalization_value": None,
+                    "catalog_recombinable": True,
+                    "particle_data_retrievable": True,
+                    "particle_projection_scale": 1.0,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "phi_resolution"      : self.phi_resolution,
