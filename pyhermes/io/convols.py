@@ -498,11 +498,6 @@ class ConvolsData(HermesData):
             _convols_info = dataset.get('convols_info')
             if _convols_info:
                 self.convols_info.update(_convols_info)
-            if self.convols_info.get("coefficient_convention") != "weighted_catalog_field_value":
-                raise ValueError(
-                    "This ConvolsData file does not use the current weighted catalogue-field convention. "
-                    "Regenerate it with the current Convols task before loading it."
-                )
             self.format_convols_params()
 
     def _save_convols(self, f_out):

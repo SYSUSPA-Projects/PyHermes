@@ -415,7 +415,6 @@ class Convols(TaskBase):
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "coefficient_convention": "weighted_catalog_field_value",
                     "field_kind"     : "catalog_field",
                     "weight_normalization": self.weight_normalization,
                     "particle_data_retrievable": True,
