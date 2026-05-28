@@ -12,9 +12,20 @@ from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_s
 
 
 def normalize_weight_normalization(weight_normalization):
-    mode = str(weight_normalization if weight_normalization is not None else "none").strip().lower()
-    if mode not in {"none", "catalog", "field"}:
-        raise ValueError("weight_normalization must be one of 'none', 'catalog', or 'field'.")
+    if weight_normalization is None:
+        raise ValueError("weight_normalization must be one of 'raw', 'catalog', or 'field'.")
+    mode = str(weight_normalization).strip().lower()
+    if mode not in {"raw", "catalog", "field"}:
+        raise ValueError("weight_normalization must be one of 'raw', 'catalog', or 'field'.")
+    return mode
+
+
+def normalize_field_value_normalization(normalization):
+    if normalization is None:
+        return None
+    mode = str(normalization).strip().lower()
+    if mode not in {"raw", "catalog", "field", "unit"}:
+        raise ValueError("normalization must be None, 'raw', 'catalog', 'field', or 'unit'.")
     return mode
 
 
@@ -310,7 +321,7 @@ class ConvolsData(HermesData):
 
     def _normalization_denominator(self, weight_normalization):
         mode = normalize_weight_normalization(weight_normalization)
-        if mode == "none":
+        if mode == "raw":
             return 1.0
         if mode == "catalog":
             value = getattr(self, "catalog_weight_sum", None)
@@ -332,7 +343,7 @@ class ConvolsData(HermesData):
         mode = normalize_weight_normalization(weight_normalization)
         if getattr(self, "field_kind", None) != "catalog_field":
             raise ValueError("weight normalization can only be switched for catalog fields.")
-        current = normalize_weight_normalization(getattr(self, "weight_normalization", "none"))
+        current = normalize_weight_normalization(getattr(self, "weight_normalization", "raw"))
         if current == mode:
             return self
         old_den = self._normalization_denominator(current)
@@ -349,7 +360,7 @@ class ConvolsData(HermesData):
         return new._switch_weight_normalization_inplace(weight_normalization)
 
     def switch_normalization(self, weight_normalization):
-        return self.switch_weight_normalization(weight_normalization)
+        return self.with_normalization(weight_normalization)
 
     def to_unit_weight(self):
         if getattr(self, "field_kind", None) == "catalog_field":
@@ -365,14 +376,25 @@ class ConvolsData(HermesData):
         new.format_convols_params()
         return new
 
-    def field_density(self, scale="grid"):
+    def with_normalization(self, normalization=None):
+        mode = normalize_field_value_normalization(normalization)
+        if mode is None:
+            return self
+        if mode == "unit":
+            return self.to_unit_weight()
+        if getattr(self, "field_kind", None) != "catalog_field":
+            raise ValueError("normalization='raw', 'catalog', or 'field' can only be applied to catalog fields.")
+        return self.switch_weight_normalization(mode)
+
+    def field_density(self, scale="grid", normalization=None):
+        field = self if normalization is None else self.with_normalization(normalization)
         scale = str(scale).strip().lower()
         if scale not in {"grid", "physical"}:
             raise ValueError("scale must be either 'grid' or 'physical'.")
-        value = getattr(self, "field_integral", None)
+        value = getattr(field, "field_integral", None)
         if value is None:
             return None
-        volume = float(self.V) if scale == "grid" else float(self.box_size) ** 3
+        volume = float(field.V) if scale == "grid" else float(field.box_size) ** 3
         return value / volume
     
     def get_particle_data(self):
@@ -385,7 +407,7 @@ class ConvolsData(HermesData):
                 "This field no longer maps to one retrievable particle catalogue. "
                 "Provide particle_pos1 and particle_weight1 explicitly for particle-centred statistics."
             )
-        denominator = self._normalization_denominator(getattr(self, "weight_normalization", "none"))
+        denominator = self._normalization_denominator(getattr(self, "weight_normalization", "raw"))
         particle_data_path = getattr(self, "particle_data_path", "")
         if particle_data_path:
             with np.load(particle_data_path) as particle_data:
@@ -439,30 +461,53 @@ class ConvolsData(HermesData):
     def phi_at_pos(self, pos):
         return scaling_stencil_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
     
-    def n_at_pos(self, pos, epsilon=None, filter=None, physical=True):
+    def field_value_at_pos(self, pos, epsilon=None, filter=None, normalization=None, value_unit="auto"):
         """
         Evaluate the represented field at positions.
 
-        physical:
-            True  -> convert a grid-coordinate field to physical coordinates.
-            False -> return the grid-coordinate value. Use this for derived fields
-                     such as a dimensionless density contrast.
+        normalization:
+            None      -> use the current ConvolsData normalization.
+            "raw"     -> use raw catalog weights; catalog fields only.
+            "catalog" -> divide by catalog_weight_sum; catalog fields only.
+            "field"   -> divide by raw_field_weighted_sum; catalog fields only.
+            "unit"    -> divide by the field integral; available for all fields.
+
+        value_unit:
+            "auto"     -> physical for catalog fields, grid for derived fields.
+            "grid"     -> return values in grid-coordinate units.
+            "physical" -> convert density-like grid values to box-coordinate units.
         """
+        if epsilon is not None and normalization is not None:
+            raise ValueError("normalization cannot be applied when an explicit epsilon array is provided.")
+
+        sample_field = self.with_normalization(normalization)
+        value_unit = str(value_unit).strip().lower()
+        if value_unit not in {"auto", "grid", "physical"}:
+            raise ValueError("value_unit must be 'auto', 'grid', or 'physical'.")
+        if value_unit == "auto":
+            value_unit = "physical" if getattr(sample_field, "field_kind", None) == "catalog_field" else "grid"
+
         if epsilon is None:
             if filter is not None:
-                epsilon = self._conv(filter).epsilon
+                epsilon = sample_field._conv(filter).epsilon
             else:
-                epsilon = self.epsilon
+                epsilon = sample_field.epsilon
 
         npos = pos.shape[0]
         nx = np.empty(npos, dtype=np.float64)
-        pos_scaled = pos * self.scale_factor
+        pos_scaled = pos * sample_field.scale_factor
         interpolate_grid_at_pos_numba(
-            nx, pos_scaled, epsilon, self.phi_array, self.L, self.phi_resolution, self.phi_support
+            nx,
+            pos_scaled,
+            epsilon,
+            sample_field.phi_array,
+            sample_field.L,
+            sample_field.phi_resolution,
+            sample_field.phi_support,
         )
 
-        if physical:
-            return nx * (self.scale_factor ** 3)
+        if value_unit == "physical":
+            return nx * (sample_field.scale_factor ** 3)
         return nx
 
     def as_array(self):

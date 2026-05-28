@@ -290,7 +290,7 @@ class Convols(TaskBase):
                     "The product catalog_weight * field_value produced a non-finite summed field value."
                 )
                 func_util.safe_exit(1)
-            if self.weight_normalization == "none":
+            if self.weight_normalization == "raw":
                 normalization_denominator = 1.0
             elif self.weight_normalization == "catalog":
                 normalization_denominator = self.catalog_weight_sum

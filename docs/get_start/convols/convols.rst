@@ -157,7 +157,7 @@ physical field value :math:`x_i`,
 
 The denominator is controlled by ``weight_normalization``. ``catalog`` uses
 :math:`Z=S_g` and is the default for ordinary catalogue statistics; ``field``
-uses :math:`Z=S_x` for positive marked fields; ``none`` keeps the raw
+uses :math:`Z=S_x` for positive marked fields; ``raw`` keeps the raw
 weighted amplitude. PyHermes stores :math:`S_g`,
 :math:`\sum_iw_{g,i}^2`, and :math:`S_x` as metadata so a catalog field can
 be switched between these three normalizations without re-projecting. For a

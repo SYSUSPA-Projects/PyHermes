@@ -206,7 +206,7 @@ class Counting(TaskBase):
             # assume positions are uniform in the simulation box [0, box_size)
             pos = random_box_positions(_local_n_tasks, _local_convols.box_size, seed=self.seed + rank)
             # --- evaluate number density at positions ---
-            _data_local = _local_convols.n_at_pos(pos).astype(np.float64, copy=False)
+            _data_local = _local_convols.field_value_at_pos(pos, value_unit="physical").astype(np.float64, copy=False)
 
             if rank == 0:
                 _data_all = np.empty(total_padded_tasks, dtype=np.float64)

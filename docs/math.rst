@@ -62,7 +62,7 @@ sums
    Z\in\{1,S_g,S_x\}.
 
 ``catalog`` uses :math:`Z=S_g` and is the default for ordinary tracer
-statistics. ``none`` uses :math:`Z=1` and keeps the raw physical amplitude.
+statistics. ``raw`` uses :math:`Z=1` and keeps the raw physical amplitude.
 ``field`` uses :math:`Z=S_x` and is only well-conditioned for positive marked
 fields. Field algebra operates on already constructed field intensities:
 ordinary arithmetic and window convolution return derived fields whose grid
@@ -155,7 +155,7 @@ therefore gives
 For a positive marked-density contrast, a correlation task can set
 ``weight_normalization: field`` and divide the marked field by :math:`S_x`.
 Signed fields such as velocity components retain their amplitude with
-``weight_normalization: none``. An explicit random catalogue
+``weight_normalization: raw``. An explicit random catalogue
 does not need to contain the same number of points as the data catalogue:
 each ordinary random field is already normalized by its own
 :math:`S_{g,R}`.
@@ -374,7 +374,7 @@ catalogue weights by default, so ordinary density statistics use :math:`d=D`
 and :math:`r=R` directly. Positive marked-density statistics, such as a
 mass-valued contrast, can additionally use ``weight_normalization: field``;
 signed quantities such as velocity components usually retain their amplitude
-with ``weight_normalization: none``. For an ordinary uniform random shortcut,
+with ``weight_normalization: raw``. For an ordinary uniform random shortcut,
 PyHermes uses the prepared field's grid density. It then forms
 :math:`\Delta=d-r` directly at the coefficient level. The numerator is a
 single volume-averaged windowed-field product,

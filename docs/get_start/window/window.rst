@@ -65,7 +65,7 @@ field: the grid values are kept, while catalogue metadata such as
 ``field_density(scale="physical")`` remain available. A correlation task uses
 ``weight_normalization: field`` only when a positive marked field should be
 reduced to unit integral; signed physical fields usually use
-``weight_normalization: none``.
+``weight_normalization: raw``.
 
 ``WindowFunc`` construction
 ---------------------------

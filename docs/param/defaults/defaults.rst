@@ -48,7 +48,7 @@ Particle input parameters
   component. If omitted, unit values are assumed.
 - ``weight_normalization``:
   projection convention for ``catalog_weight * field_value``. ``catalog`` is
-  the default and divides by the catalogue-weight sum. ``none`` keeps the raw
+  the default and divides by the catalogue-weight sum. ``raw`` keeps the raw
   weighted field. ``field`` divides by the raw weighted field sum.
 - ``save_particle_data``:
   whether to save particle positions and weights to a companion ``.npz`` file.
@@ -131,7 +131,7 @@ Corr_2PCF
   CPU threads per MPI rank.
 - ``weight_normalization``:
   input-weight convention for catalog fields. ``catalog`` (default) divides by
-  ``catalog_weight_sum``. ``none`` keeps the raw weighted amplitude.
+  ``catalog_weight_sum``. ``raw`` keeps the raw weighted amplitude.
   ``field`` divides by ``raw_field_weighted_sum`` for positive marked fields.
 - ``memory_strategy``:
   ``speed`` keeps all required fields resident and reuses each pair window

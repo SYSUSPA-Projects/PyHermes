@@ -85,7 +85,7 @@ optional fields; ``pos`` and ``size`` are always retained.
 
 The projected coefficient field uses
 :math:`w_g x / Z`, where ``weight_normalization`` chooses
-``Z = catalog_weight_sum`` (``catalog``), ``Z = 1`` (``none``), or
+``Z = catalog_weight_sum`` (``catalog``), ``Z = 1`` (``raw``), or
 ``Z = raw_field_weighted_sum`` (``field``). Keeping catalogue weights and
 physical field values separate means that the usual ``catalog`` convention is
 insensitive to an arbitrary global rescaling of the catalogue weight, while
