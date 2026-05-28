@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 from pyhermes.io import WindowFunc
-from pyhermes.io import ConvolsData, normalize_field_normalization
+from pyhermes.io import ConvolsData, normalize_weight_normalization
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
@@ -350,11 +350,14 @@ def build_pair_window_params_for_sample(sample, pair_window):
 
 
 # Pair-product kernels.
-def field_density(field):
+def field_density(field, scale="grid"):
     if isinstance(field, (float, int, np.floating)):
         return float(field)
     if isinstance(field, ConvolsData):
-        return 1.0 / field.V
+        value = field.field_density(scale=scale)
+        if value is None:
+            raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
+        return value
     raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
 
@@ -401,15 +404,15 @@ class Corr_2PCF(TaskBase):
         self.task_params['memory_strategy'] = self.memory_strategy
         self.task_params['pair_window_cache'] = self.pair_window_cache
         self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
-        self.task_params['field_normalization'] = self.field_normalization
+        self.task_params['weight_normalization'] = self.weight_normalization
         if log_runtime:
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
 
     def format_params(self):
-        if "normalization" in self.task_params:
+        if "normalization" in self.task_params or "field_normalization" in self.task_params:
             raise TypeError(
-                "Corr_2PCF.normalization has been removed. "
-                "Use field_normalization='none' or field_normalization='mean'."
+                "Corr_2PCF.normalization/field_normalization has been removed. "
+                "Use weight_normalization='none', 'catalog', or 'field'."
             )
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
@@ -421,7 +424,7 @@ class Corr_2PCF(TaskBase):
             self.random1 = self.random
         if self.random2 in (None, ""):
             self.random2 = self.random
-        self.field_normalization = normalize_field_normalization(self.task_params.get("field_normalization", "none"))
+        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
 
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
@@ -489,7 +492,7 @@ class Corr_2PCF(TaskBase):
         params['memory_strategy'] = self.memory_strategy
         params['pair_window_cache'] = self.pair_window_cache
         params['pair_window_cache_dir'] = self.pair_window_cache_dir
-        params['field_normalization'] = self.field_normalization
+        params['weight_normalization'] = self.weight_normalization
         params['fout_path'] = self.fout_path
         return params
 
@@ -576,15 +579,35 @@ class Corr_2PCF(TaskBase):
         return needs_data, needs_random
 
     def _validate_uniform_random_signal(self, field):
-        if self.field_normalization == "mean":
-            return
-        integral = getattr(field, "field_integral", None)
-        if integral is None or not np.isfinite(integral) or not np.isclose(integral, 1.0):
+        if not isinstance(field, ConvolsData) or field.field_density() is None:
             raise ValueError(
-                "random='uniform' requires a unit-integral signal field. "
-                "Ordinary count fields already satisfy this; for a positive marked field "
-                "set field_normalization='mean'."
+                "random='uniform' requires a ConvolsData field with a defined field_integral."
             )
+
+    def _remember_field_scale(self, field):
+        if isinstance(field, ConvolsData):
+            self._density_physical_scale = float(field.scale_factor) ** 3
+
+    def _pair_product_physical_scale(self):
+        return float(getattr(self, "_density_physical_scale", 1.0)) ** 2
+
+    def _scale_pair_product_results(self, product_results):
+        factor = self._pair_product_physical_scale()
+        if np.isclose(factor, 1.0):
+            return product_results
+        for product in ("dd", "dr", "rd", "delta_dd", "rr"):
+            if product in product_results and product_results[product] is not None:
+                product_results[product] = product_results[product] * factor
+        return product_results
+
+    def _field_in_task_normalization(self, field):
+        self._remember_field_scale(field)
+        if getattr(field, "field_kind", None) != "catalog_field":
+            self.logger.info(
+                "Using derived field as-is; task weight_normalization does not apply to derived fields."
+            )
+            return field.copy()
+        return field.switch_weight_normalization(self.weight_normalization)
 
     # Pair-product computation.
     def calc_pair_product(self, sample, field1, field2=None, pair_window=None):
@@ -704,13 +727,16 @@ class Corr_2PCF(TaskBase):
                 func_util.safe_exit(1)
             if base_field == "uniform":
                 signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+                signal_ref = self._field_in_task_normalization(signal_ref)
                 self._validate_uniform_random_signal(signal_ref)
-                rho = 1.0 / signal_ref.V
+                rho = field_density(signal_ref)
                 if self.rank == 0:
                     setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(signal_ref.convols_info))
                 return rho, f"{source_desc}, rho={rho:.5e}"
         else:
             raise ValueError(f"Unsupported memory leg kind: {kind}")
+
+        base_field = self._field_in_task_normalization(base_field)
 
         window_obj, window_desc = self._resolve_window(leg_idx, base_field, getattr(self, f"window{leg_idx}"))
         if window_obj is not None:
@@ -718,7 +744,6 @@ class Corr_2PCF(TaskBase):
         else:
             final_field = base_field.copy()
             final_field.format_convols_params()
-        final_field = final_field._normalize_for_estimator_inplace(self.field_normalization)
         if self.rank == 0:
             setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(final_field.convols_info))
         window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
@@ -864,6 +889,7 @@ class Corr_2PCF(TaskBase):
                 comm.Barrier()
 
             if rank == 0:
+                self._scale_pair_product_results(results)
                 populate_corr2pcf_data(
                     self.corr2pcf_data,
                     self.sampling_names,
@@ -960,13 +986,13 @@ class Corr_2PCF(TaskBase):
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
 
             for i, base_convols, source_desc, win in resolved_data_legs:
+                base_convols = self._field_in_task_normalization(base_convols)
                 window_obj, window_desc = self._resolve_window(i, base_convols, win)
                 if window_obj is not None:
                     final_convols = base_convols @ window_obj
                 else:
                     final_convols = base_convols.copy()
                     final_convols.format_convols_params()
-                final_convols = final_convols._normalize_for_estimator_inplace(self.field_normalization)
                 setattr(self, f"convols_data{i}", final_convols)
                 setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
                 self.logger.info(
@@ -978,20 +1004,21 @@ class Corr_2PCF(TaskBase):
                     signal_ref = getattr(self, f"convols_data{i}", None)
                     if not isinstance(signal_ref, ConvolsData):
                         signal_ref, _ = self._resolve_base_convols(i, None, base_convols_cache)
+                        signal_ref = self._field_in_task_normalization(signal_ref)
                     self._validate_uniform_random_signal(signal_ref)
-                    rho = 1.0 / signal_ref.V
+                    rho = field_density(signal_ref)
                     setattr(self, f"random{i}", rho)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}"
                     )
                 else:
+                    base_random = self._field_in_task_normalization(base_random)
                     window_obj, window_desc = self._resolve_window(i, base_random, win)
                     if window_obj is not None:
                         final_random = base_random @ window_obj
                     else:
                         final_random = base_random.copy()
                         final_random.format_convols_params()
-                    final_random = final_random._normalize_for_estimator_inplace(self.field_normalization)
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window={window_desc}"
@@ -1187,6 +1214,7 @@ class Corr_2PCF(TaskBase):
                     for product, gathered_values in gathered_by_product.items()
                     if product in expanded_products
                 }
+                self._scale_pair_product_results(product_results)
                 populate_corr2pcf_data(
                     self.corr2pcf_data,
                     self.sampling_names,

@@ -4,6 +4,7 @@
 		"convols_data": "",
 		"random_count": 1000000,
 		"seed": 42,
+		"weight_normalization": "catalog",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -20,7 +21,7 @@
 		"random": null,
 		"random1": "",
 		"random2": "",
-		"field_normalization": "none",
+		"weight_normalization": "catalog",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -74,7 +75,7 @@
 		"random3": "",
 		"random_pos1": null,
 		"random_weight1": null,
-		"field_normalization": "none",
+		"weight_normalization": "catalog",
 		"window": {
 			"type": "",
 			"len_args": {},
@@ -129,7 +130,7 @@
 		"random1": "",
 		"random2": "",
 		"random3": "",
-		"field_normalization": "none",
+		"weight_normalization": "catalog",
 		"window": {
 			"type": "",
 			"len_args": {},

@@ -1,11 +1,10 @@
 import time
 import copy
 import os
-import uuid
 
 import numpy as np
 
-from pyhermes.io import ConvolsData
+from pyhermes.io import ConvolsData, normalize_weight_normalization
 from pyhermes.io.readers import read_particle_data, resolve_particle_value
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
@@ -37,7 +36,7 @@ def _partition_particles_by_x_slab(p_pos, p_wei, scale_factor, J, size):
     return [
         (
             np.ascontiguousarray(pos_part),
-            np.ascontiguousarray(wei_part, dtype=np.float32),
+            np.ascontiguousarray(wei_part, dtype=np.float64),
         )
         for pos_part, wei_part in zip(pos_parts, wei_parts)
     ]
@@ -90,6 +89,7 @@ class Convols(TaskBase):
         self.particle_pos = self.task_params['particle_pos']
         self.catalog_weight = self.task_params['catalog_weight']
         self.field_value = self.task_params['field_value']
+        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
         self.box_size = self.task_params['box_size']
         self.J = self.task_params['J']
         self.L = 1 << self.J
@@ -122,6 +122,7 @@ class Convols(TaskBase):
                 + ". Use catalog_weight/catalog_weight_key for relative catalogue weights "
                   "and field_value/field_value_key for physical values."
             )
+        self.weight_normalization = normalize_weight_normalization(getattr(self, "weight_normalization", self.task_params.get("weight_normalization", "catalog")))
         if self.fin.get("url"):
             self.logger.error("Convols.fin.url is no longer supported. Download the data first and set Convols.fin.path.")
             func_util.safe_exit(1)
@@ -133,6 +134,7 @@ class Convols(TaskBase):
             'particle_pos': self.particle_pos,
             'catalog_weight': self.catalog_weight,
             'field_value': self.field_value,
+            'weight_normalization': self.weight_normalization,
             'box_size': self.box_size,
             'J': self.J,
             'wavelet_mode': self.wavelet_mode,
@@ -202,7 +204,7 @@ class Convols(TaskBase):
                 self.logger.info(
                     f"Input {name} is scalar; broadcasting to a per-particle array of length {self.particle_count}."
                 )
-                value = np.full(self.particle_count, value, dtype=np.float32)
+                value = np.full(self.particle_count, value, dtype=np.float64)
             if not isinstance(value, np.ndarray) or value.ndim != 1 or value.shape[0] != self.particle_count:
                 self.logger.error(
                     f"Wrong input of {name}! Expected a numpy array with shape (N,), "
@@ -212,7 +214,7 @@ class Convols(TaskBase):
             if not np.all(np.isfinite(value)):
                 self.logger.error(f"Wrong input of {name}! Values must all be finite.")
                 func_util.safe_exit(1)
-            factors[name] = value.astype(np.float32, copy=False)
+            factors[name] = value.astype(np.float64, copy=False)
         return p_pos, factors["catalog_weight"], factors["field_value"], source_desc
 
     def _resolve_particle_data_path(self):
@@ -235,8 +237,8 @@ class Convols(TaskBase):
         np.savez(
             particle_data_path,
             pos=np.ascontiguousarray(self.particle_pos, dtype=np.float32),
-            catalog_weight=np.ascontiguousarray(self.catalog_weight, dtype=np.float32),
-            field_value=np.ascontiguousarray(self.field_value, dtype=np.float32),
+            catalog_weight=np.ascontiguousarray(self.catalog_weight, dtype=np.float64),
+            field_value=np.ascontiguousarray(self.field_value, dtype=np.float64),
         )
         self.particle_data_path = particle_data_path
         self.logger.info(f"Saved particle positions, catalogue weights, and field values to {particle_data_path}")
@@ -273,6 +275,7 @@ class Convols(TaskBase):
             self.field_value = field_value
             self.catalog_weight_sum = float(np.sum(self.catalog_weight, dtype=np.float64))
             catalog_weight64 = self.catalog_weight.astype(np.float64, copy=False)
+            field_value64 = self.field_value.astype(np.float64, copy=False)
             self.catalog_weight_sq_sum = float(np.sum(catalog_weight64 ** 2, dtype=np.float64))
             if not np.isfinite(self.catalog_weight_sum) or np.isclose(self.catalog_weight_sum, 0.0):
                 self.logger.error(
@@ -280,22 +283,32 @@ class Convols(TaskBase):
                 )
                 func_util.safe_exit(1)
             self.raw_field_weighted_sum = float(
-                np.sum(self.catalog_weight * self.field_value, dtype=np.float64)
+                np.sum(catalog_weight64 * field_value64, dtype=np.float64)
             )
             if not np.isfinite(self.raw_field_weighted_sum):
                 self.logger.error(
                     "The product catalog_weight * field_value produced a non-finite summed field value."
                 )
                 func_util.safe_exit(1)
+            if self.weight_normalization == "none":
+                normalization_denominator = 1.0
+            elif self.weight_normalization == "catalog":
+                normalization_denominator = self.catalog_weight_sum
+            else:
+                normalization_denominator = self.raw_field_weighted_sum
+                if np.isclose(normalization_denominator, 0.0):
+                    self.logger.error(
+                        "weight_normalization='field' requires a finite, non-zero raw_field_weighted_sum."
+                    )
+                    func_util.safe_exit(1)
             self.projection_weight = (
-                self.catalog_weight * self.field_value / self.catalog_weight_sum
-            ).astype(np.float32, copy=False)
-            self.field_integral = self.raw_field_weighted_sum / self.catalog_weight_sum
-            self.catalog_id = uuid.uuid4().hex
+                catalog_weight64 * field_value64 / normalization_denominator
+            )
+            self.field_integral = self.raw_field_weighted_sum / normalization_denominator
             self.logger.info(
                 f"Input particles ready | source={source_desc} | particle_count={self.particle_count} "
                 f"| catalog_weight_key={self.fin['catalog_weight_key']} | field_value_key={self.fin['field_value_key']} "
-                f"| catalog_weight_sum={self.catalog_weight_sum:.6e} "
+                f"| weight_normalization={self.weight_normalization} | catalog_weight_sum={self.catalog_weight_sum:.6e} "
                 f"| field_integral={self.field_integral:.6e}"
             )
             if self.save_particle_data:
@@ -309,7 +322,6 @@ class Convols(TaskBase):
             self.catalog_weight_sq_sum = None
             self.raw_field_weighted_sum = None
             self.field_integral = None
-            self.catalog_id = None
         self._fields_prepared = True
 
     def run(self, save_result=True, overwrite=False):
@@ -359,7 +371,7 @@ class Convols(TaskBase):
                 shrink_list = None
                 shape_pos, n_wei = comm.recv(source=0)
                 p_pos_sub = np.empty(shape_pos, dtype=np.float32)
-                p_wei_sub = np.empty(n_wei, dtype=np.float32)
+                p_wei_sub = np.empty(n_wei, dtype=np.float64)
                 comm.Recv(p_pos_sub, source=0)
                 comm.Recv(p_wei_sub, source=0)
             if self.size > 1:
@@ -398,19 +410,15 @@ class Convols(TaskBase):
                     "catalog_weight_sq_sum": self.catalog_weight_sq_sum,
                     "raw_field_weighted_sum": self.raw_field_weighted_sum,
                     "field_integral": self.field_integral,
-                    "catalog_id": self.catalog_id,
                     "box_size"       : self.box_size,
                     "J"             : self.J,
                     "L"             : self.L,
                     "V"             : self.L ** 3,
                     "scale_factor"   : self.scale_factor,
-                    "coefficient_convention": "normalized_catalog_weight_field_value",
+                    "coefficient_convention": "weighted_catalog_field_value",
                     "field_kind"     : "catalog_field",
-                    "field_normalization": "none",
-                    "field_normalization_value": None,
-                    "catalog_recombinable": True,
+                    "weight_normalization": self.weight_normalization,
                     "particle_data_retrievable": True,
-                    "particle_projection_scale": 1.0,
                     "wavelet_mode"  : self.wavelet_mode,
                     "wavelet_level" : self.wavelet_level,
                     "phi_resolution"      : self.phi_resolution,

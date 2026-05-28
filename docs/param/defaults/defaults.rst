@@ -46,6 +46,10 @@ Particle input parameters
 - ``field_value``:
   optional in-memory per-object physical values, such as mass or one velocity
   component. If omitted, unit values are assumed.
+- ``weight_normalization``:
+  projection convention for ``catalog_weight * field_value``. ``catalog`` is
+  the default and divides by the catalogue-weight sum. ``none`` keeps the raw
+  weighted field. ``field`` divides by the raw weighted field sum.
 - ``save_particle_data``:
   whether to save particle positions and weights to a companion ``.npz`` file.
 - ``particle_data_path``:
@@ -81,6 +85,8 @@ The ``Counting`` defaults come from ``pyhermes/theory/default_params.json``.
   fallback path to the input ``ConvolsData`` file.
 - ``window``:
   optional smoothing window applied before counting.
+- ``weight_normalization``:
+  normalization applied to catalog fields before the optional counting window.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:
@@ -123,11 +129,10 @@ Corr_2PCF
   ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
 - ``threads``:
   CPU threads per MPI rank.
-- ``field_normalization``:
-  additional physical-value normalization. ``none`` (default) leaves the
-  catalogue-normalized field amplitude unchanged. ``mean`` divides by
-  ``field_integral`` for positive marked fields such as mass before comparing
-  them with a unit-integral random field.
+- ``weight_normalization``:
+  input-weight convention for catalog fields. ``catalog`` (default) divides by
+  ``catalog_weight_sum``. ``none`` keeps the raw weighted amplitude.
+  ``field`` divides by ``raw_field_weighted_sum`` for positive marked fields.
 - ``memory_strategy``:
   ``speed`` keeps all required fields resident and reuses each pair window
   across products at a sampling point. ``memory`` computes product groups in
@@ -169,9 +174,9 @@ Corr_3PCF
   random seed controlling reproducibility.
 - ``threads``:
   CPU threads per MPI rank.
-- ``field_normalization``:
-  same physical-value normalization choices as ``Corr_2PCF``. With particle
-  centers, automatically recovered center marks follow this choice.
+- ``weight_normalization``:
+  same input-weight choices as ``Corr_2PCF``. With particle centers,
+  automatically recovered center marks follow this choice.
 - ``fout_path``:
   output path for the 3PCF result.
 
@@ -202,8 +207,8 @@ Corr_3PCF_Multipole
   directory used for the optional intermediate cache.
 - ``verbose_m_progress``:
   whether to print detailed progress and timing information for each multipole.
-- ``field_normalization``:
-  same physical-value normalization choices as ``Corr_2PCF``.
+- ``weight_normalization``:
+  same input-weight choices as ``Corr_2PCF``.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:

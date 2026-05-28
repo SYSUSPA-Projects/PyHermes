@@ -48,7 +48,7 @@ the algebra is visible.
 
    D = ConvolsData(data_path="./output_new/quijote8000_snap004_sfc.pkl", threads=8)
    R = ConvolsData(data_path="./output_new/random_sfc.pkl", threads=8)
-   rho = 1.0 / D.V
+   rho = D.field_density()
 
    delta_from_random = D - R
    delta_from_uniform = (D - rho) / rho
@@ -57,13 +57,15 @@ the algebra is visible.
 Supported field operations include addition, subtraction, and multiplication.
 Supported scalar operations include addition, subtraction, multiplication, and
 division. Ordinary ``D`` and ``R`` fields already use catalogue-normalized
-weights. Scalar multiplication and division change field intensity, not
-``catalog_weight_sum``. For catalogue recombination, use the explicit
-``D.combine_catalog(other)`` and ``D.exclude_catalog(removed)`` methods rather
-than ordinary ``+`` or ``-``. A correlation task uses
-``field_normalization: mean`` only when a positive marked field should be
-reduced to unit integral; signed physical fields retain
-``field_normalization: none``.
+weights by default. Any arithmetic or window convolution returns a derived
+field: the grid values are kept, while catalogue metadata such as
+``catalog_weight_sum``, ``raw_field_weighted_sum`` and
+``weight_normalization`` are cleared. The derived field still records
+``field_integral=sum(epsilon)``, so ``field_density(scale="grid")`` and
+``field_density(scale="physical")`` remain available. A correlation task uses
+``weight_normalization: field`` only when a positive marked field should be
+reduced to unit integral; signed physical fields usually use
+``weight_normalization: none``.
 
 ``WindowFunc`` construction
 ---------------------------

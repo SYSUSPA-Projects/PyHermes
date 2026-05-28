@@ -36,12 +36,14 @@ The notebook demonstrates how the weighted point-process view,
 .. math::
 
    F_x(\mathbf{x}) =
-   \sum_i {w_{g,i}\over\sum_jw_{g,j}}x_i\,
+   \sum_i {w_{g,i}x_i\over Z}\,
    \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
 
+where ``weight_normalization`` chooses the denominator :math:`Z`,
 can be reused for several related fields:
 
-- ``field_value=1`` produces the catalogue-normalized tracer-density field
+- ``field_value=1`` with ``weight_normalization: catalog`` produces the
+  catalogue-normalized tracer-density field
 - velocity ``field_value`` components produce velocity-weighted fields, which are divided by the
   tracer-density field to estimate the velocity field
 - mass and mass-times-velocity ``field_value`` arrays produce mass-valued and
@@ -109,9 +111,9 @@ then
    {n_{v_i}\,\partial_j n\over n^2}.
 
 In code the same chain rule is assembled from ordinary ``WindowFunc`` objects.
-Here ``D`` is the catalogue-normalized tracer-density field constructed with
-per-halo unit field values, and ``Ux`` is the x-velocity-weighted field built
-from the same catalogue measure:
+Here ``D`` is the default catalogue-normalized tracer-density field
+constructed with per-halo unit field values, and ``Ux`` is the
+x-velocity-weighted field built from the same catalogue measure:
 
 .. code-block:: python
 

@@ -47,8 +47,9 @@ corrections and is treated as a relative weight: multiplying all
 :math:`w_g` by one constant does not change the represented field.
 :math:`x=1` produces a unit-integral tracer-density field, :math:`x=m`
 produces a mass-valued field, and :math:`x=v_\alpha` produces a signed
-velocity-weighted field. A ``ConvolsData`` object stores this
-catalogue-normalized field while retaining the input sums
+velocity-weighted field. A ``ConvolsData`` object stores this weighted field
+with an explicit ``weight_normalization`` convention while retaining the input
+sums
 
 .. math::
 
@@ -56,31 +57,20 @@ catalogue-normalized field while retaining the input sums
    \qquad
    S_x=\sum_iw_{g,i}x_i,
    \qquad
-   I_x={S_x\over S_g}=\int F_x(\mathbf{x})\,d^3x.
-
-Thus changing the physical quantity does not accidentally change the catalogue
-normalization. Field algebra remains linear in :math:`x`: doubling every
-``field_value`` is equivalent to multiplying the stored field by two.
-Ordinary ``+`` and ``-`` likewise operate on already constructed field
-intensities. Catalogue union and subset removal have a separate meaning
-because they require re-normalizing the catalogue measure:
-
-.. math::
-
-   F_{A\cup B}[x]
-   =
-   {S_A F_A[x]+S_B F_B[x]\over S_A+S_B},
+   I_x={S_x\over Z}=\int F_x(\mathbf{x})\,d^3x,
    \qquad
-   F_{A\setminus B}[x]
-   =
-   {S_A F_A[x]-S_B F_B[x]\over S_A-S_B}.
+   Z\in\{1,S_g,S_x\}.
 
-PyHermes exposes these operations as ``combine_catalog()`` and
-``exclude_catalog()``; the latter supports leave-one-region-out jackknife
-fields without projecting the retained catalogue again. Linear scalar
-operations retain the corresponding particle marks, whereas a combined or
-subtracted catalogue field no longer identifies one stored center catalogue;
-particle-centred estimators then require centers and their weights explicitly.
+``catalog`` uses :math:`Z=S_g` and is the default for ordinary tracer
+statistics. ``none`` uses :math:`Z=1` and keeps the raw physical amplitude.
+``field`` uses :math:`Z=S_x` and is only well-conditioned for positive marked
+fields. Field algebra operates on already constructed field intensities:
+ordinary arithmetic and window convolution return derived fields whose grid
+values are retained, while catalogue sums and particle lists are cleared.
+For these derived fields ``weight_normalization`` is ``None`` and
+``field_integral`` is the direct sum of the resulting coefficient grid.
+Particle-centred estimators therefore require explicit centers and weights
+when their input is a derived field.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
@@ -150,8 +140,9 @@ operation can be evaluated efficiently with FFTs. This is the reason downstream
 tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
 catalog.
 
-The stored coefficients already use normalized catalogue weights. For ordinary
-tracer density, :math:`x=1` therefore gives
+With the default ``catalog`` convention, the stored coefficients use
+catalogue-normalized weights. For ordinary tracer density, :math:`x=1`
+therefore gives
 
 .. math::
 
@@ -162,9 +153,9 @@ tracer density, :math:`x=1` therefore gives
    r_{\rm uniform}={1\over V}.
 
 For a positive marked-density contrast, a correlation task can set
-``field_normalization: mean`` and divide the marked field by
-:math:`I_x=S_x/S_g`. Signed fields such as velocity components retain their
-amplitude with ``field_normalization: none``. An explicit random catalogue
+``weight_normalization: field`` and divide the marked field by :math:`S_x`.
+Signed fields such as velocity components retain their amplitude with
+``weight_normalization: none``. An explicit random catalogue
 does not need to contain the same number of points as the data catalogue:
 each ordinary random field is already normalized by its own
 :math:`S_{g,R}`.
@@ -379,12 +370,12 @@ the Landy-Szalay estimator is
 
 In the Hermes field formulation this expression has a more compact
 implementation. The stored fields are already built with normalized
-catalogue weights, so ordinary density statistics use :math:`d=D` and
-:math:`r=R` directly. Positive marked-density statistics, such as a
-mass-valued contrast, can additionally use ``field_normalization: mean`` to
-divide by :math:`I_x`; signed quantities such as velocity components usually
-retain their amplitude with ``field_normalization: none``. For an ordinary
-uniform random shortcut, :math:`r=1/V`. PyHermes then forms
+catalogue weights by default, so ordinary density statistics use :math:`d=D`
+and :math:`r=R` directly. Positive marked-density statistics, such as a
+mass-valued contrast, can additionally use ``weight_normalization: field``;
+signed quantities such as velocity components usually retain their amplitude
+with ``weight_normalization: none``. For an ordinary uniform random shortcut,
+PyHermes uses the prepared field's grid density. It then forms
 :math:`\Delta=d-r` directly at the coefficient level. The numerator is a
 single volume-averaged windowed-field product,
 
@@ -422,7 +413,9 @@ repeat four separate pair-counting passes for ``DD``, ``DR``, ``RD``, and
 define the separation bin or redshift-space geometry, and evaluates the
 required product in the represented field. The symbols ``DD``, ``DR``, and
 ``RR`` therefore denote volume-averaged field products in this documentation,
-not unnormalized raw pair counts.
+not unnormalized raw pair counts. PyHermes performs the internal products in
+grid coordinates and converts stored ``DD``/``DR``/``RR``-type outputs to
+physical density units; ratios such as :math:`\xi` are unchanged.
 
 Three-Point Correlations
 ------------------------
@@ -468,9 +461,9 @@ schematic triplet product is
    \qquad
    q_i = \bar w_{g,i}x_i,
 
-with an additional division by :math:`I_x` when
-``field_normalization: mean`` is requested. For the ordinary tracer-density
-case :math:`x_i=1`, this reduces to :math:`q_i=\bar w_{g,i}`.
+with the same ``weight_normalization`` convention as the projected field. For
+the ordinary tracer-density case :math:`x_i=1` in ``catalog`` mode, this
+reduces to :math:`q_i=\bar w_{g,i}`.
 
 The center positions :math:`\mathbf{x}_i` are real particles, halos, or
 galaxies. The second and third legs are windowed fields evaluated at those
@@ -577,6 +570,9 @@ rotationally invariant multipole components, schematically
 
 For the standard shell-leg measurements, the window radii are
 :math:`R_2=r_{12}` and :math:`R_3=r_{13}`.
+As for the two-point products, PyHermes converts stored
+``DDD``-type multipoles to physical density-cubed units, while
+:math:`\zeta_\ell` is a dimensionless ratio.
 
 The implementation streams only non-negative ``m`` fields explicitly and uses
 the conjugation symmetry of spherical harmonics for the negative-``m`` terms.

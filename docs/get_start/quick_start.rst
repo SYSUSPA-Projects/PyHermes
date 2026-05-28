@@ -65,9 +65,10 @@ The quick start uses the core in-situ 2PCF identity:
    (W_{\rm shell}(R)\circ\delta_W)(\mathbf{x})
    \right\rangle.
 
-Here ``Convols`` supplies a catalogue-normalized unit-value field. For this
-ordinary-density example its integral is already one. The notebook forms
-:math:`\delta` against the uniform shortcut :math:`1/V`, smooths it into
+Here ``Convols`` supplies a unit-value field in the default
+``weight_normalization: catalog`` convention. For this ordinary-density
+example its integral is already one. The notebook forms :math:`\delta`
+against the field's uniform-density shortcut, smooths it into
 :math:`\delta_W`, and each shell convolution reads one separation bin. For
 the field-value distinction and full notation, see
 :doc:`../math`.

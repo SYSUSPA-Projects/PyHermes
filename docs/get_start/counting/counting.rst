@@ -70,11 +70,12 @@ shows how smoothing radius changes the sampled distribution and how the saved
 In other words, if ``Convols`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
 
-The examples also make the role of per-object values explicit. With unit
-field values the sampled field is the catalogue-normalized tracer-density
-field. With mass as ``field_value`` the sampled field carries the
-catalogue-weighted mean mass amplitude. This is the simplest version of
-the broader weighted-field idea developed later in
+The examples also make the role of per-object values explicit. With the
+default ``weight_normalization: catalog`` and unit field values, the sampled
+field is the catalogue-normalized tracer-density field. With mass as
+``field_value`` the sampled field carries the catalogue-weighted mean mass
+amplitude. This is the simplest version of the broader weighted-field idea
+developed later in
 :doc:`../weighted_fields/weighted_fields`.
 
 Example outputs

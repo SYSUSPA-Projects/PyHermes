@@ -16,6 +16,7 @@
 		"particle_pos": null,
 		"catalog_weight": null,
 		"field_value": null,
+		"weight_normalization": "catalog",
 		"box_size": 1000,
 		"J": 8,
 		"wavelet_mode": "db2",

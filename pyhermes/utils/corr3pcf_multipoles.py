@@ -281,7 +281,9 @@ def calc_DDD_multipole(
     total_sum_reduce_elapsed = 0.0
     total_sum_callback_elapsed = 0.0
 
-    rho = 1.0 / deltaD1.V
+    rho = deltaD1.field_density() if hasattr(deltaD1, "field_density") else None
+    if rho is None or np.isclose(rho, 0.0):
+        rho = 1.0 / deltaD1.V
     rho3 = rho ** 3
     for l_idx, l in enumerate(range(l_min, l_max + 1)):
         t_l_start = time.perf_counter()

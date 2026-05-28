@@ -138,15 +138,18 @@ windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
 The field formulation also makes the Landy-Szalay structure more direct.
-``ConvolsData`` already normalizes catalogue weights, so an ordinary
-unit-value field has unit integral without any estimator-side rescaling. For
-a positive marked field such as halo mass, set
-``field_normalization: mean`` so that it is divided by
-``D.field_integral`` before comparison with a unit-integral random field.
-Signed fields such as velocity components should generally use
-``field_normalization: none`` and be interpreted as physical weighted-field
-products rather than an ordinary density contrast. For an ordinary count
-field, an analytic uniform random shortcut is ``r = 1 / V``.
+``ConvolsData`` stores the catalogue and field-weight sums needed to switch
+catalog fields between ``weight_normalization: catalog``, ``none`` and
+``field`` before the estimator runs. ``catalog`` is the default for ordinary
+tracer statistics and gives an ordinary unit-value field unit integral.
+``field`` is useful for positive marked fields such as halo mass. Signed
+physical fields such as velocity components should generally use ``none`` and
+be interpreted as physical weighted-field products rather than an ordinary
+density contrast. For an analytic uniform random shortcut PyHermes uses the
+prepared field's ``field_density(scale="grid")`` internally. The raw
+``DD``/``DR``/``RR``-type products stored in the output are converted back to
+physical density units; dimensionless ratios such as ``xi`` are unchanged by
+this conversion.
 PyHermes then builds ``Delta = d - r`` and evaluates the pair-window product
 
 .. math::

@@ -111,15 +111,12 @@ tracer catalog itself:
 
 Here :math:`q_i=\bar w_{g,i}x_i`, where
 :math:`\bar w_{g,i}=w_{g,i}/\sum_j w_{g,j}`. For ordinary tracer density
-:math:`x_i=1`. For a positive marked field,
-``field_normalization: mean`` additionally divides the marks by their
-catalogue-weighted mean. A signed field should not generally be used as a
-particle-center normalization.
-Scalar field operations preserve these center marks, so ``2 * D`` uses
-twice the original mark when it supplies particle centers. A field returned
-by ``combine_catalog()`` or ``exclude_catalog()`` has no single recoverable
-particle list; pass ``particle_pos1`` and ``particle_weight1`` explicitly
-when using it with ``center: "particle"``.
+:math:`x_i=1`. More generally :math:`q_i=w_{g,i}x_i/Z`, with the same
+``weight_normalization`` choice used by the projected field. A signed field
+should not generally be used as a particle-center normalization. Derived
+fields produced by arithmetic or window convolution do not retain a
+recoverable particle list; pass ``particle_pos1`` and ``particle_weight1``
+explicitly when such a field is used with ``center: "particle"``.
 
 In box-random-center mode the centers are Monte Carlo positions in the periodic
 volume, so all three legs are evaluated as fields:
@@ -134,12 +131,13 @@ volume, so all three legs are evaluated as fields:
    n_{R_2}(\mathbf{y}_a)\,
    n_{R_3,\theta}(\mathbf{y}_a).
 
-The raw input fields retain their original total weights. Before constructing
-the random-normalized products, the task converts each density-like field leg
-to unit total weight; an explicit random field therefore need not have the
-same number of particles or total input weight as the data field. These
-products give the connected three-point statistic ``zeta``. The reduced
-statistic ``Q`` then divides by the hierarchical two-point denominator,
+Catalog input fields retain the sums needed to switch to the task's requested
+``weight_normalization`` before any leg windows are applied. Derived fields
+are used as given, because their catalogue normalization is no longer defined.
+The stored ``DDD``-type products are converted to physical density-cubed
+units. These products give the connected three-point statistic ``zeta`` after
+matching random normalization. The reduced statistic ``Q`` then divides by the
+hierarchical two-point denominator,
 
 .. math::
 

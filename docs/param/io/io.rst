@@ -84,13 +84,18 @@ optional fields; ``pos`` and ``size`` are always retained.
       field_value_key: "vel_x"
 
 The projected coefficient field uses
-:math:`(w_g/\sum_i w_{g,i})x`. Keeping these two inputs separate means that
-an arbitrary global rescaling of the catalogue weight does not change the
-field, while PyHermes still retains ``catalog_weight_sum``,
-``catalog_weight_sq_sum``, ``raw_field_weighted_sum`` and
-``field_integral``. For example, use ``field_value_key: "mass"`` for a
-mass-valued field and ``field_value_key: "vel_x"`` for a signed
-velocity-weighted field; neither changes the survey/completeness measure.
+:math:`w_g x / Z`, where ``weight_normalization`` chooses
+``Z = catalog_weight_sum`` (``catalog``), ``Z = 1`` (``none``), or
+``Z = raw_field_weighted_sum`` (``field``). Keeping catalogue weights and
+physical field values separate means that the usual ``catalog`` convention is
+insensitive to an arbitrary global rescaling of the catalogue weight, while
+PyHermes still retains ``catalog_weight_sum``, ``catalog_weight_sq_sum``,
+``raw_field_weighted_sum`` and ``field_integral``. For example, use
+``field_value_key: "mass"`` for a mass-valued field and
+``field_value_key: "vel_x"`` for a signed velocity-weighted field.
+After field arithmetic or window convolution the result is a derived field:
+``weight_normalization`` becomes ``None`` and ``field_integral`` is the direct
+sum of the derived ``epsilon`` grid.
 
 Task outputs
 ------------

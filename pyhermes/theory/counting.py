@@ -5,7 +5,7 @@ import copy
 
 import numpy as np
 
-from pyhermes.io import CountingData, ConvolsData, WindowFunc
+from pyhermes.io import CountingData, ConvolsData, WindowFunc, normalize_weight_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
@@ -28,6 +28,7 @@ class Counting(TaskBase):
         self.convols_data     = self.task_params.get('convols_data', '')
         self.random_count     = int(self.task_params['random_count'])
         self.seed             = int(self.task_params['seed'])
+        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
         self.threads          = int(self.task_params['threads'])
@@ -39,6 +40,7 @@ class Counting(TaskBase):
             'convols_data': self.convols_data,
             'random_count': self.random_count,
             'seed': self.seed,
+            'weight_normalization': self.weight_normalization,
             'window': self._serialize_window_input(self.window),
             'threads': self.threads,
             'fout_path': self.fout_path,
@@ -76,6 +78,7 @@ class Counting(TaskBase):
         params['convols_data'] = self._serialize_convols_input(self.convols_data)
         params['random_count'] = self.random_count
         params['seed'] = self.seed
+        params['weight_normalization'] = self.weight_normalization
         params['window'] = self._serialize_window_input(self.window)
         params['threads'] = self.threads
         params['fout_path'] = self.fout_path
@@ -138,10 +141,18 @@ class Counting(TaskBase):
                 window_obj = None
                 window_desc = "no additional window convolution"
 
+            if getattr(base_convols, "field_kind", None) == "catalog_field":
+                base_convols = base_convols.switch_weight_normalization(self.weight_normalization)
+            else:
+                self.logger.info(
+                    "Using derived field as-is; task weight_normalization does not apply to derived fields."
+                )
+                base_convols = base_convols.copy()
+
             if window_obj is not None:
                 self.convols_data = base_convols @ window_obj
             else:
-                self.convols_data = base_convols.copy()
+                self.convols_data = base_convols
                 self.convols_data.format_convols_params()
             self.window = window_obj
 

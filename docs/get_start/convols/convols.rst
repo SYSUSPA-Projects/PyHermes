@@ -53,8 +53,9 @@ Generated locally while following the notebook:
   - ``quijote8000_snap004_rsd_diag_sfc.pkl``
   - ``random_sfc.pkl``
 
-``ConvolsData`` files produced before catalogue-normalized fields were
-introduced must be regenerated with the current ``Convols`` task before use.
+``ConvolsData`` files produced before the current ``weight_normalization``
+metadata was introduced must be regenerated with the current ``Convols`` task
+before use.
 
 Minimal YAML Shape
 ------------------
@@ -149,24 +150,24 @@ physical field value :math:`x_i`,
 .. math::
 
    F_x(\mathbf{x}) =
-   \sum_i {w_{g,i}\over S_g}x_i\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
-   \qquad S_g=\sum_iw_{g,i}.
+   \sum_i {w_{g,i}x_i\over Z}\,\delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
+   \qquad
+   Z\in\left\{1,\ S_g,\ S_x\right\},
+   \quad S_g=\sum_iw_{g,i},\quad S_x=\sum_iw_{g,i}x_i.
 
-PyHermes normalizes the relative catalogue weights before projection and
-retains :math:`S_g`, :math:`\sum_iw_{g,i}^2`, and
-:math:`S_x=\sum_iw_{g,i}x_i` as metadata. For a count field
-:math:`x_i=1`, the represented field has unit integral and is unchanged if
-all catalogue weights are multiplied by one constant. For a mass-valued or
-velocity-weighted field, :math:`x_i` is mass or a velocity component while
-:math:`w_g` remains the observational weight. Field arithmetic remains
-linear: ``2 * D`` represents doubling ``field_value``.
-Ordinary ``+`` and ``-`` combine field intensity; catalogue-level operations
-are explicit. Use ``A.combine_catalog(B)`` to join two projected catalogues
-and ``A.exclude_catalog(B)`` to remove a projected subset, for example in a
-jackknife calculation. Both methods use ``catalog_weight_sum`` to
-re-normalize the resulting catalogue field. Since a recombined field no
-longer corresponds to one stored particle list, particle-centred statistics
-on such a field require explicit center positions and weights.
+The denominator is controlled by ``weight_normalization``. ``catalog`` uses
+:math:`Z=S_g` and is the default for ordinary catalogue statistics; ``field``
+uses :math:`Z=S_x` for positive marked fields; ``none`` keeps the raw
+weighted amplitude. PyHermes stores :math:`S_g`,
+:math:`\sum_iw_{g,i}^2`, and :math:`S_x` as metadata so a catalog field can
+be switched between these three normalizations without re-projecting. For a
+mass-valued or velocity-weighted field, :math:`x_i` is mass or a velocity
+component while :math:`w_g` remains the observational weight.
+Ordinary field arithmetic, scalar arithmetic, and window convolution produce
+derived fields: they keep the resulting grid values but intentionally drop
+the original catalogue metadata and particle list. Their
+``weight_normalization`` is ``None`` and their ``field_integral`` is the direct
+sum of the derived ``epsilon`` grid.
 
 ``Convols`` projects it onto scaling-function coefficients,
 
@@ -176,7 +177,7 @@ on such a field require explicit center positions and weights.
    \sum_\ell \epsilon_{j\ell}\phi_{j\ell}(\mathbf{x}),
    \qquad
    \epsilon_{j\ell} =
-   \sum_i {w_{g,i}\over S_g}x_i\phi_{j\ell}(\mathbf{x}_i).
+   \sum_i {w_{g,i}x_i\over Z}\phi_{j\ell}(\mathbf{x}_i).
 
 These coefficients are standard :math:`L^2` projection coefficients. The
 scaling functions are orthonormal under
@@ -186,13 +187,15 @@ coordinates both :math:`\phi_{j\ell}` and :math:`\epsilon_{j\ell}` carry
 :math:`V^{-1/2}` dimensions, and their product reconstructs a number-density
 field.
 
-The saved ``ConvolsData`` object stores these catalogue-normalized
-coefficients, together with ``catalog_weight_sum``,
-``catalog_weight_sq_sum``, ``raw_field_weighted_sum`` and
-``field_integral=S_x/S_g``. Ordinary tracer-density fields need no extra
-normalization. Correlation drivers accept ``field_normalization: mean`` for a
-positive marked field such as mass, while ``field_normalization: none``
-retains the amplitude of signed fields.
+The saved ``ConvolsData`` object stores these coefficients together with
+``catalog_weight_sum``, ``catalog_weight_sq_sum``,
+``raw_field_weighted_sum``, ``weight_normalization`` and ``field_integral``.
+For a catalog field ``field_integral`` is :math:`S_x/Z`; for derived fields it
+is recomputed as ``sum(epsilon)`` while ``weight_normalization`` is set to
+``None`` because catalogue-level normalization no longer applies. Correlation
+drivers also accept ``weight_normalization`` and switch catalog fields to the
+requested convention before applying any additional windows. Derived fields are
+used as given and are reported as such in the task log.
 ``Counting`` continues to sample the physical weighted field itself. The
 redshift-space cells first map
 positions along a chosen line of sight,

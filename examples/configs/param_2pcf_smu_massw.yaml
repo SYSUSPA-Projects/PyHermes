@@ -1,6 +1,6 @@
 Corr_2PCF:
    convols_data: "./output_new/quijote8000_snap004_rsd_sfc_massweight.pkl"
-   field_normalization: "mean"
+   weight_normalization: "field"
    random: "uniform"
    pair_window: "ring"
    sampling:
