@@ -350,11 +350,11 @@ def build_pair_window_params_for_sample(sample, pair_window):
 
 
 # Pair-product kernels.
-def field_density(field, scale="grid"):
+def field_mean_density(field, value_unit="grid"):
     if isinstance(field, (float, int, np.floating)):
         return float(field)
     if isinstance(field, ConvolsData):
-        value = field.field_density(scale=scale)
+        value = field.field_mean_density(value_unit=value_unit)
         if value is None:
             raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
         return value
@@ -365,7 +365,7 @@ def pair_product_with_window(field1, field2, pair_window_obj, threads):
     if field2 is None:
         field2 = field1
     if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-        return field_density(field1) * field_density(field2)
+        return field_mean_density(field1) * field_mean_density(field2)
     conv = specialized_convolution_3d(field1.epsilon, pair_window_obj.as_array(), threads=threads)
     return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
 
@@ -374,7 +374,7 @@ def compute_pair_product_at_sample(sample, convols_data1, convols_data2=None, pa
     if convols_data2 is None:
         convols_data2 = convols_data1
     if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
-        return field_density(convols_data1) * field_density(convols_data2)
+        return field_mean_density(convols_data1) * field_mean_density(convols_data2)
     pair_window_params = build_pair_window_params_for_sample(sample, pair_window)
     pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
     return pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
@@ -579,7 +579,7 @@ class Corr_2PCF(TaskBase):
         return needs_data, needs_random
 
     def _validate_uniform_random_signal(self, field):
-        if not isinstance(field, ConvolsData) or field.field_density() is None:
+        if not isinstance(field, ConvolsData) or field.field_mean_density(value_unit="grid") is None:
             raise ValueError(
                 "random='uniform' requires a ConvolsData field with a defined field_integral."
             )
@@ -617,7 +617,7 @@ class Corr_2PCF(TaskBase):
             pair_window = self.pair_window
         pair_window = normalize_pair_window_params(pair_window)
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-            return field_density(field1) * field_density(field2)
+            return field_mean_density(field1) * field_mean_density(field2)
         return compute_pair_product_at_sample(
             sample,
             field1,
@@ -664,7 +664,7 @@ class Corr_2PCF(TaskBase):
 
     def _delta_field(self, data_field, random_field):
         if isinstance(random_field, (float, int, np.floating)):
-            return data_field - field_density(random_field)
+            return data_field - field_mean_density(random_field)
         return data_field - random_field
 
     def _compute_products_for_sample(
@@ -684,7 +684,7 @@ class Corr_2PCF(TaskBase):
         def product(a, b):
             nonlocal pair_window_obj
             if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
-                return field_density(a) * field_density(b)
+                return field_mean_density(a) * field_mean_density(b)
             if pair_window_obj is None:
                 pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
             return pair_product_with_window(a, b, pair_window_obj, self.threads)
@@ -729,7 +729,7 @@ class Corr_2PCF(TaskBase):
                 signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
                 signal_ref = self._field_in_task_normalization(signal_ref)
                 self._validate_uniform_random_signal(signal_ref)
-                rho = field_density(signal_ref)
+                rho = field_mean_density(signal_ref)
                 if self.rank == 0:
                     setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(signal_ref.convols_info))
                 return rho, f"{source_desc}, rho={rho:.5e}"
@@ -793,7 +793,7 @@ class Corr_2PCF(TaskBase):
 
     def _compute_single_product_for_sample(self, sample, field1, field2):
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-            return field_density(field1) * field_density(field2)
+            return field_mean_density(field1) * field_mean_density(field2)
         reference_field = self._reference_pair_field(field1, field2)
         pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
         return pair_product_with_window(field1, field2, pair_window_obj, self.threads)
@@ -1006,7 +1006,7 @@ class Corr_2PCF(TaskBase):
                         signal_ref, _ = self._resolve_base_convols(i, None, base_convols_cache)
                         signal_ref = self._field_in_task_normalization(signal_ref)
                     self._validate_uniform_random_signal(signal_ref)
-                    rho = field_density(signal_ref)
+                    rho = field_mean_density(signal_ref)
                     setattr(self, f"random{i}", rho)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}"

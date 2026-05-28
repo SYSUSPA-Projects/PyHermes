@@ -281,7 +281,7 @@ def calc_DDD_multipole(
     total_sum_reduce_elapsed = 0.0
     total_sum_callback_elapsed = 0.0
 
-    rho = deltaD1.field_density() if hasattr(deltaD1, "field_density") else None
+    rho = deltaD1.field_mean_density(value_unit="grid") if hasattr(deltaD1, "field_mean_density") else None
     if rho is None or np.isclose(rho, 0.0):
         rho = 1.0 / deltaD1.V
     rho3 = rho ** 3

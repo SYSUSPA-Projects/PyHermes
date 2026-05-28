@@ -146,7 +146,7 @@ tracer statistics and gives an ordinary unit-value field unit integral.
 physical fields such as velocity components should generally use ``raw`` and
 be interpreted as physical weighted-field products rather than an ordinary
 density contrast. For an analytic uniform random shortcut PyHermes uses the
-prepared field's ``field_density(scale="grid")`` internally. The raw
+prepared field's ``field_mean_density(value_unit="grid")`` internally. The raw
 ``DD``/``DR``/``RR``-type products stored in the output are converted back to
 physical density units; dimensionless ratios such as ``xi`` are unchanged by
 this conversion.

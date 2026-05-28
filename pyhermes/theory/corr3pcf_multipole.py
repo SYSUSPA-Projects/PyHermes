@@ -257,11 +257,11 @@ class Corr_3PCF_Multipole(TaskBase):
             func_util.safe_exit(1)
         return None, "no additional window convolution"
 
-    def _field_density(self, field):
+    def _field_mean_density(self, field):
         if isinstance(field, (float, int, np.floating)):
             return float(field)
         if isinstance(field, ConvolsData):
-            value = field.field_density()
+            value = field.field_mean_density(value_unit="grid")
             if value is None:
                 raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
             return value
@@ -455,7 +455,7 @@ class Corr_3PCF_Multipole(TaskBase):
             shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
             self.reference_convols = compatibility_fields[0]._spawn_like()
             self.reference_convols.format_convols_params()
-            self.rho = self._field_density(self._field_in_task_normalization(compatibility_fields[0]))
+            self.rho = self._field_mean_density(self._field_in_task_normalization(compatibility_fields[0]))
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
             self.logger.info(f"Shared density | rho={self.rho:.6g}")
@@ -820,7 +820,7 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _delta_field(self, data_field, random_field):
         if self._is_uniform_random(random_field):
-            return data_field - self._field_density(random_field)
+            return data_field - self._field_mean_density(random_field)
         return data_field - random_field
 
     def _prepare_product_fields(self, product_name):

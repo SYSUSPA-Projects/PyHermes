@@ -48,7 +48,7 @@ the algebra is visible.
 
    D = ConvolsData(data_path="./output_new/quijote8000_snap004_sfc.pkl", threads=8)
    R = ConvolsData(data_path="./output_new/random_sfc.pkl", threads=8)
-   rho = D.field_density()
+   rho = D.field_mean_density(value_unit="grid")
 
    delta_from_random = D - R
    delta_from_uniform = (D - rho) / rho
@@ -61,8 +61,8 @@ weights by default. Any arithmetic or window convolution returns a derived
 field: the grid values are kept, while catalogue metadata such as
 ``catalog_weight_sum``, ``raw_field_weighted_sum`` and
 ``weight_normalization`` are cleared. The derived field still records
-``field_integral=sum(epsilon)``, so ``field_density(scale="grid")`` and
-``field_density(scale="physical")`` remain available. A correlation task uses
+``field_integral=sum(epsilon)``, so ``field_mean_density(value_unit="grid")`` and
+``field_mean_density(value_unit="physical")`` remain available. A correlation task uses
 ``weight_normalization: field`` only when a positive marked field should be
 reduced to unit integral; signed physical fields usually use
 ``weight_normalization: raw``.

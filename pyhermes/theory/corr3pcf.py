@@ -469,12 +469,12 @@ class Corr_3PCF(TaskBase):
             func_util.safe_exit(1)
         return None, "no additional window convolution"
 
-    def _field_density(self, field):
+    def _field_mean_density(self, field):
         """Extract the uniform-density representation used by shortcut branches."""
         if isinstance(field, (float, int, np.floating)):
             return float(field)
         if isinstance(field, ConvolsData):
-            value = field.field_density()
+            value = field.field_mean_density(value_unit="grid")
             if value is None:
                 raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
             return value
@@ -513,7 +513,7 @@ class Corr_3PCF(TaskBase):
     def _compute_delta_field(self, field, random_field):
         """Build one contrast field D-R, using a scalar-density shortcut when possible."""
         if isinstance(random_field, (float, int, np.floating)):
-            return field - self._field_density(random_field)
+            return field - self._field_mean_density(random_field)
         return field - random_field
 
     def _shared_density(self):
@@ -701,7 +701,7 @@ class Corr_3PCF(TaskBase):
     def calc_pair_product(self, radius, field1, field2):
         """Compute a pair product, using density shortcuts whenever one leg is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
-            return self._field_density(field1) * self._field_density(field2)
+            return self._field_mean_density(field1) * self._field_mean_density(field2)
         return compute_pair_product_at_sample({"s": radius}, field1, field2)
 
     def _compute_rrr_value(
@@ -711,17 +711,17 @@ class Corr_3PCF(TaskBase):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
         n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
         if n_uniform >= 2:
-            return self._field_density(random1) * self._field_density(random2) * self._field_density(random3)
+            return self._field_mean_density(random1) * self._field_mean_density(random2) * self._field_mean_density(random3)
         if isinstance(random1, (float, int, np.floating)):
             if rr23_cache is None:
                 rr23_cache = self.calc_pair_product(r23_value, random2, random3)
-            return self._field_density(random1) * rr23_cache
+            return self._field_mean_density(random1) * rr23_cache
         if isinstance(random2, (float, int, np.floating)):
             rr13 = self.calc_pair_product(self.r13, random1, random3)
-            return self._field_density(random2) * rr13
+            return self._field_mean_density(random2) * rr13
         if isinstance(random3, (float, int, np.floating)):
             rr12 = self.calc_pair_product(self.r12, random1, random2)
-            return self._field_density(random3) * rr12
+            return self._field_mean_density(random3) * rr12
         return estimate_triplet_product_with_sampled_centers(
             self.r12_scaled,
             self.r13_scaled,
@@ -737,7 +737,7 @@ class Corr_3PCF(TaskBase):
             seed_base_rot=seed_base_rot,
             mu_index=mu_index,
             eps1=random1.epsilon,
-            rho1=self._field_density(random1),
+            rho1=self._field_mean_density(random1),
         )
 
     def _configure_particle_center_leg1(
@@ -926,7 +926,7 @@ class Corr_3PCF(TaskBase):
                     logger=self.logger,
                     label="Corr_3PCF input fields",
                 )
-                self.rho = self._field_density(self._field_in_task_normalization(compat_fields[0]))
+                self.rho = self._field_mean_density(self._field_in_task_normalization(compat_fields[0]))
                 shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
                 self.logger.info("Corr_3PCF input compatibility check passed.")
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
@@ -1033,7 +1033,7 @@ class Corr_3PCF(TaskBase):
                     )
                     func_util.safe_exit(1)
                 signal_ref = self._field_in_task_normalization(signal_ref)
-                rho = self._field_density(signal_ref)
+                rho = self._field_mean_density(signal_ref)
                 setattr(self, "random1", rho)
                 continue
             if base_random == "uniform":
@@ -1049,7 +1049,7 @@ class Corr_3PCF(TaskBase):
                     )
                     func_util.safe_exit(1)
                 signal_ref = self._field_in_task_normalization(signal_ref)
-                rho = self._field_density(signal_ref)
+                rho = self._field_mean_density(signal_ref)
                 setattr(self, f"random{i}", rho)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
             else:
@@ -1079,9 +1079,9 @@ class Corr_3PCF(TaskBase):
                 eps1=_local_convols1.epsilon,
             )
         if "delta_ddd" in local_results:
-            field1 = _local_convols1 - self._field_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
-            field2 = _local_convols2 - self._field_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-            field3 = _local_convols3 - self._field_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+            field1 = _local_convols1 - self._field_mean_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
+            field2 = _local_convols2 - self._field_mean_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
+            field3 = _local_convols3 - self._field_mean_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
             local_results["delta_ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_convols1, field2, field3,
@@ -1550,7 +1550,7 @@ class Corr_3PCF(TaskBase):
                 self.corr3pcf_data.xi23 = pair_cache.get("xi23", {}).get("xi")
 
                 if "rrr" in expanded_products and self.corr3pcf_data.rrr is None:
-                    rho1 = self._field_density(self.random1)
+                    rho1 = self._field_mean_density(self.random1)
                     if rr23_cache is not None and isinstance(self.random1, (float, int, np.floating)):
                         self.corr3pcf_data.rrr = self._scale_triplet_product_value(rho1 * rr23_cache)
                         self.logger.info("Computed rrr from pair cache and random1 density.")

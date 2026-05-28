@@ -386,15 +386,22 @@ class ConvolsData(HermesData):
             raise ValueError("normalization='raw', 'catalog', or 'field' can only be applied to catalog fields.")
         return self.switch_weight_normalization(mode)
 
-    def field_density(self, scale="grid", normalization=None):
+    def _resolve_value_unit(self, value_unit, sample_field=None):
+        field = self if sample_field is None else sample_field
+        value_unit = str(value_unit).strip().lower()
+        if value_unit not in {"auto", "grid", "physical"}:
+            raise ValueError("value_unit must be 'auto', 'grid', or 'physical'.")
+        if value_unit == "auto":
+            value_unit = "physical" if getattr(field, "field_kind", None) == "catalog_field" else "grid"
+        return value_unit
+
+    def field_mean_density(self, normalization=None, value_unit="auto"):
         field = self if normalization is None else self.with_normalization(normalization)
-        scale = str(scale).strip().lower()
-        if scale not in {"grid", "physical"}:
-            raise ValueError("scale must be either 'grid' or 'physical'.")
+        value_unit = self._resolve_value_unit(value_unit, sample_field=field)
         value = getattr(field, "field_integral", None)
         if value is None:
             return None
-        volume = float(field.V) if scale == "grid" else float(field.box_size) ** 3
+        volume = float(field.V) if value_unit == "grid" else float(field.box_size) ** 3
         return value / volume
     
     def get_particle_data(self):
@@ -461,9 +468,9 @@ class ConvolsData(HermesData):
     def phi_at_pos(self, pos):
         return scaling_stencil_at_pos_numba(pos, self.phi_array, self.scale_factor, self.phi_resolution, self.phi_support)
     
-    def field_value_at_pos(self, pos, epsilon=None, filter=None, normalization=None, value_unit="auto"):
+    def field_density_at_pos(self, pos, epsilon=None, filter=None, normalization=None, value_unit="auto"):
         """
-        Evaluate the represented field at positions.
+        Evaluate the represented field density at positions.
 
         normalization:
             None      -> use the current ConvolsData normalization.
@@ -481,11 +488,7 @@ class ConvolsData(HermesData):
             raise ValueError("normalization cannot be applied when an explicit epsilon array is provided.")
 
         sample_field = self.with_normalization(normalization)
-        value_unit = str(value_unit).strip().lower()
-        if value_unit not in {"auto", "grid", "physical"}:
-            raise ValueError("value_unit must be 'auto', 'grid', or 'physical'.")
-        if value_unit == "auto":
-            value_unit = "physical" if getattr(sample_field, "field_kind", None) == "catalog_field" else "grid"
+        value_unit = self._resolve_value_unit(value_unit, sample_field=sample_field)
 
         if epsilon is None:
             if filter is not None:
