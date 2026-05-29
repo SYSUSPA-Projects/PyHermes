@@ -6,6 +6,7 @@ examples/output/**
 examples/data/**
 !examples/data/.gitkeep
 examples/figs/**
+!examples/figs/.gitkeep
 examples/logs/*.log
 
 ## remove the python cache to avoid conflicts
