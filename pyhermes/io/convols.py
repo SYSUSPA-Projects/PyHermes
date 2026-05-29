@@ -13,10 +13,21 @@ from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_s
 
 def normalize_weight_normalization(weight_normalization):
     if weight_normalization is None:
-        raise ValueError("weight_normalization must be one of 'raw', 'catalog', or 'field'.")
+        raise ValueError("weight_normalization must be one of 'raw', 'catalog', 'field', or 'unit'.")
     mode = str(weight_normalization).strip().lower()
+    if mode == "unit":
+        return "field"
     if mode not in {"raw", "catalog", "field"}:
-        raise ValueError("weight_normalization must be one of 'raw', 'catalog', or 'field'.")
+        raise ValueError("weight_normalization must be one of 'raw', 'catalog', 'field', or 'unit'.")
+    return mode
+
+
+def normalize_task_weight_normalization(weight_normalization):
+    if weight_normalization is None:
+        raise ValueError("task weight_normalization must be one of 'raw', 'catalog', 'field', or 'unit'.")
+    mode = str(weight_normalization).strip().lower()
+    if mode not in {"raw", "catalog", "field", "unit"}:
+        raise ValueError("task weight_normalization must be one of 'raw', 'catalog', 'field', or 'unit'.")
     return mode
 
 

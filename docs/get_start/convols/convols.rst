@@ -158,7 +158,8 @@ physical field value :math:`x_i`,
 The denominator is controlled by ``weight_normalization``. ``catalog`` uses
 :math:`Z=S_g` and is the default for ordinary catalogue statistics; ``field``
 uses :math:`Z=S_x` for positive marked fields; ``raw`` keeps the raw
-weighted amplitude. PyHermes stores :math:`S_g`,
+weighted amplitude. ``unit`` is accepted as an alias for ``field`` when a
+catalog field is constructed. PyHermes stores :math:`S_g`,
 :math:`\sum_iw_{g,i}^2`, and :math:`S_x` as metadata so a catalog field can
 be switched between these three normalizations without re-projecting. For a
 mass-valued or velocity-weighted field, :math:`x_i` is mass or a velocity
@@ -195,7 +196,9 @@ is recomputed as ``sum(epsilon)`` while ``weight_normalization`` is set to
 ``None`` because catalogue-level normalization no longer applies. Correlation
 drivers also accept ``weight_normalization`` and switch catalog fields to the
 requested convention before applying any additional windows. Derived fields are
-used as given and are reported as such in the task log.
+used as given and are reported as such in the task log, except that task-level
+``weight_normalization: unit`` can still rescale either a catalog or derived
+field to unit field integral.
 ``Counting`` continues to sample the physical weighted field itself. The
 redshift-space cells first map
 positions along a chosen line of sight,

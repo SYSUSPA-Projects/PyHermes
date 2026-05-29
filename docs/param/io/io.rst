@@ -86,11 +86,13 @@ optional fields; ``pos`` and ``size`` are always retained.
 The projected coefficient field uses
 :math:`w_g x / Z`, where ``weight_normalization`` chooses
 ``Z = catalog_weight_sum`` (``catalog``), ``Z = 1`` (``raw``), or
-``Z = raw_field_weighted_sum`` (``field``). Keeping catalogue weights and
-physical field values separate means that the usual ``catalog`` convention is
-insensitive to an arbitrary global rescaling of the catalogue weight, while
-PyHermes still retains ``catalog_weight_sum``, ``catalog_weight_sq_sum``,
-``raw_field_weighted_sum`` and ``field_integral``. For example, use
+``Z = raw_field_weighted_sum`` (``field``). ``unit`` is accepted here as an
+alias for ``field`` when constructing a catalog field. Keeping catalogue
+weights and physical field values separate means that the usual ``catalog``
+convention is insensitive to an arbitrary global rescaling of the catalogue
+weight, while PyHermes still retains ``catalog_weight_sum``,
+``catalog_weight_sq_sum``, ``raw_field_weighted_sum`` and ``field_integral``.
+For example, use
 ``field_value_key: "mass"`` for a mass-valued field and
 ``field_value_key: "vel_x"`` for a signed velocity-weighted field.
 After field arithmetic or window convolution the result is a derived field:

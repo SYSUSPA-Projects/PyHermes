@@ -3,7 +3,7 @@ import pickle
 import copy
 import numpy as np
 
-from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData, normalize_weight_normalization
+from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData, normalize_task_weight_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.corr3pcf_kernels import (
     estimate_triplet_product_box_random_centers,
@@ -143,7 +143,7 @@ class Corr_3PCF(TaskBase):
             self.logger.info(
                 "Field weight normalization rule | "
                 f"task weight_normalization={self.weight_normalization} | "
-                "catalog fields are converted to the task rule; derived fields are used as-is."
+                "catalog fields are converted to the task rule; derived fields are used as-is except for task='unit'."
             )
 
     def format_params(self):
@@ -166,7 +166,7 @@ class Corr_3PCF(TaskBase):
             self.random3 = self.random
         self.random_pos1 = self.task_params.get("random_pos1", None)
         self.random_weight1 = self.task_params.get("random_weight1", None)
-        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
+        self.weight_normalization = normalize_task_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
 
         window = self.task_params.get("window", None)
         self.window = window if (window and (window.get("type") or window.get("func"))) else None
@@ -506,11 +506,18 @@ class Corr_3PCF(TaskBase):
         self._remember_field_scale(field)
         input_kind = getattr(field, "field_kind", None)
         input_norm = getattr(field, "weight_normalization", None)
+        if self.weight_normalization == "unit":
+            self.logger.info(
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "task=unit | effective=unit"
+            )
+            return field.with_normalization("unit")
         if input_kind != "catalog_field":
             self.logger.info(
                 "Field weight normalization | "
                 f"field_kind={input_kind} | input={input_norm} | "
-                "effective=as-is; task weight_normalization does not apply to derived fields."
+                "effective=as-is; task weight_normalization applies only to catalog fields unless task='unit'."
             )
             return field.copy()
         self.logger.info(
@@ -535,14 +542,14 @@ class Corr_3PCF(TaskBase):
 
     ### Center coordinate and weight handling ###
 
-    def _normalize_particle_data(self, value):
+    def _normalize_particle_data(self, value, label="particle_pos1"):
         """Normalize explicit center positions to a contiguous (N, 3) float64 array."""
         if value is None:
             return None
         arr = np.asarray(value, dtype=np.float64)
         if arr.ndim != 2 or arr.shape[1] != 3:
             raise ValueError(
-                f"particle_pos1 must be an array-like with shape (N, 3), got shape {arr.shape}."
+                f"{label} must be an array-like with shape (N, 3), got shape {arr.shape}."
             )
         return np.ascontiguousarray(arr, dtype=np.float64)
 
@@ -563,27 +570,40 @@ class Corr_3PCF(TaskBase):
         weight = np.asarray(particle_data["projection_weight"], dtype=np.float64)
         return weight
 
-    def _resolve_pos1_array(self, provided_pos, provided_weight, fallback_field, label, explicit_name):
+    def _resolve_pos1_array(
+        self, provided_pos, provided_weight, fallback_field, label, explicit_pos_name, explicit_weight_name
+    ):
         """Resolve leg-1 center coordinates from explicit arrays or from a ConvolsData source."""
-        pos_arr = self._normalize_particle_data(provided_pos)
-        if pos_arr is not None:
-            weight_arr = self._normalize_particle_weight(provided_weight, pos_arr.shape[0])
-            return pos_arr, weight_arr, f"provided {explicit_name}"
+        has_explicit_pos = provided_pos is not None
+        has_explicit_weight = provided_weight is not None
+        if has_explicit_pos != has_explicit_weight:
+            raise ValueError(
+                f"{explicit_pos_name} and {explicit_weight_name} must be provided together for center='particle'. "
+                "This avoids mixing explicit center coordinates with field-derived weights."
+            )
+        if has_explicit_pos:
+            pos_arr = self._normalize_particle_data(provided_pos, label=explicit_pos_name)
+            weight_arr = self._normalize_particle_weight(
+                provided_weight, pos_arr.shape[0], label=explicit_weight_name
+            )
+            if isinstance(fallback_field, ConvolsData):
+                self.logger.warning(
+                    f"{explicit_pos_name} and {explicit_weight_name} are provided for center='particle'; "
+                    f"{label}.get_particle_data() will not be used for center positions or weights."
+                )
+            return pos_arr, weight_arr, f"provided {explicit_pos_name}/{explicit_weight_name}"
         if fallback_field is None:
             return None, None, None
         try:
             particle_data = fallback_field.get_particle_data()
-            pos_arr = self._normalize_particle_data(particle_data["pos"])
-            if provided_weight is not None:
-                raw_weight = provided_weight
-            else:
-                raw_weight = self._center_projection_weight(fallback_field, particle_data)
+            pos_arr = self._normalize_particle_data(particle_data["pos"], label=f"{label} particle positions")
+            raw_weight = self._center_projection_weight(fallback_field, particle_data)
             weight_arr = self._normalize_particle_weight(raw_weight, pos_arr.shape[0], label=f"{label} particle weight")
             return pos_arr, weight_arr, f"from {label}.get_particle_data()"
         except Exception:
             self.logger.error(
                 f"For center='particle', {label} could not provide usable particle coordinates. "
-                f"Please provide {explicit_name} explicitly."
+                f"Please provide {explicit_pos_name} and {explicit_weight_name} explicitly."
             )
             func_util.safe_exit(1)
 
@@ -763,13 +783,13 @@ class Corr_3PCF(TaskBase):
             func_util.safe_exit(1)
         if particle_pos1_arr is not None and leg1_base is not None:
             self.logger.warning(
-                "particle_pos1 is provided for center='particle'; it will override leg-1 data centers only, "
-                "while convols_data1 will still be used as the leg-1 signal field."
+                "particle_pos1/particle_weight1 are provided for center='particle'; "
+                "convols_data1 remains available only as the leg-1 signal field for products that require it."
             )
         if random_pos1_arr is not None and random1_base is not None and "r_delta_dd" in expanded_products:
             self.logger.warning(
-                "random_pos1 is provided for center='particle'; it will override leg-1 random centers only, "
-                "while random1 will still be used as the leg-1 random field."
+                "random_pos1/random_weight1 are provided for center='particle'; "
+                "random1 remains available only as the leg-1 random field for products that require it."
             )
         if random_pos1_arr is not None and random1_base is None:
             for idx, (i, base, src, win) in enumerate(random_legs):
@@ -789,7 +809,12 @@ class Corr_3PCF(TaskBase):
 
         particle_pos1, particle_weight1, particle_pos1_source = (
             self._resolve_pos1_array(
-                particle_pos1_arr, particle_weight1_arr, leg1_center_base, "convols_data1", "particle_pos1"
+                particle_pos1_arr,
+                particle_weight1_arr,
+                leg1_center_base,
+                "convols_data1",
+                "particle_pos1",
+                "particle_weight1",
             ) if (expanded_products & {"ddd", "d_delta_dd"}) else (None, None, None)
         )
         random_pos1, random_weight1, random_pos1_source = (
@@ -799,6 +824,7 @@ class Corr_3PCF(TaskBase):
                 random1_center_base if isinstance(random1_center_base, ConvolsData) else None,
                 "random1",
                 "random_pos1",
+                "random_weight1",
             ) if "r_delta_dd" in expanded_products else (None, None, None)
         )
 
@@ -852,9 +878,9 @@ class Corr_3PCF(TaskBase):
 
         needs_data, needs_random = self._required_input_flags()
         expanded_products = set(self._expanded_products())
-        particle_pos1_arr = self._normalize_particle_data(particle_pos1)
+        particle_pos1_arr = self._normalize_particle_data(particle_pos1, label="particle_pos1")
         particle_weight1_arr = None if particle_weight1 is None else np.asarray(particle_weight1, dtype=np.float64)
-        random_pos1_arr = self._normalize_particle_data(random_pos1)
+        random_pos1_arr = self._normalize_particle_data(random_pos1, label="random_pos1")
         random_weight1_arr = None if random_weight1 is None else np.asarray(random_weight1, dtype=np.float64)
         use_particle_pos1 = self.center == "particle" and particle_pos1_arr is not None
         use_random_pos1 = self.center == "particle" and random_pos1_arr is not None

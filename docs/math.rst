@@ -64,13 +64,16 @@ sums
 ``catalog`` uses :math:`Z=S_g` and is the default for ordinary tracer
 statistics. ``raw`` uses :math:`Z=1` and keeps the raw physical amplitude.
 ``field`` uses :math:`Z=S_x` and is only well-conditioned for positive marked
-fields. Field algebra operates on already constructed field intensities:
+fields; during catalog-field construction, ``unit`` is accepted as an alias for
+``field``. Field algebra operates on already constructed field intensities:
 ordinary arithmetic and window convolution return derived fields whose grid
 values are retained, while catalogue sums and particle lists are cleared.
 For these derived fields ``weight_normalization`` is ``None`` and
-``field_integral`` is the direct sum of the resulting coefficient grid.
-Particle-centred estimators therefore require explicit centers and weights
-when their input is a derived field.
+``field_integral`` is the direct sum of the resulting coefficient grid. The
+task-level ``weight_normalization: unit`` mode is the exception: it can rescale
+either catalog or derived fields by this field integral. Particle-centred
+estimators therefore require explicit centers and weights when their input is a
+derived field.
 
 Counting in any geometric volume is written as a convolution with a normalized
 window function,
@@ -452,6 +455,7 @@ schematic triplet product is
 
    DDD_{\rm pcenter}(\theta; r_{12}, r_{13})
    =
+   \rho_1
    {1\over W_1}
    \sum_{i\in D_1} q_i\,
    \widetilde n_{2,R_2}(\mathbf{x}_i)\,
@@ -459,11 +463,16 @@ schematic triplet product is
    \qquad
    W_1=\sum_{i\in D_1}q_i,
    \qquad
-   q_i = \bar w_{g,i}x_i,
+   \rho_1={W_1\over V},
+   \qquad
+   q_i={w_{g,i}x_i\over Z},
 
 with the same ``weight_normalization`` convention as the projected field. For
 the ordinary tracer-density case :math:`x_i=1` in ``catalog`` mode, this
-reduces to :math:`q_i=\bar w_{g,i}`.
+reduces to :math:`W_1=1` and :math:`\rho_1=1/V`. If users provide
+``particle_pos1`` explicitly, they must also provide ``particle_weight1``;
+the pair is then used as given for the center leg rather than mixed with
+particle metadata recovered from ``convols_data1``.
 
 The center positions :math:`\mathbf{x}_i` are real particles, halos, or
 galaxies. The second and third legs are windowed fields evaluated at those

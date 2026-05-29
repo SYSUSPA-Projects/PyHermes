@@ -104,19 +104,23 @@ tracer catalog itself:
 
    DDD_{\rm p}(\theta; r_{12}, r_{13})
    =
+   \rho_1
    {1\over\sum_i q_i}
    \sum_i q_i\,
    n_{R_2}(\mathbf{x}_i)\,
    n_{R_3,\theta}(\mathbf{x}_i).
 
-Here :math:`q_i=\bar w_{g,i}x_i`, where
-:math:`\bar w_{g,i}=w_{g,i}/\sum_j w_{g,j}`. For ordinary tracer density
-:math:`x_i=1`. More generally :math:`q_i=w_{g,i}x_i/Z`, with the same
-``weight_normalization`` choice used by the projected field. A signed field
-should not generally be used as a particle-center normalization. Derived
-fields produced by arithmetic or window convolution do not retain a
-recoverable particle list; pass ``particle_pos1`` and ``particle_weight1``
-explicitly when such a field is used with ``center: "particle"``.
+Here :math:`q_i=w_{g,i}x_i/Z` follows the same
+``weight_normalization`` choice used by the projected field, and
+:math:`\rho_1=(\sum_i q_i)/V` supplies the center-leg mean density. For
+ordinary tracer density in ``catalog`` mode, :math:`x_i=1`,
+:math:`\sum_i q_i=1`, and :math:`\rho_1=1/V`. A signed field should not
+generally be used as a particle-center normalization. Derived fields produced
+by arithmetic or window convolution do not retain a recoverable particle list;
+pass ``particle_pos1`` and ``particle_weight1`` explicitly when such a field is
+used with ``center: "particle"``. These two explicit arrays must be provided
+together; when they are present, PyHermes uses them as given for the center leg
+instead of mixing them with particle metadata recovered from ``convols_data1``.
 
 In box-random-center mode the centers are Monte Carlo positions in the periodic
 volume, so all three legs are evaluated as fields:
@@ -133,7 +137,9 @@ volume, so all three legs are evaluated as fields:
 
 Catalog input fields retain the sums needed to switch to the task's requested
 ``weight_normalization`` before any leg windows are applied. Derived fields
-are used as given, because their catalogue normalization is no longer defined.
+are used as given, because their catalogue normalization is no longer defined,
+except that ``weight_normalization: unit`` can still rescale any field to unit
+field integral.
 The stored ``DDD``-type products are converted to physical density-cubed
 units. These products give the connected three-point statistic ``zeta`` after
 matching random normalization. The reduced statistic ``Q`` then divides by the

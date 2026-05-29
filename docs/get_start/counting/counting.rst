@@ -74,7 +74,9 @@ The examples also make the role of per-object values explicit. With the
 default ``weight_normalization: catalog`` and unit field values, the sampled
 field is the catalogue-normalized tracer-density field. With mass as
 ``field_value`` the sampled field carries the catalogue-weighted mean mass
-amplitude. This is the simplest version of the broader weighted-field idea
+amplitude. The task-level ``weight_normalization: unit`` option can also
+rescale either a catalog or derived field to unit field integral before
+sampling. This is the simplest version of the broader weighted-field idea
 developed later in
 :doc:`../weighted_fields/weighted_fields`.
 

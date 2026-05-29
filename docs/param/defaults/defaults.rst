@@ -49,7 +49,8 @@ Particle input parameters
 - ``weight_normalization``:
   projection convention for ``catalog_weight * field_value``. ``catalog`` is
   the default and divides by the catalogue-weight sum. ``raw`` keeps the raw
-  weighted field. ``field`` divides by the raw weighted field sum.
+  weighted field. ``field`` divides by the raw weighted field sum. ``unit`` is
+  accepted as a construction-time alias for ``field``.
 - ``save_particle_data``:
   whether to save particle positions and weights to a companion ``.npz`` file.
 - ``particle_data_path``:
@@ -86,7 +87,9 @@ The ``Counting`` defaults come from ``pyhermes/theory/default_params.json``.
 - ``window``:
   optional smoothing window applied before counting.
 - ``weight_normalization``:
-  normalization applied to catalog fields before the optional counting window.
+  normalization applied before the optional counting window. ``raw``,
+  ``catalog`` and ``field`` apply to catalog fields; ``unit`` rescales either
+  catalog or derived fields to unit field integral.
 - ``threads``:
   CPU threads per MPI rank.
 - ``fout_path``:
@@ -133,6 +136,7 @@ Corr_2PCF
   input-weight convention for catalog fields. ``catalog`` (default) divides by
   ``catalog_weight_sum``. ``raw`` keeps the raw weighted amplitude.
   ``field`` divides by ``raw_field_weighted_sum`` for positive marked fields.
+  ``unit`` rescales either catalog or derived fields to unit field integral.
 - ``memory_strategy``:
   ``speed`` keeps all required fields resident and reuses each pair window
   across products at a sampling point. ``memory`` computes product groups in
@@ -176,7 +180,9 @@ Corr_3PCF
   CPU threads per MPI rank.
 - ``weight_normalization``:
   same input-weight choices as ``Corr_2PCF``. With particle centers,
-  automatically recovered center marks follow this choice.
+  automatically recovered center marks follow this choice; explicitly supplied
+  ``particle_pos1`` and ``particle_weight1`` must be provided together and are
+  used as given.
 - ``fout_path``:
   output path for the 3PCF result.
 

@@ -5,7 +5,7 @@ import time
 import numpy as np
 from mpi4py import MPI
 
-from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFMultipoleData, normalize_weight_normalization
+from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFMultipoleData, normalize_task_weight_normalization
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
@@ -51,7 +51,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.random1 = self._fallback_random(self.random1)
         self.random2 = self._fallback_random(self.random2)
         self.random3 = self._fallback_random(self.random3)
-        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
+        self.weight_normalization = normalize_task_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
 
         window = self.task_params.get("window", None)
         self.window = window if (isinstance(window, dict) and window.get("type")) else None
@@ -104,7 +104,7 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.info(
                 "Field weight normalization rule | "
                 f"task weight_normalization={self.weight_normalization} | "
-                "catalog fields are converted to the task rule; derived fields are used as-is."
+                "catalog fields are converted to the task rule; derived fields are used as-is except for task='unit'."
             )
 
     def _normalize_products(self, products):
@@ -287,11 +287,18 @@ class Corr_3PCF_Multipole(TaskBase):
         self._remember_field_scale(field)
         input_kind = getattr(field, "field_kind", None)
         input_norm = getattr(field, "weight_normalization", None)
+        if self.weight_normalization == "unit":
+            self.logger.info(
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "task=unit | effective=unit"
+            )
+            return field.with_normalization("unit")
         if input_kind != "catalog_field":
             self.logger.info(
                 "Field weight normalization | "
                 f"field_kind={input_kind} | input={input_norm} | "
-                "effective=as-is; task weight_normalization does not apply to derived fields."
+                "effective=as-is; task weight_normalization applies only to catalog fields unless task='unit'."
             )
             return field.copy()
         self.logger.info(

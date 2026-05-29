@@ -66,6 +66,9 @@ field: the grid values are kept, while catalogue metadata such as
 ``weight_normalization: field`` only when a positive marked field should be
 reduced to unit integral; signed physical fields usually use
 ``weight_normalization: raw``.
+When a correlation or counting task is configured with
+``weight_normalization: unit``, PyHermes instead rescales either catalog or
+derived fields to unit field integral before the task-level windowing.
 
 ``WindowFunc`` construction
 ---------------------------

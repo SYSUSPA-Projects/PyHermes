@@ -5,7 +5,7 @@ import copy
 
 import numpy as np
 
-from pyhermes.io import CountingData, ConvolsData, WindowFunc, normalize_weight_normalization
+from pyhermes.io import CountingData, ConvolsData, WindowFunc, normalize_task_weight_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
@@ -28,7 +28,7 @@ class Counting(TaskBase):
         self.convols_data     = self.task_params.get('convols_data', '')
         self.random_count     = int(self.task_params['random_count'])
         self.seed             = int(self.task_params['seed'])
-        self.weight_normalization = normalize_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
+        self.weight_normalization = normalize_task_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
         window = self.task_params.get('window', None)
         self.window = window if (window and window.get('type')) else None
         self.threads          = int(self.task_params['threads'])
@@ -46,6 +46,30 @@ class Counting(TaskBase):
             'fout_path': self.fout_path,
         }
         self.sync_runtime_options(context="Counting runtime configuration", blank_line=True)
+
+    def _field_in_task_normalization(self, field):
+        input_kind = getattr(field, "field_kind", None)
+        input_norm = getattr(field, "weight_normalization", None)
+        if self.weight_normalization == "unit":
+            self.logger.info(
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "task=unit | effective=unit"
+            )
+            return field.with_normalization("unit")
+        if input_kind != "catalog_field":
+            self.logger.info(
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "effective=as-is; task weight_normalization applies only to catalog fields unless task='unit'."
+            )
+            return field.copy()
+        self.logger.info(
+            "Field weight normalization | "
+            f"field_kind={input_kind} | input={input_norm} | "
+            f"task={self.weight_normalization} | effective={self.weight_normalization}"
+        )
+        return field.switch_weight_normalization(self.weight_normalization)
 
     def _serialize_convols_input(self, value):
         if isinstance(value, str):
@@ -141,13 +165,7 @@ class Counting(TaskBase):
                 window_obj = None
                 window_desc = "no additional window convolution"
 
-            if getattr(base_convols, "field_kind", None) == "catalog_field":
-                base_convols = base_convols.switch_weight_normalization(self.weight_normalization)
-            else:
-                self.logger.info(
-                    "Using derived field as-is; task weight_normalization does not apply to derived fields."
-                )
-                base_convols = base_convols.copy()
+            base_convols = self._field_in_task_normalization(base_convols)
 
             if window_obj is not None:
                 self.convols_data = base_convols @ window_obj
