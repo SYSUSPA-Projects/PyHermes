@@ -1,6 +1,6 @@
 Corr_3PCF_Multipole:
-   convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
-   random: "./output_new/random_sfc.pkl"
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   random: "./output/random_sfc.pkl"
    window:
       type: "sphere"
       len_args:
@@ -12,4 +12,4 @@ Corr_3PCF_Multipole:
    execution_mode: "pair_mpi"
    threads: 4
    products: ["ddd_l", "zeta_l"]
-   fout_path: "./output_new/quijote8000_snap004_3pcf_multipole_lmax14_full.pkl"
+   fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax14_full.pkl"

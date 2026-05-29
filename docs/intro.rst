@@ -179,7 +179,7 @@ Tracked:
 Generated locally:
 
 - ``examples/data/``
-- ``examples/output_new/``
+- ``examples/output/``
 
 In practice this means:
 

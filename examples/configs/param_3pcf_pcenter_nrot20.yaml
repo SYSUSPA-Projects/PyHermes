@@ -1,5 +1,5 @@
 Corr_3PCF:
-   convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
    random: "uniform"
    window:
       type: "sphere"
@@ -16,4 +16,4 @@ Corr_3PCF:
    products: ["ddd", "Q"]
    base_seed: 42
    threads: 2
-   fout_path: "./output_new/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
+   fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"

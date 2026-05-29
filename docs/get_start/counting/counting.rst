@@ -29,14 +29,14 @@ smoothing window, and samples the resulting field at random positions:
 .. code-block:: yaml
 
    Counting:
-      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
       random_count: 10000000
       window:
          type: "sphere"
          len_args:
             R: 20
       threads: 8
-      fout_path: "./output_new/quijote8000_snap004_counting_sph20.pkl"
+      fout_path: "./output/quijote8000_snap004_counting_sph20.pkl"
 
 Omit ``window`` if you want to sample the unfiltered field. When ``window`` is present,
 it is a normal smoothing ``WindowFunc``, not a 2PCF pair window.
@@ -46,7 +46,7 @@ Inputs and outputs
 
 Inputs are produced by ``convols.ipynb`` or
 ``examples/scripts/prepare_convols_data.py`` and live locally in
-``examples/output_new/``. The main tracked files involved in this stage are:
+``examples/output/``. The main tracked files involved in this stage are:
 
 - ``examples/notebooks/counting.ipynb``
 - ``examples/scripts/run_counting.py``

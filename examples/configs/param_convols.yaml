@@ -21,4 +21,4 @@ Convols:
    threads: 2
    save_particle_data: True
    particle_data_path: "./data/quijote_halos/8000/groups_004/group_tab_004.pos.npz"
-   fout_path: "./output_new/quijote8000_snap004_sfc.pkl"
+   fout_path: "./output/quijote8000_snap004_sfc.pkl"

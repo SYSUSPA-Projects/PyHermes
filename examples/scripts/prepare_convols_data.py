@@ -24,7 +24,7 @@ import yaml
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = EXAMPLES_DIR / "data"
-OUTPUT_DIR = EXAMPLES_DIR / "output_new"
+OUTPUT_DIR = EXAMPLES_DIR / "output"
 CATALOG_DIR = DATA_DIR / "quijote_halos"
 CATALOG_REL = "./data/quijote_halos/8000"
 ARCHIVE_PATH = DATA_DIR / "quijote_halos.tar.gz"
@@ -236,7 +236,7 @@ def build_standard_field(threads: int):
 
 
 def build_j9_field(threads: int):
-    task = base_convols_task(threads, "./output_new/quijote8000_snap004_sfc_J9.pkl")
+    task = base_convols_task(threads, "./output/quijote8000_snap004_sfc_J9.pkl")
     task.fin = {
         "path": CATALOG_REL,
         "format": "fof",
@@ -247,7 +247,7 @@ def build_j9_field(threads: int):
 
 
 def build_mass_weighted_field(threads: int):
-    task = base_convols_task(threads, "./output_new/quijote8000_snap004_sfc_massweight.pkl")
+    task = base_convols_task(threads, "./output/quijote8000_snap004_sfc_massweight.pkl")
     task.fin = {
         "path": CATALOG_REL,
         "format": "fof",
@@ -270,7 +270,7 @@ def build_redshift_space_field(
     weight_suffix = "_massweight" if field_value is not None else ""
     task = base_convols_task(
         threads,
-        f"./output_new/quijote8000_snap004_{suffix}_sfc{weight_suffix}.pkl",
+        f"./output/quijote8000_snap004_{suffix}_sfc{weight_suffix}.pkl",
     )
     task.particle_pos = pos
     if field_value is not None:
@@ -288,7 +288,7 @@ def build_random_field(random_count: int, threads: int):
     random_pos = random_box_positions(count=random_count, box_size=1000, seed=42).astype(
         np.float32, copy=False
     )
-    task = base_convols_task(threads, "./output_new/random_sfc.pkl")
+    task = base_convols_task(threads, "./output/random_sfc.pkl")
     task.particle_pos = random_pos
     task.save_particle_data = True
     task.particle_data_path = "./data/random_1e7.npz"
@@ -381,7 +381,7 @@ def main() -> None:
     )
 
     print_step("Done")
-    print("Generated products are available under examples/output_new/.")
+    print("Generated products are available under examples/output/.")
 
 
 if __name__ == "__main__":

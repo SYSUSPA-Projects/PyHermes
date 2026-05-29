@@ -30,8 +30,8 @@ The examples read the field products created by ``convols.ipynb`` or
 
 .. code-block:: text
 
-   examples/output_new/quijote8000_snap004_sfc.pkl
-   examples/output_new/random_sfc.pkl
+   examples/output/quijote8000_snap004_sfc.pkl
+   examples/output/random_sfc.pkl
 
 No new production output is required. Most cells build objects in memory so that
 the algebra is visible.
@@ -46,8 +46,8 @@ the algebra is visible.
 
    from pyhermes.io import ConvolsData
 
-   D = ConvolsData(data_path="./output_new/quijote8000_snap004_sfc.pkl", threads=8)
-   R = ConvolsData(data_path="./output_new/random_sfc.pkl", threads=8)
+   D = ConvolsData(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
+   R = ConvolsData(data_path="./output/random_sfc.pkl", threads=8)
    rho = D.field_mean_density(value_unit="grid")
 
    delta_from_random = D - R

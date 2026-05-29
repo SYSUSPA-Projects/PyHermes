@@ -3,12 +3,9 @@
 **/*.bin
 examples/output/**
 !examples/output/.gitkeep
-examples/output_new/**
-!examples/output_new/.gitkeep
 examples/data/**
 !examples/data/.gitkeep
 examples/figs/**
-examples/figs_new/**
 examples/logs/*.log
 
 ## remove the python cache to avoid conflicts

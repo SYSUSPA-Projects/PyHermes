@@ -1,6 +1,6 @@
 Corr_3PCF:
-   convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
-   random: "./output_new/random_sfc.pkl"
+   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   random: "./output/random_sfc.pkl"
    window2:
       type: "sphere"
       len_args:
@@ -21,4 +21,4 @@ Corr_3PCF:
    base_seed: 42
    products: "Q"
    threads: 8
-   fout_path: "./output_new/quijote8000_snap004_3pcf_rcenter_with_random.pkl"
+   fout_path: "./output/quijote8000_snap004_3pcf_rcenter_with_random.pkl"

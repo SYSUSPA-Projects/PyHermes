@@ -38,7 +38,7 @@ triangle side lengths, angular sampling, center strategy, and products:
 .. code-block:: yaml
 
    Corr_3PCF:
-      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"
@@ -52,7 +52,7 @@ triangle side lengths, angular sampling, center strategy, and products:
       center: "particle"
       products: ["ddd", "Q"]
       threads: 2
-      fout_path: "./output_new/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
+      fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
 
 For random box centers, switch the center strategy and provide the number of
 box centers:
@@ -208,7 +208,7 @@ shape:
 .. code-block:: yaml
 
    Corr_3PCF_Multipole:
-      convols_data: "./output_new/quijote8000_snap004_sfc.pkl"
+      convols_data: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"
@@ -220,7 +220,7 @@ shape:
       execution_mode: "pair_mpi"
       products: "zeta_l"
       threads: 4
-      fout_path: "./output_new/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
+      fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
 
 Example outputs
 ---------------
