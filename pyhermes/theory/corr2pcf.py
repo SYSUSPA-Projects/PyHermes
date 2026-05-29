@@ -407,6 +407,12 @@ class Corr_2PCF(TaskBase):
         self.task_params['weight_normalization'] = self.weight_normalization
         if log_runtime:
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
+            if self.rank == 0:
+                self.logger.info(
+                    "Field weight normalization rule | "
+                    f"task weight_normalization={self.weight_normalization} | "
+                    "catalog fields are converted to the task rule; derived fields are used as-is."
+                )
 
     def format_params(self):
         if "normalization" in self.task_params or "field_normalization" in self.task_params:
@@ -602,11 +608,20 @@ class Corr_2PCF(TaskBase):
 
     def _field_in_task_normalization(self, field):
         self._remember_field_scale(field)
+        input_kind = getattr(field, "field_kind", None)
+        input_norm = getattr(field, "weight_normalization", None)
         if getattr(field, "field_kind", None) != "catalog_field":
             self.logger.info(
-                "Using derived field as-is; task weight_normalization does not apply to derived fields."
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "effective=as-is; task weight_normalization does not apply to derived fields."
             )
             return field.copy()
+        self.logger.info(
+            "Field weight normalization | "
+            f"field_kind={input_kind} | input={input_norm} | "
+            f"task={self.weight_normalization} | effective={self.weight_normalization}"
+        )
         return field.switch_weight_normalization(self.weight_normalization)
 
     # Pair-product computation.

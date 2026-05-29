@@ -139,6 +139,12 @@ class Corr_3PCF(TaskBase):
         self.task_params["random_weight1"] = self.random_weight1
         self.task_params["weight_normalization"] = self.weight_normalization
         self.sync_runtime_options(context="Corr_3PCF runtime configuration", blank_line=True)
+        if self.rank == 0:
+            self.logger.info(
+                "Field weight normalization rule | "
+                f"task weight_normalization={self.weight_normalization} | "
+                "catalog fields are converted to the task rule; derived fields are used as-is."
+            )
 
     def format_params(self):
         """Read user-facing task parameters into runtime attributes."""
@@ -503,11 +509,20 @@ class Corr_3PCF(TaskBase):
 
     def _field_in_task_normalization(self, field):
         self._remember_field_scale(field)
-        if getattr(field, "field_kind", None) != "catalog_field":
+        input_kind = getattr(field, "field_kind", None)
+        input_norm = getattr(field, "weight_normalization", None)
+        if input_kind != "catalog_field":
             self.logger.info(
-                "Using derived field as-is; task weight_normalization does not apply to derived fields."
+                "Field weight normalization | "
+                f"field_kind={input_kind} | input={input_norm} | "
+                "effective=as-is; task weight_normalization does not apply to derived fields."
             )
             return field.copy()
+        self.logger.info(
+            "Field weight normalization | "
+            f"field_kind={input_kind} | input={input_norm} | "
+            f"task={self.weight_normalization} | effective={self.weight_normalization}"
+        )
         return field.switch_weight_normalization(self.weight_normalization)
 
     def _compute_delta_field(self, field, random_field):
