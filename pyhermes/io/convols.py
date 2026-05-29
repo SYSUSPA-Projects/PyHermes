@@ -435,9 +435,6 @@ class ConvolsData(HermesData):
                 }
 
         fin = getattr(self, "fin", {})
-        if fin.get("url"):
-            self.logger.error("fin.url is no longer supported. Download the data first and set fin.path.")
-            func_util.safe_exit(1)
         if not fin.get("path", ""):
             self.logger.error("Input particle path is not specified.")
             func_util.safe_exit(1)

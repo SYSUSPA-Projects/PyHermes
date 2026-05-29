@@ -73,18 +73,6 @@ class Convols(TaskBase):
         self._fields_prepared = False
 
     def format_params(self):
-        removed_params = []
-        if "particle_weight" in self.task_params:
-            removed_params.append("particle_weight")
-        if "weight_key" in self.task_params.get("fin", {}):
-            removed_params.append("fin.weight_key")
-        if removed_params:
-            raise TypeError(
-                "Removed Convols input parameter(s): "
-                + ", ".join(removed_params)
-                + ". Use catalog_weight/catalog_weight_key for relative catalogue weights "
-                  "and field_value/field_value_key for physical values."
-            )
         self.fin = copy.deepcopy(self.task_params['fin'])
         self.particle_pos = self.task_params['particle_pos']
         self.catalog_weight = self.task_params['catalog_weight']
@@ -103,9 +91,6 @@ class Convols(TaskBase):
 
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
-        removed_params = []
-        if "particle_weight" in self.task_params or hasattr(self, "particle_weight"):
-            removed_params.append("particle_weight")
         base_fin = copy.deepcopy(self.task_params.get('fin', {}))
         if self.fin is None:
             self.fin = base_fin
@@ -113,19 +98,7 @@ class Convols(TaskBase):
             merged_fin = base_fin
             merged_fin.update(self.fin)
             self.fin = merged_fin
-        if "weight_key" in self.fin:
-            removed_params.append("fin.weight_key")
-        if removed_params:
-            raise TypeError(
-                "Removed Convols input parameter(s): "
-                + ", ".join(removed_params)
-                + ". Use catalog_weight/catalog_weight_key for relative catalogue weights "
-                  "and field_value/field_value_key for physical values."
-            )
         self.weight_normalization = normalize_weight_normalization(getattr(self, "weight_normalization", self.task_params.get("weight_normalization", "catalog")))
-        if self.fin.get("url"):
-            self.logger.error("Convols.fin.url is no longer supported. Download the data first and set Convols.fin.path.")
-            func_util.safe_exit(1)
         self.fin.setdefault("reader_params", {})
         self.fin.setdefault("catalog_weight_key", None)
         self.fin.setdefault("field_value_key", None)

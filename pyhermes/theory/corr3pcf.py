@@ -148,11 +148,6 @@ class Corr_3PCF(TaskBase):
 
     def format_params(self):
         """Read user-facing task parameters into runtime attributes."""
-        if "normalization" in self.task_params or "field_normalization" in self.task_params:
-            raise TypeError(
-                "Corr_3PCF.normalization/field_normalization has been removed. "
-                "Use weight_normalization='raw', 'catalog', or 'field'."
-            )
         self.convols_data = self.task_params.get("convols_data", "")
         self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
         self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
@@ -531,12 +526,6 @@ class Corr_3PCF(TaskBase):
             return field - self._field_mean_density(random_field)
         return field - random_field
 
-    def _shared_density(self):
-        """Return the common density implied by the validated compatible fields."""
-        if self.rho is None:
-            raise RuntimeError("Shared density is not initialized.")
-        return self.rho
-
     def _find_geometry_reference(self, *candidates):
         """Pick the first ConvolsData object that can define geometry/scale metadata."""
         for candidate in candidates:
@@ -721,16 +710,18 @@ class Corr_3PCF(TaskBase):
 
     def _compute_rrr_value(
         self, mu, r23_value, center, pos_local, seed_base_rot, mu_index,
-        random1, random2, random3, rr23_cache=None, center_weight=None, center_weight_sum=None
+        random1, random2, random3, rr23_cache=None, center_weight=None, center_weight_sum=None,
+        rho1=None,
     ):
         """Compute <R1 R2 R3>, reducing to lower-order shortcuts whenever possible."""
+        rho1_eff = self._field_mean_density(random1) if rho1 is None else float(rho1)
         n_uniform = sum(isinstance(x, (float, int, np.floating)) for x in [random1, random2, random3])
         if n_uniform >= 2:
-            return self._field_mean_density(random1) * self._field_mean_density(random2) * self._field_mean_density(random3)
+            return rho1_eff * self._field_mean_density(random2) * self._field_mean_density(random3)
         if isinstance(random1, (float, int, np.floating)):
             if rr23_cache is None:
                 rr23_cache = self.calc_pair_product(r23_value, random2, random3)
-            return self._field_mean_density(random1) * rr23_cache
+            return rho1_eff * rr23_cache
         if isinstance(random2, (float, int, np.floating)):
             rr13 = self.calc_pair_product(self.r13, random1, random3)
             return self._field_mean_density(random2) * rr13
@@ -752,7 +743,7 @@ class Corr_3PCF(TaskBase):
             seed_base_rot=seed_base_rot,
             mu_index=mu_index,
             eps1=random1.epsilon,
-            rho1=self._field_mean_density(random1),
+            rho1=rho1_eff,
         )
 
     def _configure_particle_center_leg1(
@@ -1111,25 +1102,26 @@ class Corr_3PCF(TaskBase):
 
     def _compute_particle_center_mu(
         self, mu, r23_value, pos_local_data, weight_local_data, weight_sum_local_data,
-        pos_local_random1, weight_local_random1, weight_sum_local_random1, seed_base_rot, mu_index,
+        rho1_data, pos_local_random1, weight_local_random1, weight_sum_local_random1,
+        rho1_random1, seed_base_rot, mu_index,
         local_results, _local_convols2, _local_convols3,
         _local_random1, _local_random2, _local_random3
     ):
         """Compute mu-local products for the particle-center mode."""
-        rho = self._shared_density()
         if "ddd" in local_results:
             local_results["ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
                 self.meta_convols, _local_convols2, _local_convols3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
                 seed_base_rot=seed_base_rot, mu_index=mu_index,
-                rho1=rho,
+                rho1=rho1_data,
             )
         if "rrr" in local_results:
             local_results["rrr"][mu_index] = self._compute_rrr_value(
                 mu, r23_value, "particle", pos_local_random1, seed_base_rot, mu_index,
                 _local_random1, _local_random2, _local_random3, rr23_cache=None,
                 center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
+                rho1=rho1_random1,
             )
         if "d_delta_dd" in local_results:
             field2, field3 = self._particle_delta_fields
@@ -1138,7 +1130,7 @@ class Corr_3PCF(TaskBase):
                 self.meta_convols, field2, field3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
                 seed_base_rot=seed_base_rot, mu_index=mu_index,
-                rho1=rho,
+                rho1=rho1_data,
             )
         if "r_delta_dd" in local_results:
             if pos_local_random1 is None and isinstance(_local_random1, (float, int, np.floating)):
@@ -1152,7 +1144,7 @@ class Corr_3PCF(TaskBase):
                     self.meta_convols, field2, field3,
                     center="particle", center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
                     seed_base_rot=seed_base_rot, mu_index=mu_index,
-                    rho1=rho,
+                    rho1=rho1_random1,
                 )
 
     ### Post-loop pair cache computation ###
@@ -1378,6 +1370,7 @@ class Corr_3PCF(TaskBase):
             theta_arr = self.theta_arr
             geometry_L = comm.bcast(geometry_ref.L if rank == 0 else None, root=0)
             geometry_scale_factor = comm.bcast(geometry_ref.scale_factor if rank == 0 else None, root=0)
+            geometry_V = float(geometry_L) ** 3
             self.r12_scaled = self.r12 * geometry_scale_factor
             self.r13_scaled = self.r13 * geometry_scale_factor
 
@@ -1408,26 +1401,31 @@ class Corr_3PCF(TaskBase):
                 if weight_sum_total <= 0.0:
                     self.logger.error("Particle-center weights must have a positive global sum.")
                     func_util.safe_exit(1)
+                rho1_particle = weight_sum_total / geometry_V
                 if weight_local_random1 is not None:
                     weight_sum_local_random1 = float(np.sum(weight_local_random1))
                     weight_sum_total_random1 = comm.allreduce(weight_sum_local_random1, op=MPI.SUM)
                     if weight_sum_total_random1 <= 0.0:
                         self.logger.error("Random particle-center weights must have a positive global sum.")
                         func_util.safe_exit(1)
+                    rho1_random_particle = weight_sum_total_random1 / geometry_V
                     npos_local_random1 = pos_local_random1.shape[0]
                     npos_total_random1 = comm.allreduce(npos_local_random1, op=MPI.SUM)
                 else:
                     weight_sum_local_random1 = weight_sum_local
                     weight_sum_total_random1 = weight_sum_total
+                    rho1_random_particle = rho1_particle
                     npos_local_random1 = npos_local
                     npos_total_random1 = npos_total
             else:
                 weight_local = None
                 weight_sum_local = None
                 weight_sum_total = None
+                rho1_particle = None
                 weight_local_random1 = None
                 weight_sum_local_random1 = None
                 weight_sum_total_random1 = None
+                rho1_random_particle = None
                 npos_local_random1 = None
                 npos_total_random1 = None
             seed_base_rot = self.base_seed + 1
@@ -1498,9 +1496,11 @@ class Corr_3PCF(TaskBase):
                         self._compute_particle_center_mu(
                             mu, r23_value,
                             pos_local, weight_local, weight_sum_local,
+                            rho1_particle,
                             pos_local_random1 if pos_local_random1 is not None else pos_local,
                             weight_local_random1 if weight_local_random1 is not None else weight_local,
                             weight_sum_local_random1,
+                            rho1_random_particle,
                             seed_base_rot, it,
                             local_results,
                             local_data.get(2), local_data.get(3),

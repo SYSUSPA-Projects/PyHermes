@@ -415,11 +415,6 @@ class Corr_2PCF(TaskBase):
                 )
 
     def format_params(self):
-        if "normalization" in self.task_params or "field_normalization" in self.task_params:
-            raise TypeError(
-                "Corr_2PCF.normalization/field_normalization has been removed. "
-                "Use weight_normalization='raw', 'catalog', or 'field'."
-            )
         self.convols_data = self.task_params.get('convols_data', '')
         self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
         self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data
