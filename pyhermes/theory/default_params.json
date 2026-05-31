@@ -160,6 +160,7 @@
 		"l_min": 0,
 		"l_max": 4,
 		"gpu_device_id": 0,
+		"gpu_threads_per_block": [8, 8, 8],
 		"execution_mode": "serial",
 		"cache_multipole_fields": false,
 		"cache_dir": "",

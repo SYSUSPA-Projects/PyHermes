@@ -67,6 +67,9 @@ class Corr_3PCF_Multipole(TaskBase):
         self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
+        self.gpu_threads_per_block = multipole_util.normalize_gpu_threads_per_block(
+            self.task_params.get("gpu_threads_per_block", (8, 8, 8))
+        )
         self.execution_mode = self.task_params["execution_mode"]
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
@@ -99,6 +102,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.task_params["threads"] = self.threads
         self.task_params["products"] = copy.deepcopy(self.products)
         self.task_params["weight_normalization"] = self.weight_normalization
+        self.task_params["gpu_threads_per_block"] = list(self.gpu_threads_per_block)
         self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
         if self.rank == 0:
             self.logger.info(
@@ -195,6 +199,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "l_min": self.l_min,
             "l_max": self.l_max,
             "gpu_device_id": self.gpu_device_id,
+            "gpu_threads_per_block": list(self.gpu_threads_per_block),
             "execution_mode": self.execution_mode,
             "cache_multipole_fields": self.cache_multipole_fields,
             "cache_dir": self.cache_dir,
@@ -420,6 +425,7 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
                 f"r12={self.r12}, r13={self.r13}, threads={self.threads}, "
+                f"gpu_device_id={self.gpu_device_id}, gpu_threads_per_block={self.gpu_threads_per_block}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
             )
@@ -573,7 +579,9 @@ class Corr_3PCF_Multipole(TaskBase):
         self.logger.info(f"Start to calculate 3PCF multipole product '{product_name}' ...")
         self.logger.info(
             f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
-            f"threads={self.threads}, cache_multipole_fields={self.cache_multipole_fields}, "
+            f"threads={self.threads}, gpu_device_id={self.gpu_device_id}, "
+            f"gpu_threads_per_block={self.gpu_threads_per_block}, "
+            f"cache_multipole_fields={self.cache_multipole_fields}, "
             f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
         )
 
@@ -582,6 +590,7 @@ class Corr_3PCF_Multipole(TaskBase):
             fields[0], fields[1], fields[2],
             self.r12, self.r13, self.l_min, self.l_max,
             gpu_device_id=self.gpu_device_id,
+            gpu_threads_per_block=self.gpu_threads_per_block,
             cache_multipole_fields=self.cache_multipole_fields,
             cache_dir=self.cache_dir,
             threads=self.threads,
@@ -630,6 +639,7 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
                 f"threads={self.threads}, ranks={size}, pairs={n_pairs}, "
+                f"gpu_device_id={self.gpu_device_id}, gpu_threads_per_block={self.gpu_threads_per_block}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
             )
@@ -640,7 +650,15 @@ class Corr_3PCF_Multipole(TaskBase):
 
         conv_context_r1 = multipole_util._prepare_legendre_convolution_context(field2) if is_r1_rank else None
         conv_context_r2 = multipole_util._prepare_legendre_convolution_context(field3) if not is_r1_rank else None
-        gpu_context = multipole_util._prepare_multipole_gpu_context(field1, gpu_device_id=self.gpu_device_id) if rank == 0 else None
+        gpu_context = (
+            multipole_util._prepare_multipole_gpu_context(
+                field1,
+                gpu_device_id=self.gpu_device_id,
+                gpu_threads_per_block=self.gpu_threads_per_block,
+            )
+            if rank == 0
+            else None
+        )
 
         task_list = []
         l_arr = np.arange(self.l_min, self.l_max + 1, dtype=np.int32)

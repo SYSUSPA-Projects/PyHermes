@@ -53,6 +53,31 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, phi_support)
 REDUCE_THREADS = 256
 
 
+def normalize_gpu_threads_per_block(gpu_threads_per_block):
+    """Validate and normalize the 3D CUDA block shape for the product kernel."""
+    if gpu_threads_per_block is None:
+        gpu_threads_per_block = (8, 8, 8)
+    if isinstance(gpu_threads_per_block, str):
+        stripped = gpu_threads_per_block.strip().strip("[]()")
+        gpu_threads_per_block = [item.strip() for item in stripped.split(",") if item.strip()]
+    if not isinstance(gpu_threads_per_block, (list, tuple)) or len(gpu_threads_per_block) != 3:
+        raise ValueError("gpu_threads_per_block must be a list or tuple with three positive integers.")
+
+    threads = []
+    for value in gpu_threads_per_block:
+        if isinstance(value, bool):
+            raise ValueError("gpu_threads_per_block values must be integers, not booleans.")
+        if isinstance(value, (float, np.floating)) and not float(value).is_integer():
+            raise ValueError("gpu_threads_per_block values must be integers.")
+        threads.append(int(value))
+    threads_per_block = tuple(threads)
+    if any(value <= 0 for value in threads_per_block):
+        raise ValueError("gpu_threads_per_block values must be positive integers.")
+    if np.prod(threads_per_block) > 1024:
+        raise ValueError("gpu_threads_per_block product must not exceed 1024 CUDA threads per block.")
+    return threads_per_block
+
+
 @cuda.jit
 def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
     """Reduce a complex device array into per-block real and imaginary sums."""
@@ -164,19 +189,19 @@ def _stream_convolution_fields(
     return m_fields
 
 
-def _prepare_multipole_gpu_context(field1, gpu_device_id=0):
+def _prepare_multipole_gpu_context(field1, gpu_device_id=0, gpu_threads_per_block=(8, 8, 8)):
     """Allocate reusable CUDA state for multipole m-term summation."""
     if not cuda.is_available():
         raise RuntimeError("CUDA is required for Corr_3PCF_Multipole, but no CUDA device is available.")
 
     cuda.select_device(int(gpu_device_id))
+    threads_per_block = normalize_gpu_threads_per_block(gpu_threads_per_block)
     gamma = np.ascontiguousarray(cal_gamma(field1.phi_array, field1.phi_support, field1.phi_resolution), dtype=np.float64)
     gamma_gpu = cuda.to_device(gamma)
     data_gpu = cuda.to_device(np.ascontiguousarray(field1.epsilon, dtype=np.float64))
     result_gpu = cuda.device_array(field1.epsilon.shape, dtype=np.complex128)
     n_result = field1.epsilon.size
     result_gpu_flat = result_gpu.reshape(n_result)
-    threads_per_block = (8, 8, 8)
     blocks_per_grid = (
         (field1.L + threads_per_block[0] - 1) // threads_per_block[0],
         (field1.L + threads_per_block[1] - 1) // threads_per_block[1],
@@ -252,6 +277,7 @@ def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
     r1, r2, l_min, l_max,
     gpu_device_id=0,
+    gpu_threads_per_block=(8, 8, 8),
     cache_multipole_fields=False,
     cache_dir="",
     threads=1,
@@ -265,7 +291,11 @@ def calc_DDD_multipole(
         raise ValueError("l_max must be non-negative.")
     if l_min > l_max:
         raise ValueError("l_min must be less than or equal to l_max.")
-    gpu_context = _prepare_multipole_gpu_context(deltaD1, gpu_device_id=gpu_device_id)
+    gpu_context = _prepare_multipole_gpu_context(
+        deltaD1,
+        gpu_device_id=gpu_device_id,
+        gpu_threads_per_block=gpu_threads_per_block,
+    )
     conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
     conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)
 
