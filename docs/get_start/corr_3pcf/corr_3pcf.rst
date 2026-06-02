@@ -254,6 +254,34 @@ random field.
    Reduced 3PCF curves for different center strategies and random-field
    treatments at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
 
+The angular curve :math:`\zeta(\theta; r_{12}, r_{13})` and its Legendre
+multipoles :math:`\zeta_\ell(r_{12}, r_{13})` are two equivalent
+representations of the same triangle-shape dependence:
+
+.. math::
+
+   \zeta(\theta; r_{12}, r_{13})
+   =
+   \sum_\ell
+   \zeta_\ell(r_{12}, r_{13}) P_\ell(\cos\theta).
+
+The next diagnostic reconstructs the angular curve from the computed
+``zeta_l`` coefficients and also projects the direct angular curves back to
+low-order multipoles.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_standard_consistency.png
+   :alt: Consistency between standard angular 3PCF and 3PCF multipoles
+   :align: center
+   :width: 90%
+
+   Consistency check between the standard angular 3PCF and the multipole
+   representation at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``. The particle-center
+   curve uses ``n_part=406728`` halo centers and ``n_rot=1000``; the
+   box-random-center curve uses ``n_rand=8000000`` random centers and
+   ``n_rot=200``. The remaining differences mainly reflect finite angular
+   sampling, finite random rotations, center-sampling noise, and finite
+   multipole truncation.
+
 The multipole examples then show how truncation order and field resolution
 affect the recovered angular spectrum.
 
