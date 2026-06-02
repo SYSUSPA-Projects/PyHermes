@@ -254,6 +254,25 @@ random field.
    Reduced 3PCF curves for different center strategies and random-field
    treatments at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
 
+The multipole examples then show how truncation order and field resolution
+affect the recovered angular spectrum.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_lmax.png
+   :alt: 3PCF multipoles for different lmax values
+   :align: center
+   :width: 90%
+
+   Multipole spectra for several choices of ``l_max`` at fixed field
+   resolution and radial pair ``(r12,r13)=(20,40) Mpc/h``.
+
+.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_resolution.png
+   :alt: 3PCF multipoles for different field resolutions
+   :align: center
+   :width: 90%
+
+   Multipole spectra at fixed ``l_max`` and ``(r12,r13)=(20,40) Mpc/h`` for
+   two field resolutions.
+
 The angular curve :math:`\zeta(\theta; r_{12}, r_{13})` and its Legendre
 multipoles :math:`\zeta_\ell(r_{12}, r_{13})` are two equivalent
 representations of the same triangle-shape dependence:
@@ -281,25 +300,6 @@ low-order multipoles.
    ``n_rot=200``. The remaining differences mainly reflect finite angular
    sampling, finite random rotations, center-sampling noise, and finite
    multipole truncation.
-
-The multipole examples then show how truncation order and field resolution
-affect the recovered angular spectrum.
-
-.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_lmax.png
-   :alt: 3PCF multipoles for different lmax values
-   :align: center
-   :width: 90%
-
-   Multipole spectra for several choices of ``l_max`` at fixed field
-   resolution and radial pair ``(r12,r13)=(20,40) Mpc/h``.
-
-.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_resolution.png
-   :alt: 3PCF multipoles for different field resolutions
-   :align: center
-   :width: 90%
-
-   Multipole spectra at fixed ``l_max`` and ``(r12,r13)=(20,40) Mpc/h`` for
-   two field resolutions.
 
 How to read the notebook
 ------------------------
