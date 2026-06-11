@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -25,6 +26,7 @@ DEFAULT_SNAPSHOT_BASE = Path(
     "/Raid6/1/xutp/Quijote/Snapshots/fiducial/8000/snapdir_004/snap_004"
 )
 DEFAULT_OUTPUT = REPO_ROOT / "examples/output/quijote_fiducial_8000_snap004_dm_sfc_J8.pkl"
+HDF5_SUFFIXES = {".hdf5", ".h5"}
 
 
 def configure_serial_mpi_environment() -> None:
@@ -64,6 +66,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--box-size", type=float, default=1000.0, help="Box size in Mpc/h. Default: 1000.")
     parser.add_argument("--ptype", type=int, default=1, help="Gadget particle type. Default: 1 for DM.")
     parser.add_argument(
+        "--hdf5-position-scale",
+        type=float,
+        default=1.0e-3,
+        help=(
+            "Scale applied to HDF5 Coordinates before PyHermes projection. "
+            "Quijote stores snapshot positions in kpc/h, so the default converts them to Mpc/h."
+        ),
+    )
+    parser.add_argument(
         "--threads",
         type=positive_int,
         default=max(1, default_threads),
@@ -85,10 +96,14 @@ def split_snapshot_files(snapshot_base: Path) -> list[Path]:
         return [snapshot_base]
 
     def sort_key(path: Path):
-        suffix = path.name.rsplit(".", 1)[-1]
-        return int(suffix) if suffix.isdigit() else suffix
+        match = re.search(r"\.(\d+)(?:\.hdf5|\.h5)?$", path.name)
+        return int(match.group(1)) if match else path.name
 
     return sorted(snapshot_base.parent.glob(snapshot_base.name + ".*"), key=sort_key)
+
+
+def is_hdf5_snapshot(files: list[Path]) -> bool:
+    return bool(files) and all(path.suffix.lower() in HDF5_SUFFIXES for path in files)
 
 
 def resolve_output_path(output_path: Path) -> Path:
@@ -114,6 +129,53 @@ def summarize_field(label: str, field) -> None:
         f"particle_count={field.particle_count}",
         f"weight_normalization={field.weight_normalization}",
     )
+
+
+def read_hdf5_positions(files: list[Path], ptype: int, position_scale: float):
+    import numpy as np
+
+    try:
+        import hdf5plugin  # noqa: F401
+        import h5py
+    except ImportError as exc:
+        raise ImportError(
+            "Reading compressed Quijote HDF5 snapshots requires h5py and hdf5plugin. "
+            "Install them in the server environment, e.g. `python -m pip install h5py hdf5plugin`."
+        ) from exc
+
+    group_name = f"PartType{ptype}"
+    dataset_name = "Coordinates"
+    counts = []
+
+    for filename in files:
+        with h5py.File(filename, "r") as h5:
+            if group_name not in h5:
+                counts.append(0)
+                continue
+            if dataset_name not in h5[group_name]:
+                raise KeyError(f"Missing dataset '/{group_name}/{dataset_name}' in {filename}.")
+            shape = h5[group_name][dataset_name].shape
+            if len(shape) != 2 or shape[1] != 3:
+                raise ValueError(f"Expected '/{group_name}/{dataset_name}' to have shape (N, 3), got {shape}.")
+            counts.append(int(shape[0]))
+
+    total = int(sum(counts))
+    if total < 1:
+        raise ValueError(f"No particles found in '/{group_name}/{dataset_name}' across {len(files)} HDF5 files.")
+
+    positions = np.empty((total, 3), dtype=np.float32)
+    offset = 0
+    for filename, count in zip(files, counts):
+        if count == 0:
+            continue
+        with h5py.File(filename, "r") as h5:
+            data = h5[group_name][dataset_name][...].astype(np.float32, copy=False)
+        if position_scale != 1.0:
+            data *= np.float32(position_scale)
+        positions[offset : offset + count] = data
+        offset += count
+
+    return np.ascontiguousarray(positions)
 
 
 def main() -> None:
@@ -152,6 +214,7 @@ def main() -> None:
     print("Snapshot base:", args.snapshot_base)
     print("Snapshot files:", len(snapshot_files))
     print("First snapshot file:", snapshot_files[0])
+    print("Last snapshot file:", snapshot_files[-1])
     print("Output:", output_path)
     print("Threads:", args.threads)
     print("Grid:", f"J={args.j}", f"L={1 << args.j}", f"dx={args.box_size / (1 << args.j):.6g} Mpc/h")
@@ -163,13 +226,6 @@ def main() -> None:
         return
 
     task_params = {
-        "fin": {
-            "path": str(args.snapshot_base),
-            "format": "gadget",
-            "reader_params": {"ptype": args.ptype},
-            "catalog_weight_key": None,
-            "field_value_key": None,
-        },
         "weight_normalization": "catalog",
         "box_size": float(args.box_size),
         "J": int(args.j),
@@ -180,6 +236,32 @@ def main() -> None:
         "fout_path": str(output_path),
     }
     task = Convols({"Convols": task_params})
+
+    if is_hdf5_snapshot(snapshot_files):
+        print("Detected HDF5 split snapshot; reading PartType coordinates with h5py.")
+        print(f"HDF5 position scale: {args.hdf5_position_scale:g}")
+        task.particle_pos = read_hdf5_positions(
+            snapshot_files,
+            ptype=args.ptype,
+            position_scale=args.hdf5_position_scale,
+        )
+        print(
+            "Loaded HDF5 positions:",
+            f"shape={task.particle_pos.shape}",
+            f"dtype={task.particle_pos.dtype}",
+            f"min={task.particle_pos.min():.6g}",
+            f"max={task.particle_pos.max():.6g}",
+        )
+    else:
+        print("Detected legacy Gadget-style snapshot; using PyHermes gadget reader.")
+        task.fin = {
+            "path": str(args.snapshot_base),
+            "format": "gadget",
+            "reader_params": {"ptype": args.ptype},
+            "catalog_weight_key": None,
+            "field_value_key": None,
+        }
+
     field = task.run(save_result=True, overwrite=args.overwrite)
     summarize_field("built ConvolsData", field)
     print("Done:", output_path)
