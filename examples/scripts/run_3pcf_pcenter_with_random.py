@@ -2,7 +2,7 @@
 Two-stage Corr_3PCF run with explicit random-field normalization.
 
 The script is self-contained and does not read a YAML config. Rank 0 reads the
-data/random ConvolsData objects, attaches heavy arrays to each Corr_3PCF task,
+data/random SFCField objects, attaches heavy arrays to each Corr_3PCF task,
 and lets Corr_3PCF broadcast only the fields needed by each product.
 
 Stage 1 computes random-center ``r_delta_dd`` through the existing box-random
@@ -17,7 +17,7 @@ import os
 
 import numpy as np
 
-from pyhermes.io import ConvolsData
+from pyhermes.io import SFCField
 from pyhermes.theory.corr3pcf import Corr_3PCF
 from pyhermes.utils.mpi_util import MPI
 
@@ -53,8 +53,8 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 
 if rank == 0:
-    data = ConvolsData(data_path=DATA_PATH)
-    random = ConvolsData(data_path=RANDOM_PATH)
+    data = SFCField(data_path=DATA_PATH)
+    random = SFCField(data_path=RANDOM_PATH)
     data_stat = data
     random_stat = random
 else:
@@ -81,9 +81,9 @@ random_center_task = Corr_3PCF(
 
 if rank == 0:
     delta_field = data_stat - random_stat
-    random_center_task.convols_data1 = random_stat.copy()
-    random_center_task.convols_data2 = delta_field
-    random_center_task.convols_data3 = delta_field.copy()
+    random_center_task.sfc_field1 = random_stat.copy()
+    random_center_task.sfc_field2 = delta_field
+    random_center_task.sfc_field3 = delta_field.copy()
     random_center_task.random1 = random_stat.copy()
     random_center_task.random2 = random_stat.copy()
     random_center_task.random3 = random_stat.copy()
@@ -119,9 +119,9 @@ particle_center_task = Corr_3PCF(
 )
 
 if rank == 0:
-    particle_center_task.convols_data1 = data.copy()
-    particle_center_task.convols_data2 = data.copy()
-    particle_center_task.convols_data3 = data.copy()
+    particle_center_task.sfc_field1 = data.copy()
+    particle_center_task.sfc_field2 = data.copy()
+    particle_center_task.sfc_field3 = data.copy()
     particle_center_task.random1 = random.copy()
     particle_center_task.random2 = random.copy()
     particle_center_task.random3 = random.copy()

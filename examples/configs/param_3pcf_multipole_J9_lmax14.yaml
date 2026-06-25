@@ -1,5 +1,5 @@
 Corr_3PCF_Multipole:
-   convols_data: "./output/quijote8000_snap004_sfc_J9.pkl"
+   sfc_field: "./output/quijote8000_snap004_sfc_J9.pkl"
    random: "uniform"
    fout_path: "./output/quijote8000_snap004_3pcf_multipole_J9_lmax14.pkl"
    window:

@@ -7,7 +7,7 @@ files under ``examples/configs/`` alongside the tutorial notebooks.
 
 Supported top-level task sections include:
 
-- ``Convols``
+- ``SFCProjection``
 - ``Counting``
 - ``Corr_2PCF``
 - ``Corr_3PCF``
@@ -41,7 +41,7 @@ Minimal example
 
 .. code-block:: yaml
 
-   Convols:
+   SFCProjection:
       fin:
          path: "./data.bin"
          format: "bin"
@@ -52,10 +52,10 @@ Minimal example
             fields: {}
          catalog_weight_key: null
          field_value_key: null
-      fout_path: "./output/convols.pkl"
+      fout_path: "./output/sfc_field.pkl"
 
    Corr_2PCF:
-      convols_data: "./output/convols.pkl"
+      sfc_field: "./output/sfc_field.pkl"
       random: "uniform"
       fout_path: "./output/corr2pcf.pkl"
       pair_window: "shell"

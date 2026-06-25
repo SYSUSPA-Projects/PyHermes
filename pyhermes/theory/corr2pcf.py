@@ -8,7 +8,7 @@ import os
 import numpy as np
 
 from pyhermes.io import WindowFunc
-from pyhermes.io import ConvolsData, normalize_task_weight_normalization
+from pyhermes.io import SFCField, normalize_task_weight_normalization
 from pyhermes.io import Corr2PCFData
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
@@ -172,16 +172,16 @@ def compact_window_desc(win):
     return "window=custom"
 
 
-def serialize_convols_input(value):
+def serialize_sfc_input(value):
     if isinstance(value, str):
         return value
     if value == "uniform":
         return "uniform"
     if isinstance(value, (float, int, np.floating)):
         return float(value)
-    if isinstance(value, ConvolsData):
+    if isinstance(value, SFCField):
         return {
-            "kind": "ConvolsData",
+            "kind": "SFCField",
             "L": value.L,
             "box_size": value.box_size,
             "wavelet_mode": value.wavelet_mode,
@@ -353,7 +353,7 @@ def build_pair_window_params_for_sample(sample, pair_window):
 def field_mean_density(field, value_unit="grid"):
     if isinstance(field, (float, int, np.floating)):
         return float(field)
-    if isinstance(field, ConvolsData):
+    if isinstance(field, SFCField):
         value = field.field_mean_density(value_unit=value_unit)
         if value is None:
             raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
@@ -370,14 +370,14 @@ def pair_product_with_window(field1, field2, pair_window_obj, threads):
     return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
 
 
-def compute_pair_product_at_sample(sample, convols_data1, convols_data2=None, pair_window=None):
-    if convols_data2 is None:
-        convols_data2 = convols_data1
-    if isinstance(convols_data1, (float, int, np.floating)) or isinstance(convols_data2, (float, int, np.floating)):
-        return field_mean_density(convols_data1) * field_mean_density(convols_data2)
+def compute_pair_product_at_sample(sample, sfc_field1, sfc_field2=None, pair_window=None):
+    if sfc_field2 is None:
+        sfc_field2 = sfc_field1
+    if isinstance(sfc_field1, (float, int, np.floating)) or isinstance(sfc_field2, (float, int, np.floating)):
+        return field_mean_density(sfc_field1) * field_mean_density(sfc_field2)
     pair_window_params = build_pair_window_params_for_sample(sample, pair_window)
-    pair_window_obj = WindowFunc(pair_window_params, convols_data1.convols_info, threads=convols_data1.threads)
-    return pair_product_with_window(convols_data1, convols_data2, pair_window_obj, convols_data1.threads)
+    pair_window_obj = WindowFunc(pair_window_params, sfc_field1.sfc_info, threads=sfc_field1.threads)
+    return pair_product_with_window(sfc_field1, sfc_field2, pair_window_obj, sfc_field1.threads)
 
 
 class Corr_2PCF(TaskBase):
@@ -415,9 +415,9 @@ class Corr_2PCF(TaskBase):
                 )
 
     def format_params(self):
-        self.convols_data = self.task_params.get('convols_data', '')
-        self.convols_data1 = self.task_params.get('convols_data1', '') or self.convols_data
-        self.convols_data2 = self.task_params.get('convols_data2', '') or self.convols_data
+        self.sfc_field = self.task_params.get('sfc_field', '')
+        self.sfc_field1 = self.task_params.get('sfc_field1', '') or self.sfc_field
+        self.sfc_field2 = self.task_params.get('sfc_field2', '') or self.sfc_field
         self.random = self.task_params.get('random', None)
         self.random1 = self.task_params.get('random1', None)
         self.random2 = self.task_params.get('random2', None)
@@ -472,12 +472,12 @@ class Corr_2PCF(TaskBase):
 
     def _current_task_params_snapshot(self):
         params = {}
-        params['convols_data'] = serialize_convols_input(self.convols_data)
-        params['convols_data1'] = serialize_convols_input(self.convols_data1)
-        params['convols_data2'] = serialize_convols_input(self.convols_data2)
-        params['random'] = serialize_convols_input(self.random)
-        params['random1'] = serialize_convols_input(self.random1)
-        params['random2'] = serialize_convols_input(self.random2)
+        params['sfc_field'] = serialize_sfc_input(self.sfc_field)
+        params['sfc_field1'] = serialize_sfc_input(self.sfc_field1)
+        params['sfc_field2'] = serialize_sfc_input(self.sfc_field2)
+        params['random'] = serialize_sfc_input(self.random)
+        params['random1'] = serialize_sfc_input(self.random1)
+        params['random2'] = serialize_sfc_input(self.random2)
         params['window'] = serialize_window_input(self.window)
         params['window1'] = serialize_window_input(self.window1)
         params['window2'] = serialize_window_input(self.window2)
@@ -498,69 +498,69 @@ class Corr_2PCF(TaskBase):
         return params
 
     # Input field resolution.
-    def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
-        if provided_convols is not None:
-            if isinstance(provided_convols, str):
-                base_path = provided_convols
-                if base_path not in base_convols_cache:
-                    base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
-                return base_convols_cache[base_path], f"path={base_path}"
-            if not isinstance(provided_convols, ConvolsData):
+    def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
+        if provided_sfc is not None:
+            if isinstance(provided_sfc, str):
+                base_path = provided_sfc
+                if base_path not in base_sfc_cache:
+                    base_sfc_cache[base_path] = SFCField(data_path=base_path, threads=self.threads)
+                return base_sfc_cache[base_path], f"path={base_path}"
+            if not isinstance(provided_sfc, SFCField):
                 self.logger.error(
-                    f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+                    f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
                 )
                 func_util.safe_exit(1)
-            return provided_convols, f"provided convols_data{leg_idx}"
+            return provided_sfc, f"provided sfc_field{leg_idx}"
 
-        base_input = getattr(self, f"convols_data{leg_idx}")
+        base_input = getattr(self, f"sfc_field{leg_idx}")
         if isinstance(base_input, str) and base_input:
-            if base_input not in base_convols_cache:
-                base_convols_cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
-            return base_convols_cache[base_input], f"path={base_input}"
-        if isinstance(base_input, ConvolsData):
-            return base_input, f"provided convols_data{leg_idx}"
+            if base_input not in base_sfc_cache:
+                base_sfc_cache[base_input] = SFCField(data_path=base_input, threads=self.threads)
+            return base_sfc_cache[base_input], f"path={base_input}"
+        if isinstance(base_input, SFCField):
+            return base_input, f"provided sfc_field{leg_idx}"
         if base_input not in (None, ""):
             self.logger.error(
-                f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+                f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
             )
             func_util.safe_exit(1)
-        if not self.convols_data and not self.convols_data1 and not self.convols_data2:
+        if not self.sfc_field and not self.sfc_field1 and not self.sfc_field2:
             self.logger.error(
-                f"Missing input for field leg {leg_idx}. Please pass convols_data{leg_idx} or set "
-                f"'convols_data{leg_idx}' / 'convols_data'."
+                f"Missing input for field leg {leg_idx}. Please pass sfc_field{leg_idx} or set "
+                f"'sfc_field{leg_idx}' / 'sfc_field'."
             )
             func_util.safe_exit(1)
         self.logger.error(
-            f"Missing usable input for field leg {leg_idx}. Expected a string path or ConvolsData instance in "
-            f"'convols_data{leg_idx}' or shared 'convols_data'."
+            f"Missing usable input for field leg {leg_idx}. Expected a string path or SFCField instance in "
+            f"'sfc_field{leg_idx}' or shared 'sfc_field'."
         )
         func_util.safe_exit(1)
 
-    def _resolve_random_base(self, leg_idx, provided_random, base_convols_cache):
+    def _resolve_random_base(self, leg_idx, provided_random, base_sfc_cache):
         if provided_random is None or provided_random == "":
             return None, "no random input"
         if provided_random == "uniform":
             return "uniform", "uniform random density"
         if isinstance(provided_random, str):
             base_path = provided_random
-            if base_path not in base_convols_cache:
-                base_convols_cache[base_path] = ConvolsData(data_path=base_path, threads=self.threads)
-            return base_convols_cache[base_path], f"path={base_path}"
-        if isinstance(provided_random, ConvolsData):
+            if base_path not in base_sfc_cache:
+                base_sfc_cache[base_path] = SFCField(data_path=base_path, threads=self.threads)
+            return base_sfc_cache[base_path], f"path={base_path}"
+        if isinstance(provided_random, SFCField):
             return provided_random, f"provided random{leg_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a ConvolsData instance, or None."
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a SFCField instance, or None."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_convols, provided_window):
+    def _resolve_window(self, leg_idx, base_sfc, provided_window):
         if provided_window is None:
             return None, "no additional window convolution"
         else:
             if isinstance(provided_window, WindowFunc):
                 return provided_window, "provided WindowFunc instance"
             elif isinstance(provided_window, dict):
-                return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+                return WindowFunc(provided_window, base_sfc.sfc_info, threads=self.threads), (
                     f"provided window dict | {func_util.describe_window_action(provided_window)}"
                 )
             else:
@@ -580,13 +580,13 @@ class Corr_2PCF(TaskBase):
         return needs_data, needs_random
 
     def _validate_uniform_random_signal(self, field):
-        if not isinstance(field, ConvolsData) or field.field_mean_density(value_unit="grid") is None:
+        if not isinstance(field, SFCField) or field.field_mean_density(value_unit="grid") is None:
             raise ValueError(
-                "random='uniform' requires a ConvolsData field with a defined field_integral."
+                "random='uniform' requires a SFCField field with a defined field_integral."
             )
 
     def _remember_field_scale(self, field):
-        if isinstance(field, ConvolsData):
+        if isinstance(field, SFCField):
             self._density_physical_scale = float(field.scale_factor) ** 3
 
     def _pair_product_physical_scale(self):
@@ -644,7 +644,7 @@ class Corr_2PCF(TaskBase):
 
     def _build_pair_window_for_sample(self, sample, reference_field):
         pair_window_params = build_pair_window_params_for_sample(sample, self.pair_window)
-        pair_window_obj = WindowFunc(pair_window_params, reference_field.convols_info, threads=self.threads)
+        pair_window_obj = WindowFunc(pair_window_params, reference_field.sfc_info, threads=self.threads)
         if self.pair_window_cache:
             cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
             if os.path.exists(cache_path):
@@ -664,9 +664,9 @@ class Corr_2PCF(TaskBase):
                 cache_dir = ".pyhermes_pair_window_cache"
         cache_key = {
             "pair_window": pair_window_params,
-            "convols_info": {
-                key: reference_field.convols_info.get(key)
-                for key in ConvolsData._REQUIRED_ARGV
+            "sfc_info": {
+                key: reference_field.sfc_info.get(key)
+                for key in SFCField._REQUIRED_ARGV
             },
             "bandwidth": getattr(reference_field, "bandwidth", 1),
         }
@@ -675,7 +675,7 @@ class Corr_2PCF(TaskBase):
 
     def _reference_pair_field(self, *fields):
         for field in fields:
-            if isinstance(field, ConvolsData):
+            if isinstance(field, SFCField):
                 return field
         return None
 
@@ -729,12 +729,12 @@ class Corr_2PCF(TaskBase):
         return values
 
     # Memory-strategy execution helpers.
-    def _prepare_memory_leg_field(self, kind, leg_idx, base_convols_cache):
+    def _prepare_memory_leg_field(self, kind, leg_idx, base_sfc_cache):
         if kind == "data":
-            base_field, source_desc = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+            base_field, source_desc = self._resolve_base_sfc(leg_idx, None, base_sfc_cache)
         elif kind == "random":
             base_field, source_desc = self._resolve_random_base(
-                leg_idx, getattr(self, f"random{leg_idx}"), base_convols_cache
+                leg_idx, getattr(self, f"random{leg_idx}"), base_sfc_cache
             )
             if base_field is None:
                 self.logger.error(
@@ -743,12 +743,12 @@ class Corr_2PCF(TaskBase):
                 )
                 func_util.safe_exit(1)
             if base_field == "uniform":
-                signal_ref, _ = self._resolve_base_convols(leg_idx, None, base_convols_cache)
+                signal_ref, _ = self._resolve_base_sfc(leg_idx, None, base_sfc_cache)
                 signal_ref = self._field_in_task_normalization(signal_ref)
                 self._validate_uniform_random_signal(signal_ref)
                 rho = field_mean_density(signal_ref)
                 if self.rank == 0:
-                    setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(signal_ref.convols_info))
+                    setattr(self.corr2pcf_data, f"sfc_info{leg_idx}", copy.deepcopy(signal_ref.sfc_info))
                 return rho, f"{source_desc}, rho={rho:.5e}"
         else:
             raise ValueError(f"Unsupported memory leg kind: {kind}")
@@ -760,31 +760,31 @@ class Corr_2PCF(TaskBase):
             final_field = base_field @ window_obj
         else:
             final_field = base_field.copy()
-            final_field.format_convols_params()
+            final_field.format_sfc_params()
         if self.rank == 0:
-            setattr(self.corr2pcf_data, f"convols_info{leg_idx}", copy.deepcopy(final_field.convols_info))
+            setattr(self.corr2pcf_data, f"sfc_info{leg_idx}", copy.deepcopy(final_field.sfc_info))
         window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
         return final_field, f"{source_desc}, {window_desc}"
 
     def _prepare_memory_product_fields(self, product):
-        base_convols_cache = {}
+        base_sfc_cache = {}
         if product == "dd":
-            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
-            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
+            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
         elif product == "dr":
-            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
-            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
         elif product == "rd":
-            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
-            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
+            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
         elif product == "rr":
-            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
-            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
         elif product == "delta_dd":
-            data1, data_desc1 = self._prepare_memory_leg_field("data", 1, base_convols_cache)
-            random1, random_desc1 = self._prepare_memory_leg_field("random", 1, base_convols_cache)
-            data2, data_desc2 = self._prepare_memory_leg_field("data", 2, base_convols_cache)
-            random2, random_desc2 = self._prepare_memory_leg_field("random", 2, base_convols_cache)
+            data1, data_desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
+            random1, random_desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
+            data2, data_desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
+            random2, random_desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
             field1 = self._delta_field(data1, random1)
             field2 = self._delta_field(data2, random2)
             desc1 = f"delta1=({data_desc1}) - ({random_desc1})"
@@ -793,11 +793,11 @@ class Corr_2PCF(TaskBase):
         else:
             raise ValueError(f"Unsupported memory product: {product}")
 
-        compat_fields = [field for field in (field1, field2) if isinstance(field, ConvolsData)]
+        compat_fields = [field for field in (field1, field2) if isinstance(field, SFCField)]
         if compat_fields:
-            func_util.validate_convols_compatibility(
+            func_util.validate_sfc_compatibility(
                 compat_fields,
-                ConvolsData._REQUIRED_ARGV,
+                SFCField._REQUIRED_ARGV,
                 logger=self.logger,
                 label=f"Corr_2PCF memory product '{product}' input fields",
             )
@@ -933,8 +933,8 @@ class Corr_2PCF(TaskBase):
     # Speed-strategy input preparation and execution.
     def prepare_input_fields(
         self,
-        convols_data1=None,
-        convols_data2=None,
+        sfc_field1=None,
+        sfc_field2=None,
         random1=None,
         random2=None,
         window1=None,
@@ -947,10 +947,10 @@ class Corr_2PCF(TaskBase):
             self._sync_runtime_options()
         self.products = normalize_products(self.products)
         expanded_products = expand_products(self.products)
-        if convols_data1 is None:
-            convols_data1 = self.convols_data1
-        if convols_data2 is None:
-            convols_data2 = self.convols_data2
+        if sfc_field1 is None:
+            sfc_field1 = self.sfc_field1
+        if sfc_field2 is None:
+            sfc_field2 = self.sfc_field2
         if random1 is None:
             random1 = self.random1
         if random2 is None:
@@ -969,17 +969,17 @@ class Corr_2PCF(TaskBase):
             self.logger.info(f"{describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs)}, threads={self.threads}")
             self.logger.info(describe_products(self.products, expanded_products))
             self.logger.info(describe_pair_window(self.pair_window))
-            base_convols_cache = {}
+            base_sfc_cache = {}
             resolved_data_legs = []
             if needs_data:
-                for i, cdata, win in zip([1, 2], [convols_data1, convols_data2], [window1, window2]):
-                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                    resolved_data_legs.append((i, base_convols, source_desc, win))
+                for i, cdata, win in zip([1, 2], [sfc_field1, sfc_field2], [window1, window2]):
+                    base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
+                    resolved_data_legs.append((i, base_sfc, source_desc, win))
 
             resolved_random_legs = []
             if needs_random:
                 for i, rdata, win in zip([1, 2], [random1, random2], [window1, window2]):
-                    base_random, source_desc = self._resolve_random_base(i, rdata, base_convols_cache)
+                    base_random, source_desc = self._resolve_random_base(i, rdata, base_sfc_cache)
                     if base_random is None:
                         self.logger.error(
                             f"Missing input for random leg {i}. Products {self.products} require "
@@ -989,12 +989,12 @@ class Corr_2PCF(TaskBase):
                         func_util.safe_exit(1)
                     resolved_random_legs.append((i, base_random, source_desc, win))
 
-            compat_fields = [item[1] for item in resolved_data_legs if isinstance(item[1], ConvolsData)]
-            compat_fields.extend(item[1] for item in resolved_random_legs if isinstance(item[1], ConvolsData))
+            compat_fields = [item[1] for item in resolved_data_legs if isinstance(item[1], SFCField)]
+            compat_fields.extend(item[1] for item in resolved_random_legs if isinstance(item[1], SFCField))
             if compat_fields:
-                shared_required = func_util.validate_convols_compatibility(
+                shared_required = func_util.validate_sfc_compatibility(
                     compat_fields,
-                    ConvolsData._REQUIRED_ARGV,
+                    SFCField._REQUIRED_ARGV,
                     logger=self.logger,
                     label="Corr_2PCF input fields",
                 )
@@ -1002,25 +1002,25 @@ class Corr_2PCF(TaskBase):
                 self.logger.info("Corr_2PCF input compatibility check passed.")
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
 
-            for i, base_convols, source_desc, win in resolved_data_legs:
-                base_convols = self._field_in_task_normalization(base_convols)
-                window_obj, window_desc = self._resolve_window(i, base_convols, win)
+            for i, base_sfc, source_desc, win in resolved_data_legs:
+                base_sfc = self._field_in_task_normalization(base_sfc)
+                window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                 if window_obj is not None:
-                    final_convols = base_convols @ window_obj
+                    final_sfc = base_sfc @ window_obj
                 else:
-                    final_convols = base_convols.copy()
-                    final_convols.format_convols_params()
-                setattr(self, f"convols_data{i}", final_convols)
-                setattr(self.corr2pcf_data, f"convols_info{i}", final_convols.convols_info)
+                    final_sfc = base_sfc.copy()
+                    final_sfc.format_sfc_params()
+                setattr(self, f"sfc_field{i}", final_sfc)
+                setattr(self.corr2pcf_data, f"sfc_info{i}", final_sfc.sfc_info)
                 self.logger.info(
                     f"Field leg {i} ready | source={source_desc} | window={window_desc}"
                 )
 
             for i, base_random, source_desc, win in resolved_random_legs:
                 if base_random == "uniform":
-                    signal_ref = getattr(self, f"convols_data{i}", None)
-                    if not isinstance(signal_ref, ConvolsData):
-                        signal_ref, _ = self._resolve_base_convols(i, None, base_convols_cache)
+                    signal_ref = getattr(self, f"sfc_field{i}", None)
+                    if not isinstance(signal_ref, SFCField):
+                        signal_ref, _ = self._resolve_base_sfc(i, None, base_sfc_cache)
                         signal_ref = self._field_in_task_normalization(signal_ref)
                     self._validate_uniform_random_signal(signal_ref)
                     rho = field_mean_density(signal_ref)
@@ -1035,7 +1035,7 @@ class Corr_2PCF(TaskBase):
                         final_random = base_random @ window_obj
                     else:
                         final_random = base_random.copy()
-                        final_random.format_convols_params()
+                        final_random.format_sfc_params()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(
                         f"Random leg {i} ready | source={source_desc} | window={window_desc}"
@@ -1058,7 +1058,7 @@ class Corr_2PCF(TaskBase):
             if is_density:
                 density_value = float(value)
             else:
-                serialized = pickle.dumps(value.convols_info)
+                serialized = pickle.dumps(value.sfc_info)
                 value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
                 local_value = value
         else:
@@ -1070,9 +1070,9 @@ class Corr_2PCF(TaskBase):
 
         serialized = comm.bcast(serialized, root=0)
         if rank != 0:
-            local_value = ConvolsData(threads=self.threads)
-            local_value.convols_info = pickle.loads(serialized)
-            local_value.format_convols_params()
+            local_value = SFCField(threads=self.threads)
+            local_value.sfc_info = pickle.loads(serialized)
+            local_value.format_sfc_params()
             local_value.epsilon = np.empty((local_value.L, local_value.L, local_value.L), dtype=np.float64)
 
         comm.Bcast(local_value.epsilon, root=0)
@@ -1098,15 +1098,15 @@ class Corr_2PCF(TaskBase):
                 self.prepare_input_fields(sync_runtime=False)
             expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
-            _local_convols1 = self._broadcast_field(self.convols_data1) if needs_data else None
-            _local_convols2 = self._broadcast_field(self.convols_data2) if needs_data else None
+            _local_sfc1 = self._broadcast_field(self.sfc_field1) if needs_data else None
+            _local_sfc2 = self._broadcast_field(self.sfc_field2) if needs_data else None
             _local_random1 = self._broadcast_field(self.random1) if needs_random else None
             _local_random2 = self._broadcast_field(self.random2) if needs_random else None
             _local_delta1 = None
             _local_delta2 = None
             if "delta_dd" in expanded_products:
-                _local_delta1 = self._delta_field(_local_convols1, _local_random1)
-                _local_delta2 = self._delta_field(_local_convols2, _local_random2)
+                _local_delta1 = self._delta_field(_local_sfc1, _local_random1)
+                _local_delta2 = self._delta_field(_local_sfc2, _local_random2)
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -1147,8 +1147,8 @@ class Corr_2PCF(TaskBase):
                 values = self._compute_products_for_sample(
                     sample,
                     expanded_products,
-                    _local_convols1,
-                    _local_convols2,
+                    _local_sfc1,
+                    _local_sfc2,
                     _local_random1,
                     _local_random2,
                     _local_delta1,

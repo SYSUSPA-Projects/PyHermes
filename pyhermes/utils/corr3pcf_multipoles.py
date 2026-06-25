@@ -175,7 +175,7 @@ def _stream_convolution_fields(
                     "other_args": {"l": int(l), "m": int(m)},
                     "kernel_mode": "complex_full_fft",
                 },
-                field.convols_info,
+                field.sfc_info,
                 bandwidth=1,
                 threads=threads,
                 phi_array=field.phi_array,

@@ -2,7 +2,7 @@ Window
 ======
 
 ``window.ipynb`` sits between field construction and the measurement notebooks.
-After ``convols.ipynb`` has produced reusable ``ConvolsData`` files, this
+After ``sfc_projection.ipynb`` has produced reusable ``SFCField`` files, this
 notebook shows how PyHermes lets you manipulate fields and Fourier-space
 windows directly.
 
@@ -11,7 +11,7 @@ What this notebook covers
 
 The notebook is organized around four practical ideas:
 
-1. ``ConvolsData`` arithmetic for derived fields
+1. ``SFCField`` arithmetic for derived fields
 2. ``WindowFunc`` construction and application through ``D @ W``
 3. ``WindowFunc`` arithmetic for composite smoothing filters
 4. built-in and custom windows, including appendix k-space sketches for the
@@ -25,8 +25,8 @@ roles are introduced in the later notebooks and in :doc:`../../windows`.
 Inputs and outputs
 ------------------
 
-The examples read the field products created by ``convols.ipynb`` or
-``examples/scripts/prepare_convols_data.py``:
+The examples read the field products created by ``sfc_projection.ipynb`` or
+``examples/scripts/prepare_sfc_fields.py``:
 
 .. code-block:: text
 
@@ -36,18 +36,18 @@ The examples read the field products created by ``convols.ipynb`` or
 No new production output is required. Most cells build objects in memory so that
 the algebra is visible.
 
-``ConvolsData`` arithmetic
+``SFCField`` arithmetic
 --------------------------
 
-``ConvolsData`` arithmetic acts on the field coefficients stored in
-``epsilon`` and returns a new ``ConvolsData`` object:
+``SFCField`` arithmetic acts on the field coefficients stored in
+``epsilon`` and returns a new ``SFCField`` object:
 
 .. code-block:: python
 
-   from pyhermes.io import ConvolsData
+   from pyhermes.io import SFCField
 
-   D = ConvolsData(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
-   R = ConvolsData(data_path="./output/random_sfc.pkl", threads=8)
+   D = SFCField(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
+   R = SFCField(data_path="./output/random_sfc.pkl", threads=8)
    rho = D.field_mean_density(value_unit="grid")
 
    delta_from_random = D - R
@@ -73,7 +73,7 @@ derived fields to unit field integral before the task-level windowing.
 ``WindowFunc`` construction
 ---------------------------
 
-A smoothing window is described by a compact dictionary and the ``convols_info``
+A smoothing window is described by a compact dictionary and the ``sfc_info``
 of the field it will act on:
 
 .. code-block:: python
@@ -81,7 +81,7 @@ of the field it will act on:
    from pyhermes.io import WindowFunc
 
    win_params = {"type": "sphere", "len_args": {"R": 20.0}}
-   W_sphere20 = WindowFunc(win_params, D.convols_info, threads=8)
+   W_sphere20 = WindowFunc(win_params, D.sfc_info, threads=8)
 
    D_smooth = D @ W_sphere20
 
@@ -171,7 +171,7 @@ the field grid:
            "len_args": {"R": 20.0},
            "other_args": {"amplitude": 1.0},
        },
-       D.convols_info,
+       D.sfc_info,
        threads=8,
    )
 

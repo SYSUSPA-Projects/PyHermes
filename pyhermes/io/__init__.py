@@ -2,7 +2,7 @@ from .funcs import *
 from .readers import *
 from .base import HermesData
 from .window import WindowFunc
-from .convols import ConvolsData, normalize_weight_normalization, normalize_task_weight_normalization
+from .sfc_field import SFCField, normalize_weight_normalization, normalize_task_weight_normalization
 from .counting import CountingData
 from .corr2pcf import Corr2PCFData
 from .corr3pcf import Corr3PCFData

@@ -1,9 +1,9 @@
 """
-Prepare the ConvolsData products used by the PyHermes examples.
+Prepare the SFCField products used by the PyHermes examples.
 
 Run without MPI:
 
-    python examples/scripts/prepare_convols_data.py
+    python examples/scripts/prepare_sfc_fields.py
 
 The script resolves paths relative to the examples directory, so it works from
 the repository root or from examples/.
@@ -36,13 +36,13 @@ DOWNLOAD_URL = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build the example ConvolsData files required by later PyHermes tutorials."
+        description="Build the example SFCField files required by later PyHermes tutorials."
     )
     parser.add_argument(
         "--threads",
         type=int,
         default=8,
-        help="Number of CPU threads used by each Convols task. Default: 8.",
+        help="Number of CPU threads used by each SFCProjection task. Default: 8.",
     )
     parser.add_argument(
         "--random-count",
@@ -211,10 +211,10 @@ def run_if_needed(label: str, output_path: Path, overwrite: bool, build_task) ->
     task.run(overwrite=True)
 
 
-def base_convols_task(threads: int, fout_path: str):
-    from pyhermes.base.convols import Convols
+def base_sfc_task(threads: int, fout_path: str):
+    from pyhermes.base.sfc_projection import SFCProjection
 
-    task = Convols()
+    task = SFCProjection()
     task.box_size = 1000
     task.J = 8
     task.wavelet_mode = "db2"
@@ -226,17 +226,17 @@ def base_convols_task(threads: int, fout_path: str):
 
 
 def build_standard_field(threads: int):
-    from pyhermes.base.convols import Convols
+    from pyhermes.base.sfc_projection import SFCProjection
     from pyhermes.param.parambase import read_param
 
-    params = read_param(config_path="./configs/param_convols.yaml")
-    task = Convols(param_task=params)
+    params = read_param(config_path="./configs/param_sfc_projection.yaml")
+    task = SFCProjection(param_task=params)
     task.threads = threads
     return task
 
 
 def build_j9_field(threads: int):
-    task = base_convols_task(threads, "./output/quijote8000_snap004_sfc_J9.pkl")
+    task = base_sfc_task(threads, "./output/quijote8000_snap004_sfc_J9.pkl")
     task.fin = {
         "path": CATALOG_REL,
         "format": "fof",
@@ -247,7 +247,7 @@ def build_j9_field(threads: int):
 
 
 def build_mass_weighted_field(threads: int):
-    task = base_convols_task(threads, "./output/quijote8000_snap004_sfc_massweight.pkl")
+    task = base_sfc_task(threads, "./output/quijote8000_snap004_sfc_massweight.pkl")
     task.fin = {
         "path": CATALOG_REL,
         "format": "fof",
@@ -268,7 +268,7 @@ def build_redshift_space_field(
 ):
     suffix = "rsd_diag" if diag else "rsd"
     weight_suffix = "_massweight" if field_value is not None else ""
-    task = base_convols_task(
+    task = base_sfc_task(
         threads,
         f"./output/quijote8000_snap004_{suffix}_sfc{weight_suffix}.pkl",
     )
@@ -288,7 +288,7 @@ def build_random_field(random_count: int, threads: int):
     random_pos = random_box_positions(count=random_count, box_size=1000, seed=42).astype(
         np.float32, copy=False
     )
-    task = base_convols_task(threads, "./output/random_sfc.pkl")
+    task = base_sfc_task(threads, "./output/random_sfc.pkl")
     task.particle_pos = random_pos
     task.save_particle_data = True
     task.particle_data_path = "./data/random_1e7.npz"
@@ -302,7 +302,7 @@ def main() -> None:
     from pyhermes.utils.redshift_space import hubble_at_redshift, redshift_space_positions
 
     if MPI.COMM_WORLD.Get_size() != 1:
-        raise RuntimeError("prepare_convols_data.py is a serial helper; run it without mpirun.")
+        raise RuntimeError("prepare_sfc_fields.py is a serial helper; run it without mpirun.")
     if args.threads < 1:
         raise ValueError("--threads must be >= 1.")
     if args.random_count < 1:
@@ -318,19 +318,19 @@ def main() -> None:
     build_binary_table(fof_data, overwrite=args.overwrite)
 
     run_if_needed(
-        "Building real-space ConvolsData",
+        "Building real-space SFCField",
         OUTPUT_DIR / "quijote8000_snap004_sfc.pkl",
         args.overwrite,
         lambda: build_standard_field(args.threads),
     )
     run_if_needed(
-        "Building J=9 ConvolsData",
+        "Building J=9 SFCField",
         OUTPUT_DIR / "quijote8000_snap004_sfc_J9.pkl",
         args.overwrite,
         lambda: build_j9_field(args.threads),
     )
     run_if_needed(
-        "Building mass-weighted ConvolsData",
+        "Building mass-weighted SFCField",
         OUTPUT_DIR / "quijote8000_snap004_sfc_massweight.pkl",
         args.overwrite,
         lambda: build_mass_weighted_field(args.threads),
@@ -351,13 +351,13 @@ def main() -> None:
     )
 
     run_if_needed(
-        "Building redshift-space ConvolsData with z-axis LOS",
+        "Building redshift-space SFCField with z-axis LOS",
         OUTPUT_DIR / "quijote8000_snap004_rsd_sfc.pkl",
         args.overwrite,
         lambda: build_redshift_space_field(pos_z, args.threads, diag=False),
     )
     run_if_needed(
-        "Building mass-weighted redshift-space ConvolsData with z-axis LOS",
+        "Building mass-weighted redshift-space SFCField with z-axis LOS",
         OUTPUT_DIR / "quijote8000_snap004_rsd_sfc_massweight.pkl",
         args.overwrite,
         lambda: build_redshift_space_field(
@@ -368,13 +368,13 @@ def main() -> None:
         ),
     )
     run_if_needed(
-        "Building redshift-space ConvolsData with diagonal LOS",
+        "Building redshift-space SFCField with diagonal LOS",
         OUTPUT_DIR / "quijote8000_snap004_rsd_diag_sfc.pkl",
         args.overwrite,
         lambda: build_redshift_space_field(pos_diag, args.threads, diag=True),
     )
     run_if_needed(
-        "Building matching random ConvolsData",
+        "Building matching random SFCField",
         OUTPUT_DIR / "random_sfc.pkl",
         args.overwrite,
         lambda: build_random_field(args.random_count, args.threads),

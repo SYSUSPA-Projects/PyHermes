@@ -1,10 +1,10 @@
-Convols
+SFCProjection
 =======
 
-``convols.ipynb`` is the upstream notebook for the whole example chain. It is
-where particle catalogs become ``ConvolsData`` fields that later notebooks
+``sfc_projection.ipynb`` is the upstream notebook for the whole example chain. It is
+where particle catalogs become ``SFCField`` fields that later notebooks
 reuse. If you only want to prepare those files without opening a notebook, run
-``examples/scripts/prepare_convols_data.py`` from the repository root.
+``examples/scripts/prepare_sfc_fields.py`` from the repository root.
 
 What this notebook covers
 -------------------------
@@ -12,7 +12,7 @@ What this notebook covers
 The notebook is organized in five steps:
 
 1. read particle data through different reader paths
-2. build ``ConvolsData`` through the standard driver, config-driven API, and
+2. build ``SFCField`` through the standard driver, config-driven API, and
    task-object overrides
 3. construct a matching random field
 4. reload data and random fields from disk
@@ -26,8 +26,8 @@ Why this notebook matters
 -------------------------
 
 Every later notebook assumes that one or more field files already exist. In the
-tracked example workflow, ``convols.ipynb`` shows the construction step by
-step, while ``examples/scripts/prepare_convols_data.py`` provides the direct
+tracked example workflow, ``sfc_projection.ipynb`` shows the construction step by
+step, while ``examples/scripts/prepare_sfc_fields.py`` provides the direct
 command-line route.
 
 Tracked inputs and local products
@@ -35,10 +35,10 @@ Tracked inputs and local products
 
 Tracked in the repository:
 
-- ``examples/notebooks/convols.ipynb``
-- ``examples/scripts/prepare_convols_data.py``
-- ``examples/scripts/run_convols.py``
-- ``examples/configs/param_convols.yaml``
+- ``examples/notebooks/sfc_projection.ipynb``
+- ``examples/scripts/prepare_sfc_fields.py``
+- ``examples/scripts/run_sfc_projection.py``
+- ``examples/configs/param_sfc_projection.yaml``
 - ``examples/data/.gitkeep``
 
 Generated locally while following the notebook:
@@ -53,19 +53,19 @@ Generated locally while following the notebook:
   - ``quijote8000_snap004_rsd_diag_sfc.pkl``
   - ``random_sfc.pkl``
 
-``ConvolsData`` files produced before the current ``weight_normalization``
-metadata was introduced must be regenerated with the current ``Convols`` task
+``SFCField`` files produced before the current ``weight_normalization``
+metadata was introduced must be regenerated with the current ``SFCProjection`` task
 before use.
 
 Minimal YAML Shape
 ------------------
 
 The standard field-construction config starts from an input catalog, defines the
-multiresolution grid, and writes a reusable ``ConvolsData`` object:
+multiresolution grid, and writes a reusable ``SFCField`` object:
 
 .. code-block:: yaml
 
-   Convols:
+   SFCProjection:
       fin:
          path: "./data/quijote_halos/8000"
          format: "fof"
@@ -93,9 +93,9 @@ loaded or when only one or two parameters need to be changed interactively:
 
 .. code-block:: python
 
-   from pyhermes.theory import Convols
+   from pyhermes.theory import SFCProjection
 
-   task = Convols()
+   task = SFCProjection()
    task.fin = {
        "path": "./data/quijote_halos/8000",
        "format": "fof",
@@ -105,9 +105,9 @@ loaded or when only one or two parameters need to be changed interactively:
    task.J = 8
    D = task.run()
 
-The returned ``D`` is a ``ConvolsData`` object. Its ``epsilon`` array stores
+The returned ``D`` is a ``SFCField`` object. Its ``epsilon`` array stores
 the scaling-function coefficients of the represented field, while
-``D.convols_info`` carries the grid and wavelet metadata needed by compatible
+``D.sfc_info`` carries the grid and wavelet metadata needed by compatible
 ``WindowFunc`` objects in later notebooks.
 
 Recommended usage modes
@@ -125,7 +125,7 @@ Use the driver script when you want a clean batch run:
 .. code-block:: bash
 
    cd examples
-   python ./scripts/run_convols.py ./configs/param_convols.yaml
+   python ./scripts/run_sfc_projection.py ./configs/param_sfc_projection.yaml
 
 The notebook shows the same task through the config-driven API and through
 manual object setup, so it doubles as both a tutorial and a reference for
@@ -134,7 +134,7 @@ interactive usage.
 Key idea
 --------
 
-``Convols`` builds a weighted multiresolution field and stores it in a reusable
+``SFCProjection`` builds a weighted multiresolution field and stores it in a reusable
 format. Once that field exists, downstream tasks no longer need to reread and
 repartition the original particle catalog. PyHermes separates catalogue
 weights, such as completeness weights, from per-object field values, such as
@@ -170,7 +170,7 @@ the original catalogue metadata and particle list. Their
 ``weight_normalization`` is ``None`` and their ``field_integral`` is the direct
 sum of the derived ``epsilon`` grid.
 
-``Convols`` projects it onto scaling-function coefficients,
+``SFCProjection`` projects it onto scaling-function coefficients,
 
 .. math::
 
@@ -188,7 +188,7 @@ coordinates both :math:`\phi_{j\ell}` and :math:`\epsilon_{j\ell}` carry
 :math:`V^{-1/2}` dimensions, and their product reconstructs a number-density
 field.
 
-The saved ``ConvolsData`` object stores these coefficients together with
+The saved ``SFCField`` object stores these coefficients together with
 ``catalog_weight_sum``, ``catalog_weight_sq_sum``,
 ``raw_field_weighted_sum``, ``weight_normalization`` and ``field_integral``.
 For a catalog field ``field_integral`` is :math:`S_x/Z`; for derived fields it
@@ -233,7 +233,7 @@ over a broader support and the field appears smoother. At higher resolution,
 the support becomes narrower, so the same particles are represented by sharper
 and more localized peaks.
 
-.. figure:: ../../_static/convols/hmFig0_delta.png
+.. figure:: ../../_static/sfc_field/hmFig0_delta.png
    :alt: Reconstructed point field at different multiresolution levels
    :align: center
    :width: 95%
@@ -252,7 +252,7 @@ This is a practical check that the multiresolution field preserves the
 large-scale structure while sharpening the tracer distribution as ``J``
 increases.
 
-.. figure:: ../../_static/convols/convols_epsilon_slice_j7_j8_j9_scatter.png
+.. figure:: ../../_static/sfc_field/sfc_field_epsilon_slice_j7_j8_j9_scatter.png
    :alt: Projected epsilon slices at J=7, J=8, and J=9 compared with halo positions
    :align: center
    :width: 95%

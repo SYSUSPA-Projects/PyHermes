@@ -1,4 +1,4 @@
-Convols:
+SFCProjection:
    fin:
       path: "./data/quijote_halos/8000"
       format: "fof"

@@ -147,7 +147,7 @@ class ParamBase(object):
                     # Add new key
                     if parent_key == "Corr_2PCF.sampling" or parent_key.startswith("Corr_2PCF.sampling."):
                         self.logger.info(f"Adding Corr_2PCF sampling value: '{full_key}' as '{value}'")
-                    elif parent_key != 'Convols.window':
+                    elif parent_key != 'SFCProjection.window':
                         # Skip warning for window_args
                         self.logger.warning(f"Adding non-default key: '{full_key}'")
                     else:

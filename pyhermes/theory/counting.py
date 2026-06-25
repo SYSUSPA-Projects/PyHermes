@@ -5,7 +5,7 @@ import copy
 
 import numpy as np
 
-from pyhermes.io import CountingData, ConvolsData, WindowFunc, normalize_task_weight_normalization
+from pyhermes.io import CountingData, SFCField, WindowFunc, normalize_task_weight_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
@@ -25,7 +25,7 @@ class Counting(TaskBase):
 
     def format_params(self):
         # Parameters from json or input
-        self.convols_data     = self.task_params.get('convols_data', '')
+        self.sfc_field     = self.task_params.get('sfc_field', '')
         self.random_count     = int(self.task_params['random_count'])
         self.seed             = int(self.task_params['seed'])
         self.weight_normalization = normalize_task_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
@@ -37,7 +37,7 @@ class Counting(TaskBase):
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
         self.task_params = {
-            'convols_data': self.convols_data,
+            'sfc_field': self.sfc_field,
             'random_count': self.random_count,
             'seed': self.seed,
             'weight_normalization': self.weight_normalization,
@@ -71,12 +71,12 @@ class Counting(TaskBase):
         )
         return field.switch_weight_normalization(self.weight_normalization)
 
-    def _serialize_convols_input(self, value):
+    def _serialize_sfc_input(self, value):
         if isinstance(value, str):
             return value
-        if isinstance(value, ConvolsData):
+        if isinstance(value, SFCField):
             return {
-                "kind": "ConvolsData",
+                "kind": "SFCField",
                 "L": value.L,
                 "box_size": value.box_size,
                 "wavelet_mode": value.wavelet_mode,
@@ -99,7 +99,7 @@ class Counting(TaskBase):
 
     def _current_task_params_snapshot(self):
         params = {}
-        params['convols_data'] = self._serialize_convols_input(self.convols_data)
+        params['sfc_field'] = self._serialize_sfc_input(self.sfc_field)
         params['random_count'] = self.random_count
         params['seed'] = self.seed
         params['weight_normalization'] = self.weight_normalization
@@ -108,11 +108,11 @@ class Counting(TaskBase):
         params['fout_path'] = self.fout_path
         return params
 
-    def prepare_input_fields(self, convols_data=None, window=None):
+    def prepare_input_fields(self, sfc_field=None, window=None):
         self.counting_data = CountingData()
         self._sync_runtime_options()
-        if convols_data is None:
-            convols_data = self.convols_data
+        if sfc_field is None:
+            sfc_field = self.sfc_field
         if window is None:
             window = self.window
 
@@ -121,32 +121,32 @@ class Counting(TaskBase):
             self.logger.info(
                 f"random_count={self.random_count}, seed={self.seed}, threads={self.threads}"
             )
-            if convols_data is not None:
-                if isinstance(convols_data, str):
-                    base_convols = ConvolsData(data_path=convols_data, threads=self.threads)
-                    source_desc = f"path={convols_data}"
-                elif isinstance(convols_data, ConvolsData):
-                    base_convols = convols_data
-                    source_desc = "provided convols_data"
+            if sfc_field is not None:
+                if isinstance(sfc_field, str):
+                    base_sfc = SFCField(data_path=sfc_field, threads=self.threads)
+                    source_desc = f"path={sfc_field}"
+                elif isinstance(sfc_field, SFCField):
+                    base_sfc = sfc_field
+                    source_desc = "provided sfc_field"
                 else:
-                    self.logger.error("Unexpected input: 'convols_data' must be a string path or a ConvolsData instance.")
+                    self.logger.error("Unexpected input: 'sfc_field' must be a string path or a SFCField instance.")
                     func_util.safe_exit(1)
             else:
-                if not self.convols_data:
+                if not self.sfc_field:
                     self.logger.error(
-                        "No input 'convols_data' provided and shared 'convols_data' is not set. "
-                        "Please either pass a ConvolsData instance to prepare_input_fields(convols_data=...) "
-                        "or specify 'convols_data' in task_params."
+                        "No input 'sfc_field' provided and shared 'sfc_field' is not set. "
+                        "Please either pass a SFCField instance to prepare_input_fields(sfc_field=...) "
+                        "or specify 'sfc_field' in task_params."
                     )
                     func_util.safe_exit(1)
-                if isinstance(self.convols_data, str):
-                    base_convols = ConvolsData(data_path=self.convols_data, threads=self.threads)
-                    source_desc = f"path={self.convols_data}"
-                elif isinstance(self.convols_data, ConvolsData):
-                    base_convols = self.convols_data
-                    source_desc = "provided convols_data"
+                if isinstance(self.sfc_field, str):
+                    base_sfc = SFCField(data_path=self.sfc_field, threads=self.threads)
+                    source_desc = f"path={self.sfc_field}"
+                elif isinstance(self.sfc_field, SFCField):
+                    base_sfc = self.sfc_field
+                    source_desc = "provided sfc_field"
                 else:
-                    self.logger.error("Unexpected task attribute 'convols_data': expected string path or ConvolsData.")
+                    self.logger.error("Unexpected task attribute 'sfc_field': expected string path or SFCField.")
                     func_util.safe_exit(1)
 
             if window is not None:
@@ -154,7 +154,7 @@ class Counting(TaskBase):
                     window_obj = window
                     window_desc = "provided WindowFunc instance"
                 elif isinstance(window, dict):
-                    window_obj = WindowFunc(window, base_convols.convols_info, threads=self.threads)
+                    window_obj = WindowFunc(window, base_sfc.sfc_info, threads=self.threads)
                     window_desc = f"provided window dict | {func_util.describe_window_action(window)}"
                 else:
                     self.logger.error(
@@ -165,18 +165,18 @@ class Counting(TaskBase):
                 window_obj = None
                 window_desc = "no additional window convolution"
 
-            base_convols = self._field_in_task_normalization(base_convols)
+            base_sfc = self._field_in_task_normalization(base_sfc)
 
             if window_obj is not None:
-                self.convols_data = base_convols @ window_obj
+                self.sfc_field = base_sfc @ window_obj
             else:
-                self.convols_data = base_convols
-                self.convols_data.format_convols_params()
+                self.sfc_field = base_sfc
+                self.sfc_field.format_sfc_params()
             self.window = window_obj
 
             self.logger.info(f"Counting field ready | source={source_desc} | window={window_desc}")
             self.counting_data.counting_info = self._current_task_params_snapshot()
-            self.counting_data.convols_info = self.convols_data.convols_info
+            self.counting_data.sfc_info = self.sfc_field.sfc_info
 
         self._fields_prepared = True
 
@@ -198,33 +198,33 @@ class Counting(TaskBase):
             else:
                 total_padded_tasks = self.random_count
             _local_n_tasks = total_padded_tasks // size
-            # The convols data now only loaded to rank0
-            convols_info_serialized = None
+            # The SFCField now only loaded to rank0
+            sfc_info_serialized = None
             if rank == 0:
-                convols_info_serialized = pickle.dumps(self.convols_data.convols_info)
-            # Broadcast parameters (read + from convols data) to all ranks
-            convols_info_serialized = comm.bcast(convols_info_serialized, root=0)
+                sfc_info_serialized = pickle.dumps(self.sfc_field.sfc_info)
+            # Broadcast parameters (read + from SFCField) to all ranks
+            sfc_info_serialized = comm.bcast(sfc_info_serialized, root=0)
             if rank == 0:
-                self.convols_data.epsilon = np.ascontiguousarray(self.convols_data.epsilon, dtype=np.float64)
-                _local_convols = self.convols_data
+                self.sfc_field.epsilon = np.ascontiguousarray(self.sfc_field.epsilon, dtype=np.float64)
+                _local_sfc = self.sfc_field
             else:
-                _local_convols = ConvolsData(threads=self.threads)
-                _local_convols.convols_info = pickle.loads(convols_info_serialized)
-                _local_convols.format_convols_params()
-                _local_convols.epsilon = np.empty((_local_convols.L, _local_convols.L, _local_convols.L), dtype=np.float64)
+                _local_sfc = SFCField(threads=self.threads)
+                _local_sfc.sfc_info = pickle.loads(sfc_info_serialized)
+                _local_sfc.format_sfc_params()
+                _local_sfc.epsilon = np.empty((_local_sfc.L, _local_sfc.L, _local_sfc.L), dtype=np.float64)
             self.counting_data.counting_info = self._current_task_params_snapshot()
             self.counting_data.task_params = self._current_task_params_snapshot()
             # Broadcast epsilon to all rank
-            comm.Bcast(_local_convols.epsilon, root=0)
+            comm.Bcast(_local_sfc.epsilon, root=0)
             comm.Barrier()
             rank == 0 and self.logger.info("Start Counting ... ")
             end_time1 = time.perf_counter()
             
             # --- generate random positions on each rank ---
             # assume positions are uniform in the simulation box [0, box_size)
-            pos = random_box_positions(_local_n_tasks, _local_convols.box_size, seed=self.seed + rank)
+            pos = random_box_positions(_local_n_tasks, _local_sfc.box_size, seed=self.seed + rank)
             # --- evaluate number density at positions ---
-            _data_local = _local_convols.field_density_at_pos(pos, value_unit="physical").astype(np.float64, copy=False)
+            _data_local = _local_sfc.field_density_at_pos(pos, value_unit="physical").astype(np.float64, copy=False)
 
             if rank == 0:
                 _data_all = np.empty(total_padded_tasks, dtype=np.float64)

@@ -12,6 +12,8 @@ COORDINATE_NAMES = ("s", "mu", "rp", "pi")
 class Corr2PCFData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
+        self.sfc_info1 = None
+        self.sfc_info2 = None
         self.corr2pcf_info = {}
         self.sampling_names = ()
         self.sampling = {}
@@ -121,9 +123,9 @@ class Corr2PCFData(HermesData):
                 )
             # Assign the dictionary from the file to self.corr2pcf_info
             for i in range(1, 3):
-                _convols_info = dataset.get(f'convols_info{i}')
-                if _convols_info:
-                    setattr(self, f"convols_info{i}", _convols_info)
+                _sfc_info = dataset.get(f'sfc_info{i}')
+                if _sfc_info:
+                    setattr(self, f"sfc_info{i}", _sfc_info)
             _corr2pcf_info = dataset.get('corr2pcf_info')
             if _corr2pcf_info:
                 self.corr2pcf_info.update(_corr2pcf_info)
@@ -143,8 +145,8 @@ class Corr2PCFData(HermesData):
         sampling = self._sync_sampling_from_attrs()
         # If all required variables are present, create the dataset
         dataset = {
-            'convols_info1': self.convols_info1,
-            'convols_info2': self.convols_info2,
+            'sfc_info1': self.sfc_info1,
+            'sfc_info2': self.sfc_info2,
             'corr2pcf_info': self.corr2pcf_info,
             'sampling_names': tuple(self.sampling_names),
             'dd': None if self.dd is None else self._ensure_result_array(self.dd, 'dd'),

@@ -63,10 +63,10 @@ def parse_args() -> argparse.Namespace:
         help="Input .npz catalogue with a 'pos' array.",
     )
     parser.add_argument(
-        "--convols-data",
+        "--sfc-field",
         type=Path,
         default=OUTPUT_DIR / "quijote8000_snap004_sfc.pkl",
-        help="PyHermes ConvolsData file used for the warm run.",
+        help="PyHermes SFCField file used for the warm run.",
     )
     parser.add_argument(
         "--output-dir",
@@ -185,10 +185,10 @@ def load_positions(path: Path, n_max: int | None, seed: int) -> tuple[np.ndarray
 
 
 def run_pyhermes_projection(pos: np.ndarray, args: argparse.Namespace, output_path: Path):
-    from pyhermes.base.convols import Convols
+    from pyhermes.base.sfc_projection import SFCProjection
 
     params = {
-        "Convols": {
+        "SFCProjection": {
             "fin": {
                 "path": "./data/quijote_halos/8000",
                 "format": "fof",
@@ -205,17 +205,17 @@ def run_pyhermes_projection(pos: np.ndarray, args: argparse.Namespace, output_pa
             "fout_path": str(output_path),
         }
     }
-    task = Convols(params)
+    task = SFCProjection(params)
     task.particle_pos = np.asarray(pos, dtype=np.float32)
     return task.run(save_result=True, overwrite=True)
 
 
-def run_pyhermes_2pcf(args: argparse.Namespace, convols_path: Path, output_path: Path, s_samples: np.ndarray):
+def run_pyhermes_2pcf(args: argparse.Namespace, sfc_path: Path, output_path: Path, s_samples: np.ndarray):
     from pyhermes.theory.corr2pcf import Corr_2PCF
 
     params = {
         "Corr_2PCF": {
-            "convols_data": str(convols_path),
+            "sfc_field": str(sfc_path),
             "random": "uniform",
             "pair_window": "shell",
             "sampling": {
@@ -420,18 +420,18 @@ def main() -> None:
     outputs = {}
 
     pyhermes_output_path = args.output_dir / "benchmark_pyhermes_2pcf_isotropic.pkl"
-    active_convols_path = args.convols_data
+    active_sfc_path = args.sfc_field
     if subset_used:
         # Subsample benchmarks need their own field so all codes see the same data.
-        active_convols_path = args.output_dir / f"benchmark_pyhermes_sfc_N{len(pos)}.pkl"
+        active_sfc_path = args.output_dir / f"benchmark_pyhermes_sfc_N{len(pos)}.pkl"
         pyhermes_output_path = args.output_dir / f"benchmark_pyhermes_2pcf_isotropic_N{len(pos)}.pkl"
         args.run_pyhermes_cold = True
 
     if not args.skip_pyhermes:
-        if args.run_pyhermes_cold or not active_convols_path.exists():
+        if args.run_pyhermes_cold or not active_sfc_path.exists():
             row, value = benchmark(
                 "pyhermes_projection_cold",
-                lambda: run_pyhermes_projection(pos, args, active_convols_path),
+                lambda: run_pyhermes_projection(pos, args, active_sfc_path),
                 code="pyhermes",
                 task="projection",
                 n_data=len(pos),
@@ -444,7 +444,7 @@ def main() -> None:
 
         row, value = benchmark(
             "pyhermes_warm_xi_s",
-            lambda: run_pyhermes_2pcf(args, active_convols_path, pyhermes_output_path, s_samples),
+            lambda: run_pyhermes_2pcf(args, active_sfc_path, pyhermes_output_path, s_samples),
             code="pyhermes",
             task="xi_s",
             n_data=len(pos),

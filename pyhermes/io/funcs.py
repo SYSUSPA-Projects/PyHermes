@@ -15,7 +15,7 @@ def check_fout(instance, fout_path, overwrite=False):
         logger.info("No <fout_path> specified, skipping disk output.")
         return False
     ext_dict = {
-        'ConvolsData' : 'pkl',
+        'SFCField' : 'pkl',
         'WindowFunc'  : 'pkl',
         'CountingData': 'pkl',
         'Corr2PCFData': 'pkl',

@@ -8,7 +8,7 @@ angular window filters. The mathematical background page explains the shared
 convolution viewpoint; this page focuses on the practical window vocabulary
 used by the code and examples.
 
-For the notebook-style walkthrough of ``ConvolsData`` and ``WindowFunc``
+For the notebook-style walkthrough of ``SFCField`` and ``WindowFunc``
 arithmetic, see :doc:`get_start/window/window`.
 
 Why Windows Matter
@@ -354,7 +354,7 @@ Field-Derivative Windows
 
 The standard windows above mostly average or select parts of a field. PyHermes
 also provides field-derivative operator windows, which apply differential
-operators to the field represented by a ``ConvolsData`` object. This works
+operators to the field represented by a ``SFCField`` object. This works
 because derivatives have a simple Fourier-space form. In a periodic box, write
 
 .. math::
@@ -394,10 +394,10 @@ Applied to a scalar field, the result is the directional derivative of the
 PyHermes field, :math:`\partial_{\widehat n}f`, in grid-coordinate units. To
 convert the derivative to physical box units, multiply the output by
 :math:`L/L_{\rm box}`; this factor is available as
-``ConvolsData.scale_factor``. To keep derivatives stable on discrete tracer
+``SFCField.scale_factor``. To keep derivatives stable on discrete tracer
 fields, combine this operator with an ordinary smoothing window such as
 ``gaussian``. In PyHermes this can be done with the same convolution syntax,
-for example ``D @ W_G @ W_deriv`` for a ``ConvolsData`` object ``D``, a
+for example ``D @ W_G @ W_deriv`` for a ``SFCField`` object ``D``, a
 Gaussian window ``W_G``, and a derivative window ``W_deriv``:
 
 .. math::
@@ -424,7 +424,7 @@ The ``gdw`` window is a scale-normalized Gaussian-derivative wavelet. It is
 related to combining a Gaussian with the negative Laplacian, but includes its
 own scale and :math:`L^2` normalization factors.
 
-This construction is natural for ``ConvolsData`` because PyHermes stores a
+This construction is natural for ``SFCField`` because PyHermes stores a
 periodic scaling-function representation of the particle field and applies
 ``WindowFunc`` objects through Fourier-space convolution. The derivative is
 therefore the derivative of the PyHermes-represented field, optionally after
@@ -455,21 +455,21 @@ In Python:
 
    window = WindowFunc(
        {"type": "sphere", "len_args": {"R": 5}},
-       convols_data.convols_info,
+       sfc_field.sfc_info,
        threads=8,
    )
-   smoothed = convols_data @ window
+   smoothed = sfc_field @ window
 
 ``WindowFunc`` objects can also be combined after their kernels are built. The
 operations act directly on ``w_kernel``:
 
 .. code-block:: python
 
-   W_shell = WindowFunc(shell_params, convols_data.convols_info, threads=8)
-   W_disk = WindowFunc(disk_params, convols_data.convols_info, threads=8)
+   W_shell = WindowFunc(shell_params, sfc_field.sfc_info, threads=8)
+   W_disk = WindowFunc(disk_params, sfc_field.sfc_info, threads=8)
 
    W_mix = 0.7 * W_shell + 0.3 * W_disk
-   smoothed = convols_data @ W_mix
+   smoothed = sfc_field @ W_mix
 
 Supported operations are ``W1 + W2``, ``W1 - W2``, ``a * W``, ``W * a``,
 ``W / a``, and ``-W``. Both windows in a binary operation must share the same
@@ -482,7 +482,7 @@ Important details:
 - ``type`` selects the built-in window function.
 - ``len_args`` contains physical lengths in the same units as ``box_size``.
   PyHermes rescales them internally to the multiresolution grid.
-- ``WindowFunc`` must be built with the ``convols_info`` of the field it will
+- ``WindowFunc`` must be built with the ``sfc_info`` of the field it will
   convolve. This keeps ``J``, ``box_size``, ``phi_resolution``, and the wavelet
   basis consistent.
 - Line-of-sight windows use ``los_args``. The default LOS is the z axis:
@@ -506,7 +506,7 @@ Advanced users can pass a custom ``func`` instead of choosing a built-in
 ``type``. A custom window function should describe the Fourier-space kernel
 :math:`\widehat W(\mathbf{k})`, not the real-space profile. PyHermes evaluates
 that kernel on the wavelet/Fourier grid and folds it into the convolution
-kernel used by ``ConvolsData @ WindowFunc``.
+kernel used by ``SFCField @ WindowFunc``.
 
 Custom windows should be written as Numba ``@njit`` functions. The required
 signature pattern is:
@@ -550,7 +550,7 @@ For example:
            "len_args": {"R": 5},
            "other_args": {"amplitude": 1.0},
        },
-       convols_data.convols_info,
+       sfc_field.sfc_info,
        threads=8,
    )
 
@@ -698,7 +698,7 @@ before pair counting:
 .. code-block:: yaml
 
    Corr_2PCF:
-     convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+     sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
      random: "uniform"
      window:
        type: "sphere"
@@ -872,7 +872,7 @@ smooths the input legs, just as in standard 3PCF:
 .. code-block:: yaml
 
    Corr_3PCF_Multipole:
-     convols_data: "./output/quijote8000_snap004_sfc.pkl"
+     sfc_field: "./output/quijote8000_snap004_sfc.pkl"
      random: "uniform"
      window:
        type: "sphere"

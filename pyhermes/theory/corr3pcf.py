@@ -3,7 +3,7 @@ import pickle
 import copy
 import numpy as np
 
-from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFData, normalize_task_weight_normalization
+from pyhermes.io import WindowFunc, SFCField, Corr3PCFData, normalize_task_weight_normalization
 from pyhermes.utils import func_util
 from pyhermes.utils.corr3pcf_kernels import (
     estimate_triplet_product_box_random_centers,
@@ -62,7 +62,7 @@ PRODUCT_INPUT_FLAGS = {
 
 def estimate_triplet_product_with_sampled_centers(
     r12_scaled, r13_scaled, mu, center_scaled, n_rot,
-    convols_meta, convols_data2, convols_data3,
+    sfc_meta, sfc_field2, sfc_field3,
     center="box_random",
     center_weight=None,
     center_weight_sum=None,
@@ -73,16 +73,16 @@ def estimate_triplet_product_with_sampled_centers(
 ):
     """Estimate a triplet product using either box-random or particle centers."""
     kwargs_common = {
-        "phi_array": convols_meta.phi_array,
-        "L": convols_meta.L,
-        "phi_resolution": convols_meta.phi_resolution,
-        "phi_support": convols_meta.phi_support,
+        "phi_array": sfc_meta.phi_array,
+        "L": sfc_meta.L,
+        "phi_resolution": sfc_meta.phi_resolution,
+        "phi_support": sfc_meta.phi_support,
         "seed_base_rot": seed_base_rot,
         "mu_index": mu_index,
     }
 
-    eps2 = convols_data2.epsilon
-    eps3 = convols_data3.epsilon
+    eps2 = sfc_field2.epsilon
+    eps3 = sfc_field3.epsilon
 
     if center == "box_random":
         if eps1 is None:
@@ -96,7 +96,7 @@ def estimate_triplet_product_with_sampled_centers(
 
     if center == "particle":
         if rho1 is None:
-            rho1 = 1 / convols_meta.L ** 3
+            rho1 = 1 / sfc_meta.L ** 3
         if center_scaled.shape[0] == 0:
             return 0.0
         if center_weight is None:
@@ -148,10 +148,10 @@ class Corr_3PCF(TaskBase):
 
     def format_params(self):
         """Read user-facing task parameters into runtime attributes."""
-        self.convols_data = self.task_params.get("convols_data", "")
-        self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
-        self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
-        self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
+        self.sfc_field = self.task_params.get("sfc_field", "")
+        self.sfc_field1 = self.task_params.get("sfc_field1", "") or self.sfc_field
+        self.sfc_field2 = self.task_params.get("sfc_field2", "") or self.sfc_field
+        self.sfc_field3 = self.task_params.get("sfc_field3", "") or self.sfc_field
         self.particle_pos1 = self.task_params.get("particle_pos1", None)
         self.particle_weight1 = self.task_params.get("particle_weight1", None)
         self.random = self.task_params.get("random", None)
@@ -322,16 +322,16 @@ class Corr_3PCF(TaskBase):
 
     ### Task snapshot serialization ###
 
-    def _serialize_convols_input(self, value):
+    def _serialize_sfc_input(self, value):
         if isinstance(value, str):
             return value
         if value == "uniform":
             return "uniform"
         if isinstance(value, (float, int, np.floating)):
             return float(value)
-        if isinstance(value, ConvolsData):
+        if isinstance(value, SFCField):
             return {
-                "kind": "ConvolsData",
+                "kind": "SFCField",
                 "L": value.L,
                 "box_size": value.box_size,
                 "wavelet_mode": value.wavelet_mode,
@@ -355,10 +355,10 @@ class Corr_3PCF(TaskBase):
     def _current_task_params_snapshot(self):
         """Record a serializable snapshot of the effective task configuration."""
         params = {}
-        params["convols_data"] = self._serialize_convols_input(self.convols_data)
-        params["convols_data1"] = self._serialize_convols_input(self.convols_data1)
-        params["convols_data2"] = self._serialize_convols_input(self.convols_data2)
-        params["convols_data3"] = self._serialize_convols_input(self.convols_data3)
+        params["sfc_field"] = self._serialize_sfc_input(self.sfc_field)
+        params["sfc_field1"] = self._serialize_sfc_input(self.sfc_field1)
+        params["sfc_field2"] = self._serialize_sfc_input(self.sfc_field2)
+        params["sfc_field3"] = self._serialize_sfc_input(self.sfc_field3)
         if self.particle_pos1 is None:
             params["particle_pos1"] = None
         else:
@@ -369,10 +369,10 @@ class Corr_3PCF(TaskBase):
         else:
             arr = np.asarray(self.particle_weight1)
             params["particle_weight1"] = {"kind": "particle_weight1", "shape": tuple(arr.shape)}
-        params["random"] = self._serialize_convols_input(self.random)
-        params["random1"] = self._serialize_convols_input(self.random1)
-        params["random2"] = self._serialize_convols_input(self.random2)
-        params["random3"] = self._serialize_convols_input(self.random3)
+        params["random"] = self._serialize_sfc_input(self.random)
+        params["random1"] = self._serialize_sfc_input(self.random1)
+        params["random2"] = self._serialize_sfc_input(self.random2)
+        params["random3"] = self._serialize_sfc_input(self.random3)
         if self.random_pos1 is None:
             params["random_pos1"] = None
         else:
@@ -410,30 +410,30 @@ class Corr_3PCF(TaskBase):
 
     ### Input resolution and field preparation helpers ###
 
-    def _resolve_base_convols(self, leg_idx, provided_convols, cache):
-        """Resolve one signal leg from a path, shared fallback, or ConvolsData instance."""
-        if provided_convols is not None:
-            if isinstance(provided_convols, str):
-                if provided_convols not in cache:
-                    cache[provided_convols] = ConvolsData(data_path=provided_convols, threads=self.threads)
-                return cache[provided_convols], f"path={provided_convols}"
-            if not isinstance(provided_convols, ConvolsData):
+    def _resolve_base_sfc(self, leg_idx, provided_sfc, cache):
+        """Resolve one signal leg from a path, shared fallback, or SFCField instance."""
+        if provided_sfc is not None:
+            if isinstance(provided_sfc, str):
+                if provided_sfc not in cache:
+                    cache[provided_sfc] = SFCField(data_path=provided_sfc, threads=self.threads)
+                return cache[provided_sfc], f"path={provided_sfc}"
+            if not isinstance(provided_sfc, SFCField):
                 self.logger.error(
-                    f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+                    f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
                 )
                 func_util.safe_exit(1)
-            return provided_convols, f"provided convols_data{leg_idx}"
+            return provided_sfc, f"provided sfc_field{leg_idx}"
 
-        base_input = getattr(self, f"convols_data{leg_idx}")
+        base_input = getattr(self, f"sfc_field{leg_idx}")
         if isinstance(base_input, str) and base_input:
             if base_input not in cache:
-                cache[base_input] = ConvolsData(data_path=base_input, threads=self.threads)
+                cache[base_input] = SFCField(data_path=base_input, threads=self.threads)
             return cache[base_input], f"path={base_input}"
-        if isinstance(base_input, ConvolsData):
-            return base_input, f"provided convols_data{leg_idx}"
+        if isinstance(base_input, SFCField):
+            return base_input, f"provided sfc_field{leg_idx}"
         self.logger.error(
-            f"Missing usable input for field leg {leg_idx}. Expected a string path or ConvolsData instance in "
-            f"'convols_data{leg_idx}' or shared 'convols_data'."
+            f"Missing usable input for field leg {leg_idx}. Expected a string path or SFCField instance in "
+            f"'sfc_field{leg_idx}' or shared 'sfc_field'."
         )
         func_util.safe_exit(1)
 
@@ -446,21 +446,21 @@ class Corr_3PCF(TaskBase):
             return "uniform", "uniform random density"
         if isinstance(provided_random, str):
             if provided_random not in cache:
-                cache[provided_random] = ConvolsData(data_path=provided_random, threads=self.threads)
+                cache[provided_random] = SFCField(data_path=provided_random, threads=self.threads)
             return cache[provided_random], f"path={provided_random}"
-        if isinstance(provided_random, ConvolsData):
+        if isinstance(provided_random, SFCField):
             return provided_random, f"provided random{leg_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a ConvolsData instance, or None."
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a SFCField instance, or None."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_convols, provided_window):
+    def _resolve_window(self, leg_idx, base_sfc, provided_window):
         """Resolve a smoothing window for one leg from dict/WindowFunc/None."""
         if isinstance(provided_window, WindowFunc):
             return provided_window, "provided WindowFunc instance"
         if isinstance(provided_window, dict):
-            return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+            return WindowFunc(provided_window, base_sfc.sfc_info, threads=self.threads), (
                 f"provided window dict | {func_util.describe_window_action(provided_window)}"
             )
         if provided_window is not None:
@@ -474,7 +474,7 @@ class Corr_3PCF(TaskBase):
         """Extract the uniform-density representation used by shortcut branches."""
         if isinstance(field, (float, int, np.floating)):
             return float(field)
-        if isinstance(field, ConvolsData):
+        if isinstance(field, SFCField):
             value = field.field_mean_density(value_unit="grid")
             if value is None:
                 raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
@@ -482,7 +482,7 @@ class Corr_3PCF(TaskBase):
         raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
     def _remember_field_scale(self, field):
-        if isinstance(field, ConvolsData):
+        if isinstance(field, SFCField):
             self._density_physical_scale = float(field.scale_factor) ** 3
 
     def _triplet_product_physical_scale(self):
@@ -534,9 +534,9 @@ class Corr_3PCF(TaskBase):
         return field - random_field
 
     def _find_geometry_reference(self, *candidates):
-        """Pick the first ConvolsData object that can define geometry/scale metadata."""
+        """Pick the first SFCField object that can define geometry/scale metadata."""
         for candidate in candidates:
-            if isinstance(candidate, ConvolsData):
+            if isinstance(candidate, SFCField):
                 return candidate
         return None
 
@@ -573,7 +573,7 @@ class Corr_3PCF(TaskBase):
     def _resolve_pos1_array(
         self, provided_pos, provided_weight, fallback_field, label, explicit_pos_name, explicit_weight_name
     ):
-        """Resolve leg-1 center coordinates from explicit arrays or from a ConvolsData source."""
+        """Resolve leg-1 center coordinates from explicit arrays or from a SFCField source."""
         has_explicit_pos = provided_pos is not None
         has_explicit_weight = provided_weight is not None
         if has_explicit_pos != has_explicit_weight:
@@ -586,7 +586,7 @@ class Corr_3PCF(TaskBase):
             weight_arr = self._normalize_particle_weight(
                 provided_weight, pos_arr.shape[0], label=explicit_weight_name
             )
-            if isinstance(fallback_field, ConvolsData):
+            if isinstance(fallback_field, SFCField):
                 self.logger.warning(
                     f"{explicit_pos_name} and {explicit_weight_name} are provided for center='particle'; "
                     f"{label}.get_particle_data() will not be used for center positions or weights."
@@ -611,17 +611,17 @@ class Corr_3PCF(TaskBase):
 
     def _resolve_runtime_inputs(
         self,
-        convols_data1, convols_data2, convols_data3,
+        sfc_field1, sfc_field2, sfc_field3,
         particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
         window1, window2, window3,
     ):
         """Apply shared-input fallbacks right before preparation/run-time use."""
-        if convols_data1 is None:
-            convols_data1 = self.convols_data1 if self.convols_data1 not in (None, "") else self.convols_data
-        if convols_data2 is None:
-            convols_data2 = self.convols_data2 if self.convols_data2 not in (None, "") else self.convols_data
-        if convols_data3 is None:
-            convols_data3 = self.convols_data3 if self.convols_data3 not in (None, "") else self.convols_data
+        if sfc_field1 is None:
+            sfc_field1 = self.sfc_field1 if self.sfc_field1 not in (None, "") else self.sfc_field
+        if sfc_field2 is None:
+            sfc_field2 = self.sfc_field2 if self.sfc_field2 not in (None, "") else self.sfc_field
+        if sfc_field3 is None:
+            sfc_field3 = self.sfc_field3 if self.sfc_field3 not in (None, "") else self.sfc_field
         if particle_pos1 is None:
             particle_pos1 = self.particle_pos1
         if particle_weight1 is None:
@@ -643,13 +643,13 @@ class Corr_3PCF(TaskBase):
         if window3 is None:
             window3 = self.window3 if self.window3 is not None else self.window
         return (
-            convols_data1, convols_data2, convols_data3, particle_pos1, particle_weight1, 
+            sfc_field1, sfc_field2, sfc_field3, particle_pos1, particle_weight1, 
             random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         )
 
     def _broadcast_field(self, value):
-        """Broadcast a ConvolsData field or scalar density to all MPI ranks."""
+        """Broadcast a SFCField field or scalar density to all MPI ranks."""
         comm = self.comm
         rank = self.rank
         serialized = None
@@ -660,7 +660,7 @@ class Corr_3PCF(TaskBase):
             if is_density:
                 density_value = float(value)
             else:
-                serialized = pickle.dumps(value.convols_info)
+                serialized = pickle.dumps(value.sfc_info)
                 value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
                 local_value = value
         else:
@@ -672,9 +672,9 @@ class Corr_3PCF(TaskBase):
 
         serialized = comm.bcast(serialized, root=0)
         if rank != 0:
-            local_value = ConvolsData(threads=self.threads)
-            local_value.convols_info = pickle.loads(serialized)
-            local_value.format_convols_params()
+            local_value = SFCField(threads=self.threads)
+            local_value.sfc_info = pickle.loads(serialized)
+            local_value.format_sfc_params()
             local_value.epsilon = np.empty((local_value.L, local_value.L, local_value.L), dtype=np.float64)
         comm.Bcast(local_value.epsilon, root=0)
         comm.Barrier()
@@ -754,7 +754,7 @@ class Corr_3PCF(TaskBase):
             mu,
             pos_local,
             self.n_rot,
-            self.meta_convols,
+            self.meta_sfc,
             random2,
             random3,
             center=center,
@@ -777,14 +777,14 @@ class Corr_3PCF(TaskBase):
 
         if particle_pos1_arr is not None and (expanded_products & {"xi12", "xi13", "zeta_H", "Q"}) and leg1_base is None:
             self.logger.error(
-                "particle_pos1 can replace convols_data1 only for particle-center products that do not require "
-                "xi12/xi13/zeta_H/Q. Please provide convols_data1 as well if those products are requested."
+                "particle_pos1 can replace sfc_field1 only for particle-center products that do not require "
+                "xi12/xi13/zeta_H/Q. Please provide sfc_field1 as well if those products are requested."
             )
             func_util.safe_exit(1)
         if particle_pos1_arr is not None and leg1_base is not None:
             self.logger.warning(
                 "particle_pos1/particle_weight1 are provided for center='particle'; "
-                "convols_data1 remains available only as the leg-1 signal field for products that require it."
+                "sfc_field1 remains available only as the leg-1 signal field for products that require it."
             )
         if random_pos1_arr is not None and random1_base is not None and "r_delta_dd" in expanded_products:
             self.logger.warning(
@@ -800,11 +800,11 @@ class Corr_3PCF(TaskBase):
 
         leg1_center_base = (
             self._field_in_task_normalization(leg1_base)
-            if isinstance(leg1_base, ConvolsData) else leg1_base
+            if isinstance(leg1_base, SFCField) else leg1_base
         )
         random1_center_base = (
             self._field_in_task_normalization(random1_base)
-            if isinstance(random1_base, ConvolsData) else random1_base
+            if isinstance(random1_base, SFCField) else random1_base
         )
 
         particle_pos1, particle_weight1, particle_pos1_source = (
@@ -812,7 +812,7 @@ class Corr_3PCF(TaskBase):
                 particle_pos1_arr,
                 particle_weight1_arr,
                 leg1_center_base,
-                "convols_data1",
+                "sfc_field1",
                 "particle_pos1",
                 "particle_weight1",
             ) if (expanded_products & {"ddd", "d_delta_dd"}) else (None, None, None)
@@ -821,7 +821,7 @@ class Corr_3PCF(TaskBase):
             self._resolve_pos1_array(
                 random_pos1_arr,
                 random_weight1_arr,
-                random1_center_base if isinstance(random1_center_base, ConvolsData) else None,
+                random1_center_base if isinstance(random1_center_base, SFCField) else None,
                 "random1",
                 "random_pos1",
                 "random_weight1",
@@ -848,9 +848,9 @@ class Corr_3PCF(TaskBase):
 
     def prepare_input_fields(
         self,
-        convols_data1=None,
-        convols_data2=None,
-        convols_data3=None,
+        sfc_field1=None,
+        sfc_field2=None,
+        sfc_field3=None,
         particle_pos1=None,
         particle_weight1=None,
         random1=None,
@@ -867,11 +867,11 @@ class Corr_3PCF(TaskBase):
         self._sync_runtime_options()
         self._resolve_angle_sampling()
         (
-            convols_data1, convols_data2, convols_data3,
+            sfc_field1, sfc_field2, sfc_field3,
             particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         ) = self._resolve_runtime_inputs(
-            convols_data1, convols_data2, convols_data3,
+            sfc_field1, sfc_field2, sfc_field3,
             particle_pos1, particle_weight1, random1, random2, random3, random_pos1, random_weight1,
             window1, window2, window3,
         )
@@ -916,11 +916,11 @@ class Corr_3PCF(TaskBase):
             cache = {}
             data_legs = []
             if needs_data:
-                for i, cdata, win in zip([1, 2, 3], [convols_data1, convols_data2, convols_data3], [window1, window2, window3]):
+                for i, cdata, win in zip([1, 2, 3], [sfc_field1, sfc_field2, sfc_field3], [window1, window2, window3]):
                     if i == 1 and not requires_signal_leg1:
                         continue
-                    base_convols, source_desc = self._resolve_base_convols(i, cdata, cache)
-                    data_legs.append((i, base_convols, source_desc, win))
+                    base_sfc, source_desc = self._resolve_base_sfc(i, cdata, cache)
+                    data_legs.append((i, base_sfc, source_desc, win))
 
             random_legs = []
             if needs_random:
@@ -947,14 +947,14 @@ class Corr_3PCF(TaskBase):
                 random_pos1_source = None
                 self.random_weight1 = None
 
-            # All ConvolsData inputs, including random legs, must agree on the
+            # All SFCField inputs, including random legs, must agree on the
             # same geometry and wavelet metadata before any mixed statistics are valid.
-            compat_fields = [item[1] for item in data_legs if isinstance(item[1], ConvolsData)]
-            compat_fields.extend(item[1] for item in random_legs if isinstance(item[1], ConvolsData))
+            compat_fields = [item[1] for item in data_legs if isinstance(item[1], SFCField)]
+            compat_fields.extend(item[1] for item in random_legs if isinstance(item[1], SFCField))
             if compat_fields:
-                shared_required = func_util.validate_convols_compatibility(
+                shared_required = func_util.validate_sfc_compatibility(
                     compat_fields,
-                    ConvolsData._REQUIRED_ARGV,
+                    SFCField._REQUIRED_ARGV,
                     logger=self.logger,
                     label="Corr_3PCF input fields",
                 )
@@ -978,8 +978,8 @@ class Corr_3PCF(TaskBase):
             self._prepare_signal_legs(data_legs)
 
             if not requires_signal_leg1:
-                self.convols_data1 = None
-                self.corr3pcf_data.convols_info1 = None
+                self.sfc_field1 = None
+                self.corr3pcf_data.sfc_info1 = None
 
             if self.random_pos1 is not None:
                 weight_sum = float(np.sum(self.random_weight1))
@@ -1032,16 +1032,16 @@ class Corr_3PCF(TaskBase):
 
     def _prepare_signal_legs(self, data_legs):
         """Apply optional smoothing windows and finalize the signal-leg fields."""
-        for i, base_convols, source_desc, win in data_legs:
-            base_convols = self._field_in_task_normalization(base_convols)
-            window_obj, window_desc = self._resolve_window(i, base_convols, win)
+        for i, base_sfc, source_desc, win in data_legs:
+            base_sfc = self._field_in_task_normalization(base_sfc)
+            window_obj, window_desc = self._resolve_window(i, base_sfc, win)
             if window_obj is not None:
-                final_convols = base_convols @ window_obj
+                final_sfc = base_sfc @ window_obj
             else:
-                final_convols = base_convols.copy()
-                final_convols.format_convols_params()
-            setattr(self, f"convols_data{i}", final_convols)
-            setattr(self.corr3pcf_data, f"convols_info{i}", final_convols.convols_info)
+                final_sfc = base_sfc.copy()
+                final_sfc.format_sfc_params()
+            setattr(self, f"sfc_field{i}", final_sfc)
+            setattr(self.corr3pcf_data, f"sfc_info{i}", final_sfc.sfc_info)
             self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
 
     def _prepare_random_legs(self, data_legs, random_legs):
@@ -1054,14 +1054,14 @@ class Corr_3PCF(TaskBase):
                 and isinstance(getattr(self, "random1", None), (float, int, np.floating))
             ):
                 signal_ref = self._find_geometry_reference(
-                    getattr(self, f"convols_data{i}", None),
-                    *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
-                    *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
+                    getattr(self, f"sfc_field{i}", None),
+                    *[item[1] for item in data_legs if isinstance(item[1], SFCField)],
+                    *[item[1] for item in random_legs if isinstance(item[1], SFCField)],
                 )
                 if signal_ref is None:
                     self.logger.error(
                         "Cannot resolve the geometry for particle-center random leg 1. "
-                        "Please provide at least one ConvolsData input field."
+                        "Please provide at least one SFCField input field."
                     )
                     func_util.safe_exit(1)
                 signal_ref = self._field_in_task_normalization(signal_ref)
@@ -1070,14 +1070,14 @@ class Corr_3PCF(TaskBase):
                 continue
             if base_random == "uniform":
                 signal_ref = self._find_geometry_reference(
-                    getattr(self, f"convols_data{i}", None),
-                    *[item[1] for item in data_legs if isinstance(item[1], ConvolsData)],
-                    *[item[1] for item in random_legs if isinstance(item[1], ConvolsData)],
+                    getattr(self, f"sfc_field{i}", None),
+                    *[item[1] for item in data_legs if isinstance(item[1], SFCField)],
+                    *[item[1] for item in random_legs if isinstance(item[1], SFCField)],
                 )
                 if signal_ref is None:
                     self.logger.error(
                         f"Cannot resolve the geometry for uniform random leg {i}. "
-                        f"Please provide at least one ConvolsData input field or an explicit random field."
+                        f"Please provide at least one SFCField input field or an explicit random field."
                     )
                     func_util.safe_exit(1)
                 signal_ref = self._field_in_task_normalization(signal_ref)
@@ -1091,7 +1091,7 @@ class Corr_3PCF(TaskBase):
                     final_random = base_random @ window_obj
                 else:
                     final_random = base_random.copy()
-                    final_random.format_convols_params()
+                    final_random.format_sfc_params()
                 setattr(self, f"random{i}", final_random)
                 self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
@@ -1099,24 +1099,24 @@ class Corr_3PCF(TaskBase):
 
     def _compute_random_center_mu(
         self, mu, r23_value, pos_local, seed_base_rot, mu_index,
-        local_results, _local_convols1, _local_convols2, _local_convols3,
+        local_results, _local_sfc1, _local_sfc2, _local_sfc3,
         _local_random1, _local_random2, _local_random3
     ):
         """Compute mu-local products for the box-random center mode."""
         if "ddd" in local_results:
             local_results["ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
-                _local_convols1, _local_convols2, _local_convols3,
+                _local_sfc1, _local_sfc2, _local_sfc3,
                 center="box_random", seed_base_rot=seed_base_rot, mu_index=mu_index,
-                eps1=_local_convols1.epsilon,
+                eps1=_local_sfc1.epsilon,
             )
         if "delta_ddd" in local_results:
-            field1 = _local_convols1 - self._field_mean_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_convols1 - _local_random1
-            field2 = _local_convols2 - self._field_mean_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_convols2 - _local_random2
-            field3 = _local_convols3 - self._field_mean_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_convols3 - _local_random3
+            field1 = _local_sfc1 - self._field_mean_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_sfc1 - _local_random1
+            field2 = _local_sfc2 - self._field_mean_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_sfc2 - _local_random2
+            field3 = _local_sfc3 - self._field_mean_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_sfc3 - _local_random3
             local_results["delta_ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
-                _local_convols1, field2, field3,
+                _local_sfc1, field2, field3,
                 center="box_random", seed_base_rot=seed_base_rot, mu_index=mu_index,
                 eps1=field1.epsilon,
             )
@@ -1130,14 +1130,14 @@ class Corr_3PCF(TaskBase):
         self, mu, r23_value, pos_local_data, weight_local_data, weight_sum_local_data,
         rho1_data, pos_local_random1, weight_local_random1, weight_sum_local_random1,
         rho1_random1, seed_base_rot, mu_index,
-        local_results, _local_convols2, _local_convols3,
+        local_results, _local_sfc2, _local_sfc3,
         _local_random1, _local_random2, _local_random3
     ):
         """Compute mu-local products for the particle-center mode."""
         if "ddd" in local_results:
             local_results["ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
-                self.meta_convols, _local_convols2, _local_convols3,
+                self.meta_sfc, _local_sfc2, _local_sfc3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
                 seed_base_rot=seed_base_rot, mu_index=mu_index,
                 rho1=rho1_data,
@@ -1153,7 +1153,7 @@ class Corr_3PCF(TaskBase):
             field2, field3 = self._particle_delta_fields
             local_results["d_delta_dd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local_data, self.n_rot,
-                self.meta_convols, field2, field3,
+                self.meta_sfc, field2, field3,
                 center="particle", center_weight=weight_local_data, center_weight_sum=weight_sum_local_data,
                 seed_base_rot=seed_base_rot, mu_index=mu_index,
                 rho1=rho1_data,
@@ -1167,7 +1167,7 @@ class Corr_3PCF(TaskBase):
                 field2, field3 = self._particle_delta_fields
                 local_results["r_delta_dd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                     self.r12_scaled, self.r13_scaled, mu, pos_local_random1, self.n_rot,
-                    self.meta_convols, field2, field3,
+                    self.meta_sfc, field2, field3,
                     center="particle", center_weight=weight_local_random1, center_weight_sum=weight_sum_local_random1,
                     seed_base_rot=seed_base_rot, mu_index=mu_index,
                     rho1=rho1_random1,
@@ -1177,7 +1177,7 @@ class Corr_3PCF(TaskBase):
 
     def _compute_pair_cache(
         self, expanded_products, mu_arr,
-        _local_convols1, _local_convols2, _local_convols3,
+        _local_sfc1, _local_sfc2, _local_sfc3,
         _local_random1, _local_random2, _local_random3
     ):
         """Compute and cache all requested 2PCF-derived quantities after the main loop."""
@@ -1187,20 +1187,20 @@ class Corr_3PCF(TaskBase):
         if "xi12" in expanded_products:
             t_pair = time.perf_counter()
             pair_cache["xi12"] = self._compute_pair_stats(
-                _local_convols1, _local_convols2, _local_random1, _local_random2, self.r12
+                _local_sfc1, _local_sfc2, _local_random1, _local_random2, self.r12
             )
             timing["xi12"] = time.perf_counter() - t_pair
         if "xi13" in expanded_products:
             t_pair = time.perf_counter()
             pair_cache["xi13"] = self._compute_pair_stats(
-                _local_convols1, _local_convols3, _local_random1, _local_random3, self.r13
+                _local_sfc1, _local_sfc3, _local_random1, _local_random3, self.r13
             )
             timing["xi13"] = time.perf_counter() - t_pair
         if "xi23" in expanded_products or "rrr" in expanded_products:
             t_pair = time.perf_counter()
             pair_cache["xi23"] = self._compute_pair_stats_series(
-                _local_convols2,
-                _local_convols3,
+                _local_sfc2,
+                _local_sfc3,
                 _local_random2,
                 _local_random3,
                 third_side_from_mu(self.r12, self.r13, mu_arr),
@@ -1212,9 +1212,9 @@ class Corr_3PCF(TaskBase):
     def _root_geometry_reference(self):
         """Find a prepared rank-0 field that can define geometry and scaling."""
         return self._find_geometry_reference(
-            getattr(self, "convols_data1", None),
-            getattr(self, "convols_data2", None),
-            getattr(self, "convols_data3", None),
+            getattr(self, "sfc_field1", None),
+            getattr(self, "sfc_field2", None),
+            getattr(self, "sfc_field3", None),
             getattr(self, "random1", None),
             getattr(self, "random2", None),
             getattr(self, "random3", None),
@@ -1265,14 +1265,14 @@ class Corr_3PCF(TaskBase):
         local_data = {}
         local_random = {}
         for idx in sorted(data_legs):
-            local_data[idx] = self._broadcast_field(getattr(self, f"convols_data{idx}"))
+            local_data[idx] = self._broadcast_field(getattr(self, f"sfc_field{idx}"))
         for idx in sorted(random_legs):
             local_random[idx] = self._broadcast_field(getattr(self, f"random{idx}"))
         return local_data, local_random
 
     def _release_product_runtime(self):
         """Drop product-local cached fields held on the task instance."""
-        self.meta_convols = None
+        self.meta_sfc = None
         self._particle_delta_fields = None
 
     def _product_center_summary(
@@ -1363,19 +1363,19 @@ class Corr_3PCF(TaskBase):
             if rank == 0:
                 geometry_ref = self._root_geometry_reference()
                 if geometry_ref is None:
-                    self.logger.error("At least one ConvolsData input is required to define geometry for Corr_3PCF.")
+                    self.logger.error("At least one SFCField input is required to define geometry for Corr_3PCF.")
                     func_util.safe_exit(1)
                 if self.center == "particle":
                     if self.particle_pos1 is not None:
                         pos_all = self.particle_pos1 * geometry_ref.scale_factor
                         weight_all = self.particle_weight1
                     else:
-                        if self.convols_data1 is None:
-                            self.logger.error("particle centers require particle_pos1 or a usable convols_data1 source.")
+                        if self.sfc_field1 is None:
+                            self.logger.error("particle centers require particle_pos1 or a usable sfc_field1 source.")
                             func_util.safe_exit(1)
-                        particle_data = self.convols_data1.get_particle_data()
-                        pos_all = particle_data["pos"] * self.convols_data1.scale_factor
-                        weight_all = self._center_projection_weight(self.convols_data1, particle_data)
+                        particle_data = self.sfc_field1.get_particle_data()
+                        pos_all = particle_data["pos"] * self.sfc_field1.scale_factor
+                        weight_all = self._center_projection_weight(self.sfc_field1, particle_data)
                     if has_random_pos1:
                         pos_all_random1 = self.random_pos1 * geometry_ref.scale_factor
                         weight_all_random1 = self.random_weight1
@@ -1487,7 +1487,7 @@ class Corr_3PCF(TaskBase):
                     )
 
                 local_data, local_random = self._broadcast_product_runtime(product)
-                self.meta_convols = self._find_geometry_reference(
+                self.meta_sfc = self._find_geometry_reference(
                     *local_data.values(),
                     *local_random.values(),
                 )
@@ -1495,11 +1495,11 @@ class Corr_3PCF(TaskBase):
                     delta_field2 = self._compute_delta_field(local_data[2], local_random[2])
                     delta_field3 = self._compute_delta_field(local_data[3], local_random[3])
                     self._particle_delta_fields = (delta_field2, delta_field3)
-                    self.meta_convols = self._find_geometry_reference(delta_field2, delta_field3, self.meta_convols)
+                    self.meta_sfc = self._find_geometry_reference(delta_field2, delta_field3, self.meta_sfc)
                 elif self.center == "box_random" and product == "delta_ddd":
-                    self.meta_convols = self._find_geometry_reference(local_data.get(1), local_data.get(2), local_data.get(3))
-                elif self.meta_convols is None:
-                    self.meta_convols = self._find_geometry_reference(
+                    self.meta_sfc = self._find_geometry_reference(local_data.get(1), local_data.get(2), local_data.get(3))
+                elif self.meta_sfc is None:
+                    self.meta_sfc = self._find_geometry_reference(
                         local_data.get(1), local_data.get(2), local_data.get(3),
                         local_random.get(1), local_random.get(2), local_random.get(3),
                     )
@@ -1566,7 +1566,7 @@ class Corr_3PCF(TaskBase):
 
                 pair_cache, rr23_cache, pair_timing = self._compute_pair_cache(
                     expanded_products, mu_arr,
-                    self.convols_data1, self.convols_data2, self.convols_data3,
+                    self.sfc_field1, self.sfc_field2, self.sfc_field3,
                     self.random1, self.random2, self.random3
                 )
 

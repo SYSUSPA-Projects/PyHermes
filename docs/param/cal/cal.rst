@@ -3,8 +3,8 @@ Calculation
 
 This section summarizes the main task-specific calculation parameters.
 
-Convols
--------
+SFCProjection
+-------------
 
 - ``J``: multiresolution level used for the field representation
 - ``phi_resolution``: number of samples used to tabulate ``phi``, the wavelet scaling function

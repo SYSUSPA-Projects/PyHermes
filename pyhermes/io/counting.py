@@ -10,6 +10,7 @@ from pyhermes.utils import func_util
 class CountingData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
+        self.sfc_info = {}
         self.counting_info = {}
         self.nx = None
         super().__init__(*args, threads=threads, **kwargs)
@@ -18,7 +19,7 @@ class CountingData(HermesData):
             self.load_counting(data_path)
 
     def format_counting_params(self):
-        for key, value in self.convols_info.items():
+        for key, value in self.sfc_info.items():
             setattr(self, key, value)
         for key, value in self.counting_info.items():
             setattr(self, key, value)
@@ -37,9 +38,9 @@ class CountingData(HermesData):
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'nx' key.")
                 func_util.safe_exit(1)
             self.nx = dataset['nx']
-            _convols_info = dataset.get('convols_info')
-            if _convols_info:
-                self.convols_info = _convols_info
+            _sfc_info = dataset.get('sfc_info')
+            if _sfc_info:
+                self.sfc_info = _sfc_info
             _counting_info = dataset.get('counting_info')
             if _counting_info:
                 self.counting_info.update(_counting_info)
@@ -55,7 +56,7 @@ class CountingData(HermesData):
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         dataset = {
-            'convols_info': self.convols_info,
+            'sfc_info': self.sfc_info,
             'counting_info': self.counting_info,
             'nx': self.nx  # Include the actual data
         }

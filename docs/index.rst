@@ -3,7 +3,7 @@ PyHermes documentation
 
 PyHermes is a workflow-oriented package for particle-based cosmic statistics.
 The central idea is simple: project a particle catalog into a reusable
-``ConvolsData`` field, act on that field with ``WindowFunc`` convolution
+``SFCField`` field, act on that field with ``WindowFunc`` convolution
 operators, and read out one-point, two-point, three-point, multipole, or
 weighted-field measurements from the resulting field products.
 

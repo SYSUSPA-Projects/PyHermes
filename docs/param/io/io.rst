@@ -105,12 +105,12 @@ Task outputs
 PyHermes writes serialized task outputs as pickle-based ``.pkl`` files. Common
 examples are:
 
-- ``ConvolsData``
+- ``SFCField``
 - ``CountingData``
 - ``Corr2PCFData``
 - ``Corr3PCFData``
 
-Most workflows reuse the ``Convols`` output file as the main upstream input for
+Most workflows reuse the ``SFCProjection`` output file as the main upstream input for
 later tasks.
 
 Relevant fields

@@ -1,6 +1,6 @@
 {
 	"enable_default_param": true, // do not change this
-	"Convols": {
+	"SFCProjection": {
 		"fin": {
 			"path": "",
 			"format": "bin",

@@ -4,7 +4,7 @@ import copy
 
 import numpy as np
 
-from .convols import ConvolsData
+from .sfc_field import SFCField
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import (
     build_complex_window_rfft_kernel,
@@ -26,11 +26,11 @@ from pyhermes.utils.window_params import (
 )
 
 
-class WindowFunc(ConvolsData):
+class WindowFunc(SFCField):
     def __init__(
         self,
         win_params,
-        convols_params,
+        sfc_params,
         bandwidth=1,
         threads=1,
         phi_array=None,
@@ -38,25 +38,25 @@ class WindowFunc(ConvolsData):
     ):
         # Initial MPI, logger mess
         super().__init__(threads=threads)
-        missing = [k for k in self._REQUIRED_ARGV if k not in convols_params]
+        missing = [k for k in self._REQUIRED_ARGV if k not in sfc_params]
         if missing:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc missing required keys: {missing}")
             func_util.safe_exit(1)
         try:
-            self.L = 1 << int(convols_params['J'])
+            self.L = 1 << int(sfc_params['J'])
             self.bandwidth = int(bandwidth)
-            self.box_size = convols_params["box_size"]
-            self.phi_resolution = int(convols_params["phi_resolution"])
-            self.wavelet_mode = convols_params["wavelet_mode"]
-            self.wavelet_level = convols_params["wavelet_level"]
+            self.box_size = sfc_params["box_size"]
+            self.phi_resolution = int(sfc_params["phi_resolution"])
+            self.wavelet_mode = sfc_params["wavelet_mode"]
+            self.wavelet_level = sfc_params["wavelet_level"]
         except Exception as e:
             if self.rank == 0:
                 self.logger.error(f"WindowFunc core parameter error: {e}")
             func_util.safe_exit(1)
         self.input_params = {
             **dict(win_params),
-            "J": int(convols_params["J"]),
+            "J": int(sfc_params["J"]),
             "box_size": self.box_size,
             "phi_resolution": self.phi_resolution,
             "wavelet_mode": self.wavelet_mode,
@@ -276,7 +276,7 @@ class WindowFunc(ConvolsData):
         new.saveflag = False
         new.task_params = copy.deepcopy(getattr(self, "task_params", None))
         new.threads = self.threads
-        new.convols_info = copy.deepcopy(getattr(self, "convols_info", {}))
+        new.sfc_info = copy.deepcopy(getattr(self, "sfc_info", {}))
         new.epsilon = None
 
         for key in (
@@ -423,7 +423,7 @@ class WindowFunc(ConvolsData):
             if 'window_kernal' not in dataset:
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'window_kernal' key.")
                 func_util.safe_exit(1)
-            # Assign the dictionary from the file to self.convols_info
+            # Assign the dictionary from the file to self.sfc_info
             self.input_params = {key: value for key, value in dataset.items() if key != 'window_kernal'}
             self.w_kernel = dataset['window_kernal']
 

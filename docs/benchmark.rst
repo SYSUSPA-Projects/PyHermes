@@ -136,7 +136,7 @@ Label notes: ``smu(46x51)`` means 46 radial bins times 51 ``mu`` bins, while
 ``rppi(46x46)`` means 46 ``rp`` bins times 46 ``pi`` bins. ``axis LOS`` uses
 ``(0, 0, 1)`` and ``diag LOS`` uses ``(1, 1, 1)``. ``uniform shortcut`` uses
 the analytic uniform random density, while ``explicit random`` reads a saved
-random ``ConvolsData`` field.
+random ``SFCField`` field.
 
 .. list-table::
    :header-rows: 1

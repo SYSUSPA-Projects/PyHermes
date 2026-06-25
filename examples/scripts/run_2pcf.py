@@ -2,7 +2,7 @@
 Example: run 2PCF with PyHermes
 
 This script computes the 2-point correlation function from a saved
-ConvolsData product using the standard PyHermes 2PCF pipeline.
+SFCField product using the standard PyHermes 2PCF pipeline.
 """
 
 import sys

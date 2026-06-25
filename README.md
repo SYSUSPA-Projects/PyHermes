@@ -10,14 +10,14 @@ statistics, built around multiresolution fields and window convolutions.
 
 Instead of recounting pairs or triplets for every requested configuration,
 PyHermes projects a particle catalog onto a grid, stores the result as reusable
-`ConvolsData`, and evaluates downstream measurements through field operations.
+`SFCField`, and evaluates downstream measurements through field operations.
 This gives one common workflow for one-point counts, two-point correlations,
 three-point correlations, and multipoles, with GPU acceleration available for
 the multipole path.
 
 The typical workflow is:
 
-1. build `ConvolsData` from particle positions with `Convols`
+1. build `SFCField` from particle positions with `SFCProjection`
 2. define the window functions required by the statistic
 3. reuse the same field for counting, 2PCF, 3PCF, and multipole measurements
 
@@ -49,12 +49,12 @@ pip install mpi4py
 ## Quick Start
 
 The examples use paths relative to `examples/`. From a fresh clone, first
-prepare the local Quijote halo catalog and the reusable `ConvolsData` products
+prepare the local Quijote halo catalog and the reusable `SFCField` products
 used by later examples. You can either run the data-preparation sections in
-`examples/notebooks/convols.ipynb`, or run the same preparation directly:
+`examples/notebooks/sfc_projection.ipynb`, or run the same preparation directly:
 
 ```bash
-python examples/scripts/prepare_convols_data.py
+python examples/scripts/prepare_sfc_fields.py
 ```
 
 After that, the core PyHermes workflow is only a few lines:
@@ -66,7 +66,7 @@ import os
 import matplotlib.pyplot as plt
 import numpy as np
 
-from pyhermes.base.convols import Convols
+from pyhermes.base.sfc_projection import SFCProjection
 from pyhermes.io import WindowFunc
 from pyhermes.param.parambase import read_param
 
@@ -74,8 +74,8 @@ from pyhermes.param.parambase import read_param
 os.chdir(Path("examples"))
 
 # Build the multiresolution field from the example particle catalog.
-task_params = read_param(config_path="./configs/param_convols.yaml")
-D = Convols(task_params).run(save_result=False)
+task_params = read_param(config_path="./configs/param_sfc_projection.yaml")
+D = SFCProjection(task_params).run(save_result=False)
 D.threads = 8
 
 # Convert the normalized field into a fluctuation field.
@@ -86,7 +86,7 @@ deltaD = D - rho
 # Smooth the fluctuation field with a spherical top-hat window.
 smooth_window = WindowFunc(
     {"type": "sphere", "len_args": {"R": 5}},
-    D.convols_info,
+    D.sfc_info,
     threads=8,
 )
 deltaD_w = deltaD @ smooth_window
@@ -98,7 +98,7 @@ xi_arr = np.zeros_like(r_arr)
 for i, r in enumerate(r_arr):
     shell_window = WindowFunc(
         {"type": "shell", "len_args": {"R": r}},
-        D.convols_info,
+        D.sfc_info,
         threads=8,
     )
     pair_field = deltaD_w @ shell_window * deltaD_w
@@ -115,8 +115,8 @@ plt.show()
 The repository is organized around seven notebooks in `examples/notebooks/`:
 
 - `quick_start.ipynb`: the smallest end-to-end example
-- `convols.ipynb`: build `ConvolsData` from particle catalogs
-- `window.ipynb`: work with `ConvolsData` and `WindowFunc` arithmetic
+- `sfc_projection.ipynb`: build `SFCField` from particle catalogs
+- `window.ipynb`: work with `SFCField` and `WindowFunc` arithmetic
 - `counting.ipynb`: sample the field at random positions
 - `corr2pcf.ipynb`: isotropic and anisotropic 2PCF, including redshift-space examples
 - `corr3pcf.ipynb`: standard 3PCF, low-level `Q` reconstruction, and multipoles
@@ -125,7 +125,7 @@ The repository is organized around seven notebooks in `examples/notebooks/`:
 The recommended reading order is:
 
 1. `quick_start.ipynb`
-2. `convols.ipynb`
+2. `sfc_projection.ipynb`
 3. `window.ipynb`
 4. `counting.ipynb`
 5. `corr2pcf.ipynb`
@@ -142,8 +142,8 @@ The tracked example assets are:
 
 The following directories are created and filled locally:
 
-- `examples/data/`: local example data. Use `examples/notebooks/convols.ipynb`
-  or `examples/scripts/prepare_convols_data.py` to download and prepare the
+- `examples/data/`: local example data. Use `examples/notebooks/sfc_projection.ipynb`
+  or `examples/scripts/prepare_sfc_fields.py` to download and prepare the
   Quijote halo example used by the tutorials.
 - `examples/output/`: local outputs. Lightweight products are created during
   notebook runs. Heavier 2PCF and 3PCF products are not committed; the
@@ -160,7 +160,7 @@ From the repository root:
 
 ```bash
 cd examples
-python ./scripts/run_convols.py ./configs/param_convols.yaml
+python ./scripts/run_sfc_projection.py ./configs/param_sfc_projection.yaml
 python ./scripts/run_counting.py ./configs/param_counting.yaml
 python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
@@ -170,7 +170,7 @@ With MPI:
 
 ```bash
 cd examples
-mpirun -np 4 python ./scripts/run_convols.py ./configs/param_convols.yaml
+mpirun -np 4 python ./scripts/run_sfc_projection.py ./configs/param_sfc_projection.yaml
 mpirun -np 4 python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
 mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
 ```

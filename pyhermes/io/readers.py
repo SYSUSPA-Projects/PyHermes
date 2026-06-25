@@ -466,7 +466,7 @@ def read_particle_data(path, data_format=None, **reader_params):
     return FORMAT_READERS[data_format](path, **reader_params)
 
 
-# Per-particle scalar selection used by Convols and ConvolsData.
+# Per-particle scalar selection used by SFCProjection and SFCField.
 def resolve_particle_value(particle_data, value_key, label="Particle value", logger=None):
     """Resolve a unit or named one-dimensional particle scalar array."""
     size = int(particle_data["size"])

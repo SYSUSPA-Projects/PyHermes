@@ -1,5 +1,5 @@
 Corr_2PCF:
-   convols_data: "./output/quijote8000_snap004_rsd_diag_sfc.pkl"
+   sfc_field: "./output/quijote8000_snap004_rsd_diag_sfc.pkl"
    random: "uniform"
    pair_window:
       type: "ring"

@@ -5,7 +5,7 @@ import time
 import numpy as np
 from mpi4py import MPI
 
-from pyhermes.io import WindowFunc, ConvolsData, Corr3PCFMultipoleData, normalize_task_weight_normalization
+from pyhermes.io import WindowFunc, SFCField, Corr3PCFMultipoleData, normalize_task_weight_normalization
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
@@ -40,10 +40,10 @@ class Corr_3PCF_Multipole(TaskBase):
         self._fields_prepared = False
 
     def format_params(self):
-        self.convols_data = self.task_params.get("convols_data", "")
-        self.convols_data1 = self.task_params.get("convols_data1", "") or self.convols_data
-        self.convols_data2 = self.task_params.get("convols_data2", "") or self.convols_data
-        self.convols_data3 = self.task_params.get("convols_data3", "") or self.convols_data
+        self.sfc_field = self.task_params.get("sfc_field", "")
+        self.sfc_field1 = self.task_params.get("sfc_field1", "") or self.sfc_field
+        self.sfc_field2 = self.task_params.get("sfc_field2", "") or self.sfc_field
+        self.sfc_field3 = self.task_params.get("sfc_field3", "") or self.sfc_field
         self.random = self.task_params.get("random", None)
         self.random1 = self.task_params.get("random1", None)
         self.random2 = self.task_params.get("random2", None)
@@ -78,7 +78,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "zeta_l"))
         self.rho = None
-        self.reference_convols = None
+        self.reference_sfc = None
         self._last_product_profile = None
         self._role_layout_logged = False
         self.fout_path = self.task_params["fout_path"]
@@ -86,8 +86,8 @@ class Corr_3PCF_Multipole(TaskBase):
     def _fallback_random(self, value):
         return self.random if value is None or value == "" else value
 
-    def _fallback_convols(self, value):
-        return self.convols_data if value is None or value == "" else value
+    def _fallback_sfc(self, value):
+        return self.sfc_field if value is None or value == "" else value
 
     def _fallback_window(self, value):
         if value is None:
@@ -151,12 +151,12 @@ class Corr_3PCF_Multipole(TaskBase):
             needs_random = needs_random or product_needs_random
         return needs_data, needs_random
 
-    def _serialize_convols_input(self, value):
+    def _serialize_sfc_input(self, value):
         if isinstance(value, str) or value is None:
             return value
-        if isinstance(value, ConvolsData):
+        if isinstance(value, SFCField):
             return {
-                "kind": "ConvolsData",
+                "kind": "SFCField",
                 "L": getattr(value, "L", value.epsilon.shape[0] if value.epsilon is not None else None),
                 "box_size": getattr(value, "box_size", None),
                 "wavelet_mode": getattr(value, "wavelet_mode", None),
@@ -181,14 +181,14 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _current_task_params_snapshot(self):
         return {
-            "convols_data": self._serialize_convols_input(self.convols_data),
-            "convols_data1": self._serialize_convols_input(self.convols_data1),
-            "convols_data2": self._serialize_convols_input(self.convols_data2),
-            "convols_data3": self._serialize_convols_input(self.convols_data3),
-            "random": self._serialize_convols_input(self.random),
-            "random1": self._serialize_convols_input(self.random1),
-            "random2": self._serialize_convols_input(self.random2),
-            "random3": self._serialize_convols_input(self.random3),
+            "sfc_field": self._serialize_sfc_input(self.sfc_field),
+            "sfc_field1": self._serialize_sfc_input(self.sfc_field1),
+            "sfc_field2": self._serialize_sfc_input(self.sfc_field2),
+            "sfc_field3": self._serialize_sfc_input(self.sfc_field3),
+            "random": self._serialize_sfc_input(self.random),
+            "random1": self._serialize_sfc_input(self.random1),
+            "random2": self._serialize_sfc_input(self.random2),
+            "random3": self._serialize_sfc_input(self.random3),
             "weight_normalization": self.weight_normalization,
             "window": self._serialize_window_input(self.window),
             "window1": self._serialize_window_input(self.window1),
@@ -211,21 +211,21 @@ class Corr_3PCF_Multipole(TaskBase):
             "fout_path": self.fout_path,
         }
 
-    def _resolve_base_convols(self, leg_idx, provided_convols, base_convols_cache):
-        if isinstance(provided_convols, str) and provided_convols:
-            if provided_convols not in base_convols_cache:
-                base_convols_cache[provided_convols] = ConvolsData(data_path=provided_convols, threads=self.threads)
-            return base_convols_cache[provided_convols], f"path={provided_convols}"
-        if isinstance(provided_convols, ConvolsData):
-            return provided_convols, f"provided convols_data{leg_idx}"
-        if provided_convols in (None, ""):
+    def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
+        if isinstance(provided_sfc, str) and provided_sfc:
+            if provided_sfc not in base_sfc_cache:
+                base_sfc_cache[provided_sfc] = SFCField(data_path=provided_sfc, threads=self.threads)
+            return base_sfc_cache[provided_sfc], f"path={provided_sfc}"
+        if isinstance(provided_sfc, SFCField):
+            return provided_sfc, f"provided sfc_field{leg_idx}"
+        if provided_sfc in (None, ""):
             self.logger.error(
                 f"Missing input for field leg {leg_idx}. Products {self._expanded_products()} require "
-                f"'convols_data{leg_idx}' or shared 'convols_data'."
+                f"'sfc_field{leg_idx}' or shared 'sfc_field'."
             )
             func_util.safe_exit(1)
         self.logger.error(
-            f"Unexpected input: 'convols_data{leg_idx}' must be a string path or a ConvolsData instance."
+            f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
         )
         func_util.safe_exit(1)
 
@@ -240,20 +240,20 @@ class Corr_3PCF_Multipole(TaskBase):
             if provided_random == "uniform":
                 return "uniform", "uniform random density"
             if provided_random not in random_cache:
-                random_cache[provided_random] = ConvolsData(data_path=provided_random, threads=self.threads)
+                random_cache[provided_random] = SFCField(data_path=provided_random, threads=self.threads)
             return random_cache[provided_random], f"path={provided_random}"
-        if isinstance(provided_random, ConvolsData):
+        if isinstance(provided_random, SFCField):
             return provided_random, f"provided random{leg_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, or a ConvolsData instance."
+            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, or a SFCField instance."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_convols, provided_window):
+    def _resolve_window(self, leg_idx, base_sfc, provided_window):
         if isinstance(provided_window, WindowFunc):
             return provided_window, "provided WindowFunc instance"
         if isinstance(provided_window, dict):
-            return WindowFunc(provided_window, base_convols.convols_info, threads=self.threads), (
+            return WindowFunc(provided_window, base_sfc.sfc_info, threads=self.threads), (
                 f"provided window dict | {func_util.describe_window_action(provided_window)}"
             )
         if provided_window is not None:
@@ -266,7 +266,7 @@ class Corr_3PCF_Multipole(TaskBase):
     def _field_mean_density(self, field):
         if isinstance(field, (float, int, np.floating)):
             return float(field)
-        if isinstance(field, ConvolsData):
+        if isinstance(field, SFCField):
             value = field.field_mean_density(value_unit="grid")
             if value is None:
                 raise ValueError("Cannot extract a uniform density from a field without field_integral metadata.")
@@ -274,7 +274,7 @@ class Corr_3PCF_Multipole(TaskBase):
         raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
     def _remember_field_scale(self, field):
-        if isinstance(field, ConvolsData):
+        if isinstance(field, SFCField):
             self._density_physical_scale = float(field.scale_factor) ** 3
 
     def _triplet_product_physical_scale(self):
@@ -321,7 +321,7 @@ class Corr_3PCF_Multipole(TaskBase):
     def _materialize_uniform_random(self, reference_field, rho, leg_idx):
         field = reference_field._spawn_like()
         field.epsilon = np.full((reference_field.L,) * 3, rho, dtype=np.float64)
-        field.convols_info.update({
+        field.sfc_info.update({
             "catalog_weight_sum": None,
             "catalog_weight_sq_sum": None,
             "raw_field_weighted_sum": None,
@@ -335,26 +335,26 @@ class Corr_3PCF_Multipole(TaskBase):
             "uniform_random_materialized": True,
             "uniform_random_leg": int(leg_idx),
         })
-        field.format_convols_params()
+        field.format_sfc_params()
         return field
 
-    def _broadcast_convols(self, rank, comm, convols_data):
-        serialized = pickle.dumps(convols_data.convols_info) if rank == 0 else None
+    def _broadcast_sfc(self, rank, comm, sfc_field):
+        serialized = pickle.dumps(sfc_field.sfc_info) if rank == 0 else None
         serialized = comm.bcast(serialized, root=0)
         if rank == 0:
-            local = convols_data
+            local = sfc_field
             local.epsilon = np.ascontiguousarray(local.epsilon, dtype=np.float64)
         else:
-            local = ConvolsData(threads=self.threads)
-            local.convols_info = pickle.loads(serialized)
-            local.format_convols_params()
+            local = SFCField(threads=self.threads)
+            local.sfc_info = pickle.loads(serialized)
+            local.format_sfc_params()
             local.epsilon = np.empty((local.L, local.L, local.L), dtype=np.float64)
         comm.Bcast(local.epsilon, root=0)
         return local
 
-    def _broadcast_convols_to_ranks(self, comm, convols_data, target_ranks):
+    def _broadcast_sfc_to_ranks(self, comm, sfc_field, target_ranks):
         """
-        Broadcast one ConvolsData only to ranks that need it.
+        Broadcast one SFCField only to ranks that need it.
 
         Rank 0 is always included as the sender. If rank 0 is not in
         target_ranks, it participates in the broadcast but returns None so the
@@ -367,17 +367,17 @@ class Corr_3PCF_Multipole(TaskBase):
         if subcomm == MPI.COMM_NULL:
             return None
 
-        serialized = pickle.dumps(convols_data.convols_info) if rank == 0 else None
+        serialized = pickle.dumps(sfc_field.sfc_info) if rank == 0 else None
         serialized = subcomm.bcast(serialized, root=0)
         if rank == 0:
-            send_field = convols_data
+            send_field = sfc_field
             send_field.epsilon = np.ascontiguousarray(send_field.epsilon, dtype=np.float64)
             subcomm.Bcast(send_field.epsilon, root=0)
             local = send_field if rank in target_ranks else None
         else:
-            local = ConvolsData(threads=self.threads)
-            local.convols_info = pickle.loads(serialized)
-            local.format_convols_params()
+            local = SFCField(threads=self.threads)
+            local.sfc_info = pickle.loads(serialized)
+            local.format_sfc_params()
             local.epsilon = np.empty((local.L, local.L, local.L), dtype=np.float64)
             subcomm.Bcast(local.epsilon, root=0)
         subcomm.Free()
@@ -385,9 +385,9 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def prepare_input_fields(
         self,
-        convols_data1=None,
-        convols_data2=None,
-        convols_data3=None,
+        sfc_field1=None,
+        sfc_field2=None,
+        sfc_field3=None,
         random1=None,
         random2=None,
         random3=None,
@@ -405,9 +405,9 @@ class Corr_3PCF_Multipole(TaskBase):
 
         needs_data, needs_random = self._required_input_flags()
         data_inputs = [
-            convols_data1 if convols_data1 is not None else self._fallback_convols(self.convols_data1),
-            convols_data2 if convols_data2 is not None else self._fallback_convols(self.convols_data2),
-            convols_data3 if convols_data3 is not None else self._fallback_convols(self.convols_data3),
+            sfc_field1 if sfc_field1 is not None else self._fallback_sfc(self.sfc_field1),
+            sfc_field2 if sfc_field2 is not None else self._fallback_sfc(self.sfc_field2),
+            sfc_field3 if sfc_field3 is not None else self._fallback_sfc(self.sfc_field3),
         ]
         random_inputs = [
             random1 if random1 is not None else self._fallback_random(self.random1),
@@ -433,7 +433,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"requested_products={self.products}, expanded_products={self._expanded_products()}"
             )
 
-            base_convols_cache = {}
+            base_sfc_cache = {}
             random_cache = {}
             data_legs = []
             random_legs = []
@@ -441,23 +441,23 @@ class Corr_3PCF_Multipole(TaskBase):
 
             if needs_data:
                 for i, cdata in enumerate(data_inputs, start=1):
-                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                    data_legs.append((i, base_convols, source_desc, window_inputs[i - 1]))
-                    compatibility_fields.append(base_convols)
+                    base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
+                    data_legs.append((i, base_sfc, source_desc, window_inputs[i - 1]))
+                    compatibility_fields.append(base_sfc)
 
             if needs_random:
                 for i, random_input in enumerate(random_inputs, start=1):
                     base_random, source_desc = self._resolve_random_base(i, random_input, random_cache)
                     random_legs.append((i, base_random, source_desc, window_inputs[i - 1]))
-                    if isinstance(base_random, ConvolsData):
+                    if isinstance(base_random, SFCField):
                         compatibility_fields.append(base_random)
 
             if not compatibility_fields:
                 for i, cdata in enumerate(data_inputs, start=1):
                     if cdata is None or cdata == "":
                         continue
-                    base_convols, source_desc = self._resolve_base_convols(i, cdata, base_convols_cache)
-                    compatibility_fields.append(base_convols)
+                    base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
+                    compatibility_fields.append(base_sfc)
                     self.logger.info(
                         f"Geometry reference loaded from field leg {i} | source={source_desc}"
                     )
@@ -465,45 +465,45 @@ class Corr_3PCF_Multipole(TaskBase):
 
             if not compatibility_fields:
                 self.logger.error(
-                    "At least one ConvolsData input is required to define the grid geometry and shared density."
+                    "At least one SFCField input is required to define the grid geometry and shared density."
                 )
                 func_util.safe_exit(1)
 
-            shared_required = func_util.validate_convols_compatibility(
+            shared_required = func_util.validate_sfc_compatibility(
                 compatibility_fields,
-                ConvolsData._REQUIRED_ARGV,
+                SFCField._REQUIRED_ARGV,
                 logger=self.logger,
                 label="Corr_3PCF multipole input fields",
             )
             shared_required_text = ", ".join([f"{k}={v}" for k, v in shared_required.items()])
-            self.reference_convols = compatibility_fields[0]._spawn_like()
-            self.reference_convols.format_convols_params()
+            self.reference_sfc = compatibility_fields[0]._spawn_like()
+            self.reference_sfc.format_sfc_params()
             self.rho = self._field_mean_density(self._field_in_task_normalization(compatibility_fields[0]))
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
             self.logger.info(f"Shared density | rho={self.rho:.6g}")
 
             if needs_data:
-                for i, base_convols, source_desc, win in data_legs:
-                    base_convols = self._field_in_task_normalization(base_convols)
-                    window_obj, window_desc = self._resolve_window(i, base_convols, win)
+                for i, base_sfc, source_desc, win in data_legs:
+                    base_sfc = self._field_in_task_normalization(base_sfc)
+                    window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                     if window_obj is not None:
-                        final_convols = base_convols @ window_obj
+                        final_sfc = base_sfc @ window_obj
                     else:
-                        final_convols = base_convols.copy()
-                        final_convols.format_convols_params()
+                        final_sfc = base_sfc.copy()
+                        final_sfc.format_sfc_params()
 
-                    setattr(self, f"convols_data{i}", final_convols)
-                    setattr(self.corr3pcf_multipole_data, f"convols_info{i}", final_convols.convols_info)
+                    setattr(self, f"sfc_field{i}", final_sfc)
+                    setattr(self.corr3pcf_multipole_data, f"sfc_info{i}", final_sfc.sfc_info)
                     self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
             else:
                 for i in range(1, 4):
-                    setattr(self.corr3pcf_multipole_data, f"convols_info{i}", self.reference_convols.convols_info)
+                    setattr(self.corr3pcf_multipole_data, f"sfc_info{i}", self.reference_sfc.sfc_info)
 
             if needs_random:
                 for i, base_random, source_desc, win in random_legs:
                     if isinstance(base_random, str) and base_random == "uniform":
-                        signal_ref = getattr(self, f"convols_data{i}", None)
+                        signal_ref = getattr(self, f"sfc_field{i}", None)
                         setattr(self, f"random{i}", self.rho)
                         self.logger.info(
                             f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={self.rho:.6g}"
@@ -515,7 +515,7 @@ class Corr_3PCF_Multipole(TaskBase):
                         final_random = base_random @ window_obj
                     else:
                         final_random = base_random.copy()
-                        final_random.format_convols_params()
+                        final_random.format_sfc_params()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
 
@@ -860,16 +860,16 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _prepare_product_fields(self, product_name):
         if product_name == "ddd_l":
-            return [self.convols_data1, self.convols_data2, self.convols_data3]
+            return [self.sfc_field1, self.sfc_field2, self.sfc_field3]
         if product_name == "delta_ddd_l":
             return [
-                self._delta_field(self.convols_data1, self.random1),
-                self._delta_field(self.convols_data2, self.random2),
-                self._delta_field(self.convols_data3, self.random3),
+                self._delta_field(self.sfc_field1, self.random1),
+                self._delta_field(self.sfc_field2, self.random2),
+                self._delta_field(self.sfc_field3, self.random3),
             ]
         if product_name == "rrr_l":
             rho = self._uniform_density()
-            reference = self.reference_convols
+            reference = self.reference_sfc
             fields = []
             for i, random_field in enumerate([self.random1, self.random2, self.random3], start=1):
                 if self._is_uniform_random(random_field):
@@ -915,9 +915,9 @@ class Corr_3PCF_Multipole(TaskBase):
                     )
                     self._role_layout_logged = True
             local_fields = [
-                self._broadcast_convols_to_ranks(comm, fields[0] if rank == 0 else None, {0}),
-                self._broadcast_convols_to_ranks(comm, fields[1] if rank == 0 else None, set(range(n_pairs))),
-                self._broadcast_convols_to_ranks(comm, fields[2] if rank == 0 else None, set(range(n_pairs, size))),
+                self._broadcast_sfc_to_ranks(comm, fields[0] if rank == 0 else None, {0}),
+                self._broadcast_sfc_to_ranks(comm, fields[1] if rank == 0 else None, set(range(n_pairs))),
+                self._broadcast_sfc_to_ranks(comm, fields[2] if rank == 0 else None, set(range(n_pairs, size))),
             ]
             if rank == 0:
                 fields[:] = [None, None, None]

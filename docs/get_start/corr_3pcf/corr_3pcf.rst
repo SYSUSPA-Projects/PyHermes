@@ -38,7 +38,7 @@ triangle side lengths, angular sampling, center strategy, and products:
 .. code-block:: yaml
 
    Corr_3PCF:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"
@@ -120,7 +120,7 @@ by arithmetic or window convolution do not retain a recoverable particle list;
 pass ``particle_pos1`` and ``particle_weight1`` explicitly when such a field is
 used with ``center: "particle"``. These two explicit arrays must be provided
 together; when they are present, PyHermes uses them as given for the center leg
-instead of mixing them with particle metadata recovered from ``convols_data1``.
+instead of mixing them with particle metadata recovered from ``sfc_field1``.
 
 In box-random-center mode the centers are Monte Carlo positions in the periodic
 volume, so all three legs are evaluated as fields:
@@ -214,7 +214,7 @@ shape:
 .. code-block:: yaml
 
    Corr_3PCF_Multipole:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       window:
          type: "sphere"

@@ -40,17 +40,17 @@ def normalize_field_value_normalization(normalization):
     return mode
 
 
-class ConvolsData(HermesData):
+class SFCField(HermesData):
     _REQUIRED_ARGV = ("J", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level")
 
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
-        self.convols_info = {}
+        self.sfc_info = {}
         self.epsilon = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
-            self.convols_info['convols_data_path'] = data_path
-            self.load_convols(data_path)
+            self.sfc_info['sfc_field_path'] = data_path
+            self.load_sfc_field(data_path)
 
     def _spawn_like(self):
         """
@@ -65,7 +65,7 @@ class ConvolsData(HermesData):
         new.logger = self.logger
 
         # --- copy metadata (shallow copy is enough) ---
-        new.convols_info = copy.deepcopy(self.convols_info)
+        new.sfc_info = copy.deepcopy(self.sfc_info)
         new.task_params  = copy.deepcopy(self.task_params)
 
         # --- clear data containers ---
@@ -80,7 +80,7 @@ class ConvolsData(HermesData):
         """
         new = self._spawn_like()
         new.epsilon = copy.deepcopy(self.epsilon)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     def _conv(self, other):
@@ -125,35 +125,35 @@ class ConvolsData(HermesData):
                     "If you swapped the operands (window @ signal), this shape mismatch can occur.")
             func_util.safe_exit(1)
 
-        # --- spawn new ConvolsData ---
+        # --- spawn new SFCField ---
         new = self._spawn_like()
 
         # --- set result ---
         new.epsilon = conv
 
         # --- optional: record provenance ---
-        windows = self.convols_info.get("convolution_of", [])
+        windows = self.sfc_info.get("convolution_of", [])
         # windows.append(other.window_params)
-        new.convols_info.update({
+        new.sfc_info.update({
             "convolution_of": windows + [other.window_params]
         })
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
 
         return new
 
     def __matmul__(self, other):
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return self._conv(other)
         return NotImplemented
 
     def __rmatmul__(self, other):
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return other._conv(self)  
         return NotImplemented
 
     def __add__(self, other):
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return self._add_field(other)
 
         if np.isscalar(other):
@@ -165,13 +165,13 @@ class ConvolsData(HermesData):
         if np.isscalar(other):
             return self._add_scalar(other)
 
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return other._add_field(self)
 
         return NotImplemented
 
     def __mul__(self, other):
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return self._mul_field(other)
 
         if np.isscalar(other):
@@ -183,7 +183,7 @@ class ConvolsData(HermesData):
         if np.isscalar(other):
             return self._mul_scalar(other)
 
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return other._mul_field(self)
 
         return NotImplemented
@@ -200,7 +200,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon + other.epsilon
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     # ---------- field + scalar ----------
@@ -212,7 +212,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon + scalar
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     # ---------- field × field ----------
@@ -221,7 +221,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon * other.epsilon
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     # ---------- field × scalar ----------
@@ -233,7 +233,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon * scalar
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     # ---------- field / scalar ----------
@@ -242,18 +242,18 @@ class ConvolsData(HermesData):
             self.logger.error("Cannot divide by scalar: epsilon is None.")
             func_util.safe_exit(1)
         if scalar == 0.0:
-            self.logger.error("Cannot divide ConvolsData by zero.")
+            self.logger.error("Cannot divide SFCField by zero.")
             func_util.safe_exit(1)
 
         new = self._spawn_like()
         new.epsilon = self.epsilon / scalar
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     def __sub__(self, other):
         # Case 1: field - field
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return self._sub_field(other)
 
         # Case 2: field - scalar
@@ -268,7 +268,7 @@ class ConvolsData(HermesData):
             return -1 * self._sub_scalar(other)
 
         # Case: field - field (only reached if left side failed)
-        if isinstance(other, ConvolsData):
+        if isinstance(other, SFCField):
             return other._sub_field(self)
 
         return NotImplemented
@@ -278,7 +278,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon - other.epsilon
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     def _sub_scalar(self, scalar):
@@ -289,7 +289,7 @@ class ConvolsData(HermesData):
         new = self._spawn_like()
         new.epsilon = self.epsilon - scalar
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     def _validate_field_array_operation(self, other, operation):
@@ -317,7 +317,7 @@ class ConvolsData(HermesData):
         return float(total)
 
     def _mark_derived(self, field):
-        field.convols_info.update({
+        field.sfc_info.update({
             "catalog_weight_sum": None,
             "catalog_weight_sq_sum": None,
             "raw_field_weighted_sum": None,
@@ -361,9 +361,9 @@ class ConvolsData(HermesData):
         new_den = self._normalization_denominator(mode)
         self.epsilon = np.ascontiguousarray(self.epsilon, dtype=np.float64)
         self.epsilon *= old_den / new_den
-        self.convols_info["weight_normalization"] = mode
-        self.convols_info["field_integral"] = self._field_integral_for_normalization(mode)
-        self.format_convols_params()
+        self.sfc_info["weight_normalization"] = mode
+        self.sfc_info["field_integral"] = self._field_integral_for_normalization(mode)
+        self.format_sfc_params()
         return self
 
     def switch_weight_normalization(self, weight_normalization):
@@ -384,7 +384,7 @@ class ConvolsData(HermesData):
         new = self.copy()
         new.epsilon = new.epsilon / total
         self._mark_derived(new)
-        new.format_convols_params()
+        new.format_sfc_params()
         return new
 
     def with_normalization(self, normalization=None):
@@ -481,7 +481,7 @@ class ConvolsData(HermesData):
         Evaluate the represented field density at positions.
 
         normalization:
-            None      -> use the current ConvolsData normalization.
+            None      -> use the current SFCField normalization.
             "raw"     -> use raw catalog weights; catalog fields only.
             "catalog" -> divide by catalog_weight_sum; catalog fields only.
             "field"   -> divide by raw_field_weighted_sum; catalog fields only.
@@ -524,21 +524,21 @@ class ConvolsData(HermesData):
     def as_array(self):
         return self.epsilon
 
-    def format_convols_params(self):
-        missing = [k for k in self._REQUIRED_ARGV if k not in self.convols_info]
+    def format_sfc_params(self):
+        missing = [k for k in self._REQUIRED_ARGV if k not in self.sfc_info]
         if missing:
-            self.logger.error(f"ConvolsData missing required keys: {missing}")
+            self.logger.error(f"SFCField missing required keys: {missing}")
             func_util.safe_exit(1)
-        for key, value in self.convols_info.items():
+        for key, value in self.sfc_info.items():
             setattr(self, key, value)
 
-    def load_convols(self, f_in, single=True):
-        self.load(f_in, read_convols=True, single=single)
+    def load_sfc_field(self, f_in, single=True):
+        self.load(f_in, read_sfc_field=True, single=single)
 
-    def save_convols(self, f_out, single=True, overwrite=False):
-        self.save(f_out, save_convols=True, single=single, overwrite=overwrite)
+    def save_sfc_field(self, f_out, single=True, overwrite=False):
+        self.save(f_out, save_sfc_field=True, single=single, overwrite=overwrite)
 
-    def _load_convols(self, f_in):
+    def _load_sfc_field(self, f_in):
         with open(f_in, 'rb') as f:
             # Read the entire .npy file as bytes
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
@@ -549,27 +549,27 @@ class ConvolsData(HermesData):
                 self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
                 func_util.safe_exit(1)
             self.epsilon = dataset['epsilon']
-            # Assign the dictionary from the file to self.convols_info
-            # _convols_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
-            _convols_info = dataset.get('convols_info')
-            if _convols_info:
-                self.convols_info.update(_convols_info)
-            self.format_convols_params()
+            # Assign the dictionary from the file to self.sfc_info
+            # _sfc_info = {key: value for key, value in dataset.items() if key != 'epsilon'}
+            _sfc_info = dataset.get('sfc_info')
+            if _sfc_info:
+                self.sfc_info.update(_sfc_info)
+            self.format_sfc_params()
 
-    def _save_convols(self, f_out):
+    def _save_sfc_field(self, f_out):
         # Check and create directory if it doesn't exist
         _dir = os.path.dirname(f_out)
         if not os.path.exists(_dir):
             os.makedirs(_dir)
-        # Check if the convols_info is empty
-        if not self.convols_info:
-            self.logger.error('The dictionary "convols_info" is empty.')
+        # Check if the sfc_info is empty
+        if not self.sfc_info:
+            self.logger.error('The dictionary "sfc_info" is empty.')
             self.logger.error('Please ensure that the required data has been loaded or calculated before attempting to save the dataset.')
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         # If all required variables are present, create the dataset
         dataset = {
-            'convols_info': self.convols_info,
+            'sfc_info': self.sfc_info,
             'epsilon': self.epsilon  # Include the actual data
         }
         # Save the dataset to the specified file

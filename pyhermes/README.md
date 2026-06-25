@@ -13,8 +13,8 @@ PyHermes is organized around one main data flow:
 
 ```text
 particle catalog
-  -> Convols task
-  -> ConvolsData field
+  -> SFCProjection task
+  -> SFCField field
   -> WindowFunc convolution
   -> Counting / Corr_2PCF / Corr_3PCF / multipoles / weighted-field analyses
 ```
@@ -34,7 +34,7 @@ The most common public entry points are imported from `pyhermes.io` and
 `pyhermes.theory`:
 
 ```python
-from pyhermes.io import ConvolsData, WindowFunc, read_particle_data
+from pyhermes.io import SFCField, WindowFunc, read_particle_data
 from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 ```
 
@@ -42,8 +42,8 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 
 | If you are looking for... | Start here |
 | --- | --- |
-| Building `ConvolsData` from particles | `base/convols.py` |
-| Loading or manipulating saved fields | `io/convols.py`, `io/base.py` |
+| Building `SFCField` from particles | `base/sfc_projection.py` |
+| Loading or manipulating saved fields | `io/sfc_field.py`, `io/base.py` |
 | Constructing and applying windows | `io/window.py`, `utils/convolution.py` |
 | Built-in window formulas | `utils/window_functions.py` |
 | Window parameter normalization | `utils/window_params.py` |
@@ -65,7 +65,7 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 
 Low-level task code that constructs the field representation.
 
-- `convols.py`: implements the `Convols` task. This is where particle
+- `sfc_projection.py`: implements the `SFCProjection` task. This is where particle
   positions and weights are projected into scaling-function coefficients.
 - `default_params.json`: defaults for the field-construction layer.
 
@@ -74,9 +74,9 @@ Low-level task code that constructs the field representation.
 Data containers, readers, and user-facing field/window objects.
 
 - `base.py`: defines `HermesData`, the base class for saved result containers.
-- `convols.py`: defines `ConvolsData`, the reusable field object used by later
+- `sfc_projection.py`: defines `SFCField`, the reusable field object used by later
   tasks.
-- `window.py`: defines `WindowFunc` and the `ConvolsData @ WindowFunc`
+- `window.py`: defines `WindowFunc` and the `SFCField @ WindowFunc`
   convolution interface.
 - `readers.py`: particle catalog readers for `bin`, `npz`, `gadget`,
   `gadget-fof`, and `fof`, plus weight resolution helpers.
@@ -87,7 +87,7 @@ Data containers, readers, and user-facing field/window objects.
 ### `theory/`
 
 Task drivers and estimator logic. These classes usually combine parameters,
-`ConvolsData`, `WindowFunc`, random fields, and numerical kernels.
+`SFCField`, `WindowFunc`, random fields, and numerical kernels.
 
 - `counting.py`: `Counting` task; samples a field at random positions.
 - `corr2pcf.py`: `Corr_2PCF` task; sampling grids, pair-window mappings,
@@ -124,7 +124,7 @@ more internal than `io/` and `theory/`, but it contains many important pieces.
 - `window_params.py`: normalization and serialization of window dictionaries,
   length arguments, LOS arguments, pair-window defaults, and kernel modes.
 - `convolution.py`: real and complex window-kernel construction plus the
-  specialized 3D convolution routines used by `ConvolsData @ WindowFunc`.
+  specialized 3D convolution routines used by `SFCField @ WindowFunc`.
 
 #### Wavelet/grid utilities
 
@@ -154,7 +154,7 @@ more internal than `io/` and `theory/`, but it contains many important pieces.
 - `plot.py`: 2D 2PCF plotting helpers for `(s, mu)` and `(rp, pi)` products.
 - `plot_styles.json`: default plotting style values.
 - `func_util.py`: miscellaneous helpers such as notebook detection, split-file
-  discovery, window-action descriptions, and `ConvolsData` compatibility checks.
+  discovery, window-action descriptions, and `SFCField` compatibility checks.
 
 ## Maintenance Notes
 

@@ -1,8 +1,8 @@
 Counting
 ========
 
-``counting.ipynb`` is the one-point companion to ``convols.ipynb``. It starts
-from a saved ``ConvolsData`` field, optionally smooths it, evaluates it at
+``counting.ipynb`` is the one-point companion to ``sfc_projection.ipynb``. It starts
+from a saved ``SFCField`` field, optionally smooths it, evaluates it at
 many random positions, and studies the resulting distribution.
 
 What this notebook covers
@@ -13,7 +13,7 @@ The notebook walks through:
 1. the standard ``Counting`` driver
 2. the config-driven Python API
 3. task-object overrides
-4. manual preparation of ``ConvolsData`` and ``WindowFunc``
+4. manual preparation of ``SFCField`` and ``WindowFunc``
 5. direct low-level sampling of the smoothed field
 6. one-field RMS fluctuation measurements with low-pass and high-pass windows
 
@@ -23,13 +23,13 @@ explicit: ``Counting`` is fundamentally a random-position probe of a field.
 Minimal YAML Shape
 ------------------
 
-``Counting`` reads a saved ``ConvolsData`` field, optionally applies an ordinary
+``Counting`` reads a saved ``SFCField`` field, optionally applies an ordinary
 smoothing window, and samples the resulting field at random positions:
 
 .. code-block:: yaml
 
    Counting:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
       random_count: 10000000
       window:
          type: "sphere"
@@ -44,8 +44,8 @@ it is a normal smoothing ``WindowFunc``, not a 2PCF pair window.
 Inputs and outputs
 ------------------
 
-Inputs are produced by ``convols.ipynb`` or
-``examples/scripts/prepare_convols_data.py`` and live locally in
+Inputs are produced by ``sfc_projection.ipynb`` or
+``examples/scripts/prepare_sfc_fields.py`` and live locally in
 ``examples/output/``. The main tracked files involved in this stage are:
 
 - ``examples/notebooks/counting.ipynb``
@@ -67,7 +67,7 @@ This notebook is where the field representation starts to feel concrete. It
 shows how smoothing radius changes the sampled distribution and how the saved
 ``CountingData`` result relates to direct field evaluation.
 
-In other words, if ``Convols`` explains how PyHermes stores the field,
+In other words, if ``SFCProjection`` explains how PyHermes stores the field,
 ``Counting`` explains how PyHermes reads values back out of it.
 
 The examples also make the role of per-object values explicit. With the

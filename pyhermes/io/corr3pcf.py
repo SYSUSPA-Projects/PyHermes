@@ -9,6 +9,9 @@ from pyhermes.utils import func_util
 class Corr3PCFData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
+        self.sfc_info1 = None
+        self.sfc_info2 = None
+        self.sfc_info3 = None
         self.corr3pcf_info = {}
         self.mu                  = None
         self.theta               = None
@@ -73,9 +76,9 @@ class Corr3PCFData(HermesData):
             self.zeta_H = dataset.get('zeta_H')
             # Assign the dictionary from the file to self.corr3pcf_info
             for i in range(1, 4):
-                _convols_info = dataset.get(f'convols_info{i}')
-                if _convols_info:
-                    setattr(self, f"convols_info{i}", _convols_info)
+                _sfc_info = dataset.get(f'sfc_info{i}')
+                if _sfc_info:
+                    setattr(self, f"sfc_info{i}", _sfc_info)
             _corr3pcf_info = dataset.get('corr3pcf_info')
             if _corr3pcf_info:
                 self.corr3pcf_info.update(_corr3pcf_info)
@@ -96,9 +99,9 @@ class Corr3PCFData(HermesData):
         theta_arr = self._ensure_1d_array(self.theta, "theta")
         mu_arr = self._ensure_1d_array(self.mu, "mu")
         dataset = {
-            'convols_info1': self.convols_info1,
-            'convols_info2': self.convols_info2,
-            'convols_info3': self.convols_info3,
+            'sfc_info1': self.sfc_info1,
+            'sfc_info2': self.sfc_info2,
+            'sfc_info3': self.sfc_info3,
             'corr3pcf_info': self.corr3pcf_info,
             'mu': mu_arr,
             'theta': theta_arr,

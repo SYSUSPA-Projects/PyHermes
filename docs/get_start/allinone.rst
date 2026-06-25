@@ -7,7 +7,7 @@ The main tutorial workflow is organized around the notebooks in
 ``examples/notebooks/``:
 
 - ``quick_start.ipynb``
-- ``convols.ipynb``
+- ``sfc_projection.ipynb``
 - ``window.ipynb``
 - ``counting.ipynb``
 - ``corr2pcf.ipynb``

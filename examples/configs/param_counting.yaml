@@ -1,5 +1,5 @@
 Counting:
-  convols_data: "./output/quijote8000_snap004_sfc.pkl"
+  sfc_field: "./output/quijote8000_snap004_sfc.pkl"
   random_count: 10000000
   window:
     type: sphere

@@ -4,7 +4,7 @@ import os
 
 import numpy as np
 
-from pyhermes.io import ConvolsData, normalize_weight_normalization
+from pyhermes.io import SFCField, normalize_weight_normalization
 from pyhermes.io.readers import read_particle_data, resolve_particle_value
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
@@ -61,15 +61,15 @@ def _add_slab_to_epsilon(epsilon, slab, part, size, core_width, phi_support):
 
 
 
-class Convols(TaskBase):
+class SFCProjection(TaskBase):
 
     def __init__(self, param_task=None):
         if param_task is None:
-            param_task = {"Convols": {}}
+            param_task = {"SFCProjection": {}}
         self.task_name = str(self.__class__.__name__)
         super().__init__(param_task=param_task)
         self.format_params()
-        self.convols_data = None
+        self.sfc_field = None
         self._fields_prepared = False
 
     def format_params(self):
@@ -119,7 +119,7 @@ class Convols(TaskBase):
             'fout_path': self.fout_path,
         }
         self.L = 1 << self.J
-        self.sync_runtime_options(context="Convols runtime configuration")
+        self.sync_runtime_options(context="SFCProjection runtime configuration")
 
     def _load_particle_input(self):
         if self.particle_pos is not None:
@@ -228,13 +228,13 @@ class Convols(TaskBase):
         if field_value is not None:
             self.field_value = field_value
         self._sync_runtime_options()
-        self.convols_data = ConvolsData(threads=self.threads)
+        self.sfc_field = SFCField(threads=self.threads)
         self.phi_array = sample_scaling_function(self.wavelet_mode, self.wavelet_level)
         self.phi_support = self.phi_array.shape[0] // self.phi_resolution
         self.core_width = self.L // self.size
         self.scale_factor = self.L / self.box_size
         if self.rank == 0:
-            self.logger.info("Preparing Convols input fields ...")
+            self.logger.info("Preparing SFCProjection input fields ...")
             self.logger.info(
                 f"J={self.J}, L={self.L}, box_size={self.box_size}, phi_resolution={self.phi_resolution}, "
                 f"wavelet_mode={self.wavelet_mode}, wavelet_level={self.wavelet_level}"
@@ -376,7 +376,7 @@ class Convols(TaskBase):
                 else:
                     comm.Send(_s_part, dest=0)
             if rank == 0:
-                _convols_info = {
+                _sfc_info = {
                     "fin"           : copy.deepcopy(self.fin),
                     "particle_count"   : self.particle_count,
                     "catalog_weight_sum": self.catalog_weight_sum,
@@ -399,13 +399,13 @@ class Convols(TaskBase):
                     "phi_support"    : self.phi_support,
                     "phi_array"      : self.phi_array
                 }
-                self.convols_data.convols_info = dict(_convols_info)
-                self.convols_data.format_convols_params()
+                self.sfc_field.sfc_info = dict(_sfc_info)
+                self.sfc_field.format_sfc_params()
                 time_end = time.perf_counter()
                 self.logger.info(f"The time for scaling function: {time_end - time_start:.4f} sec")
-                self.convols_data.epsilon = _epsilon
+                self.sfc_field.epsilon = _epsilon
                 if save_result and self.fout_path:
-                    self.convols_data.save_convols(self.fout_path, overwrite=overwrite)
+                    self.sfc_field.save_sfc_field(self.fout_path, overwrite=overwrite)
         except Exception as e:
             self.logger.error(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
@@ -414,4 +414,4 @@ class Convols(TaskBase):
             time_run_2 = time.perf_counter()
             print("")
             self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
-        return self.convols_data
+        return self.sfc_field

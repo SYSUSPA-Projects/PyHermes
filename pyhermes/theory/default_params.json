@@ -1,7 +1,7 @@
 {
 	"enable_default_param": true, // do not change this
 	"Counting": {
-		"convols_data": "",
+		"sfc_field": "",
 		"random_count": 1000000,
 		"seed": 42,
 		"weight_normalization": "catalog",
@@ -15,9 +15,9 @@
 		"fout_path": ""
 	},
 	"Corr_2PCF": {
-		"convols_data": "",
-		"convols_data1": "",
-		"convols_data2": "",
+		"sfc_field": "",
+		"sfc_field1": "",
+		"sfc_field2": "",
 		"random": null,
 		"random1": "",
 		"random2": "",
@@ -63,10 +63,10 @@
 		"fout_path": ""
 	},
 	"Corr_3PCF": {
-		"convols_data": "",
-		"convols_data1": "",
-		"convols_data2": "",
-		"convols_data3": "",
+		"sfc_field": "",
+		"sfc_field1": "",
+		"sfc_field2": "",
+		"sfc_field3": "",
 		"particle_pos1": null,
 		"particle_weight1": null,
 		"random": null,
@@ -122,10 +122,10 @@
 		"fout_path": ""
 	},
 	"Corr_3PCF_Multipole": {
-		"convols_data": "",
-		"convols_data1": "",
-		"convols_data2": "",
-		"convols_data3": "",
+		"sfc_field": "",
+		"sfc_field1": "",
+		"sfc_field2": "",
+		"sfc_field3": "",
 		"random": null,
 		"random1": "",
 		"random2": "",

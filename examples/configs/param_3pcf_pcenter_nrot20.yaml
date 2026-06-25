@@ -1,5 +1,5 @@
 Corr_3PCF:
-   convols_data: "./output/quijote8000_snap004_sfc.pkl"
+   sfc_field: "./output/quijote8000_snap004_sfc.pkl"
    random: "uniform"
    window:
       type: "sphere"

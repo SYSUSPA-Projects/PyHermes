@@ -59,6 +59,6 @@ Verify the install
 What to open next
 -----------------
 
-After installation, start with :doc:`get_start/convols/convols` to prepare the
+After installation, start with :doc:`get_start/sfc_projection/sfc_projection` to prepare the
 main example data in ``examples/data/``. Once that data exists, open
 :doc:`get_start/quick_start` for the smallest end-to-end calculation.

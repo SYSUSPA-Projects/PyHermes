@@ -1,9 +1,9 @@
 """
-Build a PyHermes ConvolsData field from a Quijote dark-matter snapshot.
+Build a PyHermes SFCField field from a Quijote dark-matter snapshot.
 
 Typical server run from the PyHermes repository root:
 
-    python examples/scripts/build_quijote_dm_convols.py
+    python examples/scripts/build_quijote_dm_sfc_field.py
 
 The default input is the Quijote fiducial realization 8000, snapshot 004
 dark-matter particle snapshot, and the default output is the file expected by
@@ -45,7 +45,7 @@ def positive_int(value: str) -> int:
 def parse_args() -> argparse.Namespace:
     default_threads = int(os.environ.get("SLURM_CPUS_PER_TASK", "8"))
     parser = argparse.ArgumentParser(
-        description="Project Quijote dark-matter particles to a saved PyHermes ConvolsData field."
+        description="Project Quijote dark-matter particles to a saved PyHermes SFCField field."
     )
     parser.add_argument(
         "--snapshot-base",
@@ -60,7 +60,7 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help="Output ConvolsData .pkl path. Default: %(default)s",
+        help="Output SFCField .pkl path. Default: %(default)s",
     )
     parser.add_argument("--j", type=positive_int, default=8, help="PyHermes grid level J. Default: 8.")
     parser.add_argument("--box-size", type=float, default=1000.0, help="Box size in Mpc/h. Default: 1000.")
@@ -191,8 +191,8 @@ def main() -> None:
     if str(REPO_ROOT) not in sys.path:
         sys.path.insert(0, str(REPO_ROOT))
 
-    from pyhermes.base.convols import Convols
-    from pyhermes.io.convols import ConvolsData
+    from pyhermes.base.sfc_projection import SFCProjection
+    from pyhermes.io.sfc_field import SFCField
     from pyhermes.utils.mpi_util import MPI
 
     output_path = resolve_output_path(args.output)
@@ -221,8 +221,8 @@ def main() -> None:
 
     if output_path.exists() and not args.overwrite:
         print("Output already exists; skipping rebuild. Use --overwrite to rebuild.")
-        existing = ConvolsData(data_path=str(output_path), threads=args.threads)
-        summarize_field("existing ConvolsData", existing)
+        existing = SFCField(data_path=str(output_path), threads=args.threads)
+        summarize_field("existing SFCField", existing)
         return
 
     task_params = {
@@ -235,7 +235,7 @@ def main() -> None:
         "threads": int(args.threads),
         "fout_path": str(output_path),
     }
-    task = Convols({"Convols": task_params})
+    task = SFCProjection({"SFCProjection": task_params})
 
     if is_hdf5_snapshot(snapshot_files):
         print("Detected HDF5 split snapshot; reading PartType coordinates with h5py.")
@@ -263,7 +263,7 @@ def main() -> None:
         }
 
     field = task.run(save_result=True, overwrite=args.overwrite)
-    summarize_field("built ConvolsData", field)
+    summarize_field("built SFCField", field)
     print("Done:", output_path)
 
 

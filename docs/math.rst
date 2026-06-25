@@ -47,7 +47,7 @@ corrections and is treated as a relative weight: multiplying all
 :math:`w_g` by one constant does not change the represented field.
 :math:`x=1` produces a unit-integral tracer-density field, :math:`x=m`
 produces a mass-valued field, and :math:`x=v_\alpha` produces a signed
-velocity-weighted field. A ``ConvolsData`` object stores this weighted field
+velocity-weighted field. A ``SFCField`` object stores this weighted field
 with an explicit ``weight_normalization`` convention while retaining the input
 sums
 
@@ -98,7 +98,7 @@ ring-like pair geometries. The practical window families are summarized in
 Multiresolution Field Reconstruction
 ------------------------------------
 
-``Convols`` replaces the singular Dirac-delta catalog by scaling-function
+``SFCProjection`` replaces the singular Dirac-delta catalog by scaling-function
 coefficients on a compact multiresolution basis,
 
 .. math::
@@ -140,7 +140,7 @@ coefficients,
 
 For homogeneous windows, :math:`W^j_{\ell m}` has convolution structure, so the
 operation can be evaluated efficiently with FFTs. This is the reason downstream
-tasks can reuse a saved ``ConvolsData`` object instead of returning to the raw
+tasks can reuse a saved ``SFCField`` object instead of returning to the raw
 catalog.
 
 With the default ``catalog`` convention, the stored coefficients use
@@ -173,7 +173,7 @@ grid-coordinate forms differ only by the coordinate scaling convention, and
 the common factors cancel in normalized statistics such as :math:`\xi` and
 :math:`Q`.
 
-.. figure:: _static/convols/hmFig0_delta.png
+.. figure:: _static/sfc_field/hmFig0_delta.png
    :alt: Reconstructed point field at different multiresolution levels
    :align: center
    :width: 92%
@@ -220,7 +220,7 @@ convention above,
 
 Therefore a derivative can be represented as a special Fourier-space window.
 This is useful for gradients of scalar fields and for divergence or curl of
-vector fields constructed from weighted ``ConvolsData`` objects. The
+vector fields constructed from weighted ``SFCField`` objects. The
 field-derivative windows are documented in :doc:`windows`, and the full
 velocity and momentum-density example is in
 :doc:`get_start/weighted_fields/weighted_fields`.
@@ -472,7 +472,7 @@ the ordinary tracer-density case :math:`x_i=1` in ``catalog`` mode, this
 reduces to :math:`W_1=1` and :math:`\rho_1=1/V`. If users provide
 ``particle_pos1`` explicitly, they must also provide ``particle_weight1``;
 the pair is then used as given for the center leg rather than mixed with
-particle metadata recovered from ``convols_data1``.
+particle metadata recovered from ``sfc_field1``.
 
 The center positions :math:`\mathbf{x}_i` are real particles, halos, or
 galaxies. The second and third legs are windowed fields evaluated at those

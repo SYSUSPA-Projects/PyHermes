@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">PyHermes workflow</title>
-  <desc id="desc">Particle catalogs are converted into ConvolsData, then window functions define smoothing, pair bins, triangle legs, and multipole filters for downstream statistics.</desc>
+  <desc id="desc">Particle catalogs are converted into SFCField, then window functions define smoothing, pair bins, triangle legs, and multipole filters for downstream statistics.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#fbfbf7"/>
@@ -38,7 +38,7 @@
     <rect x="480" y="207" width="58" height="58" rx="13" fill="#d9e9f8"/>
     <path d="M509 218 L531 259 L487 259 Z" fill="#2b70b8"/>
     <circle cx="509" cy="259" r="8" fill="#2b70b8"/>
-    <text x="560" y="241" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">Convols</text>
+    <text x="560" y="241" font-family="Arial, Helvetica, sans-serif" font-size="27" font-weight="700" fill="#152522">SFCProjection</text>
     <text x="560" y="269" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">particles to field</text>
   </g>
 
@@ -46,7 +46,7 @@
     <rect x="805" y="162" width="360" height="170" rx="18" fill="#17322d" stroke="#17322d"/>
     <rect x="833" y="203" width="62" height="62" rx="13" fill="#f4c768"/>
     <path d="M850 225 H881 M850 242 H881 M850 259 H881" stroke="#17322d" stroke-width="7" stroke-linecap="round"/>
-    <text x="922" y="243" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="700" fill="#ffffff">ConvolsData</text>
+    <text x="922" y="243" font-family="Arial, Helvetica, sans-serif" font-size="31" font-weight="700" fill="#ffffff">SFCField</text>
     <text x="922" y="272" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#cbd9d5">one reusable field product</text>
     <text x="922" y="302" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" fill="#cbd9d5">shared by all tasks</text>
   </g>

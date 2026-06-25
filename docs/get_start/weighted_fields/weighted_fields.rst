@@ -8,8 +8,8 @@ representation is not limited to the tracer-density field. With different
 ``field_value`` arrays it can reconstruct mass-valued and component-wise
 vector fields, such as velocity and momentum density.
 
-The most useful prerequisites are ``convols.ipynb`` and ``window.ipynb``:
-``Convols`` explains how the weighted fields are built, and ``WindowFunc``
+The most useful prerequisites are ``sfc_projection.ipynb`` and ``window.ipynb``:
+``SFCProjection`` explains how the weighted fields are built, and ``WindowFunc``
 explains how those fields are filtered or differentiated.
 
 The second ingredient is the field-derivative window. Since derivatives are
@@ -121,7 +121,7 @@ x-velocity-weighted field built from the same catalogue measure:
 
    smooth = WindowFunc(
        {"type": "gaussian", "len_args": {"R": 8.0}},
-       D.convols_info,
+       D.sfc_info,
        threads=8,
    )
    dx = WindowFunc(
@@ -129,7 +129,7 @@ x-velocity-weighted field built from the same catalogue measure:
            "type": "directional_derivative",
            "los_args": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
        },
-       D.convols_info,
+       D.sfc_info,
        threads=8,
    )
 
@@ -167,7 +167,7 @@ shows the velocity divergence computed with derivative windows on the same
    compression or expansion pattern.
 
 The velocity derivatives are then measured directly from the weighted
-``ConvolsData`` objects by applying directional-derivative windows. This avoids
+``SFCField`` objects by applying directional-derivative windows. This avoids
 requiring a regular evaluation grid for the main derivative estimate.
 
 .. figure:: ../../_static/weighted_fields/weighted_fields_velocity_derivatives_pdf.png

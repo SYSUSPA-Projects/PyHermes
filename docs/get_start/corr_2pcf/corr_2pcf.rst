@@ -31,7 +31,7 @@ For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
       pair_window: "shell"
       sampling:
@@ -50,7 +50,7 @@ the z-axis line of sight:
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
       random: "uniform"
       pair_window: "ring"
       sampling:
@@ -72,7 +72,7 @@ are already the transverse and line-of-sight separations:
 .. code-block:: yaml
 
    Corr_2PCF:
-      convols_data: "./output/quijote8000_snap004_rsd_sfc.pkl"
+      sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
       random: "./output/random_sfc.pkl"
       window:
          type: "sphere"
@@ -138,7 +138,7 @@ windows to build a finite-thickness shell and a cylinder-surface pair window
 from existing Fourier kernels.
 
 The field formulation also makes the Landy-Szalay structure more direct.
-``ConvolsData`` stores the catalogue and field-weight sums needed to switch
+``SFCField`` stores the catalogue and field-weight sums needed to switch
 catalog fields between ``weight_normalization: catalog``, ``raw`` and
 ``field`` before the estimator runs. The task-level ``unit`` option is also
 available and rescales either catalog or derived fields to unit field integral.

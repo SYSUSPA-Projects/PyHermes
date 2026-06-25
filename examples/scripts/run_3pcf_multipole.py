@@ -2,7 +2,7 @@
 Example: run 3PCF multipole with PyHermes
 
 This script computes the multipole moments zeta_l(r12, r13) from a saved
-ConvolsData product using the streamed CPU-convolution + CUDA-summation
+SFCField product using the streamed CPU-convolution + CUDA-summation
 pipeline.
 """
 

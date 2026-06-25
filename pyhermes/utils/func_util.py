@@ -93,18 +93,18 @@ def describe_window_action(win_params):
     return "no window, reusing base field"
 
 
-def validate_convols_compatibility(convols_list, required_keys, logger=None, label="ConvolsData inputs"):
-    filtered = [c for c in convols_list if c is not None]
+def validate_sfc_compatibility(sfc_list, required_keys, logger=None, label="SFCField inputs"):
+    filtered = [c for c in sfc_list if c is not None]
     if len(filtered) < 2:
         if filtered:
-            return {key: filtered[0].convols_info.get(key) for key in required_keys}
+            return {key: filtered[0].sfc_info.get(key) for key in required_keys}
         return {}
     reference = filtered[0]
     mismatches = []
     for idx, current in enumerate(filtered[1:], start=2):
         for key in required_keys:
-            ref_val = reference.convols_info.get(key)
-            cur_val = current.convols_info.get(key)
+            ref_val = reference.sfc_info.get(key)
+            cur_val = current.sfc_info.get(key)
             if ref_val != cur_val:
                 mismatches.append((idx, key, ref_val, cur_val))
     if mismatches:
@@ -114,4 +114,4 @@ def validate_convols_compatibility(convols_list, required_keys, logger=None, lab
         if logger is not None:
             logger.error(f"{label} require matching required parameters. Found mismatches: {mismatch_text}")
         safe_exit(1)
-    return {key: reference.convols_info.get(key) for key in required_keys}
+    return {key: reference.sfc_info.get(key) for key in required_keys}

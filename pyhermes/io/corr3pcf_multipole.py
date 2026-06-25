@@ -10,6 +10,9 @@ from pyhermes.utils import func_util
 class Corr3PCFMultipoleData(HermesData):
     def __init__(self, *args, threads=None, **kwargs):
         data_path = kwargs.pop("data_path", None)
+        self.sfc_info1 = None
+        self.sfc_info2 = None
+        self.sfc_info3 = None
         self.corr3pcf_multipole_info = {}
         self.r12 = None
         self.r13 = None
@@ -52,9 +55,9 @@ class Corr3PCFMultipoleData(HermesData):
             self.delta_ddd_l = dataset.get("delta_ddd_l")
             self.zeta_l = dataset.get("zeta_l")
             for i in range(1, 4):
-                _convols_info = dataset.get(f"convols_info{i}")
-                if _convols_info:
-                    setattr(self, f"convols_info{i}", _convols_info)
+                _sfc_info = dataset.get(f"sfc_info{i}")
+                if _sfc_info:
+                    setattr(self, f"sfc_info{i}", _sfc_info)
             _info = dataset.get("corr3pcf_multipole_info")
             if _info:
                 self.corr3pcf_multipole_info.update(_info)
@@ -70,9 +73,9 @@ class Corr3PCFMultipoleData(HermesData):
             self.logger.error(f"Failed to save the data to the file: '{f_out}'")
             func_util.safe_exit(1)
         dataset = {
-            "convols_info1": self.convols_info1,
-            "convols_info2": self.convols_info2,
-            "convols_info3": self.convols_info3,
+            "sfc_info1": self.sfc_info1,
+            "sfc_info2": self.sfc_info2,
+            "sfc_info3": self.sfc_info3,
             "corr3pcf_multipole_info": self.corr3pcf_multipole_info,
             "r12": self.r12,
             "r13": self.r13,

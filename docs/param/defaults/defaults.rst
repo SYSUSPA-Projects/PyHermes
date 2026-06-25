@@ -13,10 +13,10 @@ subset of these keys.
 This page explains the meaning of the most important default parameters used by
 the main public tasks.
 
-Convols
+SFCProjection
 -------
 
-The ``Convols`` defaults come from ``pyhermes/base/default_params.json``.
+The ``SFCProjection`` defaults come from ``pyhermes/base/default_params.json``.
 
 Core field-construction parameters
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -71,7 +71,7 @@ Output
 ^^^^^^
 
 - ``fout_path``:
-  path where the serialized ``ConvolsData`` result is written.
+  path where the serialized ``SFCField`` result is written.
 
 Counting
 --------
@@ -82,8 +82,8 @@ The ``Counting`` defaults come from ``pyhermes/theory/default_params.json``.
   random seed for the sampled positions.
 - ``N_randoms``:
   number of random positions to evaluate.
-- ``convols_data_path``:
-  fallback path to the input ``ConvolsData`` file.
+- ``sfc_field_path``:
+  fallback path to the input ``SFCField`` file.
 - ``window``:
   optional smoothing window applied before counting.
 - ``weight_normalization``:
@@ -98,11 +98,11 @@ The ``Counting`` defaults come from ``pyhermes/theory/default_params.json``.
 Corr_2PCF
 ---------
 
-- ``convols_data_path``:
+- ``sfc_field_path``:
   shared fallback input field path.
-- ``convols_data1_path`` and ``convols_data2_path``:
+- ``sfc_field1_path`` and ``sfc_field2_path``:
   optional leg-specific field paths. If empty, they fall back to
-  ``convols_data_path``.
+  ``sfc_field_path``.
 - ``window``:
   shared fallback smoothing window for the two legs.
 - ``window1`` and ``window2``:
@@ -154,9 +154,9 @@ Corr_2PCF
 Corr_3PCF
 ---------
 
-- ``convols_data_path``:
+- ``sfc_field_path``:
   shared fallback input field path.
-- ``convols_data1_path``, ``convols_data2_path``, ``convols_data3_path``:
+- ``sfc_field1_path``, ``sfc_field2_path``, ``sfc_field3_path``:
   optional leg-specific input paths.
 - ``window``:
   shared fallback smoothing window.
@@ -189,9 +189,9 @@ Corr_3PCF
 Corr_3PCF_Multipole
 -------------------
 
-- ``convols_data_path``:
+- ``sfc_field_path``:
   shared fallback input field path.
-- ``convols_data1_path``, ``convols_data2_path``, ``convols_data3_path``:
+- ``sfc_field1_path``, ``sfc_field2_path``, ``sfc_field3_path``:
   optional leg-specific input paths.
 - ``window``:
   shared fallback smoothing window.

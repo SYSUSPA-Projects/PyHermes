@@ -2,7 +2,7 @@
 Example: run 3PCF with PyHermes
 
 This script computes the 3-point correlation function from a saved
-ConvolsData product using the standard PyHermes 3PCF pipeline.
+SFCField product using the standard PyHermes 3PCF pipeline.
 """
 
 import sys
