@@ -2,7 +2,7 @@
 
 import numpy as np
 from numba import njit, prange
-from scipy.special import spherical_jn, sph_harm
+from scipy.special import sph_harm_y, spherical_jn
 
 from pyhermes.utils.legendre_fast import (
     calculate_fast_legendre_window_array_with_lm,
@@ -31,7 +31,7 @@ def window_function_legendre_reference(ki, kj, kk, R, l, m):
     theta = np.arccos(np.clip(kk / k, -1.0, 1.0))
     phi = np.arctan2(kj, ki)
     phase = 2.0 * np.pi * k * R
-    return spherical_jn(l, phase) * sph_harm(m, l, phi, theta)
+    return spherical_jn(l, phase) * sph_harm_y(l, m, theta, phi)
 
 
 @njit
