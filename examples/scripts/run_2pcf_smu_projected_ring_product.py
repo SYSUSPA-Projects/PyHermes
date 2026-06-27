@@ -23,6 +23,7 @@ from numba import njit
 from pyhermes.io import Corr2PCFData, WindowFunc
 from pyhermes.param.parambase import read_param
 from pyhermes.theory.corr2pcf import Corr_2PCF, build_pair_window_params_for_sample
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.special_functions import jn_numba
 
 
@@ -108,16 +109,38 @@ def print_baseline_comparison(result_data, baseline_path, result_path) -> None:
     print(f"  rel_l2  : {rel_l2:.6e}")
 
 
+def load_projected_ring_product_params(config_path):
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+
+    params = read_param(config_path=config_path)
+    baseline_output = ""
+    error = None
+
+    if rank == 0:
+        try:
+            params = copy.deepcopy(params)
+            if "Corr_2PCF" not in params:
+                raise KeyError("Expected a Corr_2PCF section in the input config.")
+            task_params = params["Corr_2PCF"]
+            baseline_output = task_params.get("fout_path", "")
+            task_params["pair_window"] = "ring"
+            task_params["fout_path"] = DEFAULT_OUTPUT
+        except Exception as exc:
+            error = f"{type(exc).__name__}: {exc}"
+
+    error = comm.bcast(error, root=0)
+    if error is not None:
+        raise RuntimeError(error)
+
+    params = comm.bcast(params, root=0)
+    baseline_output = comm.bcast(baseline_output, root=0)
+    return params, baseline_output
+
+
 def main() -> None:
     config_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG
-    params = read_param(config_path=config_path)
-    params = copy.deepcopy(params)
-    if "Corr_2PCF" not in params:
-        raise KeyError("Expected a Corr_2PCF section in the input config.")
-    task_params = params["Corr_2PCF"]
-    baseline_output = task_params.get("fout_path", "")
-    task_params["pair_window"] = "ring"
-    task_params["fout_path"] = DEFAULT_OUTPUT
+    params, baseline_output = load_projected_ring_product_params(config_path)
 
     corr2pcf = Corr2PCFProjectedRingProduct(param_task=params)
     result_data = corr2pcf.run(overwrite=True)
