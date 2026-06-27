@@ -370,9 +370,17 @@ class WindowFunc(SFCField):
         return self._scalar_window_op(-1.0, "mul", lambda window, scalar: window * scalar)
 
     def __mul__(self, other):
+        if isinstance(other, WindowFunc):
+            return self._binary_window_op(
+                other,
+                "projected_kernel_product",
+                lambda left, right: left * right,
+            )
         return self._scalar_window_op(other, "mul", lambda window, scalar: window * scalar)
 
     def __rmul__(self, other):
+        if isinstance(other, WindowFunc):
+            return other.__mul__(self)
         return self.__mul__(other)
 
     def __truediv__(self, other):

@@ -469,13 +469,19 @@ operations act directly on ``w_kernel``:
    W_disk = WindowFunc(disk_params, sfc_field.sfc_info, threads=8)
 
    W_mix = 0.7 * W_shell + 0.3 * W_disk
+   W_chain = W_shell * W_disk
    smoothed = sfc_field @ W_mix
 
-Supported operations are ``W1 + W2``, ``W1 - W2``, ``a * W``, ``W * a``,
-``W / a``, and ``-W``. Both windows in a binary operation must share the same
+Supported operations are ``W1 + W2``, ``W1 - W2``, ``W1 * W2``, ``a * W``,
+``W * a``, ``W / a``, and ``-W``. Both windows in a binary operation must share the same
 ``J``, ``box_size``, ``phi_resolution``, ``wavelet_mode``, ``wavelet_level``,
 ``bandwidth``, and kernel shape. Composite windows are materialized: they store
 the resulting ``w_kernel`` and do not rebuild from a window function.
+The product ``W1 * W2`` is a projected-kernel product,
+``W1.as_array() * W2.as_array()``. It is useful for matching a chained
+projected convolution, ``(field @ W1) @ W2``, up to FFT roundoff; it is not a
+raw analytic transfer product of the form
+``P_phi[W_hat_1 * W_hat_2]``.
 
 Important details:
 
