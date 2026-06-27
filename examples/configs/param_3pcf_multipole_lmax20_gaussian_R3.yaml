@@ -1,0 +1,15 @@
+Corr_3PCF_Multipole:
+   sfc_field: "./output/quijote8000_snap004_sfc.pkl"
+   random: "uniform"
+   window:
+      type: "gaussian"
+      len_args:
+         R: 3
+   r12: 20.0
+   r13: 40.0
+   l_max: 20
+   gpu_device_id: 0
+   execution_mode: "pair_mpi"
+   threads: 4
+   products: "zeta_l"
+   fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax20_gaussian_R3.pkl"
