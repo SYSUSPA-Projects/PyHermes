@@ -24,6 +24,8 @@ from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
 from pyhermes.utils.special_functions import jn_numba
 
+SPEED_OF_LIGHT_KM_S = 299792.458
+
 # Isotropic windows.
 @njit
 def window_function_sphere_numba(ki, kj, kk, R):
@@ -398,6 +400,45 @@ def window_function_laplacian_numba(ki, kj, kk):
     return -((2.0 * np.pi) ** 2) * k2
 
 
+@njit
+def window_function_inverse_laplacian_numba(ki, kj, kk):
+    """
+    Inverse-Laplacian operator window in k-space.
+
+    With the inverse-FFT basis exp(2*pi*i*k*x),
+    W(k) = -1 / ((2*pi)^2 * |k|^2), corresponding to nabla^{-2}.
+    The zero mode is set to zero, fixing the mean of the resulting field.
+    """
+    k2 = ki * ki + kj * kj + kk * kk
+    if k2 == 0.0:
+        return 0.0
+    return -1.0 / (((2.0 * np.pi) ** 2) * k2)
+
+
+@njit
+def window_function_gravitational_potential_numba(ki, kj, kk, omegam, H0, a):
+    """
+    Poisson gravitational-potential window for Phi/c^2.
+
+    For a density contrast delta, the comoving Poisson equation is
+
+        nabla^2 (Phi/c^2) = (3/2) * Omega_m * (H0/c)^2 * delta / a.
+
+    This window returns
+
+        W(k) = -[(3/2) * Omega_m * (H0/c)^2 / a] / ((2*pi)^2 * |k|^2),
+
+    with W(0) = 0. ``H0`` should be supplied in km/s per coordinate unit
+    inverse. ``WindowFunc`` accepts H0 in km/s/(Mpc/h) when box_size is in
+    Mpc/h, and rescales it internally to the grid-coordinate system used by
+    the kernel builder.
+    """
+    if a <= 0.0:
+        return np.nan
+    prefactor = 1.5 * omegam * (H0 / SPEED_OF_LIGHT_KM_S) ** 2 / a
+    return prefactor * window_function_inverse_laplacian_numba(ki, kj, kk)
+
+
 WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
     "gaussian": window_function_gauss_numba,
@@ -413,6 +454,8 @@ WINDOW_TYPE_DICT = {
     "gdw": window_function_gdw_numba,
     "directional_derivative": window_function_directional_derivative_numba,
     "laplacian": window_function_laplacian_numba,
+    "inverse_laplacian": window_function_inverse_laplacian_numba,
+    "gravitational_potential": window_function_gravitational_potential_numba,
 }
 
 

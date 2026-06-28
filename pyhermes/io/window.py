@@ -26,6 +26,9 @@ from pyhermes.utils.window_params import (
 )
 
 
+ZERO_MODE_ZERO_WINDOW_TYPES = {"inverse_laplacian", "gravitational_potential"}
+
+
 class WindowFunc(SFCField):
     def __init__(
         self,
@@ -105,13 +108,22 @@ class WindowFunc(SFCField):
         self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
         self.los_args = normalize_los_args(win_params.get('los_args', {}), self.type)
         self.other_args = win_params.get('other_args', {})
+        self.rescale_other_args = self._rescale_other_args(self.other_args)
         self.input_params["los_args"] = self.los_args
         self.window_params["los_args"] = self.los_args
         self.window_args = dict(self.rescale_len_args)
         self.window_args.update(self.los_args)
-        self.window_args.update(self.other_args)
+        self.window_args.update(self.rescale_other_args)
         self.w_kernel = None
         self.is_composite_window = False
+
+    def _rescale_other_args(self, other_args):
+        if other_args is None:
+            return {}
+        rescaled = copy.deepcopy(other_args)
+        if self.type == "gravitational_potential" and "H0" in rescaled:
+            rescaled["H0"] = float(rescaled["H0"]) * self.box_size / self.L
+        return rescaled
 
     def _resolve_kernel_mode(self, win_params, has_custom_func):
         kernel_mode = win_params.get("kernel_mode", None)
@@ -189,6 +201,10 @@ class WindowFunc(SFCField):
             use_fast=use_fast,
         )
 
+    def _apply_zero_mode_convention(self):
+        if self.type in ZERO_MODE_ZERO_WINDOW_TYPES and self.w_kernel is not None:
+            self.w_kernel[0, 0, 0] = 0.0
+
     def _build_kernel(self):
         if getattr(self, "is_composite_window", False):
             if self.rank == 0:
@@ -209,6 +225,7 @@ class WindowFunc(SFCField):
             func_util.safe_exit(1)
         if self._requires_complex_full_fft_kernel():
             self._build_complex_full_fft_kernel()
+            self._apply_zero_mode_convention()
             return
         if self._requires_complex_rfft_kernel():
             self.w_kernel = build_complex_window_rfft_kernel(
@@ -218,6 +235,7 @@ class WindowFunc(SFCField):
                 window_function_numba=self.func,
                 **self.window_args,
             )
+            self._apply_zero_mode_convention()
             return
         if self._requires_full_rfft_kernel():
             self.w_kernel = build_real_window_rfft_kernel(
@@ -227,6 +245,7 @@ class WindowFunc(SFCField):
                 window_function_numba=self.func,
                 **self.window_args,
             )
+            self._apply_zero_mode_convention()
             return
         _window_array = build_real_window_octant_array(
             L=self.L,
@@ -236,6 +255,7 @@ class WindowFunc(SFCField):
             **self.window_args,
         )
         self.w_kernel = fold_octant_window_to_rfft_kernel(_window_array)
+        self._apply_zero_mode_convention()
 
     def as_array(self):
         if self.w_kernel is None:

@@ -56,9 +56,10 @@ The same ``WindowFunc`` machinery appears in several roles:
    * - Angular multipole filters
      - ``legendre_multipole`` and internal spherical-harmonic filters
      - 3PCF multipoles, with 2PCF multipoles planned as a future extension
-   * - Field derivatives
-     - ``directional_derivative``, ``laplacian``
-     - gradients, divergence, and curl of weighted fields
+   * - Field operators
+     - ``directional_derivative``, ``laplacian``, ``inverse_laplacian``,
+       ``gravitational_potential``
+     - gradients, divergence, curl, and Poisson potential fields
 
 Built-In Windows
 ----------------
@@ -79,12 +80,13 @@ The standard windows below are normalized so that
 windows, :math:`r=|\mathbf{x}|`, :math:`k=|\mathbf{k}|`, and
 :math:`q=2\pi kR`.
 
-The current built-in window vocabulary contains fourteen named windows:
+The current built-in window vocabulary contains sixteen named windows:
 ``shell``, ``sphere``, ``gaussian``, ``gaussian_shell``, ``cubic``,
 ``cylinder``, ``cylshell``, ``disk``, ``ring``, ``cw``, ``cws``, ``gdw``,
-``directional_derivative``, and ``laplacian``. The first nine are ordinary
-low-pass or pair-geometry windows, ``cw``/``cws``/``gdw`` are high-pass or
-wavelet-like filters, and the last two are differential-operator windows.
+``directional_derivative``, ``laplacian``, ``inverse_laplacian``, and
+``gravitational_potential``. The first nine are ordinary low-pass or
+pair-geometry windows, ``cw``/``cws``/``gdw`` are high-pass or wavelet-like
+filters, and the last four are field-operator windows.
 
 Isotropic Windows
 ~~~~~~~~~~~~~~~~~
@@ -419,6 +421,36 @@ scalar operator
    \widehat W_{\nabla^2}(\mathbf{k})
    =
    -(2\pi)^2|\mathbf{k}|^2.
+
+The companion ``inverse_laplacian`` window represents
+:math:`\nabla^{-2}`:
+
+.. math::
+
+   \widehat W_{\nabla^{-2}}(\mathbf{k})
+   =
+   -{1\over (2\pi)^2|\mathbf{k}|^2},
+   \qquad
+   \widehat W_{\nabla^{-2}}(\mathbf{0})=0.
+
+The zero mode is set to zero because the mean of a Poisson potential is an
+arbitrary convention. The physical ``gravitational_potential`` window applies
+the comoving Poisson prefactor for :math:`\Phi/c^2`:
+
+.. math::
+
+   \widehat W_{\Phi/c^2}(\mathbf{k},a)
+   =
+   {3\Omega_m\over 2a}
+   \left({H_0\over c}\right)^2
+   \widehat W_{\nabla^{-2}}(\mathbf{k}).
+
+Use ``other_args`` to pass ``omegam``, ``H0``, and ``a``. When
+``box_size`` is in :math:`{\rm Mpc}/h`, use ``H0=100`` in
+``km/s/(Mpc/h)``; ``WindowFunc`` rescales this internally to the
+grid-coordinate system used by the kernel builder, giving the
+:math:`\Phi/c^2` transfer with the Poisson prefactor in
+:math:`({\rm Mpc}/h)^{-2}`.
 
 The ``gdw`` window is a scale-normalized Gaussian-derivative wavelet. It is
 related to combining a Gaussian with the negative Laplacian, but includes its
@@ -918,9 +950,10 @@ Practical Rules Of Thumb
   line-of-sight average is desired.
 - Keep the LOS axis-aligned when possible if runtime matters. Oblique LOS is
   supported, but it uses a more general kernel path.
-- Use ``directional_derivative`` and ``laplacian`` as operator windows, usually
-  composed with a smoothing window, when you need gradients, divergence, curl,
-  or Poisson-like operations on a represented field.
+- Use ``directional_derivative``, ``laplacian``, ``inverse_laplacian``, and
+  ``gravitational_potential`` as operator windows, usually composed with a
+  smoothing window, when you need gradients, divergence, curl, or
+  Poisson-like operations on a represented field.
 - Use ``pair_window_cache`` for heavy 2PCF runs when many pair windows are
   rebuilt under a memory-saving strategy.
 - Treat window choices as part of the science definition of the statistic, not
