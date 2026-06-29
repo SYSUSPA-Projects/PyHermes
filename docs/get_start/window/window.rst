@@ -126,7 +126,6 @@ shape:
    {"type": "directional_derivative", "los_args": {"nx": 0.0, "ny": 0.0, "nz": 1.0}}
    {"type": "laplacian"}
    {"type": "inverse_laplacian"}
-   {"type": "gravitational_potential", "other_args": {"omegam": 0.315, "H0": 100.0, "a": 1.0}}
 
 For line-of-sight windows, add ``los_args`` when the default z-axis line of
 sight is not the intended direction:
@@ -143,7 +142,7 @@ sight is not the intended direction:
 Here ``H`` is a distance along the line of sight. For ``cylshell`` and
 ``cylinder``, it is the half-height of the finite cylinder.
 
-The appendix cells plot the Fourier-space responses of all sixteen built-in
+The appendix cells plot the Fourier-space responses of all fifteen built-in
 windows. Those plots are useful when choosing whether a window acts as a
 low-pass smoother, a pair-geometry selector, a high-pass filter, or a
 field operator.

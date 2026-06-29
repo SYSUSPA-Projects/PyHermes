@@ -26,7 +26,7 @@ from pyhermes.utils.window_params import (
 )
 
 
-ZERO_MODE_ZERO_WINDOW_TYPES = {"inverse_laplacian", "gravitational_potential"}
+ZERO_MODE_ZERO_WINDOW_TYPES = {"inverse_laplacian"}
 
 
 class WindowFunc(SFCField):
@@ -120,10 +120,7 @@ class WindowFunc(SFCField):
     def _rescale_other_args(self, other_args):
         if other_args is None:
             return {}
-        rescaled = copy.deepcopy(other_args)
-        if self.type == "gravitational_potential" and "H0" in rescaled:
-            rescaled["H0"] = float(rescaled["H0"]) * self.box_size / self.L
-        return rescaled
+        return copy.deepcopy(other_args)
 
     def _resolve_kernel_mode(self, win_params, has_custom_func):
         kernel_mode = win_params.get("kernel_mode", None)
