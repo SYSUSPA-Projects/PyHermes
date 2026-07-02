@@ -342,14 +342,14 @@ and its Fourier-space form contains the Bessel factor
    \cos(2\pi k_\parallel r_\parallel).
 
 In practice PyHermes can use shell, ring, disk, cylinder, or cylindrical-shell
-pair windows, all with the same coefficient-level machinery. Replacing the
+binning windows, all with the same coefficient-level machinery. Replacing the
 window changes the estimator geometry: a shell gives the usual isotropic
 ``xi(s)``, a cosine transfer gives a generalized phase-weighted 2PCF, and the
 line-of-sight windows probe different averages over the
 :math:`(s_\perp,s_\parallel)` plane.
 
-.. figure:: _static/corr2pcf/corr2pcf_rsd_pair_windows_2d.png
-   :alt: Redshift-space pair-window geometries in the transverse and line-of-sight plane
+.. figure:: _static/corr2pcf/corr2pcf_rsd_binning_windows_2d.png
+   :alt: Redshift-space binning-window geometries in the transverse and line-of-sight plane
    :align: center
    :width: 86%
 
@@ -391,7 +391,7 @@ single volume-averaged windowed-field product,
    =
    DD - DR - RD + RR,
 
-which reduces to the usual Landy-Szalay numerator for symmetric pair windows.
+which reduces to the usual Landy-Szalay numerator for symmetric binning windows.
 Thus the two-point estimator can be read schematically as
 
 .. math::
@@ -412,7 +412,7 @@ Thus the two-point estimator can be read schematically as
 
 This is one of the main advantages of the framework: the code does not need to
 repeat four separate pair-counting passes for ``DD``, ``DR``, ``RD``, and
-``RR``. It constructs the field-level difference once, lets the pair window
+``RR``. It constructs the field-level difference once, lets the binning window
 define the separation bin or redshift-space geometry, and evaluates the
 required product in the represented field. The symbols ``DD``, ``DR``, and
 ``RR`` therefore denote volume-averaged field products in this documentation,

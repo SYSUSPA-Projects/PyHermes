@@ -25,7 +25,7 @@ Changing :math:`W` changes the statistic.
 
 - A smoothing window such as ``sphere`` or ``gaussian`` suppresses small-scale
   structure before later measurements.
-- A 2PCF ``pair_window`` selects the separation bin being counted, for example
+- A 2PCF ``binning_window`` selects the separation bin being counted, for example
   a real-space shell or a redshift-space ring.
 - Standard 3PCF windows define the smoothed triangle legs.
 - 3PCF multipoles use angular windows to build
@@ -52,7 +52,7 @@ The same ``WindowFunc`` machinery appears in several roles:
      - scale-localized power and wavelet-like filtered fields
    * - Pair geometry
      - ``shell``, ``ring``, ``disk``, ``cylinder``, ``cylshell``
-     - ``pair_window`` in 2PCF tasks
+     - ``binning_window`` in 2PCF tasks
    * - Angular multipole filters
      - ``legendre_multipole`` and internal spherical-harmonic filters
      - 3PCF multipoles, with 2PCF multipoles planned as a future extension
@@ -116,7 +116,7 @@ choice for smoothing and count-in-cell style measurements:
    =
    \exp\left(-{q^2\over 2}\right).
 
-``shell`` is a thin spherical shell. It is the natural real-space pair window
+``shell`` is a thin spherical shell. It is the natural real-space binning window
 for :math:`\xi(r)`:
 
 .. math::
@@ -630,13 +630,13 @@ In Python:
        W_out = window_function_sphere_numba(ki, kj, kk, R_out)
        return (W_out * V_out - W_in * V_in) / denom
 
-   def mapping_s_to_R_thick_shell(sample, pair_window, T=10.0):
-       params = copy.deepcopy(pair_window)
+   def mapping_s_to_R_thick_shell(sample, binning_window, T=10.0):
+       params = copy.deepcopy(binning_window)
        params["len_args"]["R_in"] = sample["s"] - T / 2.0
        params["len_args"]["R_out"] = sample["s"] + T / 2.0
        return params
 
-   pair_window = {
+   binning_window = {
        "type": "thick_shell",
        "func": window_function_thick_shell_numba,
        "len_args": ["R_in", "R_out"],
@@ -670,7 +670,7 @@ factor :math:`2\pi R` is removed:
        win_disk = window_function_disk_numba(ki, kj, kk, R, H, nx, ny, nz)
        return (win_cylshell * 2.0 * H + win_disk * R) / denom
 
-   pair_window = {
+   binning_window = {
        "type": "cylsurf",
        "func": window_function_cylsurf_numba,
        "len_args": ["R", "H"],
@@ -687,7 +687,7 @@ Practical cautions:
 - Handle the zero mode explicitly when the formula contains divisions by
   :math:`k`, :math:`q`, or Bessel-like factors. Most normalized smoothing or
   counting windows should return ``1`` at ``k = 0``.
-- Return a real scalar for ordinary smoothing and pair windows. Complex
+- Return a real scalar for ordinary smoothing and binning windows. Complex
   Hermitian-preserving kernels are supported through ``kernel_mode:
   "complex_rfft"``; this is the mode used by the built-in
   ``directional_derivative`` window.
@@ -695,7 +695,7 @@ Practical cautions:
   ``other_args``, PyHermes will not rescale it by ``J`` and ``box_size``.
 - When adding or subtracting windows, combine normalized kernels with the
   correct volume, area, or line-of-sight weights if the result should remain
-  normalized. For pair windows this usually means checking that
+  normalized. For binning windows this usually means checking that
   :math:`\widehat W(0)=1`.
 - Handle degenerate limits explicitly, such as ``R_in == R_out`` in a
   finite-thickness shell or ``q == 0`` in a sinc/Bessel factor. These limits are
@@ -745,12 +745,12 @@ This turns the input density into a smoothed field before the 2PCF products are
 formed. ``window1`` and ``window2`` can be used when the two legs need
 different preprocessing.
 
-``pair_window`` defines the separation bin itself. For a real-space
+``binning_window`` defines the separation bin itself. For a real-space
 :math:`\xi(s)` measurement, the default is a shell:
 
 .. code-block:: yaml
 
-   pair_window: "shell"
+   binning_window: "shell"
    sampling:
      s:
        min: 0.0
@@ -763,7 +763,7 @@ coordinates into window lengths:
 
 .. code-block:: yaml
 
-   pair_window:
+   binning_window:
      type: "ring"
      mapping: "smu_to_RH"
      los_args: [0, 0, 1]
@@ -786,7 +786,7 @@ The built-in mappings are:
 For Python-level workflows, ``mapping`` can also be a custom callable. This is
 useful when the sampling coordinates do not map onto ``R`` and ``H`` in one of
 the built-in ways. The callable receives the current sampling point and the
-template ``pair_window`` dictionary, then returns the concrete window
+template ``binning_window`` dictionary, then returns the concrete window
 dictionary for that sample:
 
 .. code-block:: python
@@ -794,8 +794,8 @@ dictionary for that sample:
    import copy
    import numpy as np
 
-   def custom_mapping(sample, pair_window):
-       params = copy.deepcopy(pair_window)
+   def custom_mapping(sample, binning_window):
+       params = copy.deepcopy(binning_window)
        params.setdefault("len_args", {})
        params["len_args"]["R"] = sample["s"] * np.sqrt(1.0 - sample["mu"] ** 2)
        params["len_args"]["H"] = sample["s"] * sample["mu"]
@@ -803,7 +803,7 @@ dictionary for that sample:
        return params
 
    task.run(
-       pair_window={
+       binning_window={
            "type": "ring",
            "mapping": custom_mapping,
            "los_args": [0, 0, 1],
@@ -825,7 +825,7 @@ Windows In 2PCF Multipoles
 
 This section describes a planned extension rather than a released
 ``Corr_2PCF`` interface. 2PCF multipoles are a natural future use of the same
-pair-window language. In the traditional workflow, one first measures
+binning-window language. In the traditional workflow, one first measures
 :math:`\xi(s,\mu)` on a two-dimensional grid and then projects along
 :math:`\mu`:
 
@@ -842,7 +842,7 @@ too few :math:`\mu` bins under-resolve the projection, while many narrow bins
 increase cost and make each intermediate bin noisier.
 
 In the PyHermes window-convolution picture, the projection can instead be
-absorbed into the pair window itself. For a fixed plane-parallel line of sight
+absorbed into the binning window itself. For a fixed plane-parallel line of sight
 :math:`\widehat{\mathbf n}`, the real-space pair filter can be written
 schematically as
 
@@ -867,7 +867,7 @@ Then the multipole can be estimated directly as a windowed-field product,
 
 with the conventional :math:`2\ell+1` normalization applied either in the
 window or in the final estimator. The :math:`\ell=0` case reduces to the
-ordinary shell pair window used by :math:`\xi(s)`, while higher multipoles use
+ordinary shell binning window used by :math:`\xi(s)`, while higher multipoles use
 Legendre-weighted shell windows.
 
 This planned route is one of the advantages of the Hermes framework: it can
@@ -875,7 +875,7 @@ skip the coordinate-space :math:`(s,\mu)` sampling step and perform the angular
 projection through a Fourier-space convolution. The resulting accuracy is then
 controlled mainly by the field resolution ``J`` and by any smoothing/window
 choice, rather than by an auxiliary :math:`\mu` grid. As with the current
-redshift-space pair windows, this simple convolution form assumes a fixed LOS;
+redshift-space binning windows, this simple convolution form assumes a fixed LOS;
 local-LOS survey estimators would require a separate treatment because the
 window would no longer be purely translation invariant.
 
@@ -952,7 +952,7 @@ Practical Rules Of Thumb
   operator windows, usually composed with a smoothing window, when you need
   gradients, divergence, curl, or Poisson-like operations on a represented
   field.
-- Use ``pair_window_cache`` for heavy 2PCF runs when many pair windows are
+- Use ``binning_window_cache`` for heavy 2PCF runs when many binning windows are
   rebuilt under a memory-saving strategy.
 - Treat window choices as part of the science definition of the statistic, not
   only as performance parameters.

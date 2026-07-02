@@ -14,8 +14,8 @@ from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
-    default_pair_window,
-    normalize_pair_window_template,
+    default_binning_window,
+    normalize_binning_window_template,
     serialize_window_params,
 )
 from pyhermes.pipeline import TaskBase
@@ -130,10 +130,10 @@ def describe_task_distribution(total_tasks, n_ranks):
     return f"Sampling tasks: total={total_tasks}, ranks={n_ranks}, per_rank={min_tasks}-{max_tasks}"
 
 
-def effective_pair_los(pair_window):
-    if not isinstance(pair_window, dict):
+def effective_binning_los(binning_window):
+    if not isinstance(binning_window, dict):
         return None
-    los_args = pair_window.get("los_args", {})
+    los_args = binning_window.get("los_args", {})
     if not all(axis in los_args for axis in LOS_ARG_KEYS):
         return None
     los_values = tuple(los_args.get(axis) for axis in LOS_ARG_KEYS)
@@ -142,18 +142,18 @@ def effective_pair_los(pair_window):
     return None
 
 
-def describe_pair_window(pair_window):
-    if isinstance(pair_window, dict):
-        mapping = pair_window.get("mapping", "custom")
+def describe_binning_window(binning_window):
+    if isinstance(binning_window, dict):
+        mapping = binning_window.get("mapping", "custom")
         mapping_name = mapping if isinstance(mapping, str) else getattr(mapping, "__name__", "custom callable")
-        parts = [f"type={pair_window.get('type', 'custom')}", f"mapping={mapping_name}"]
-        if pair_window.get("kernel_mode") is not None:
-            parts.append(f"kernel_mode={pair_window.get('kernel_mode')}")
-        pair_los = effective_pair_los(pair_window)
-        if pair_los is not None:
-            parts.append(f"los={pair_los}")
-        return "Pair window: " + " | ".join(parts)
-    return "Pair window: default shell mapping"
+        parts = [f"type={binning_window.get('type', 'custom')}", f"mapping={mapping_name}"]
+        if binning_window.get("kernel_mode") is not None:
+            parts.append(f"kernel_mode={binning_window.get('kernel_mode')}")
+        binning_los = effective_binning_los(binning_window)
+        if binning_los is not None:
+            parts.append(f"los={binning_los}")
+        return "Binning window: " + " | ".join(parts)
+    return "Binning window: default shell mapping"
 
 
 def compact_window_desc(win):
@@ -261,17 +261,17 @@ def populate_corr2pcf_data(corr2pcf_data, sampling_names, sampling_arrays, expan
         corr2pcf_data.xi = corr2pcf_data.delta_dd / corr2pcf_data.rr
 
 
-# Pair-window mappings.
-def mapping_s_to_R(sample, pair_window):
-    params = copy.deepcopy(pair_window)
+# Binning-window mappings.
+def mapping_s_to_R(sample, binning_window):
+    params = copy.deepcopy(binning_window)
     params.setdefault("len_args", {})
     if params["len_args"].get("R") is None:
         params["len_args"]["R"] = sample["s"]
     return params
 
 
-def mapping_smu_to_RH(sample, pair_window):
-    params = copy.deepcopy(pair_window)
+def mapping_smu_to_RH(sample, binning_window):
+    params = copy.deepcopy(binning_window)
     params.setdefault("len_args", {})
     params.setdefault("los_args", {})
     params.setdefault("other_args", {})
@@ -282,8 +282,8 @@ def mapping_smu_to_RH(sample, pair_window):
     return params
 
 
-def mapping_rppi_to_RH(sample, pair_window):
-    params = copy.deepcopy(pair_window)
+def mapping_rppi_to_RH(sample, binning_window):
+    params = copy.deepcopy(binning_window)
     params.setdefault("len_args", {})
     params.setdefault("los_args", {})
     params.setdefault("other_args", {})
@@ -294,7 +294,7 @@ def mapping_rppi_to_RH(sample, pair_window):
     return params
 
 
-PAIR_WINDOW_MAPPING_SPECS = {
+BINNING_WINDOW_MAPPING_SPECS = {
     "s_to_R": {
         "sampling_args": ("s",),
         "len_args": ("R",),
@@ -313,34 +313,34 @@ PAIR_WINDOW_MAPPING_SPECS = {
 }
 
 
-def normalize_pair_window_params(pair_window, require_mapping=True):
-    normalized = normalize_pair_window_template(pair_window)
+def normalize_binning_window_params(binning_window, require_mapping=True):
+    normalized = normalize_binning_window_template(binning_window)
     mapping = normalized.get("mapping")
     if not mapping:
         if require_mapping:
-            raise ValueError("pair_window requires a 'mapping' field.")
+            raise ValueError("binning_window requires a 'mapping' field.")
         return normalized
     if isinstance(mapping, str):
-        if mapping not in PAIR_WINDOW_MAPPING_SPECS:
+        if mapping not in BINNING_WINDOW_MAPPING_SPECS:
             raise ValueError(
-                f"Unsupported pair_window mapping '{mapping}'. "
-                f"Supported built-in mappings: {sorted(PAIR_WINDOW_MAPPING_SPECS)}."
+                f"Unsupported binning_window mapping '{mapping}'. "
+                f"Supported built-in mappings: {sorted(BINNING_WINDOW_MAPPING_SPECS)}."
             )
     elif not callable(mapping):
-        raise TypeError("pair_window mapping must be a string or callable.")
+        raise TypeError("binning_window mapping must be a string or callable.")
     return normalized
 
 
-def build_pair_window_params_for_sample(sample, pair_window):
-    pair_window = normalize_pair_window_params(pair_window)
-    mapping = pair_window.get("mapping")
+def build_binning_window_params_for_sample(sample, binning_window):
+    binning_window = normalize_binning_window_params(binning_window)
+    mapping = binning_window.get("mapping")
     if isinstance(mapping, str):
-        mapper = PAIR_WINDOW_MAPPING_SPECS[mapping]["func"]
+        mapper = BINNING_WINDOW_MAPPING_SPECS[mapping]["func"]
     else:
         mapper = mapping
-    params = mapper(sample, pair_window)
+    params = mapper(sample, binning_window)
     if not isinstance(params, dict):
-        raise TypeError("pair_window mapping must return a pair_window dictionary.")
+        raise TypeError("binning_window mapping must return a binning_window dictionary.")
     params = copy.deepcopy(params)
     params.pop("mapping", None)
     params.setdefault("len_args", {})
@@ -361,23 +361,23 @@ def field_mean_density(field, value_unit="grid"):
     raise TypeError(f"Unsupported field type for density extraction: {type(field)}")
 
 
-def pair_product_with_window(field1, field2, pair_window_obj, threads):
+def pair_product_with_window(field1, field2, binning_window_obj, threads):
     if field2 is None:
         field2 = field1
     if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
         return field_mean_density(field1) * field_mean_density(field2)
-    conv = specialized_convolution_3d(field1.epsilon, pair_window_obj.as_array(), threads=threads)
+    conv = specialized_convolution_3d(field1.epsilon, binning_window_obj.as_array(), threads=threads)
     return float(np.einsum("ijk,ijk->", conv, field2.epsilon, optimize=True) / conv.size)
 
 
-def compute_pair_product_at_sample(sample, sfc_field1, sfc_field2=None, pair_window=None):
+def compute_pair_product_at_sample(sample, sfc_field1, sfc_field2=None, binning_window=None):
     if sfc_field2 is None:
         sfc_field2 = sfc_field1
     if isinstance(sfc_field1, (float, int, np.floating)) or isinstance(sfc_field2, (float, int, np.floating)):
         return field_mean_density(sfc_field1) * field_mean_density(sfc_field2)
-    pair_window_params = build_pair_window_params_for_sample(sample, pair_window)
-    pair_window_obj = WindowFunc(pair_window_params, sfc_field1.sfc_info, threads=sfc_field1.threads)
-    return pair_product_with_window(sfc_field1, sfc_field2, pair_window_obj, sfc_field1.threads)
+    binning_window_params = build_binning_window_params_for_sample(sample, binning_window)
+    binning_window_obj = WindowFunc(binning_window_params, sfc_field1.sfc_info, threads=sfc_field1.threads)
+    return pair_product_with_window(sfc_field1, sfc_field2, binning_window_obj, sfc_field1.threads)
 
 
 class Corr_2PCF(TaskBase):
@@ -396,14 +396,14 @@ class Corr_2PCF(TaskBase):
         self.memory_strategy = str(self.memory_strategy).strip().lower()
         if self.memory_strategy not in ("speed", "memory"):
             raise ValueError("Corr_2PCF memory_strategy must be either 'speed' or 'memory'.")
-        self.pair_window_cache = parse_bool(self.pair_window_cache)
+        self.binning_window_cache = parse_bool(self.binning_window_cache)
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['sampling'] = copy.deepcopy(self.sampling)
-        self.task_params['pair_window'] = copy.deepcopy(self.pair_window)
+        self.task_params['binning_window'] = copy.deepcopy(self.binning_window)
         self.task_params['memory_strategy'] = self.memory_strategy
-        self.task_params['pair_window_cache'] = self.pair_window_cache
-        self.task_params['pair_window_cache_dir'] = self.pair_window_cache_dir
+        self.task_params['binning_window_cache'] = self.binning_window_cache
+        self.task_params['binning_window_cache_dir'] = self.binning_window_cache_dir
         self.task_params['weight_normalization'] = self.weight_normalization
         if log_runtime:
             self.sync_runtime_options(context="Corr_2PCF runtime configuration")
@@ -435,7 +435,7 @@ class Corr_2PCF(TaskBase):
             if (not window_i) and self.window:
                 window_i = dict(self.window)
             setattr(self, f'window{i}', window_i)
-        self.pair_window = normalize_pair_window_params(self.task_params.get('pair_window', default_pair_window()))
+        self.binning_window = normalize_binning_window_params(self.task_params.get('binning_window', default_binning_window()))
 
         self.sampling = copy.deepcopy(self.task_params['sampling'])
         self.sampling_names = ()
@@ -444,16 +444,16 @@ class Corr_2PCF(TaskBase):
         self.threads = int(self.task_params['threads'])
         self.products = normalize_products(self.task_params.get('products', 'xi'))
         self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
-        self.pair_window_cache = parse_bool(self.task_params.get("pair_window_cache", False))
-        self.pair_window_cache_dir = self.task_params.get("pair_window_cache_dir", "")
+        self.binning_window_cache = parse_bool(self.task_params.get("binning_window_cache", False))
+        self.binning_window_cache_dir = self.task_params.get("binning_window_cache_dir", "")
         self.fout_path = self.task_params['fout_path']
 
     def _resolve_sampling(self):
         if not isinstance(self.sampling, dict) or not self.sampling:
             raise ValueError("Corr_2PCF requires a non-empty 'sampling' dictionary.")
-        mapping = self.pair_window.get("mapping")
+        mapping = self.binning_window.get("mapping")
         if isinstance(mapping, str):
-            required_names = PAIR_WINDOW_MAPPING_SPECS[mapping]["sampling_args"]
+            required_names = BINNING_WINDOW_MAPPING_SPECS[mapping]["sampling_args"]
         else:
             required_names = tuple(self.sampling.keys())
         missing = [name for name in required_names if name not in self.sampling]
@@ -481,7 +481,7 @@ class Corr_2PCF(TaskBase):
         params['window'] = serialize_window_input(self.window)
         params['window1'] = serialize_window_input(self.window1)
         params['window2'] = serialize_window_input(self.window2)
-        params['pair_window'] = serialize_window_input(self.pair_window)
+        params['binning_window'] = serialize_window_input(self.binning_window)
         params['sampling_spec'] = copy.deepcopy(self.sampling_specs)
         params['sampling_names'] = list(self.sampling_names)
         params['sampling'] = {
@@ -491,8 +491,8 @@ class Corr_2PCF(TaskBase):
         params['threads'] = self.threads
         params['products'] = copy.deepcopy(self.products)
         params['memory_strategy'] = self.memory_strategy
-        params['pair_window_cache'] = self.pair_window_cache
-        params['pair_window_cache_dir'] = self.pair_window_cache_dir
+        params['binning_window_cache'] = self.binning_window_cache
+        params['binning_window_cache_dir'] = self.binning_window_cache_dir
         params['weight_normalization'] = self.weight_normalization
         params['fout_path'] = self.fout_path
         return params
@@ -627,43 +627,43 @@ class Corr_2PCF(TaskBase):
         return field.switch_weight_normalization(self.weight_normalization)
 
     # Pair-product computation.
-    def calc_pair_product(self, sample, field1, field2=None, pair_window=None):
+    def calc_pair_product(self, sample, field1, field2=None, binning_window=None):
         if field2 is None:
             field2 = field1
-        if pair_window is None:
-            pair_window = self.pair_window
-        pair_window = normalize_pair_window_params(pair_window)
+        if binning_window is None:
+            binning_window = self.binning_window
+        binning_window = normalize_binning_window_params(binning_window)
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return field_mean_density(field1) * field_mean_density(field2)
         return compute_pair_product_at_sample(
             sample,
             field1,
             field2,
-            pair_window=pair_window,
+            binning_window=binning_window,
         )
 
-    def _build_pair_window_for_sample(self, sample, reference_field):
-        pair_window_params = build_pair_window_params_for_sample(sample, self.pair_window)
-        pair_window_obj = WindowFunc(pair_window_params, reference_field.sfc_info, threads=self.threads)
-        if self.pair_window_cache:
-            cache_path = self._pair_window_cache_path(pair_window_params, reference_field)
+    def _build_binning_window_for_sample(self, sample, reference_field):
+        binning_window_params = build_binning_window_params_for_sample(sample, self.binning_window)
+        binning_window_obj = WindowFunc(binning_window_params, reference_field.sfc_info, threads=self.threads)
+        if self.binning_window_cache:
+            cache_path = self._binning_window_cache_path(binning_window_params, reference_field)
             if os.path.exists(cache_path):
-                pair_window_obj.w_kernel = np.load(cache_path)
+                binning_window_obj.w_kernel = np.load(cache_path)
             else:
-                pair_window_obj.as_array()
+                binning_window_obj.as_array()
                 os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-                np.save(cache_path, pair_window_obj.w_kernel)
-        return pair_window_obj
+                np.save(cache_path, binning_window_obj.w_kernel)
+        return binning_window_obj
 
-    def _pair_window_cache_path(self, pair_window_params, reference_field):
-        cache_dir = self.pair_window_cache_dir
+    def _binning_window_cache_path(self, binning_window_params, reference_field):
+        cache_dir = self.binning_window_cache_dir
         if not cache_dir:
             if self.fout_path:
-                cache_dir = os.path.join(os.path.dirname(self.fout_path) or ".", "pair_window_cache")
+                cache_dir = os.path.join(os.path.dirname(self.fout_path) or ".", "binning_window_cache")
             else:
-                cache_dir = ".pyhermes_pair_window_cache"
+                cache_dir = ".pyhermes_binning_window_cache"
         cache_key = {
-            "pair_window": pair_window_params,
+            "binning_window": binning_window_params,
             "sfc_info": {
                 key: reference_field.sfc_info.get(key)
                 for key in SFCField._REQUIRED_ARGV
@@ -696,15 +696,15 @@ class Corr_2PCF(TaskBase):
         delta2,
     ):
         reference_field = self._reference_pair_field(field1, field2, random1, random2, delta1, delta2)
-        pair_window_obj = None
+        binning_window_obj = None
 
         def product(a, b):
-            nonlocal pair_window_obj
+            nonlocal binning_window_obj
             if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
                 return field_mean_density(a) * field_mean_density(b)
-            if pair_window_obj is None:
-                pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
-            return pair_product_with_window(a, b, pair_window_obj, self.threads)
+            if binning_window_obj is None:
+                binning_window_obj = self._build_binning_window_for_sample(sample, reference_field)
+            return pair_product_with_window(a, b, binning_window_obj, self.threads)
 
         values = {
             "dd": None,
@@ -812,8 +812,8 @@ class Corr_2PCF(TaskBase):
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return field_mean_density(field1) * field_mean_density(field2)
         reference_field = self._reference_pair_field(field1, field2)
-        pair_window_obj = self._build_pair_window_for_sample(sample, reference_field)
-        return pair_product_with_window(field1, field2, pair_window_obj, self.threads)
+        binning_window_obj = self._build_binning_window_for_sample(sample, reference_field)
+        return pair_product_with_window(field1, field2, binning_window_obj, self.threads)
 
     def _run_memory_product(self, product, tasks, result_shape):
         comm = self.comm
@@ -881,7 +881,7 @@ class Corr_2PCF(TaskBase):
                 time_run_1 = time.perf_counter()
             self.corr2pcf_data = Corr2PCFData(threads=self.threads)
             self.products = normalize_products(self.products)
-            self.pair_window = normalize_pair_window_params(self.pair_window)
+            self.binning_window = normalize_binning_window_params(self.binning_window)
             self._resolve_sampling()
             expanded_products = expand_products(self.products)
             products_to_compute = [product for product in expanded_products if product != "xi"]
@@ -891,8 +891,8 @@ class Corr_2PCF(TaskBase):
                 self.logger.info("Start to calculate 2PCF in memory strategy ...")
                 self.logger.info(describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs))
                 self.logger.info(describe_products(self.products, expanded_products))
-                self.logger.info(describe_pair_window(self.pair_window))
-                self.logger.info(f"Pair-window cache: enabled={self.pair_window_cache}")
+                self.logger.info(describe_binning_window(self.binning_window))
+                self.logger.info(f"Binning-window cache: enabled={self.binning_window_cache}")
                 self.logger.info(describe_task_distribution(len(tasks), comm.Get_size()))
             else:
                 tasks = None
@@ -939,7 +939,7 @@ class Corr_2PCF(TaskBase):
         random2=None,
         window1=None,
         window2=None,
-        pair_window=None,
+        binning_window=None,
         sync_runtime=True,
     ):
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
@@ -959,16 +959,16 @@ class Corr_2PCF(TaskBase):
             window1 = self.window1
         if window2 is None:
             window2 = self.window2
-        if pair_window is None:
-            pair_window = self.pair_window
-        self.pair_window = normalize_pair_window_params(pair_window)
+        if binning_window is None:
+            binning_window = self.binning_window
+        self.binning_window = normalize_binning_window_params(binning_window)
         self._resolve_sampling()
         needs_data, needs_random = self._required_input_flags()
         if self.rank == 0:
             self.logger.info("Preparing Corr_2PCF input fields ...")
             self.logger.info(f"{describe_sampling(self.sampling_names, self.sampling_arrays, self.sampling_specs)}, threads={self.threads}")
             self.logger.info(describe_products(self.products, expanded_products))
-            self.logger.info(describe_pair_window(self.pair_window))
+            self.logger.info(describe_binning_window(self.binning_window))
             base_sfc_cache = {}
             resolved_data_legs = []
             if needs_data:

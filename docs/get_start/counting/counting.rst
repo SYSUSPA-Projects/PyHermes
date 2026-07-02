@@ -39,7 +39,7 @@ smoothing window, and samples the resulting field at random positions:
       fout_path: "./output/quijote8000_snap004_counting_sph20.pkl"
 
 Omit ``window`` if you want to sample the unfiltered field. When ``window`` is present,
-it is a normal smoothing ``WindowFunc``, not a 2PCF pair window.
+it is a normal smoothing ``WindowFunc``, not a 2PCF binning window.
 
 Inputs and outputs
 ------------------

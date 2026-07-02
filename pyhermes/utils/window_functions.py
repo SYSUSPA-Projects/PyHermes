@@ -139,7 +139,7 @@ def window_function_cubic_numba(ki, kj, kk, Lx, Ly, Lz):
 @njit
 def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     """
-    Thin ring-pair window in k-space with a configurable line of sight.
+    Thin ring-binning window in k-space with a configurable line of sight.
 
     ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
     should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
@@ -170,7 +170,7 @@ def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
 @njit
 def window_function_disk_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     """
-    Thin disk-pair window in k-space with a configurable line of sight.
+    Thin disk-binning window in k-space with a configurable line of sight.
 
     ``(nx, ny, nz)`` defaults to the z direction, is normalized internally, and
     should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be

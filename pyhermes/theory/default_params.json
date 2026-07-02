@@ -40,7 +40,7 @@
 			"los_args": {},
 			"other_args": {}
 		},
-		"pair_window": {
+		"binning_window": {
 			"type": "shell",
 			"len_args": ["R"],
 			"los_args": {},
@@ -58,8 +58,8 @@
 		"threads": 1,
 		"products": "xi",
 		"memory_strategy": "speed",
-		"pair_window_cache": false,
-		"pair_window_cache_dir": "",
+		"binning_window_cache": false,
+		"binning_window_cache_dir": "",
 		"fout_path": ""
 	},
 	"Corr_3PCF": {

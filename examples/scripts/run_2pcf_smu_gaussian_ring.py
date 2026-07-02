@@ -1,7 +1,7 @@
 """
-Run the s-mu 2PCF with a Gaussian-blurred ring pair window.
+Run the s-mu 2PCF with a Gaussian-blurred ring binning window.
 
-The custom pair window is assembled from two projected factors:
+The custom binning window is assembled from two projected factors:
 
     J0(2*pi*k_perp*R) * exp[-(2*pi*k_perp*sigma_perp)^2/2]
     cos(2*pi*k_parallel*H)
@@ -22,7 +22,7 @@ from numba import njit
 
 from pyhermes.io import Corr2PCFData, WindowFunc
 from pyhermes.param.parambase import read_param
-from pyhermes.theory.corr2pcf import Corr_2PCF, build_pair_window_params_for_sample
+from pyhermes.theory.corr2pcf import Corr_2PCF, build_binning_window_params_for_sample
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.special_functions import jn_numba
 
@@ -64,8 +64,8 @@ class Corr2PCFGaussianRing(Corr_2PCF):
         self.format_params()
         self._fields_prepared = False
 
-    def _build_pair_window_for_sample(self, sample, reference_field):
-        ring_params = build_pair_window_params_for_sample(sample, self.pair_window)
+    def _build_binning_window_for_sample(self, sample, reference_field):
+        ring_params = build_binning_window_params_for_sample(sample, self.binning_window)
         radius = float(ring_params["len_args"]["R"])
         half_height = float(ring_params["len_args"]["H"])
 
@@ -132,7 +132,7 @@ def load_gaussian_ring_params(config_path, output_path):
                 raise KeyError("Expected a Corr_2PCF section in the input config.")
             task_params = params["Corr_2PCF"]
             baseline_output = task_params.get("fout_path", "")
-            task_params["pair_window"] = "ring"
+            task_params["binning_window"] = "ring"
             task_params["fout_path"] = output_path
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"

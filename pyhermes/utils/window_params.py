@@ -10,10 +10,10 @@ VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft", "complex_fu
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 LOS_AWARE_WINDOW_TYPES = ANISOTROPIC_AUTO_WINDOW_TYPES | COMPLEX_RFFT_WINDOW_TYPES
-BUILTIN_PAIR_WINDOW_TYPES = {"shell"} | ANISOTROPIC_AUTO_WINDOW_TYPES
+BUILTIN_BINNING_WINDOW_TYPES = {"shell"} | ANISOTROPIC_AUTO_WINDOW_TYPES
 
 
-def default_pair_window():
+def default_binning_window():
     return {
         "type": "shell",
         "len_args": {"R": None},
@@ -122,8 +122,8 @@ def serialize_window_params(value):
     return copy.deepcopy(value)
 
 
-def apply_builtin_pair_window_defaults(pair_window):
-    params = copy.deepcopy(pair_window)
+def apply_builtin_binning_window_defaults(binning_window):
+    params = copy.deepcopy(binning_window)
     window_type = params.get("type")
     if not window_type:
         return params
@@ -142,28 +142,28 @@ def apply_builtin_pair_window_defaults(pair_window):
     return params
 
 
-def pair_window_from_string(pair_window):
-    window_type = pair_window.strip().lower()
-    if window_type not in BUILTIN_PAIR_WINDOW_TYPES:
+def binning_window_from_string(binning_window):
+    window_type = binning_window.strip().lower()
+    if window_type not in BUILTIN_BINNING_WINDOW_TYPES:
         raise ValueError(
-            f"Unsupported pair_window string '{pair_window}'. "
+            f"Unsupported binning_window string '{binning_window}'. "
             "Supported built-in strings are 'shell', 'ring', 'disk', "
             "'cylinder', and 'cylshell'."
         )
-    return apply_builtin_pair_window_defaults({"type": window_type})
+    return apply_builtin_binning_window_defaults({"type": window_type})
 
 
-def normalize_pair_window_template(pair_window):
-    if pair_window is None:
-        pair_window = default_pair_window()
-    elif isinstance(pair_window, str):
-        pair_window = pair_window_from_string(pair_window)
-    elif not isinstance(pair_window, dict):
+def normalize_binning_window_template(binning_window):
+    if binning_window is None:
+        binning_window = default_binning_window()
+    elif isinstance(binning_window, str):
+        binning_window = binning_window_from_string(binning_window)
+    elif not isinstance(binning_window, dict):
         raise TypeError(
-            f"Unsupported pair_window input: expected dict, string, or None, got {type(pair_window)}."
+            f"Unsupported binning_window input: expected dict, string, or None, got {type(binning_window)}."
         )
 
-    normalized = apply_builtin_pair_window_defaults(pair_window)
+    normalized = apply_builtin_binning_window_defaults(binning_window)
     if not normalized.get("type"):
         normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
     normalized["len_args"] = normalize_len_args(normalized.get("len_args", {}))

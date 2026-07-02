@@ -58,7 +58,7 @@ Minimal example
       sfc_field: "./output/sfc_field.pkl"
       random: "uniform"
       fout_path: "./output/corr2pcf.pkl"
-      pair_window: "shell"
+      binning_window: "shell"
       sampling:
          s:
             min: 1.0

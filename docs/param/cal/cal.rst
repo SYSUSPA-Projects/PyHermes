@@ -44,18 +44,18 @@ Corr_2PCF
   ``xi(s, mu)``, or ``rp`` and ``pi`` for ``xi(rp, pi)``.
 - ``window``, ``window1``, ``window2``: optional window definitions for custom
   smoothing behavior
-- ``pair_window.mapping``: coordinate mapping from sampling variables to
-  pair-window length arguments. ``s_to_R`` maps ``R=s``; ``smu_to_RH`` maps
+- ``binning_window.mapping``: coordinate mapping from sampling variables to
+  binning-window length arguments. ``s_to_R`` maps ``R=s``; ``smu_to_RH`` maps
   ``R=s sqrt(1-mu^2)``, ``H=s mu``; and ``rppi_to_RH`` maps ``R=rp``,
-  ``H=pi``. In ``Corr_2PCF`` pair windows, ``None`` marks a runtime
+  ``H=pi``. In ``Corr_2PCF`` binning windows, ``None`` marks a runtime
   placeholder; fixed numeric values in ``len_args`` are left unchanged. LOS
-  information belongs in ``pair_window.los_args``.
-- ``pair_window.kernel_mode``: kernel construction strategy. ``full_rfft``
+  information belongs in ``binning_window.los_args``.
+- ``binning_window.kernel_mode``: kernel construction strategy. ``full_rfft``
   evaluates the full real-FFT kernel and is the default for custom windows.
   ``octant`` uses symmetry folding and is appropriate only for windows with the
   required octant symmetries. ``auto`` uses folding for coordinate-axis LOS
   directions and full real-FFT otherwise; built-in ``ring``, ``disk``, and
-  ``cylinder`` pair windows default to ``auto``.
+  ``cylinder`` binning windows default to ``auto``.
   ``octant`` is mathematically safe only when the k-space window is invariant
   under independent sign flips of all three components:
   ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
@@ -72,9 +72,9 @@ Corr_2PCF
 - ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
   windows across products; ``memory`` computes product groups sequentially to
   reduce peak memory
-- ``pair_window_cache``: optional disk cache for pair-window kernels, most
+- ``binning_window_cache``: optional disk cache for binning-window kernels, most
   useful with ``memory_strategy: memory``
-- ``pair_window_cache_dir``: directory for cached pair-window kernels
+- ``binning_window_cache_dir``: directory for cached binning-window kernels
 
 Corr_3PCF
 ---------

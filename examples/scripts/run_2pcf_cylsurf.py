@@ -2,7 +2,7 @@
 Example: run 2PCF with a custom cylinder-surface plus disk-cap window.
 
 This script uses ``examples/configs/param_2pcf_smu_disk.yaml`` as a base
-configuration and replaces only the pair window. Run it from ``examples``:
+configuration and replaces only the binning window. Run it from ``examples``:
 
     python scripts/run_2pcf_cylsurf.py
 """
@@ -29,7 +29,7 @@ def window_function_cylsurf_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     return (2.0 * H * win_cylshell + R * win_disk) / denom
 
 
-CYLSURF_PAIR_WINDOW = {
+CYLSURF_BINNING_WINDOW = {
     "type": "cylsurf",
     "func": window_function_cylsurf_numba,
     "len_args": ["R", "H"],
@@ -41,7 +41,7 @@ CYLSURF_PAIR_WINDOW = {
 
 params = read_param(config_path="./configs/param_2pcf_smu_disk.yaml")
 if MPI.COMM_WORLD.Get_rank() == 0:
-    params["Corr_2PCF"]["pair_window"] = CYLSURF_PAIR_WINDOW
+    params["Corr_2PCF"]["binning_window"] = CYLSURF_BINNING_WINDOW
     params["Corr_2PCF"]["fout_path"] = "./output/quijote8000_snap004_rsd_2pcf_smu_cylsurf.pkl"
 
 task = Corr_2PCF(param_task=params)

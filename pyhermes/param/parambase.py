@@ -16,7 +16,7 @@ import pyhermes.pipeline.custom_exceptions as ce
 
 
 REPLACE_KEYS = {
-    "Corr_2PCF.pair_window",
+    "Corr_2PCF.binning_window",
     "Corr_2PCF.sampling",
 }
 
@@ -188,7 +188,7 @@ class ParamBase(object):
             default_ok = isinstance(default_value, (dict, list, tuple))
             new_ok = isinstance(new_value, (dict, list, tuple))
             return default_ok and new_ok
-        if full_key.endswith(".pair_window"):
+        if full_key.endswith(".binning_window"):
             default_ok = isinstance(default_value, (dict, str))
             new_ok = isinstance(new_value, (dict, str))
             return default_ok and new_ok

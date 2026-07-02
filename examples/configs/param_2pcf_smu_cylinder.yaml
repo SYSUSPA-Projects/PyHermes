@@ -1,7 +1,7 @@
 Corr_2PCF:
    sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
    random: "uniform"
-   pair_window: "cylinder"
+   binning_window: "cylinder"
    sampling:
       s:
          min: 0.0

@@ -1,7 +1,7 @@
 Corr_2PCF:
    sfc_field: "./output/quijote8000_snap004_sfc.pkl"
    random: "uniform"
-   pair_window: "ring"
+   binning_window: "ring"
    sampling:
       s:
          min: 0.0

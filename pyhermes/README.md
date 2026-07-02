@@ -51,7 +51,7 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 | Redshift-space position mapping | `utils/redshift_space.py` |
 | Scaling-function projection/interpolation | `utils/wavelet_grid.py` |
 | Counting task logic | `theory/counting.py`, `io/counting.py` |
-| 2PCF task logic and pair-window mappings | `theory/corr2pcf.py`, `io/corr2pcf.py` |
+| 2PCF task logic and binning-window mappings | `theory/corr2pcf.py`, `io/corr2pcf.py` |
 | 3PCF task logic | `theory/corr3pcf.py`, `utils/corr3pcf_kernels.py`, `io/corr3pcf.py` |
 | 3PCF multipoles | `theory/corr3pcf_multipole.py`, `utils/corr3pcf_multipoles.py` |
 | Legendre/spherical-harmonic window kernels | `utils/legendre_windows.py`, `utils/legendre_fast.py`, `utils/special_functions.py` |
@@ -90,7 +90,7 @@ Task drivers and estimator logic. These classes usually combine parameters,
 `SFCField`, `WindowFunc`, random fields, and numerical kernels.
 
 - `counting.py`: `Counting` task; samples a field at random positions.
-- `corr2pcf.py`: `Corr_2PCF` task; sampling grids, pair-window mappings,
+- `corr2pcf.py`: `Corr_2PCF` task; sampling grids, binning-window mappings,
   pair-product calculations, and product assembly.
 - `corr3pcf.py`: `Corr_3PCF` task; standard 3PCF products for particle-center
   and box-random-center modes.
@@ -119,10 +119,10 @@ more internal than `io/` and `theory/`, but it contains many important pieces.
 #### Window and convolution utilities
 
 - `window_functions.py`: built-in Fourier-space window functions, including
-  smoothing windows, pair windows, field-derivative windows, and the
+  smoothing windows, binning windows, field-derivative windows, and the
   Gaussian-derivative wavelet.
 - `window_params.py`: normalization and serialization of window dictionaries,
-  length arguments, LOS arguments, pair-window defaults, and kernel modes.
+  length arguments, LOS arguments, binning-window defaults, and kernel modes.
 - `convolution.py`: real and complex window-kernel construction plus the
   specialized 3D convolution routines used by `SFCField @ WindowFunc`.
 

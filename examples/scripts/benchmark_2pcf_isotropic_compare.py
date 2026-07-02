@@ -217,7 +217,7 @@ def run_pyhermes_2pcf(args: argparse.Namespace, sfc_path: Path, output_path: Pat
         "Corr_2PCF": {
             "sfc_field": str(sfc_path),
             "random": "uniform",
-            "pair_window": "shell",
+            "binning_window": "shell",
             "sampling": {
                 "s": {
                     "min": float(s_samples[0]),

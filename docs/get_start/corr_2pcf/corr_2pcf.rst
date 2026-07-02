@@ -12,9 +12,9 @@ The notebook has two main halves:
 
 1. isotropic 2PCF on a one-dimensional separation grid
 2. anisotropic 2PCF in redshift space, including line-of-sight changes,
-   smoothing choices, and alternative pair-window families
+   smoothing choices, and alternative binning-window families
 
-It also contains lower-level sections for custom pair windows and direct
+It also contains lower-level sections for custom binning windows and direct
 estimator comparisons. Those sections are useful when you want to understand
 what the task wrapper is doing under the hood.
 
@@ -22,10 +22,10 @@ Minimal YAML Shapes
 -------------------
 
 The current ``Corr_2PCF`` interface separates the sampled coordinates from the
-pair-window geometry. ``sampling`` names the output grid, while ``pair_window``
+binning-window geometry. ``sampling`` names the output grid, while ``binning_window``
 describes how each sampled point becomes a Fourier-space bin window.
 
-For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
+For real-space ``xi(s)``, the minimal shape is a shell binning window sampled by
 ``s``:
 
 .. code-block:: yaml
@@ -33,7 +33,7 @@ For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
    Corr_2PCF:
       sfc_field: "./output/quijote8000_snap004_sfc.pkl"
       random: "uniform"
-      pair_window: "shell"
+      binning_window: "shell"
       sampling:
          s:
             min: 0.0
@@ -43,7 +43,7 @@ For real-space ``xi(s)``, the minimal shape is a shell pair window sampled by
       threads: 2
       fout_path: "./output/quijote8000_snap004_2pcf.pkl"
 
-For redshift-space ``xi(s, mu)``, use a line-of-sight pair window such as
+For redshift-space ``xi(s, mu)``, use a line-of-sight binning window such as
 ``ring``. Built-in string windows fill their own length arguments and default to
 the z-axis line of sight:
 
@@ -52,7 +52,7 @@ the z-axis line of sight:
    Corr_2PCF:
       sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
       random: "uniform"
-      pair_window: "ring"
+      binning_window: "ring"
       sampling:
          s:
             min: 0.0
@@ -78,7 +78,7 @@ are already the transverse and line-of-sight separations:
          type: "sphere"
          len_args:
             R: 5
-      pair_window:
+      binning_window:
          type: "ring"
          mapping: "rppi_to_RH"
       sampling:
@@ -124,17 +124,17 @@ Typical command-line runs look like:
 Conceptual focus
 ----------------
 
-This is the notebook where PyHermes' pair-window abstraction becomes important.
+This is the notebook where PyHermes' binning-window abstraction becomes important.
 Instead of hard-coding one estimator shape, the task combines:
 
 - a prepared field
 - optional smoothing windows
-- a pair window
+- a binning window
 - a sampling grid
 
 That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
 ``xi(rp, pi)`` in one interface. The notebook also uses custom Python pair
-windows to build a finite-thickness shell and a cylinder-surface pair window
+windows to build a finite-thickness shell and a cylinder-surface binning window
 from existing Fourier kernels.
 
 The field formulation also makes the Landy-Szalay structure more direct.
@@ -152,7 +152,7 @@ prepared field's ``field_mean_density(value_unit="grid")`` internally. The raw
 ``DD``/``DR``/``RR``-type products stored in the output are converted back to
 physical density units; dimensionless ratios such as ``xi`` are unchanged by
 this conversion.
-PyHermes then builds ``Delta = d - r`` and evaluates the pair-window product
+PyHermes then builds ``Delta = d - r`` and evaluates the binning-window product
 
 .. math::
 
@@ -167,13 +167,13 @@ PyHermes then builds ``Delta = d - r`` and evaluates the pair-window product
       (W_P\circ r)(\mathbf{x})
      \right\rangle }.
 
-For symmetric pair windows the numerator is the usual
+For symmetric binning windows the numerator is the usual
 ``DD - DR - RD + RR`` combination. The important implementation difference is
 that PyHermes does not need four independent catalogue pair loops; the
-subtraction is done at the field level and the pair window defines the
+subtraction is done at the field level and the binning window defines the
 separation geometry.
 
-Changing the pair window changes the statistic itself. ``shell`` gives the
+Changing the binning window changes the statistic itself. ``shell`` gives the
 usual isotropic ``xi(s)``, while replacing its Fourier response by a cosine
 kernel gives a generalized two-point statistic with a different phase weighting
 of Fourier modes. In redshift space, ``ring`` gives the familiar
@@ -196,16 +196,16 @@ real-space two-point statistic.
    Isotropic :math:`s^2\xi(s)` for the tracer field, a mass-weighted field, and a
    spherically smoothed field.
 
-Changing the pair-window family changes the bin geometry used by the estimator.
+Changing the binning-window family changes the bin geometry used by the estimator.
 The one-dimensional shell and cosine examples are a compact check of that
 choice.
 
-.. figure:: ../../_static/corr2pcf/corr2pcf_pair_window_shell_cosine.png
-   :alt: Isotropic 2PCF comparison for shell and cosine pair windows
+.. figure:: ../../_static/corr2pcf/corr2pcf_binning_window_shell_cosine.png
+   :alt: Isotropic 2PCF comparison for shell and cosine binning windows
    :align: center
    :width: 90%
 
-   Isotropic :math:`s^2\xi(s)` measured with shell and cosine pair windows.
+   Isotropic :math:`s^2\xi(s)` measured with shell and cosine binning windows.
    The two curves use the same field product, but the cosine transfer has a
    different Fourier phase from the shell transfer and therefore probes a
    different generalized two-point statistic.
@@ -221,14 +221,14 @@ For redshift-space analyses, the notebook compares real-space and redshift-space
    Real-space and redshift-space anisotropic 2PCF comparison in ``(s, mu)``.
 
 The final diagnostic keeps the redshift-space field fixed and changes the
-line-of-sight-aware pair-window family.
+line-of-sight-aware binning-window family.
 
-.. figure:: ../../_static/corr2pcf/corr2pcf_rsd_pair_windows_2d.png
-   :alt: Redshift-space 2PCF comparison across pair-window families
+.. figure:: ../../_static/corr2pcf/corr2pcf_rsd_binning_windows_2d.png
+   :alt: Redshift-space 2PCF comparison across binning-window families
    :align: center
    :width: 95%
 
-   Redshift-space 2PCF morphology for several pair-window families. Ring,
+   Redshift-space 2PCF morphology for several binning-window families. Ring,
    disk, cylindrical-shell, and cylindrical-surface windows average over
    different regions of the transverse/line-of-sight plane, so they respond
    differently to redshift-space distortions.
@@ -242,9 +242,9 @@ If you care about redshift-space distortions, the second half is the more
 important reference because it shows how line-of-sight choice, smoothing, and
 window family affect the result.
 
-The same pair-window viewpoint also suggests a future direct route to 2PCF
+The same binning-window viewpoint also suggests a future direct route to 2PCF
 multipoles: instead of first sampling ``xi(s, mu)`` and then projecting over
-``mu``, one can absorb the Legendre projection into a specialized pair window.
+``mu``, one can absorb the Legendre projection into a specialized binning window.
 That planned extension is discussed in :doc:`../../windows`.
 
 Mathematical idea

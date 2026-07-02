@@ -18,7 +18,7 @@ The notebook is organized around four practical ideas:
    built-in window family
 
 This notebook focuses on ordinary field filters and window arithmetic. The same
-``WindowFunc`` abstraction is reused later for 2PCF ``pair_window`` objects,
+``WindowFunc`` abstraction is reused later for 2PCF ``binning_window`` objects,
 3PCF multipole filters, and field-derivative windows, but those task-specific
 roles are introduced in the later notebooks and in :doc:`../../windows`.
 
@@ -187,7 +187,7 @@ What to carry forward
 
 Use this notebook when you want to reason about what a window does before using
 it in a task. ``Counting`` uses the same ordinary smoothing-window role.
-``Corr_2PCF`` additionally uses windows as ``pair_window`` objects, where the
+``Corr_2PCF`` additionally uses windows as ``binning_window`` objects, where the
 window selects a separation bin instead of smoothing the input field.
 ``weighted_fields.ipynb`` uses the same composition rules with derivative
 windows to compute gradients, divergence, and curl.

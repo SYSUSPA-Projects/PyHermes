@@ -1,8 +1,8 @@
 """
-Run the s-mu 2PCF with a ring pair window composed from projected factors.
+Run the s-mu 2PCF with a ring binning window composed from projected factors.
 
 This script mirrors configs/param_2pcf_smu.yaml, but replaces each built-in
-ring pair window with the projected-kernel product of two custom windows:
+ring binning window with the projected-kernel product of two custom windows:
 
     J0(2*pi*k_perp*R) * cos(2*pi*k_parallel*H)
 
@@ -22,7 +22,7 @@ from numba import njit
 
 from pyhermes.io import Corr2PCFData, WindowFunc
 from pyhermes.param.parambase import read_param
-from pyhermes.theory.corr2pcf import Corr_2PCF, build_pair_window_params_for_sample
+from pyhermes.theory.corr2pcf import Corr_2PCF, build_binning_window_params_for_sample
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.special_functions import jn_numba
 
@@ -56,8 +56,8 @@ class Corr2PCFProjectedRingProduct(Corr_2PCF):
         self.format_params()
         self._fields_prepared = False
 
-    def _build_pair_window_for_sample(self, sample, reference_field):
-        ring_params = build_pair_window_params_for_sample(sample, self.pair_window)
+    def _build_binning_window_for_sample(self, sample, reference_field):
+        ring_params = build_binning_window_params_for_sample(sample, self.binning_window)
         radius = float(ring_params["len_args"]["R"])
         half_height = float(ring_params["len_args"]["H"])
 
@@ -124,7 +124,7 @@ def load_projected_ring_product_params(config_path):
                 raise KeyError("Expected a Corr_2PCF section in the input config.")
             task_params = params["Corr_2PCF"]
             baseline_output = task_params.get("fout_path", "")
-            task_params["pair_window"] = "ring"
+            task_params["binning_window"] = "ring"
             task_params["fout_path"] = DEFAULT_OUTPUT
         except Exception as exc:
             error = f"{type(exc).__name__}: {exc}"

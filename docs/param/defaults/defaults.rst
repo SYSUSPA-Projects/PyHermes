@@ -107,14 +107,14 @@ Corr_2PCF
   shared fallback smoothing window for the two legs.
 - ``window1`` and ``window2``:
   optional leg-specific smoothing windows.
-- ``pair_window``:
+- ``binning_window``:
   kernel template used in the pair-correlation measurement itself. The default
   is a shell window with ``mapping: s_to_R``. Built-in mappings are
   ``s_to_R``, ``smu_to_RH``, and ``rppi_to_RH``; the ``sampling`` keys must
   match the selected mapping exactly. Only ``None`` values in ``len_args`` are
   filled at runtime by the mapping; fixed numeric values are left unchanged.
-  LOS information belongs in ``pair_window.los_args``.
-- ``pair_window.kernel_mode``:
+  LOS information belongs in ``binning_window.los_args``.
+- ``binning_window.kernel_mode``:
   kernel construction strategy. ``full_rfft`` evaluates the full real-FFT
   kernel and is the default for custom windows. ``octant`` uses symmetry
   folding. ``auto`` folds only for coordinate-axis LOS directions and otherwise
@@ -127,8 +127,8 @@ Corr_2PCF
 - ``sampling``:
   coordinate specification for the output grid. Supported built-in mapping
   coordinate sets are ``s``, ``s`` and ``mu``, or ``rp`` and ``pi``.
-- ``pair_window.los_args``:
-  line-of-sight direction for LOS-aware pair windows, expressed as
+- ``binning_window.los_args``:
+  line-of-sight direction for LOS-aware binning windows, expressed as
   ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
 - ``threads``:
   CPU threads per MPI rank.
@@ -138,15 +138,15 @@ Corr_2PCF
   ``field`` divides by ``raw_field_weighted_sum`` for positive marked fields.
   ``unit`` rescales either catalog or derived fields to unit field integral.
 - ``memory_strategy``:
-  ``speed`` keeps all required fields resident and reuses each pair window
+  ``speed`` keeps all required fields resident and reuses each binning window
   across products at a sampling point. ``memory`` computes product groups in
-  sequence to reduce peak memory, at the cost of rebuilding pair windows.
-- ``pair_window_cache``:
-  optional disk cache for pair-window kernels, useful with
+  sequence to reduce peak memory, at the cost of rebuilding binning windows.
+- ``binning_window_cache``:
+  optional disk cache for binning-window kernels, useful with
   ``memory_strategy: memory`` when repeated product groups would otherwise
   rebuild the same kernels. Disabled by default.
-- ``pair_window_cache_dir``:
-  directory used when ``pair_window_cache`` is enabled. If empty, PyHermes
+- ``binning_window_cache_dir``:
+  directory used when ``binning_window_cache`` is enabled. If empty, PyHermes
   derives a cache directory from ``fout_path``.
 - ``fout_path``:
   output path for the 2PCF result.

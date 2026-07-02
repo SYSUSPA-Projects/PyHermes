@@ -179,7 +179,7 @@ random ``SFCField`` field.
      - ``51.45 ms``
 
 The diagonal LOS is much slower because the kernel can no longer exploit the
-axis-aligned geometry of ``(0, 0, 1)``. For an axis LOS, many pair-window
+axis-aligned geometry of ``(0, 0, 1)``. For an axis LOS, many binning-window
 operations reduce to simpler separations along the grid axes. For
 ``(1, 1, 1)``, the code must evaluate the full LOS-aware geometry, so each
 sample point does more coordinate work and memory access is less direct.
@@ -190,7 +190,7 @@ analytic constant.
 The representative ``J=8`` memory footprint is ``16--17 GB`` for the
 axis-aligned uniform-shortcut runs. The more general ``full_rfft`` path changes
 runtime more than memory, because the main field buffers are still set by the
-same grid resolution and pair-window construction.
+same grid resolution and binning-window construction.
 
 Standard 3PCF
 -------------

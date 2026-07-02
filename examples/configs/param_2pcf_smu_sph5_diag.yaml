@@ -5,7 +5,7 @@ Corr_2PCF:
       type: "sphere"
       len_args:
          R: 5
-   pair_window:
+   binning_window:
       type: "ring"
       los_args: [1, 1, 1]
    sampling:

@@ -80,7 +80,7 @@
   <g filter="url(#shadow)">
     <rect x="450" y="650" width="300" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
     <text x="480" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_2PCF</text>
-    <text x="480" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">pair_window defines bins</text>
+    <text x="480" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">binning_window defines bins</text>
     <text x="480" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">xi(s), xi(s,mu), xi(rp,pi)</text>
   </g>
 

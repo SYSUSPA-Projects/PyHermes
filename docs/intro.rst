@@ -103,10 +103,10 @@ This field-and-window viewpoint gives PyHermes several practical advantages:
   one consistent window-function language;
 - complex redshift-space geometries and line-of-sight choices fit naturally
   into the same framework;
-- 2PCF multipoles can be viewed as Legendre-weighted pair windows, so the
+- 2PCF multipoles can be viewed as Legendre-weighted binning windows, so the
   angular projection can be folded into the convolution rather than performed
   after sampling a dense :math:`(s,\mu)` grid; this is a natural planned
-  extension of the current pair-window framework;
+  extension of the current binning-window framework;
 - 3PCF multipoles are built from angular window filters on the field itself,
   avoiding direct triplet enumeration for every angular basis component;
 - field derivatives can be computed with derivative windows, so gradients,
