@@ -21,6 +21,7 @@ REPLACE_KEYS = {
     "Corr_3PCF_Multipole.binning_window12",
     "Corr_3PCF_Multipole.binning_window13",
     "Corr_3PCF_Multipole.sampling",
+    "Corr_3PCF_Multipole.sample_mpi",
 }
 
 

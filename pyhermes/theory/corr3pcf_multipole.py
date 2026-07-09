@@ -1,5 +1,6 @@
 import copy
 import itertools
+import os
 import pickle
 import time
 
@@ -94,7 +95,10 @@ class Corr_3PCF_Multipole(TaskBase):
         self.gpu_threads_per_block = multipole_util.normalize_gpu_threads_per_block(
             self.task_params.get("gpu_threads_per_block", (8, 8, 8))
         )
-        self.execution_mode = self.task_params["execution_mode"]
+        self.execution_mode = str(self.task_params["execution_mode"]).strip().lower()
+        if self.execution_mode not in {"serial", "pair_mpi", "sample_mpi"}:
+            raise ValueError("Corr_3PCF_Multipole execution_mode must be 'serial', 'pair_mpi', or 'sample_mpi'.")
+        self.sample_mpi = self._normalize_sample_mpi(self.task_params.get("sample_mpi", {}))
         self.cache_multipole_fields = bool(self.task_params["cache_multipole_fields"])
         self.cache_dir = self.task_params["cache_dir"]
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
@@ -119,6 +123,50 @@ class Corr_3PCF_Multipole(TaskBase):
         if isinstance(value, dict) and not value.get("type") and self.window:
             return self.window
         return value
+
+    def _normalize_sample_mpi(self, value):
+        if value is None:
+            value = {}
+        if not isinstance(value, dict):
+            raise TypeError("Corr_3PCF_Multipole.sample_mpi must be a dictionary.")
+        params = copy.deepcopy(value)
+        ranks_per_sample = int(params.get("ranks_per_sample", 1))
+        if ranks_per_sample != 1:
+            raise ValueError("sample_mpi currently supports only ranks_per_sample=1.")
+        gpu_device_ids = params.get("gpu_device_ids", [])
+        if gpu_device_ids in (None, ""):
+            gpu_device_ids = []
+        elif isinstance(gpu_device_ids, (int, np.integer)):
+            gpu_device_ids = [int(gpu_device_ids)]
+        elif isinstance(gpu_device_ids, (list, tuple)):
+            gpu_device_ids = [int(item) for item in gpu_device_ids]
+        else:
+            raise TypeError("sample_mpi.gpu_device_ids must be an integer or a list of integers.")
+        return {
+            "ranks_per_sample": ranks_per_sample,
+            "gpu_device_ids": gpu_device_ids,
+        }
+
+    def _local_rank(self, rank):
+        for env_name in (
+            "OMPI_COMM_WORLD_LOCAL_RANK",
+            "MV2_COMM_WORLD_LOCAL_RANK",
+            "SLURM_LOCALID",
+            "PMI_LOCAL_RANK",
+        ):
+            value = os.environ.get(env_name)
+            if value is not None:
+                try:
+                    return int(value)
+                except ValueError:
+                    pass
+        return int(rank)
+
+    def _rank_gpu_device_id(self, rank):
+        gpu_device_ids = self.sample_mpi.get("gpu_device_ids", [])
+        if not gpu_device_ids:
+            return self.gpu_device_id
+        return int(gpu_device_ids[self._local_rank(rank) % len(gpu_device_ids)])
 
     def _normalize_edge_binning_window(self, value, name):
         if not isinstance(value, dict):
@@ -344,6 +392,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "gpu_device_id": self.gpu_device_id,
             "gpu_threads_per_block": list(self.gpu_threads_per_block),
             "execution_mode": self.execution_mode,
+            "sample_mpi": serialize_window_params(self.sample_mpi),
             "cache_multipole_fields": self.cache_multipole_fields,
             "cache_dir": self.cache_dir,
             "verbose_m_progress": self.verbose_m_progress,
@@ -571,7 +620,8 @@ class Corr_3PCF_Multipole(TaskBase):
             window3 if window3 is not None else self._fallback_window(self.window3),
         ]
 
-        if self.rank == 0:
+        prepare_on_this_rank = self.rank == 0 or self.execution_mode == "sample_mpi"
+        if prepare_on_this_rank:
             self.logger.info("Preparing Corr_3PCF multipole input fields ...")
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
@@ -1060,6 +1110,109 @@ class Corr_3PCF_Multipole(TaskBase):
             rrr_l[zero_idx[0]] = self._uniform_density() ** 3
         return l_arr, rrr_l
 
+    def _sample_indices_for_rank(self, rank, size):
+        return list(range(int(rank), len(self.samples), int(size)))
+
+    def _run_sample_mpi_local_sample(self, rank, fields, product_name, binning_window12, binning_window13, sample_idx):
+        gpu_device_id = self._rank_gpu_device_id(rank)
+        self.logger.info(
+            f"Rank {rank} starts 3PCF multipole product '{product_name}' "
+            f"for sample {sample_idx + 1}/{len(self.samples)} on gpu_device_id={gpu_device_id}."
+        )
+        log_l_progress, log_m_progress = self._log_helpers(product_name)
+        progress_callback = log_l_progress if (self.verbose_profile or self.verbose_m_progress) else None
+        l_arr, multipole_l, timing_info = multipole_util.calc_DDD_multipole(
+            fields[0], fields[1], fields[2],
+            binning_window12, binning_window13, self.l_min, self.l_max,
+            gpu_device_id=gpu_device_id,
+            gpu_threads_per_block=self.gpu_threads_per_block,
+            cache_multipole_fields=self.cache_multipole_fields,
+            cache_dir=self.cache_dir,
+            cache_namespace=f"{product_name}_sample{sample_idx:04d}",
+            threads=self.threads,
+            progress_callback=progress_callback,
+            m_progress_callback=log_m_progress if self.verbose_m_progress else None,
+        )
+        return l_arr, multipole_l, timing_info
+
+    def _compute_product_sample_mpi(self, product_name):
+        comm = self.comm
+        rank = self.rank
+        size = comm.Get_size()
+        local_sample_indices = self._sample_indices_for_rank(rank, size)
+        if rank == 0:
+            self.logger.info(
+                f"execution_mode=sample_mpi | ranks={size}, n_samples={len(self.samples)}, "
+                f"rank0_samples={local_sample_indices}"
+            )
+        self.logger.info(f"Rank {rank} handles sample indices {local_sample_indices}.")
+
+        local_l_arr = None
+        local_rows = []
+        local_timing = {
+            "conv": 0.0,
+            "gpu_sum": 0.0,
+            "h2d": 0.0,
+            "kernel": 0.0,
+            "d2h": 0.0,
+            "reduce": 0.0,
+        }
+        for sample_idx in local_sample_indices:
+            fields = self._prepare_product_fields(product_name)
+            l_arr, product_l, timing_info = self._run_sample_mpi_local_sample(
+                rank,
+                fields,
+                product_name,
+                self.binning_window12[sample_idx],
+                self.binning_window13[sample_idx],
+                sample_idx,
+            )
+            local_l_arr = l_arr
+            local_rows.append((sample_idx, product_l))
+            local_timing["conv"] += timing_info["conv_elapsed_sec"]
+            local_timing["gpu_sum"] += timing_info["sum_elapsed_sec"]
+            local_timing["h2d"] += timing_info["sum_h2d_elapsed_sec"]
+            local_timing["kernel"] += timing_info["sum_kernel_elapsed_sec"]
+            local_timing["d2h"] += timing_info["sum_d2h_elapsed_sec"]
+            local_timing["reduce"] += timing_info["sum_reduce_elapsed_sec"]
+            del fields
+
+        gathered = comm.gather((local_l_arr, local_rows, local_timing), root=0)
+        if rank != 0:
+            return None, None
+
+        l_arr = next((item[0] for item in gathered if item[0] is not None), None)
+        if l_arr is None:
+            raise ValueError("sample_mpi did not produce any local multipole result.")
+        product_values = np.empty((len(self.samples), len(l_arr)), dtype=np.float64)
+        seen = np.zeros(len(self.samples), dtype=bool)
+        timing_keys = ("conv", "gpu_sum", "h2d", "kernel", "d2h", "reduce")
+        timing_max = {key: max(float(item[2][key]) for item in gathered) for key in timing_keys}
+        timing_sum = {key: sum(float(item[2][key]) for item in gathered) for key in timing_keys}
+        for _, rows, _ in gathered:
+            for sample_idx, product_l in rows:
+                product_values[int(sample_idx)] = np.asarray(product_l, dtype=np.float64)
+                seen[int(sample_idx)] = True
+        if not np.all(seen):
+            missing = np.where(~seen)[0].tolist()
+            raise ValueError(f"sample_mpi missing results for sample indices {missing}.")
+        self._last_product_profile = {
+            "conv": timing_max["conv"],
+            "gpu_sum": timing_max["gpu_sum"],
+            "h2d": timing_max["h2d"],
+            "kernel": timing_max["kernel"],
+            "d2h": timing_max["d2h"],
+            "reduce": timing_max["reduce"],
+            "sample_mpi_conv_sum": timing_sum["conv"],
+            "sample_mpi_gpu_sum": timing_sum["gpu_sum"],
+        }
+        self.logger.info(
+            f"sample_mpi timing [{product_name}] | conv_max_rank={timing_max['conv']:.2f} sec | "
+            f"sum_max_rank={timing_max['gpu_sum']:.2f} sec | conv_sum_all={timing_sum['conv']:.2f} sec | "
+            f"sum_all={timing_sum['gpu_sum']:.2f} sec"
+        )
+        return l_arr, product_values
+
     def _compute_product_multipole(self, product_name, fields, binning_window12, binning_window13, sample_idx):
         comm = self.comm
         rank = self.rank
@@ -1189,6 +1342,13 @@ class Corr_3PCF_Multipole(TaskBase):
                         self.logger.info(
                             f"Product 'rrr_l' used all-uniform analytic shortcut | rho^3={self._uniform_density() ** 3:.6e}"
                         )
+                        self._log_product_timing(product_name, time.perf_counter() - product_t0)
+                    continue
+
+                if self.execution_mode == "sample_mpi":
+                    l_arr, product_values = self._compute_product_sample_mpi(product_name)
+                    if rank == 0:
+                        self._store_product(product_name, l_arr, product_values)
                         self._log_product_timing(product_name, time.perf_counter() - product_t0)
                     continue
 

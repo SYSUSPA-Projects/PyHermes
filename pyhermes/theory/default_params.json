@@ -173,6 +173,10 @@
 		"gpu_device_id": 0,
 		"gpu_threads_per_block": [8, 8, 8],
 		"execution_mode": "serial",
+		"sample_mpi": {
+			"ranks_per_sample": 1,
+			"gpu_device_ids": []
+		},
 		"cache_multipole_fields": false,
 		"cache_dir": "",
 		"verbose_m_progress": false,
