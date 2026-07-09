@@ -5,8 +5,21 @@ Corr_3PCF_Multipole:
       type: "sphere"
       len_args:
          R: 5
-   r12: 20.0
-   r13: 40.0
+   binning_window12:
+      type: "shell"
+      len_args: {}
+      other_args: {}
+      map:
+         R: "r12"
+   binning_window13:
+      type: "shell"
+      len_args: {}
+      other_args: {}
+      map:
+         R: "r13"
+   sampling:
+      r12: 20.0
+      r13: 40.0
    l_max: 7
    gpu_device_id: 0
    execution_mode: "pair_mpi"

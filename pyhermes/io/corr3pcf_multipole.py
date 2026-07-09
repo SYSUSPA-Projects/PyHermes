@@ -14,6 +14,9 @@ class Corr3PCFMultipoleData(HermesData):
         self.sfc_info2 = None
         self.sfc_info3 = None
         self.corr3pcf_multipole_info = {}
+        self.sample_params = None
+        self.binning_window12 = None
+        self.binning_window13 = None
         self.r12 = None
         self.r13 = None
         self.l = None
@@ -40,16 +43,13 @@ class Corr3PCFMultipoleData(HermesData):
         with open(f_in, "rb") as f:
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             dataset = pickle.loads(serialized_data.tobytes())
-            for key in ["l"]:
+            for key in ["l", "sample_params", "binning_window12", "binning_window13"]:
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
                     func_util.safe_exit(1)
                 setattr(self, key, dataset[key])
-            self.r12 = dataset.get("r12", dataset.get("r1"))
-            self.r13 = dataset.get("r13", dataset.get("r2"))
-            if self.r12 is None or self.r13 is None:
-                self.logger.error("Failed to load the dataset. The file is missing the 'r12/r13' (or legacy 'r1/r2') keys.")
-                func_util.safe_exit(1)
+            self.r12 = dataset.get("r12")
+            self.r13 = dataset.get("r13")
             self.ddd_l = dataset.get("ddd_l")
             self.rrr_l = dataset.get("rrr_l")
             self.delta_ddd_l = dataset.get("delta_ddd_l")
@@ -77,6 +77,9 @@ class Corr3PCFMultipoleData(HermesData):
             "sfc_info2": self.sfc_info2,
             "sfc_info3": self.sfc_info3,
             "corr3pcf_multipole_info": self.corr3pcf_multipole_info,
+            "sample_params": self.sample_params,
+            "binning_window12": self.binning_window12,
+            "binning_window13": self.binning_window13,
             "r12": self.r12,
             "r13": self.r13,
             "l": self.l,

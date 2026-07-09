@@ -166,14 +166,39 @@ class WindowFunc(SFCField):
         return self.kernel_mode == "auto" and self.type in COMPLEX_FULL_FFT_WINDOW_TYPES
 
     def _build_complex_full_fft_kernel(self):
-        if self.type != "legendre_multipole":
+        if self.type not in {"legendre_multipole", "radial_multipole"}:
             if self.rank == 0:
                 self.logger.error(f"Unsupported complex full-FFT window type: {self.type}")
             func_util.safe_exit(1)
         if self.bandwidth != 1:
             if self.rank == 0:
-                self.logger.error("legendre_multipole currently supports only bandwidth=1.")
+                self.logger.error(f"{self.type} currently supports only bandwidth=1.")
             func_util.safe_exit(1)
+        if self.type == "radial_multipole":
+            try:
+                radial_type = str(self.other_args["radial_type"])
+                l = int(self.other_args["l"])
+                m = int(self.other_args["m"])
+            except KeyError as exc:
+                if self.rank == 0:
+                    self.logger.error(f"radial_multipole missing required other_args key: {exc}")
+                func_util.safe_exit(1)
+            from pyhermes.utils.radial_multipole_windows import calculate_radial_multipole_window_array
+
+            try:
+                self.w_kernel = calculate_radial_multipole_window_array(
+                    self.L,
+                    self.phi_fourier_power,
+                    self.rescale_len_args,
+                    radial_type,
+                    l,
+                    m,
+                )
+            except Exception as exc:
+                if self.rank == 0:
+                    self.logger.error(f"Failed to build radial_multipole window: {exc}")
+                func_util.safe_exit(1)
+            return
         if "R" not in self.rescale_len_args:
             if self.rank == 0:
                 self.logger.error("legendre_multipole requires len_args={'R': ...}.")

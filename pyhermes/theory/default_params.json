@@ -155,8 +155,19 @@
 			"los_args": {},
 			"other_args": {}
 		},
-		"r12": 20.0,
-		"r13": 40.0,
+		"binning_window12": {
+			"type": "shell",
+			"len_args": {},
+			"other_args": {},
+			"map": {}
+		},
+		"binning_window13": {
+			"type": "shell",
+			"len_args": {},
+			"other_args": {},
+			"map": {}
+		},
+		"sampling": {},
 		"l_min": 0,
 		"l_max": 4,
 		"gpu_device_id": 0,

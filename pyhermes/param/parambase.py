@@ -18,6 +18,9 @@ import pyhermes.pipeline.custom_exceptions as ce
 REPLACE_KEYS = {
     "Corr_2PCF.binning_window",
     "Corr_2PCF.sampling",
+    "Corr_3PCF_Multipole.binning_window12",
+    "Corr_3PCF_Multipole.binning_window13",
+    "Corr_3PCF_Multipole.sampling",
 }
 
 

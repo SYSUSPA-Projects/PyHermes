@@ -1,4 +1,5 @@
 import copy
+import itertools
 import pickle
 import time
 
@@ -52,6 +53,12 @@ class Corr_3PCF_Multipole(TaskBase):
         self.random2 = self._fallback_random(self.random2)
         self.random3 = self._fallback_random(self.random3)
         self.weight_normalization = normalize_task_weight_normalization(self.task_params.get("weight_normalization", "catalog"))
+        legacy_radius_keys = [key for key in ("r12", "r13", "r1", "r2") if key in self.task_params]
+        if legacy_radius_keys:
+            raise ValueError(
+                "Corr_3PCF_Multipole no longer accepts top-level radius keys "
+                f"{legacy_radius_keys}. Define radii through sampling and map them into binning_window12/13."
+            )
 
         window = self.task_params.get("window", None)
         self.window = window if (isinstance(window, dict) and window.get("type")) else None
@@ -62,8 +69,25 @@ class Corr_3PCF_Multipole(TaskBase):
                 window_i = dict(self.window)
             setattr(self, f"window{i}", window_i)
 
-        self.r12 = float(self.task_params.get("r12", self.task_params.get("r1")))
-        self.r13 = float(self.task_params.get("r13", self.task_params.get("r2")))
+        self.binning_window12_template = self._normalize_edge_binning_window(
+            self.task_params.get("binning_window12"), "binning_window12"
+        )
+        self.binning_window13_template = self._normalize_edge_binning_window(
+            self.task_params.get("binning_window13"), "binning_window13"
+        )
+        self.sampling = self._normalize_sampling(self.task_params.get("sampling"))
+        self.samples = self._expand_sampling(self.sampling)
+        self.sample_params = self._sample_params_from_samples(self.samples)
+        self.binning_window12 = [
+            self._build_sample_binning_window(self.binning_window12_template, sample, "binning_window12")
+            for sample in self.samples
+        ]
+        self.binning_window13 = [
+            self._build_sample_binning_window(self.binning_window13_template, sample, "binning_window13")
+            for sample in self.samples
+        ]
+        self.r12 = self.sample_params.get("r12")
+        self.r13 = self.sample_params.get("r13")
         self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
@@ -95,6 +119,123 @@ class Corr_3PCF_Multipole(TaskBase):
         if isinstance(value, dict) and not value.get("type") and self.window:
             return self.window
         return value
+
+    def _normalize_edge_binning_window(self, value, name):
+        if not isinstance(value, dict):
+            raise TypeError(f"{name} must be a dictionary.")
+        if not value.get("type"):
+            raise ValueError(f"{name} must define a non-empty 'type'.")
+        params = copy.deepcopy(value)
+        params["type"] = str(params["type"]).strip().lower()
+        params.setdefault("len_args", {})
+        params.setdefault("other_args", {})
+        params.setdefault("map", {})
+        if params["len_args"] is None:
+            params["len_args"] = {}
+        if params["other_args"] is None:
+            params["other_args"] = {}
+        if params["map"] is None:
+            params["map"] = {}
+        if not isinstance(params["len_args"], dict):
+            raise TypeError(f"{name}.len_args must be a dictionary.")
+        if not isinstance(params["other_args"], dict):
+            raise TypeError(f"{name}.other_args must be a dictionary.")
+        if not isinstance(params["map"], dict):
+            raise TypeError(f"{name}.map must be a dictionary.")
+        return params
+
+    def _normalize_sampling(self, sampling):
+        if not isinstance(sampling, dict):
+            raise TypeError("Corr_3PCF_Multipole requires a 'sampling' dictionary.")
+        normalized = copy.deepcopy(sampling)
+        mode = str(normalized.pop("mode", "grid")).strip().lower()
+        if mode not in {"grid", "paired"}:
+            raise ValueError("sampling.mode must be 'grid' or 'paired'.")
+        values = {}
+        for name, spec in normalized.items():
+            values[name] = self._sampling_values(name, spec)
+        if not values:
+            raise ValueError("sampling must contain at least one sampled parameter.")
+        return {"mode": mode, "values": values}
+
+    def _sampling_values(self, name, spec):
+        if isinstance(spec, dict):
+            if "values" in spec:
+                values = np.asarray(spec["values"], dtype=np.float64)
+            elif {"min", "max", "n"}.issubset(spec):
+                values = np.linspace(float(spec["min"]), float(spec["max"]), int(spec["n"]), dtype=np.float64)
+            elif {"start", "stop", "step"}.issubset(spec):
+                start = float(spec["start"])
+                stop = float(spec["stop"])
+                step = float(spec["step"])
+                if step == 0.0:
+                    raise ValueError(f"sampling.{name}.step must be non-zero.")
+                values = np.arange(start, stop + 0.5 * step, step, dtype=np.float64)
+            else:
+                raise ValueError(
+                    f"sampling.{name} must use 'values', 'min/max/n', 'start/stop/step', or a scalar."
+                )
+        else:
+            values = np.asarray([spec], dtype=np.float64)
+        if values.ndim != 1 or values.size == 0:
+            raise ValueError(f"sampling.{name} must expand to a non-empty 1D array.")
+        return values
+
+    def _expand_sampling(self, sampling):
+        values = sampling["values"]
+        names = list(values)
+        if sampling["mode"] == "grid":
+            samples = []
+            for combo in itertools.product(*(values[name] for name in names)):
+                samples.append({name: float(value) for name, value in zip(names, combo)})
+            return samples
+
+        lengths = [arr.size for arr in values.values()]
+        n_samples = max(lengths)
+        if any(length not in (1, n_samples) for length in lengths):
+            raise ValueError("sampling.mode='paired' requires each parameter to have length 1 or the shared length.")
+        samples = []
+        for idx in range(n_samples):
+            sample = {}
+            for name, arr in values.items():
+                sample[name] = float(arr[0] if arr.size == 1 else arr[idx])
+            samples.append(sample)
+        return samples
+
+    def _sample_params_from_samples(self, samples):
+        names = list(samples[0])
+        return {
+            name: np.asarray([sample[name] for sample in samples], dtype=np.float64)
+            for name in names
+        }
+
+    def _resolve_sample_mapping_value(self, sample, source):
+        if isinstance(source, str):
+            if source not in sample:
+                raise KeyError(f"Sampling parameter '{source}' is not defined.")
+            return float(sample[source])
+        return float(source)
+
+    def _assign_mapped_binning_value(self, params, target, value):
+        if "." not in target:
+            params.setdefault("len_args", {})[target] = value
+            return
+        section, key = target.split(".", 1)
+        if section not in {"len_args", "other_args"}:
+            raise ValueError(f"Unsupported binning-window map target '{target}'.")
+        params.setdefault(section, {})[key] = value
+
+    def _build_sample_binning_window(self, template, sample, name):
+        params = copy.deepcopy(template)
+        mapping = params.pop("map")
+        params["len_args"] = copy.deepcopy(params.get("len_args", {}))
+        params["other_args"] = copy.deepcopy(params.get("other_args", {}))
+        for target, source in mapping.items():
+            value = self._resolve_sample_mapping_value(sample, source)
+            self._assign_mapped_binning_value(params, target, value)
+        if not params["len_args"]:
+            raise ValueError(f"{name} produced an empty len_args dictionary.")
+        return params
 
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
@@ -194,8 +335,10 @@ class Corr_3PCF_Multipole(TaskBase):
             "window1": self._serialize_window_input(self.window1),
             "window2": self._serialize_window_input(self.window2),
             "window3": self._serialize_window_input(self.window3),
-            "r12": self.r12,
-            "r13": self.r13,
+            "binning_window12_template": self._serialize_window_input(self.binning_window12_template),
+            "binning_window13_template": self._serialize_window_input(self.binning_window13_template),
+            "sampling": serialize_window_params(self.sampling),
+            "n_samples": len(self.samples),
             "l_min": self.l_min,
             "l_max": self.l_max,
             "gpu_device_id": self.gpu_device_id,
@@ -383,6 +526,13 @@ class Corr_3PCF_Multipole(TaskBase):
         subcomm.Free()
         return local
 
+    def _store_sampling_metadata(self):
+        self.corr3pcf_multipole_data.sample_params = copy.deepcopy(self.sample_params)
+        self.corr3pcf_multipole_data.binning_window12 = copy.deepcopy(self.binning_window12)
+        self.corr3pcf_multipole_data.binning_window13 = copy.deepcopy(self.binning_window13)
+        self.corr3pcf_multipole_data.r12 = copy.deepcopy(self.r12)
+        self.corr3pcf_multipole_data.r13 = copy.deepcopy(self.r13)
+
     def prepare_input_fields(
         self,
         sfc_field1=None,
@@ -396,6 +546,7 @@ class Corr_3PCF_Multipole(TaskBase):
         window3=None,
     ):
         self.corr3pcf_multipole_data = Corr3PCFMultipoleData()
+        self._store_sampling_metadata()
         self._sync_runtime_options()
 
         if "zeta_l" in self._expanded_products() and self.l_min > 0:
@@ -424,7 +575,7 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.info("Preparing Corr_3PCF multipole input fields ...")
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
-                f"r12={self.r12}, r13={self.r13}, threads={self.threads}, "
+                f"n_samples={len(self.samples)}, threads={self.threads}, "
                 f"gpu_device_id={self.gpu_device_id}, gpu_threads_per_block={self.gpu_threads_per_block}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
@@ -525,10 +676,11 @@ class Corr_3PCF_Multipole(TaskBase):
         self._fields_prepared = True
 
     def _store_product(self, product_name, l_arr, values):
-        self.corr3pcf_multipole_data.r12 = self.r12
-        self.corr3pcf_multipole_data.r13 = self.r13
+        self._store_sampling_metadata()
         self.corr3pcf_multipole_data.l = np.asarray(l_arr, dtype=np.int32)
         values = np.asarray(values, dtype=np.float64)
+        if values.ndim == 1:
+            values = values.reshape(1, -1)
         if product_name in {"ddd_l", "rrr_l", "delta_ddd_l"}:
             values = self._scale_triplet_product_value(values)
         setattr(self.corr3pcf_multipole_data, product_name, values)
@@ -572,11 +724,14 @@ class Corr_3PCF_Multipole(TaskBase):
 
         return _log_l_progress, _log_m_progress
 
-    def _run_serial_mode(self, rank, fields, product_name):
+    def _run_serial_mode(self, rank, fields, product_name, binning_window12, binning_window13, sample_idx):
         if rank != 0:
             return None, None
 
-        self.logger.info(f"Start to calculate 3PCF multipole product '{product_name}' ...")
+        self.logger.info(
+            f"Start to calculate 3PCF multipole product '{product_name}' "
+            f"for sample {sample_idx + 1}/{len(self.samples)} ..."
+        )
         self.logger.info(
             f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
             f"threads={self.threads}, gpu_device_id={self.gpu_device_id}, "
@@ -588,11 +743,12 @@ class Corr_3PCF_Multipole(TaskBase):
         log_l_progress, log_m_progress = self._log_helpers(product_name)
         l_arr, multipole_l, timing_info = multipole_util.calc_DDD_multipole(
             fields[0], fields[1], fields[2],
-            self.r12, self.r13, self.l_min, self.l_max,
+            binning_window12, binning_window13, self.l_min, self.l_max,
             gpu_device_id=self.gpu_device_id,
             gpu_threads_per_block=self.gpu_threads_per_block,
             cache_multipole_fields=self.cache_multipole_fields,
             cache_dir=self.cache_dir,
+            cache_namespace=f"{product_name}_sample{sample_idx:04d}",
             threads=self.threads,
             progress_callback=log_l_progress,
             m_progress_callback=log_m_progress if self.verbose_m_progress else None,
@@ -620,7 +776,7 @@ class Corr_3PCF_Multipole(TaskBase):
             )
         return l_arr, multipole_l
 
-    def _run_pair_mpi_mode(self, comm, rank, local_fields, product_name):
+    def _run_pair_mpi_mode(self, comm, rank, local_fields, product_name, binning_window12, binning_window13, sample_idx):
         size = comm.Get_size()
         if size == 1:
             if rank == 0:
@@ -628,14 +784,17 @@ class Corr_3PCF_Multipole(TaskBase):
                     "execution_mode='pair_mpi' requested with a single MPI rank. Falling back to serial execution."
                 )
                 self.execution_mode = "serial"
-            return self._run_serial_mode(rank, local_fields, product_name)
+            return self._run_serial_mode(rank, local_fields, product_name, binning_window12, binning_window13, sample_idx)
         if size < 2 or size % 2 != 0:
             self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
             func_util.safe_exit(1)
         n_pairs = size // 2
 
         if rank == 0:
-            self.logger.info(f"Start to calculate 3PCF multipole product '{product_name}' ...")
+            self.logger.info(
+                f"Start to calculate 3PCF multipole product '{product_name}' "
+                f"for sample {sample_idx + 1}/{len(self.samples)} ..."
+            )
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
                 f"threads={self.threads}, ranks={size}, pairs={n_pairs}, "
@@ -696,11 +855,19 @@ class Corr_3PCF_Multipole(TaskBase):
                 _, l, m = local_meta
                 if is_r1_rank:
                     local_field = multipole_util._stream_convolution_fields(
-                        field2, self.r12, int(l), threads=self.threads, m_values=[int(m)], conv_context=conv_context_r1
+                        field2, binning_window12, int(l), threads=self.threads, m_values=[int(m)],
+                        conv_context=conv_context_r1,
+                        cache_multipole_fields=self.cache_multipole_fields,
+                        cache_dir=self.cache_dir,
+                        cache_namespace=f"{product_name}_sample{sample_idx:04d}_side12",
                     )[0]
                 else:
                     local_field = multipole_util._stream_convolution_fields(
-                        field3, self.r13, int(l), threads=self.threads, m_values=[-int(m)], conv_context=conv_context_r2
+                        field3, binning_window13, int(l), threads=self.threads, m_values=[-int(m)],
+                        conv_context=conv_context_r2,
+                        cache_multipole_fields=self.cache_multipole_fields,
+                        cache_dir=self.cache_dir,
+                        cache_namespace=f"{product_name}_sample{sample_idx:04d}_side13",
                     )[0]
             conv_elapsed = time.perf_counter() - t_conv
             total_conv_elapsed += conv_elapsed
@@ -893,13 +1060,16 @@ class Corr_3PCF_Multipole(TaskBase):
             rrr_l[zero_idx[0]] = self._uniform_density() ** 3
         return l_arr, rrr_l
 
-    def _compute_product_multipole(self, product_name, fields):
+    def _compute_product_multipole(self, product_name, fields, binning_window12, binning_window13, sample_idx):
         comm = self.comm
         rank = self.rank
         if self.execution_mode == "pair_mpi":
             size = comm.Get_size()
             if size == 1:
-                return self._run_pair_mpi_mode(comm, rank, fields if rank == 0 else None, product_name)
+                return self._run_pair_mpi_mode(
+                    comm, rank, fields if rank == 0 else None, product_name,
+                    binning_window12, binning_window13, sample_idx,
+                )
             if size < 2 or size % 2 != 0:
                 self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
                 func_util.safe_exit(1)
@@ -923,8 +1093,12 @@ class Corr_3PCF_Multipole(TaskBase):
                 fields[:] = [None, None, None]
             if rank == 0:
                 self.logger.info(f"Initializing multipole input for '{product_name}': role-aware broadcast complete.")
-            return self._run_pair_mpi_mode(comm, rank, local_fields, product_name)
-        return self._run_serial_mode(rank, fields if rank == 0 else None, product_name)
+            return self._run_pair_mpi_mode(
+                comm, rank, local_fields, product_name, binning_window12, binning_window13, sample_idx
+            )
+        return self._run_serial_mode(
+            rank, fields if rank == 0 else None, product_name, binning_window12, binning_window13, sample_idx
+        )
 
     def _compute_zeta_l(self):
         delta_ddd_l = self.corr3pcf_multipole_data.delta_ddd_l
@@ -932,9 +1106,28 @@ class Corr_3PCF_Multipole(TaskBase):
         if delta_ddd_l is None or rrr_l is None:
             self.logger.error("zeta_l requires both delta_ddd_l and rrr_l.")
             func_util.safe_exit(1)
-        zeta_l, _, cond_m = solve_multipoles_from_ratio(delta_ddd_l, rrr_l, self.l_max)
+        delta_ddd_l = np.asarray(delta_ddd_l, dtype=np.float64)
+        rrr_l = np.asarray(rrr_l, dtype=np.float64)
+        if delta_ddd_l.ndim == 1:
+            delta_ddd_l = delta_ddd_l.reshape(1, -1)
+        if rrr_l.ndim == 1:
+            rrr_l = rrr_l.reshape(1, -1)
+        zeta_rows = []
+        cond_values = []
+        for sample_idx in range(delta_ddd_l.shape[0]):
+            zeta_row, _, cond_m = solve_multipoles_from_ratio(
+                delta_ddd_l[sample_idx],
+                rrr_l[sample_idx],
+                self.l_max,
+            )
+            zeta_rows.append(zeta_row)
+            cond_values.append(cond_m)
+        zeta_l = np.asarray(zeta_rows, dtype=np.float64)
         self.corr3pcf_multipole_data.zeta_l = zeta_l
-        self.logger.info(f"zeta_l solved from multipole ratio | mixing matrix cond={cond_m:.3e}")
+        self.logger.info(
+            "zeta_l solved from multipole ratio | "
+            f"mixing matrix cond range=[{np.min(cond_values):.3e}, {np.max(cond_values):.3e}]"
+        )
 
     def _log_product_timing(self, product_name, elapsed_sec):
         profile = self._last_product_profile or {}
@@ -991,18 +1184,33 @@ class Corr_3PCF_Multipole(TaskBase):
                 if product_name == "rrr_l" and all_random_uniform:
                     if rank == 0:
                         l_arr, product_l = self._analytic_uniform_rrr_l()
-                        self._store_product(product_name, l_arr, product_l)
+                        product_values = np.repeat(product_l.reshape(1, -1), len(self.samples), axis=0)
+                        self._store_product(product_name, l_arr, product_values)
                         self.logger.info(
                             f"Product 'rrr_l' used all-uniform analytic shortcut | rho^3={self._uniform_density() ** 3:.6e}"
                         )
                         self._log_product_timing(product_name, time.perf_counter() - product_t0)
                     continue
 
-                fields = self._prepare_product_fields(product_name) if rank == 0 else None
-                l_arr, product_l = self._compute_product_multipole(product_name, fields)
+                product_rows = []
+                l_arr = None
+                for sample_idx, (binning_window12, binning_window13) in enumerate(
+                    zip(self.binning_window12, self.binning_window13)
+                ):
+                    fields = self._prepare_product_fields(product_name) if rank == 0 else None
+                    l_arr, product_l = self._compute_product_multipole(
+                        product_name,
+                        fields,
+                        binning_window12,
+                        binning_window13,
+                        sample_idx,
+                    )
+                    if rank == 0:
+                        product_rows.append(product_l)
+                        del fields
                 if rank == 0:
-                    self._store_product(product_name, l_arr, product_l)
-                    del fields
+                    product_values = np.asarray(product_rows, dtype=np.float64)
+                    self._store_product(product_name, l_arr, product_values)
                     self._log_product_timing(product_name, time.perf_counter() - product_t0)
 
             if rank == 0:

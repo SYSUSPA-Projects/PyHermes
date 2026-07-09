@@ -1,5 +1,7 @@
 """3PCF multipole convolution, caching, and CUDA summation helpers."""
 
+import hashlib
+import json
 import time
 from pathlib import Path
 
@@ -9,6 +11,7 @@ from numba import cuda
 
 from pyhermes.io.window import WindowFunc
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum
+from pyhermes.utils.window_params import serialize_window_params
 
 
 def cal_gamma(phi_array, phi_support, phi_resolution):
@@ -123,11 +126,38 @@ def combine_multipole_m_terms(m_values, l):
     return coeff.real
 
 
-def _cache_file_path(cache_dir, radius, l, m):
-    """Return the cache path for one radius and Legendre (l, m) field."""
+def _cache_file_path(cache_dir, binning_window, l, m, cache_namespace=""):
+    """Return the cache path for one radial-profile multipole field."""
     sign = "m" if m >= 0 else "m_minus"
     suffix = f"{m}" if m >= 0 else f"{-m}"
-    return Path(cache_dir) / f"R{radius:g}_l{l}_{sign}{suffix}.npy"
+    serialized = serialize_window_params(binning_window)
+    payload = json.dumps(serialized, sort_keys=True, separators=(",", ":"))
+    digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+    namespace = str(cache_namespace).strip()
+    prefix = f"{namespace}_" if namespace else ""
+    return Path(cache_dir) / f"{prefix}win_{digest}_l{l}_{sign}{suffix}.npy"
+
+
+def _multipole_window_params(binning_window, l, m):
+    """Convert an edge-binning window spec into a WindowFunc multipole spec."""
+    if not isinstance(binning_window, dict):
+        raise TypeError("binning_window must be a dictionary.")
+    radial_type = str(binning_window.get("type", "")).strip().lower()
+    if not radial_type:
+        raise ValueError("binning_window must define a non-empty 'type'.")
+    len_args = binning_window.get("len_args", {})
+    if len_args is None:
+        len_args = {}
+    return {
+        "type": "radial_multipole",
+        "len_args": dict(len_args),
+        "other_args": {
+            "radial_type": radial_type,
+            "l": int(l),
+            "m": int(m),
+        },
+        "kernel_mode": "complex_full_fft",
+    }
 
 
 def _prepare_legendre_convolution_context(field):
@@ -145,15 +175,16 @@ def _prepare_legendre_convolution_context(field):
 
 def _stream_convolution_fields(
     field,
-    radius,
+    binning_window,
     l,
     threads,
     m_values=None,
     cache_multipole_fields=False,
     cache_dir="",
     conv_context=None,
+    cache_namespace="",
 ):
-    """Generate or load convolved fields for selected m values at one radius."""
+    """Generate or load convolved fields for selected m values at one edge window."""
     if conv_context is None:
         conv_context = _prepare_legendre_convolution_context(field)
     phi_fourier_power = conv_context["phi_fourier_power"]
@@ -164,17 +195,12 @@ def _stream_convolution_fields(
         cached = None
         cache_path = None
         if cache_multipole_fields and cache_dir:
-            cache_path = _cache_file_path(cache_dir, radius, l, m)
+            cache_path = _cache_file_path(cache_dir, binning_window, l, m, cache_namespace=cache_namespace)
             if cache_path.exists():
                 cached = np.load(cache_path)
         if cached is None:
             window = WindowFunc(
-                {
-                    "type": "legendre_multipole",
-                    "len_args": {"R": radius},
-                    "other_args": {"l": int(l), "m": int(m)},
-                    "kernel_mode": "complex_full_fft",
-                },
+                _multipole_window_params(binning_window, l, m),
                 field.sfc_info,
                 bandwidth=1,
                 threads=threads,
@@ -275,11 +301,12 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
 
 def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
-    r1, r2, l_min, l_max,
+    binning_window12, binning_window13, l_min, l_max,
     gpu_device_id=0,
     gpu_threads_per_block=(8, 8, 8),
     cache_multipole_fields=False,
     cache_dir="",
+    cache_namespace="",
     threads=1,
     progress_callback=None,
     m_progress_callback=None,
@@ -320,22 +347,26 @@ def calc_DDD_multipole(
         conv_elapsed = 0.0
         m_values = np.empty(l + 1, dtype=np.complex128)
         sum_elapsed = 0.0
+        side12_namespace = f"{cache_namespace}_side12" if cache_namespace else "side12"
+        side13_namespace = f"{cache_namespace}_side13" if cache_namespace else "side13"
         for m in range(0, l + 1):
             t_m_start = time.perf_counter()
             t_conv_m_start = time.perf_counter()
             field_r1_m = _stream_convolution_fields(
-                deltaD2, r1, l, threads=threads,
+                deltaD2, binning_window12, l, threads=threads,
                 m_values=[m],
                 cache_multipole_fields=cache_multipole_fields,
                 cache_dir=cache_dir,
                 conv_context=conv_context_r1,
+                cache_namespace=side12_namespace,
             )[0]
             field_r2_m = _stream_convolution_fields(
-                deltaD3, r2, l, threads=threads,
+                deltaD3, binning_window13, l, threads=threads,
                 m_values=[-m],
                 cache_multipole_fields=cache_multipole_fields,
                 cache_dir=cache_dir,
                 conv_context=conv_context_r2,
+                cache_namespace=side13_namespace,
             )[0]
             conv_m_elapsed = time.perf_counter() - t_conv_m_start
             conv_elapsed += conv_m_elapsed
