@@ -410,10 +410,14 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _load_sfc_from_path(self, path):
         if self.execution_mode == "sample_mpi":
-            field = SFCField(threads=self.threads)
-            field.sfc_info["sfc_field_path"] = path
-            field._load_sfc_field(path)
-            return field
+            if self.rank == 0:
+                self.logger.info(
+                    f"Sample-MPI input loading | rank0 reads SFCField from {path} and broadcasts it to all ranks."
+                )
+                field = SFCField(data_path=path, threads=self.threads)
+            else:
+                field = None
+            return self._broadcast_sfc(self.rank, self.comm, field)
         return SFCField(data_path=path, threads=self.threads)
 
     def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
