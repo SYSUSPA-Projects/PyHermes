@@ -95,6 +95,9 @@ class Corr_3PCF_Multipole(TaskBase):
         self.gpu_threads_per_block = multipole_util.normalize_gpu_threads_per_block(
             self.task_params.get("gpu_threads_per_block", (8, 8, 8))
         )
+        self.summation_backend = multipole_util.normalize_summation_backend(
+            self.task_params.get("summation_backend", "gpu")
+        )
         self.execution_mode = str(self.task_params["execution_mode"]).strip().lower()
         if self.execution_mode not in {"serial", "pair_mpi", "sample_mpi"}:
             raise ValueError("Corr_3PCF_Multipole execution_mode must be 'serial', 'pair_mpi', or 'sample_mpi'.")
@@ -292,6 +295,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.task_params["products"] = copy.deepcopy(self.products)
         self.task_params["weight_normalization"] = self.weight_normalization
         self.task_params["gpu_threads_per_block"] = list(self.gpu_threads_per_block)
+        self.task_params["summation_backend"] = self.summation_backend
         self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
         if self.rank == 0:
             self.logger.info(
@@ -391,6 +395,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "l_max": self.l_max,
             "gpu_device_id": self.gpu_device_id,
             "gpu_threads_per_block": list(self.gpu_threads_per_block),
+            "summation_backend": self.summation_backend,
             "execution_mode": self.execution_mode,
             "sample_mpi": serialize_window_params(self.sample_mpi),
             "cache_multipole_fields": self.cache_multipole_fields,
@@ -784,7 +789,7 @@ class Corr_3PCF_Multipole(TaskBase):
         )
         self.logger.info(
             f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
-            f"threads={self.threads}, gpu_device_id={self.gpu_device_id}, "
+            f"threads={self.threads}, summation_backend={self.summation_backend}, gpu_device_id={self.gpu_device_id}, "
             f"gpu_threads_per_block={self.gpu_threads_per_block}, "
             f"cache_multipole_fields={self.cache_multipole_fields}, "
             f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
@@ -794,6 +799,7 @@ class Corr_3PCF_Multipole(TaskBase):
         l_arr, multipole_l, timing_info = multipole_util.calc_DDD_multipole(
             fields[0], fields[1], fields[2],
             binning_window12, binning_window13, self.l_min, self.l_max,
+            summation_backend=self.summation_backend,
             gpu_device_id=self.gpu_device_id,
             gpu_threads_per_block=self.gpu_threads_per_block,
             cache_multipole_fields=self.cache_multipole_fields,
@@ -805,6 +811,7 @@ class Corr_3PCF_Multipole(TaskBase):
         )
         self._last_product_profile = {
             "conv": timing_info["conv_elapsed_sec"],
+            "sum": timing_info["sum_elapsed_sec"],
             "gpu_sum": timing_info["sum_elapsed_sec"],
             "h2d": timing_info["sum_h2d_elapsed_sec"],
             "kernel": timing_info["sum_kernel_elapsed_sec"],
@@ -817,7 +824,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"summation={timing_info['sum_elapsed_sec']:.2f} sec"
             )
             self.logger.info(
-                f"3PCF multipole summation breakdown [{product_name}] | "
+                f"3PCF multipole summation breakdown [{product_name}, backend={self.summation_backend}] | "
                 f"h2d={timing_info['sum_h2d_elapsed_sec']:.2f} sec | "
                 f"kernel={timing_info['sum_kernel_elapsed_sec']:.2f} sec | "
                 f"d2h={timing_info['sum_d2h_elapsed_sec']:.2f} sec | "
@@ -847,7 +854,7 @@ class Corr_3PCF_Multipole(TaskBase):
             )
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
-                f"threads={self.threads}, ranks={size}, pairs={n_pairs}, "
+                f"threads={self.threads}, ranks={size}, pairs={n_pairs}, summation_backend={self.summation_backend}, "
                 f"gpu_device_id={self.gpu_device_id}, gpu_threads_per_block={self.gpu_threads_per_block}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
@@ -859,9 +866,10 @@ class Corr_3PCF_Multipole(TaskBase):
 
         conv_context_r1 = multipole_util._prepare_legendre_convolution_context(field2) if is_r1_rank else None
         conv_context_r2 = multipole_util._prepare_legendre_convolution_context(field3) if not is_r1_rank else None
-        gpu_context = (
-            multipole_util._prepare_multipole_gpu_context(
+        sum_context = (
+            multipole_util._prepare_multipole_sum_context(
                 field1,
+                summation_backend=self.summation_backend,
                 gpu_device_id=self.gpu_device_id,
                 gpu_threads_per_block=self.gpu_threads_per_block,
             )
@@ -949,7 +957,7 @@ class Corr_3PCF_Multipole(TaskBase):
                             field_r1_m = recv_r1
                             field_r2_m = recv_r2
                         t_sum = time.perf_counter()
-                        value, timing = multipole_util.compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
+                        value, timing = multipole_util.compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context)
                         sum_elapsed = time.perf_counter() - t_sum
                         round_summands[key] = (value, timing, sum_elapsed)
                         del field_r1_m, field_r2_m
@@ -1048,6 +1056,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 "conv_rank0": total_conv_elapsed,
                 "conv_max": conv_max_rank,
                 "comm_max": comm_max_rank,
+                "sum": total_sum_elapsed,
                 "gpu_sum": total_sum_elapsed,
                 "h2d": total_h2d,
                 "kernel": total_kernel,
@@ -1062,7 +1071,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"summation={total_sum_elapsed:.2f} sec"
             )
             self.logger.info(
-                f"Pair-MPI summation breakdown [{product_name}] | h2d={total_h2d:.2f} sec | "
+                f"Pair-MPI summation breakdown [{product_name}, backend={self.summation_backend}] | h2d={total_h2d:.2f} sec | "
                 f"kernel={total_kernel:.2f} sec | d2h={total_d2h:.2f} sec | reduce={total_reduce:.2f} sec"
             )
         return l_arr if rank == 0 else None, multipole_l
@@ -1115,15 +1124,18 @@ class Corr_3PCF_Multipole(TaskBase):
 
     def _run_sample_mpi_local_sample(self, rank, fields, product_name, binning_window12, binning_window13, sample_idx):
         gpu_device_id = self._rank_gpu_device_id(rank)
+        backend_location = f"gpu_device_id={gpu_device_id}" if self.summation_backend == "gpu" else "CPU"
         self.logger.info(
             f"Rank {rank} starts 3PCF multipole product '{product_name}' "
-            f"for sample {sample_idx + 1}/{len(self.samples)} on gpu_device_id={gpu_device_id}."
+            f"for sample {sample_idx + 1}/{len(self.samples)} with "
+            f"summation_backend={self.summation_backend} on {backend_location}."
         )
         log_l_progress, log_m_progress = self._log_helpers(product_name)
         progress_callback = log_l_progress if (self.verbose_profile or self.verbose_m_progress) else None
         l_arr, multipole_l, timing_info = multipole_util.calc_DDD_multipole(
             fields[0], fields[1], fields[2],
             binning_window12, binning_window13, self.l_min, self.l_max,
+            summation_backend=self.summation_backend,
             gpu_device_id=gpu_device_id,
             gpu_threads_per_block=self.gpu_threads_per_block,
             cache_multipole_fields=self.cache_multipole_fields,
@@ -1151,6 +1163,7 @@ class Corr_3PCF_Multipole(TaskBase):
         local_rows = []
         local_timing = {
             "conv": 0.0,
+            "sum": 0.0,
             "gpu_sum": 0.0,
             "h2d": 0.0,
             "kernel": 0.0,
@@ -1170,6 +1183,7 @@ class Corr_3PCF_Multipole(TaskBase):
             local_l_arr = l_arr
             local_rows.append((sample_idx, product_l))
             local_timing["conv"] += timing_info["conv_elapsed_sec"]
+            local_timing["sum"] += timing_info["sum_elapsed_sec"]
             local_timing["gpu_sum"] += timing_info["sum_elapsed_sec"]
             local_timing["h2d"] += timing_info["sum_h2d_elapsed_sec"]
             local_timing["kernel"] += timing_info["sum_kernel_elapsed_sec"]
@@ -1186,7 +1200,7 @@ class Corr_3PCF_Multipole(TaskBase):
             raise ValueError("sample_mpi did not produce any local multipole result.")
         product_values = np.empty((len(self.samples), len(l_arr)), dtype=np.float64)
         seen = np.zeros(len(self.samples), dtype=bool)
-        timing_keys = ("conv", "gpu_sum", "h2d", "kernel", "d2h", "reduce")
+        timing_keys = ("conv", "sum", "gpu_sum", "h2d", "kernel", "d2h", "reduce")
         timing_max = {key: max(float(item[2][key]) for item in gathered) for key in timing_keys}
         timing_sum = {key: sum(float(item[2][key]) for item in gathered) for key in timing_keys}
         for _, rows, _ in gathered:
@@ -1198,18 +1212,20 @@ class Corr_3PCF_Multipole(TaskBase):
             raise ValueError(f"sample_mpi missing results for sample indices {missing}.")
         self._last_product_profile = {
             "conv": timing_max["conv"],
+            "sum": timing_max["sum"],
             "gpu_sum": timing_max["gpu_sum"],
             "h2d": timing_max["h2d"],
             "kernel": timing_max["kernel"],
             "d2h": timing_max["d2h"],
             "reduce": timing_max["reduce"],
             "sample_mpi_conv_sum": timing_sum["conv"],
+            "sample_mpi_sum": timing_sum["sum"],
             "sample_mpi_gpu_sum": timing_sum["gpu_sum"],
         }
         self.logger.info(
             f"sample_mpi timing [{product_name}] | conv_max_rank={timing_max['conv']:.2f} sec | "
-            f"sum_max_rank={timing_max['gpu_sum']:.2f} sec | conv_sum_all={timing_sum['conv']:.2f} sec | "
-            f"sum_all={timing_sum['gpu_sum']:.2f} sec"
+            f"sum_max_rank={timing_max['sum']:.2f} sec | conv_sum_all={timing_sum['conv']:.2f} sec | "
+            f"sum_all={timing_sum['sum']:.2f} sec"
         )
         return l_arr, product_values
 
@@ -1290,10 +1306,10 @@ class Corr_3PCF_Multipole(TaskBase):
                 msg += (
                     f" | conv_max={profile['conv_max']:.2f} sec"
                     f" | comm_max={profile['comm_max']:.2f} sec"
-                    f" | gpu_sum={profile['gpu_sum']:.2f} sec"
+                    f" | sum={profile.get('sum', profile.get('gpu_sum', 0.0)):.2f} sec"
                 )
             elif "conv" in profile:
-                msg += f" | conv={profile['conv']:.2f} sec | gpu_sum={profile['gpu_sum']:.2f} sec"
+                msg += f" | conv={profile['conv']:.2f} sec | sum={profile.get('sum', profile.get('gpu_sum', 0.0)):.2f} sec"
             if self.verbose_profile and "kernel" in profile:
                 msg += (
                     f" | h2d={profile['h2d']:.2f} sec"

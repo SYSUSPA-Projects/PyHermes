@@ -81,6 +81,16 @@ def normalize_gpu_threads_per_block(gpu_threads_per_block):
     return threads_per_block
 
 
+def normalize_summation_backend(summation_backend):
+    """Validate the backend used for the SFC triple-product summation."""
+    if summation_backend is None:
+        summation_backend = "gpu"
+    backend = str(summation_backend).strip().lower()
+    if backend not in {"gpu", "cpu"}:
+        raise ValueError("summation_backend must be either 'gpu' or 'cpu'.")
+    return backend
+
+
 @cuda.jit
 def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
     """Reduce a complex device array into per-block real and imaginary sums."""
@@ -114,6 +124,45 @@ def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
     if tid == 0:
         partial_real[cuda.blockIdx.x] = shared_real[0]
         partial_imag[cuda.blockIdx.x] = shared_imag[0]
+
+
+@numba.njit(parallel=True)
+def compute_3d_summand_cpu(data, data_R1, data_R2, Gamma, L, phi_support):
+    """CPU-parallel version of the SFC triple-product summand."""
+    n_result = L * L * L
+    plane_size = L * L
+    total_real = 0.0
+    total_imag = 0.0
+    for idx in numba.prange(n_result):
+        lx = idx // plane_size
+        rem = idx - lx * plane_size
+        ly = rem // L
+        lz = rem - ly * L
+
+        sum_over_l1 = 0.0 + 0.0j
+        for l1x in range(phi_support):
+            index_l1x = (lx - l1x) % L
+            for l1y in range(phi_support):
+                index_l1y = (ly - l1y) % L
+                for l1z in range(phi_support):
+                    index_l1z = (lz - l1z) % L
+                    sum_over_l2 = 0.0 + 0.0j
+                    for l2x in range(phi_support):
+                        index_l2x = (lx - l2x) % L
+                        gamma_x = Gamma[l1x, l2x]
+                        for l2y in range(phi_support):
+                            index_l2y = (ly - l2y) % L
+                            gamma_xy = gamma_x * Gamma[l1y, l2y]
+                            for l2z in range(phi_support):
+                                index_l2z = (lz - l2z) % L
+                                weight = gamma_xy * Gamma[l1z, l2z]
+                                sum_over_l2 += weight * data_R2[index_l2x, index_l2y, index_l2z]
+                    sum_over_l1 += data_R1[index_l1x, index_l1y, index_l1z] * sum_over_l2
+
+        value = data[lx, ly, lz] * sum_over_l1
+        total_real += value.real
+        total_imag += value.imag
+    return total_real + 1j * total_imag
 
 
 def combine_multipole_m_terms(m_values, l):
@@ -237,6 +286,7 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0, gpu_threads_per_bloc
     partial_real_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
     partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
     return {
+        "backend": "gpu",
         "gamma_gpu": gamma_gpu,
         "data_gpu": data_gpu,
         "result_gpu": result_gpu,
@@ -252,45 +302,96 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0, gpu_threads_per_bloc
     }
 
 
-def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
+def _prepare_multipole_cpu_context(field1):
+    """Allocate reusable CPU state for multipole m-term summation."""
+    gamma = np.ascontiguousarray(cal_gamma(field1.phi_array, field1.phi_support, field1.phi_resolution), dtype=np.float64)
+    data = np.ascontiguousarray(field1.epsilon, dtype=np.float64)
+    return {
+        "backend": "cpu",
+        "gamma": gamma,
+        "data": data,
+        "n_result": field1.epsilon.size,
+        "L": field1.L,
+        "phi_support": field1.phi_support,
+    }
+
+
+def _prepare_multipole_sum_context(
+    field1,
+    summation_backend="gpu",
+    gpu_device_id=0,
+    gpu_threads_per_block=(8, 8, 8),
+):
+    """Allocate reusable state for the selected multipole summation backend."""
+    backend = normalize_summation_backend(summation_backend)
+    if backend == "gpu":
+        return _prepare_multipole_gpu_context(
+            field1,
+            gpu_device_id=gpu_device_id,
+            gpu_threads_per_block=gpu_threads_per_block,
+        )
+    return _prepare_multipole_cpu_context(field1)
+
+
+def compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context):
     """Compute one complex m summand and return timing diagnostics."""
+    backend = sum_context.get("backend", "gpu")
+    if backend == "cpu":
+        t_kernel_start = time.perf_counter()
+        raw_sum = compute_3d_summand_cpu(
+            sum_context["data"],
+            np.ascontiguousarray(field_r1_m, dtype=np.complex128),
+            np.ascontiguousarray(field_r2_m, dtype=np.complex128),
+            sum_context["gamma"],
+            sum_context["L"],
+            sum_context["phi_support"],
+        )
+        kernel_elapsed = time.perf_counter() - t_kernel_start
+        value = (4.0 * np.pi) * raw_sum / sum_context["n_result"]
+        return value, {
+            "h2d_elapsed_sec": 0.0,
+            "kernel_elapsed_sec": kernel_elapsed,
+            "reduce_elapsed_sec": 0.0,
+            "d2h_elapsed_sec": 0.0,
+        }
+
     t_h2d_start = time.perf_counter()
     data_r1_gpu = cuda.to_device(np.ascontiguousarray(field_r1_m, dtype=np.complex128))
     data_r2_gpu = cuda.to_device(np.ascontiguousarray(field_r2_m, dtype=np.complex128))
     h2d_elapsed = time.perf_counter() - t_h2d_start
 
     t_kernel_start = time.perf_counter()
-    compute_3d_result_gpu[gpu_context["blocks_per_grid"], gpu_context["threads_per_block"]](
-        gpu_context["data_gpu"],
+    compute_3d_result_gpu[sum_context["blocks_per_grid"], sum_context["threads_per_block"]](
+        sum_context["data_gpu"],
         data_r1_gpu,
         data_r2_gpu,
-        gpu_context["gamma_gpu"],
-        gpu_context["result_gpu"],
-        gpu_context["L"],
-        gpu_context["phi_support"],
+        sum_context["gamma_gpu"],
+        sum_context["result_gpu"],
+        sum_context["L"],
+        sum_context["phi_support"],
     )
     cuda.synchronize()
     kernel_elapsed = time.perf_counter() - t_kernel_start
 
     t_reduce_start = time.perf_counter()
-    reduce_complex_sum_kernel[gpu_context["reduce_blocks"], REDUCE_THREADS](
-        gpu_context["result_gpu_flat"],
-        gpu_context["partial_real_gpu"],
-        gpu_context["partial_imag_gpu"],
-        gpu_context["n_result"],
+    reduce_complex_sum_kernel[sum_context["reduce_blocks"], REDUCE_THREADS](
+        sum_context["result_gpu_flat"],
+        sum_context["partial_real_gpu"],
+        sum_context["partial_imag_gpu"],
+        sum_context["n_result"],
     )
     cuda.synchronize()
     reduce_elapsed = time.perf_counter() - t_reduce_start
 
     t_d2h_start = time.perf_counter()
-    partial_real = gpu_context["partial_real_gpu"].copy_to_host()
-    partial_imag = gpu_context["partial_imag_gpu"].copy_to_host()
+    partial_real = sum_context["partial_real_gpu"].copy_to_host()
+    partial_imag = sum_context["partial_imag_gpu"].copy_to_host()
     d2h_elapsed = time.perf_counter() - t_d2h_start
 
     del data_r1_gpu
     del data_r2_gpu
 
-    value = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / gpu_context["n_result"]
+    value = (4.0 * np.pi) * complex(np.sum(partial_real), np.sum(partial_imag)) / sum_context["n_result"]
     return value, {
         "h2d_elapsed_sec": h2d_elapsed,
         "kernel_elapsed_sec": kernel_elapsed,
@@ -302,6 +403,7 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context):
 def calc_DDD_multipole(
     deltaD1, deltaD2, deltaD3,
     binning_window12, binning_window13, l_min, l_max,
+    summation_backend="gpu",
     gpu_device_id=0,
     gpu_threads_per_block=(8, 8, 8),
     cache_multipole_fields=False,
@@ -318,8 +420,9 @@ def calc_DDD_multipole(
         raise ValueError("l_max must be non-negative.")
     if l_min > l_max:
         raise ValueError("l_min must be less than or equal to l_max.")
-    gpu_context = _prepare_multipole_gpu_context(
+    sum_context = _prepare_multipole_sum_context(
         deltaD1,
+        summation_backend=summation_backend,
         gpu_device_id=gpu_device_id,
         gpu_threads_per_block=gpu_threads_per_block,
     )
@@ -372,7 +475,7 @@ def calc_DDD_multipole(
             conv_elapsed += conv_m_elapsed
             total_conv_elapsed += conv_m_elapsed
             t_sum_m_start = time.perf_counter()
-            m_values[m], timing = compute_multipole_m_summand(field_r1_m, field_r2_m, gpu_context)
+            m_values[m], timing = compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context)
             total_sum_h2d_elapsed += timing["h2d_elapsed_sec"]
             total_sum_kernel_elapsed += timing["kernel_elapsed_sec"]
             total_sum_reduce_elapsed += timing["reduce_elapsed_sec"]

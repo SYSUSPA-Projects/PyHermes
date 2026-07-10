@@ -172,6 +172,7 @@
 		"l_max": 4,
 		"gpu_device_id": 0,
 		"gpu_threads_per_block": [8, 8, 8],
+		"summation_backend": "gpu",
 		"execution_mode": "serial",
 		"sample_mpi": {
 			"ranks_per_sample": 1,
