@@ -10,7 +10,7 @@ VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft", "complex_fu
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 LOS_AWARE_WINDOW_TYPES = ANISOTROPIC_AUTO_WINDOW_TYPES | COMPLEX_RFFT_WINDOW_TYPES
-BUILTIN_BINNING_WINDOW_TYPES = {"shell"} | ANISOTROPIC_AUTO_WINDOW_TYPES
+BUILTIN_BINNING_WINDOW_TYPES = {"shell", "thick_shell"} | ANISOTROPIC_AUTO_WINDOW_TYPES
 
 
 def default_binning_window():
@@ -134,6 +134,11 @@ def apply_builtin_binning_window_defaults(binning_window):
         params.setdefault("los_args", {})
         params.setdefault("other_args", {})
         params.setdefault("mapping", "s_to_R")
+    elif window_type == "thick_shell":
+        params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R", "delta_R"))
+        params.setdefault("los_args", {})
+        params.setdefault("other_args", {})
+        params.setdefault("mapping", "s_to_R")
     elif window_type in LOS_AWARE_WINDOW_TYPES:
         params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R", "H"))
         params.setdefault("los_args", copy.deepcopy(DEFAULT_LOS_ARGS))
@@ -147,7 +152,7 @@ def binning_window_from_string(binning_window):
     if window_type not in BUILTIN_BINNING_WINDOW_TYPES:
         raise ValueError(
             f"Unsupported binning_window string '{binning_window}'. "
-            "Supported built-in strings are 'shell', 'ring', 'disk', "
+            "Supported built-in strings are 'shell', 'thick_shell', 'ring', 'disk', "
             "'cylinder', and 'cylshell'."
         )
     return apply_builtin_binning_window_defaults({"type": window_type})

@@ -70,6 +70,30 @@ def window_function_shell_numba(ki, kj, kk, R):
     result = np.sin(q) / q
     return result
 
+
+@njit
+def window_function_thick_shell_numba(ki, kj, kk, R, delta_R):
+    """
+    Volume-normalized spherical thick-shell window in k-space.
+
+    The real-space profile is constant on ``[R-delta_R/2, R+delta_R/2]``
+    after clipping the inner radius at zero.  Its transfer function is the
+    volume-weighted difference of two spherical top-hat transforms, with
+    ``W(0)=1``.
+    """
+    r_inner = R - 0.5 * delta_R
+    if r_inner < 0.0:
+        r_inner = 0.0
+    r_outer = R + 0.5 * delta_R
+    denominator = r_outer ** 3 - r_inner ** 3
+    if denominator == 0.0:
+        return 1.0
+    return (
+        r_outer ** 3 * window_function_sphere_numba(ki, kj, kk, r_outer)
+        - r_inner ** 3 * window_function_sphere_numba(ki, kj, kk, r_inner)
+    ) / denominator
+
+
 @njit
 def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     """
@@ -417,6 +441,7 @@ WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
     "gaussian": window_function_gauss_numba,
     "shell": window_function_shell_numba,
+    "thick_shell": window_function_thick_shell_numba,
     "gaussian_shell": window_function_gauss_shell_numba,
     "cubic": window_function_cubic_numba,
     "ring": window_function_ring_numba,

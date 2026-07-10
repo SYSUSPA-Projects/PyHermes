@@ -114,6 +114,7 @@ class WindowFunc(SFCField):
         self.window_args = dict(self.rescale_len_args)
         self.window_args.update(self.los_args)
         self.window_args.update(self.rescale_other_args)
+        self._validate_builtin_arguments()
         self.w_kernel = None
         self.is_composite_window = False
 
@@ -121,6 +122,19 @@ class WindowFunc(SFCField):
         if other_args is None:
             return {}
         return copy.deepcopy(other_args)
+
+    def _validate_builtin_arguments(self):
+        if self.type != "thick_shell":
+            return
+        try:
+            radius = float(self.rescale_len_args["R"])
+            width = float(self.rescale_len_args["delta_R"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("thick_shell requires finite len_args {'R': ..., 'delta_R': ...}.") from exc
+        if not np.isfinite(radius) or radius < 0.0:
+            raise ValueError("thick_shell requires a finite non-negative R.")
+        if not np.isfinite(width) or width <= 0.0:
+            raise ValueError("thick_shell requires a finite positive delta_R.")
 
     def _resolve_kernel_mode(self, win_params, has_custom_func):
         kernel_mode = win_params.get("kernel_mode", None)
