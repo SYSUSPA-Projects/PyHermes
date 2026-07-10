@@ -408,10 +408,18 @@ class Corr_3PCF_Multipole(TaskBase):
             "fout_path": self.fout_path,
         }
 
+    def _load_sfc_from_path(self, path):
+        if self.execution_mode == "sample_mpi":
+            field = SFCField(threads=self.threads)
+            field.sfc_info["sfc_field_path"] = path
+            field._load_sfc_field(path)
+            return field
+        return SFCField(data_path=path, threads=self.threads)
+
     def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
         if isinstance(provided_sfc, str) and provided_sfc:
             if provided_sfc not in base_sfc_cache:
-                base_sfc_cache[provided_sfc] = SFCField(data_path=provided_sfc, threads=self.threads)
+                base_sfc_cache[provided_sfc] = self._load_sfc_from_path(provided_sfc)
             return base_sfc_cache[provided_sfc], f"path={provided_sfc}"
         if isinstance(provided_sfc, SFCField):
             return provided_sfc, f"provided sfc_field{leg_idx}"
@@ -437,7 +445,7 @@ class Corr_3PCF_Multipole(TaskBase):
             if provided_random == "uniform":
                 return "uniform", "uniform random density"
             if provided_random not in random_cache:
-                random_cache[provided_random] = SFCField(data_path=provided_random, threads=self.threads)
+                random_cache[provided_random] = self._load_sfc_from_path(provided_random)
             return random_cache[provided_random], f"path={provided_random}"
         if isinstance(provided_random, SFCField):
             return provided_random, f"provided random{leg_idx}"
@@ -631,7 +639,8 @@ class Corr_3PCF_Multipole(TaskBase):
             self.logger.info(
                 f"execution_mode={self.execution_mode}, l_min={self.l_min}, l_max={self.l_max}, "
                 f"n_samples={len(self.samples)}, threads={self.threads}, "
-                f"gpu_device_id={self.gpu_device_id}, gpu_threads_per_block={self.gpu_threads_per_block}, "
+                f"summation_backend={self.summation_backend}, gpu_device_id={self.gpu_device_id}, "
+                f"gpu_threads_per_block={self.gpu_threads_per_block}, "
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
             )
