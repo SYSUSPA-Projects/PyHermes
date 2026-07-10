@@ -24,6 +24,7 @@ class Corr3PCFMultipoleData(HermesData):
         self.rrr_l = None
         self.delta_ddd_l = None
         self.zeta_l = None
+        self.zeta_condition = None
         super().__init__(*args, threads=threads, **kwargs)
         if data_path:
             self.corr3pcf_multipole_info["corr3pcf_multipole_data_path"] = data_path
@@ -54,6 +55,7 @@ class Corr3PCFMultipoleData(HermesData):
             self.rrr_l = dataset.get("rrr_l")
             self.delta_ddd_l = dataset.get("delta_ddd_l")
             self.zeta_l = dataset.get("zeta_l")
+            self.zeta_condition = dataset.get("zeta_condition")
             for i in range(1, 4):
                 _sfc_info = dataset.get(f"sfc_info{i}")
                 if _sfc_info:
@@ -87,6 +89,7 @@ class Corr3PCFMultipoleData(HermesData):
             "rrr_l": self.rrr_l,
             "delta_ddd_l": self.delta_ddd_l,
             "zeta_l": self.zeta_l,
+            "zeta_condition": self.zeta_condition,
         }
         _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, "wb") as f:

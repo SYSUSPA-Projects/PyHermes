@@ -75,7 +75,10 @@ class HermesData(object):
                         self.logger.info(
                             f"l: Num = {self.l.shape[0]}, Min = {self.l.min()}, Max = {self.l.max()}"
                         )
-                        products = [key for key in ['ddd_l', 'rrr_l', 'delta_ddd_l', 'zeta_l'] if getattr(self, key) is not None]
+                        products = [
+                            key for key in ['ddd_l', 'rrr_l', 'delta_ddd_l', 'zeta_l', 'zeta_condition']
+                            if getattr(self, key) is not None
+                        ]
                         self.logger.info(f'Products loaded: {products}')
                     else:
                         extra_str = ''

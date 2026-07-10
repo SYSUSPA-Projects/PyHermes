@@ -182,6 +182,7 @@
 		"cache_dir": "",
 		"verbose_m_progress": false,
 		"verbose_profile": false,
+		"zeta_condition_warning": 1e12,
 		"threads": 1,
 		"products": "zeta_l",
 		"fout_path": ""

@@ -11,6 +11,7 @@ from pyhermes.io import WindowFunc, SFCField, Corr3PCFMultipoleData, normalize_t
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
+from pyhermes.utils.radial_multipole_windows import validate_radial_multipole_profile
 from pyhermes.utils.special_functions import solve_multipoles_from_ratio
 from pyhermes.utils.window_params import serialize_window_params
 
@@ -91,6 +92,9 @@ class Corr_3PCF_Multipole(TaskBase):
         self.r13 = self.sample_params.get("r13")
         self.l_min = int(self.task_params["l_min"])
         self.l_max = int(self.task_params["l_max"])
+        if self.l_min < 0 or self.l_max < 0 or self.l_min > self.l_max:
+            raise ValueError("Corr_3PCF_Multipole requires 0 <= l_min <= l_max.")
+        self._validate_binning_window_requests()
         self.gpu_device_id = int(self.task_params["gpu_device_id"])
         self.gpu_threads_per_block = multipole_util.normalize_gpu_threads_per_block(
             self.task_params.get("gpu_threads_per_block", (8, 8, 8))
@@ -106,10 +110,15 @@ class Corr_3PCF_Multipole(TaskBase):
         self.cache_dir = self.task_params["cache_dir"]
         self.verbose_m_progress = bool(self.task_params["verbose_m_progress"])
         self.verbose_profile = bool(self.task_params.get("verbose_profile", False))
+        self.zeta_condition_warning = float(self.task_params.get("zeta_condition_warning", 1.0e12))
+        if not np.isfinite(self.zeta_condition_warning) or self.zeta_condition_warning <= 0.0:
+            raise ValueError("zeta_condition_warning must be a finite positive number.")
         self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "zeta_l"))
         self.rho = None
+        self.rho_legs = [None, None, None]
         self.reference_sfc = None
+        self.resolution_diagnostics = []
         self._last_product_profile = None
         self._role_layout_logged = False
         self.fout_path = self.task_params["fout_path"]
@@ -226,6 +235,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 raise ValueError(
                     f"sampling.{name} must use 'values', 'min/max/n', 'start/stop/step', or a scalar."
                 )
+        elif isinstance(spec, (list, tuple, np.ndarray)):
+            values = np.asarray(spec, dtype=np.float64)
         else:
             values = np.asarray([spec], dtype=np.float64)
         if values.ndim != 1 or values.size == 0:
@@ -288,6 +299,17 @@ class Corr_3PCF_Multipole(TaskBase):
             raise ValueError(f"{name} produced an empty len_args dictionary.")
         return params
 
+    def _validate_binning_window_requests(self):
+        for name, windows in (
+            ("binning_window12", self.binning_window12),
+            ("binning_window13", self.binning_window13),
+        ):
+            for sample_idx, params in enumerate(windows):
+                try:
+                    validate_radial_multipole_profile(params["type"], params["len_args"], self.l_max)
+                except (TypeError, ValueError, KeyError) as exc:
+                    raise ValueError(f"Invalid {name} for sample {sample_idx}: {exc}") from exc
+
     def _sync_runtime_options(self):
         self.threads = max(1, int(self.threads))
         self.products = self._normalize_products(self.products)
@@ -296,6 +318,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.task_params["weight_normalization"] = self.weight_normalization
         self.task_params["gpu_threads_per_block"] = list(self.gpu_threads_per_block)
         self.task_params["summation_backend"] = self.summation_backend
+        self.task_params["zeta_condition_warning"] = self.zeta_condition_warning
         self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
         if self.rank == 0:
             self.logger.info(
@@ -402,9 +425,12 @@ class Corr_3PCF_Multipole(TaskBase):
             "cache_dir": self.cache_dir,
             "verbose_m_progress": self.verbose_m_progress,
             "verbose_profile": self.verbose_profile,
+            "zeta_condition_warning": self.zeta_condition_warning,
             "threads": self.threads,
             "products": copy.deepcopy(self.products),
             "expanded_products": self._expanded_products(),
+            "rho_legs": copy.deepcopy(self.rho_legs),
+            "resolution_diagnostics": copy.deepcopy(self.resolution_diagnostics),
             "fout_path": self.fout_path,
         }
 
@@ -546,6 +572,61 @@ class Corr_3PCF_Multipole(TaskBase):
         })
         field.format_sfc_params()
         return field
+
+    def _uniform_random_after_window(self, reference_field, rho, window_obj, leg_idx):
+        """Return a uniform random leg after the same field-level window."""
+        if window_obj is None:
+            return float(rho), "uniform shortcut"
+
+        zero_mode = complex(np.asarray(window_obj.as_array())[(0, 0, 0)])
+        if abs(zero_mode.imag) <= 1.0e-12 * max(1.0, abs(zero_mode.real)) and np.isclose(
+            zero_mode.real, 1.0, rtol=1.0e-10, atol=1.0e-12
+        ):
+            return float(rho), "uniform shortcut with W(0)=1"
+
+        uniform_field = self._materialize_uniform_random(reference_field, rho, leg_idx)
+        return uniform_field @ window_obj, f"uniform field convolved with W(0)={zero_mode:.6g}"
+
+    def _record_resolution_diagnostics(self):
+        self.resolution_diagnostics = []
+        if self.l_max == 0:
+            return
+
+        scale_keys = {
+            "shell": "R",
+            "thick_shell": "R",
+            "sphere": "R",
+            "gaussian": "R",
+            "gaussian_shell": "R_shell",
+        }
+        for name, windows in (
+            ("binning_window12", self.binning_window12),
+            ("binning_window13", self.binning_window13),
+        ):
+            radial_type = str(windows[0]["type"]).strip().lower()
+            scale_key = scale_keys[radial_type]
+            radii = np.asarray([float(params["len_args"][scale_key]) for params in windows], dtype=np.float64)
+            positive_radii = radii[radii > 0.0]
+            if positive_radii.size == 0:
+                continue
+            q_grid_min = float(np.pi * positive_radii.min() * self.reference_sfc.L / self.reference_sfc.box_size)
+            ratio = float(self.l_max / q_grid_min)
+            diagnostic = {
+                "edge": name,
+                "radial_type": radial_type,
+                "min_radius": float(positive_radii.min()),
+                "max_radius": float(positive_radii.max()),
+                "q_grid_min": q_grid_min,
+                "l_max_over_q_grid_min": ratio,
+            }
+            self.resolution_diagnostics.append(diagnostic)
+            if ratio >= 0.7:
+                self.logger.warning(
+                    "Multipole resolution diagnostic | "
+                    f"{name}: l_max={self.l_max}, min radial scale={positive_radii.min():.6g}, "
+                    f"pi R / dx={q_grid_min:.3f}, l_max/(pi R/dx)={ratio:.3f}. "
+                    "The highest multipoles are close to the grid high-k range; check J convergence."
+                )
 
     def _broadcast_sfc(self, rank, comm, sfc_field):
         serialized = pickle.dumps(sfc_field.sfc_info) if rank == 0 else None
@@ -698,13 +779,18 @@ class Corr_3PCF_Multipole(TaskBase):
             self.reference_sfc = compatibility_fields[0]._spawn_like()
             self.reference_sfc.format_sfc_params()
             self.rho = self._field_mean_density(self._field_in_task_normalization(compatibility_fields[0]))
+            self.rho_legs = [self.rho, self.rho, self.rho]
+            self._record_resolution_diagnostics()
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
             self.logger.info(f"Shared density | rho={self.rho:.6g}")
 
+            normalized_data_fields = {}
             if needs_data:
                 for i, base_sfc, source_desc, win in data_legs:
                     base_sfc = self._field_in_task_normalization(base_sfc)
+                    normalized_data_fields[i] = base_sfc
+                    self.rho_legs[i - 1] = self._field_mean_density(base_sfc)
                     window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                     if window_obj is not None:
                         final_sfc = base_sfc @ window_obj
@@ -722,10 +808,15 @@ class Corr_3PCF_Multipole(TaskBase):
             if needs_random:
                 for i, base_random, source_desc, win in random_legs:
                     if isinstance(base_random, str) and base_random == "uniform":
-                        signal_ref = getattr(self, f"sfc_field{i}", None)
-                        setattr(self, f"random{i}", self.rho)
+                        reference_field = normalized_data_fields.get(i, self.reference_sfc)
+                        leg_rho = float(self.rho_legs[i - 1])
+                        window_obj, _ = self._resolve_window(i, reference_field, win)
+                        uniform_random, uniform_desc = self._uniform_random_after_window(
+                            reference_field, leg_rho, window_obj, i
+                        )
+                        setattr(self, f"random{i}", uniform_random)
                         self.logger.info(
-                            f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={self.rho:.6g}"
+                            f"Random leg {i} ready | source={source_desc} | window={uniform_desc} | rho={leg_rho:.6g}"
                         )
                         continue
                     base_random = self._field_in_task_normalization(base_random)
@@ -1107,7 +1198,6 @@ class Corr_3PCF_Multipole(TaskBase):
                 self._delta_field(self.sfc_field3, self.random3),
             ]
         if product_name == "rrr_l":
-            rho = self._uniform_density()
             reference = self.reference_sfc
             fields = []
             for i, random_field in enumerate([self.random1, self.random2, self.random3], start=1):
@@ -1115,7 +1205,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     self.logger.info(
                         f"Random leg {i} for rrr_l materialized from uniform density for the generic multipole kernel."
                     )
-                    fields.append(self._materialize_uniform_random(reference, rho, i))
+                    fields.append(self._materialize_uniform_random(reference, float(random_field), i))
                 else:
                     fields.append(random_field)
             return fields
@@ -1129,7 +1219,7 @@ class Corr_3PCF_Multipole(TaskBase):
         rrr_l = np.zeros(l_arr.size, dtype=np.float64)
         zero_idx = np.where(l_arr == 0)[0]
         if zero_idx.size:
-            rrr_l[zero_idx[0]] = self._uniform_density() ** 3
+            rrr_l[zero_idx[0]] = float(self.random1) * float(self.random2) * float(self.random3)
         return l_arr, rrr_l
 
     def _sample_indices_for_rank(self, rank, size):
@@ -1183,8 +1273,8 @@ class Corr_3PCF_Multipole(TaskBase):
             "d2h": 0.0,
             "reduce": 0.0,
         }
+        fields = self._prepare_product_fields(product_name)
         for sample_idx in local_sample_indices:
-            fields = self._prepare_product_fields(product_name)
             l_arr, product_l, timing_info = self._run_sample_mpi_local_sample(
                 rank,
                 fields,
@@ -1202,7 +1292,7 @@ class Corr_3PCF_Multipole(TaskBase):
             local_timing["kernel"] += timing_info["sum_kernel_elapsed_sec"]
             local_timing["d2h"] += timing_info["sum_d2h_elapsed_sec"]
             local_timing["reduce"] += timing_info["sum_reduce_elapsed_sec"]
-            del fields
+        del fields
 
         gathered = comm.gather((local_l_arr, local_rows, local_timing), root=0)
         if rank != 0:
@@ -1301,11 +1391,19 @@ class Corr_3PCF_Multipole(TaskBase):
                 delta_ddd_l[sample_idx],
                 rrr_l[sample_idx],
                 self.l_max,
+                rcond_warning=np.inf,
             )
             zeta_rows.append(zeta_row)
             cond_values.append(cond_m)
         zeta_l = np.asarray(zeta_rows, dtype=np.float64)
         self.corr3pcf_multipole_data.zeta_l = zeta_l
+        self.corr3pcf_multipole_data.zeta_condition = np.asarray(cond_values, dtype=np.float64)
+        bad_conditions = np.where(self.corr3pcf_multipole_data.zeta_condition > self.zeta_condition_warning)[0]
+        if bad_conditions.size:
+            self.logger.warning(
+                "zeta_l mixing matrices exceed zeta_condition_warning="
+                f"{self.zeta_condition_warning:.3e} for samples {bad_conditions.tolist()}."
+            )
         self.logger.info(
             "zeta_l solved from multipole ratio | "
             f"mixing matrix cond range=[{np.min(cond_values):.3e}, {np.max(cond_values):.3e}]"
@@ -1383,10 +1481,15 @@ class Corr_3PCF_Multipole(TaskBase):
 
                 product_rows = []
                 l_arr = None
+                reusable_fields = self._prepare_product_fields(product_name) if (
+                    rank == 0 and self.execution_mode == "serial"
+                ) else None
                 for sample_idx, (binning_window12, binning_window13) in enumerate(
                     zip(self.binning_window12, self.binning_window13)
                 ):
-                    fields = self._prepare_product_fields(product_name) if rank == 0 else None
+                    fields = reusable_fields if self.execution_mode == "serial" else (
+                        self._prepare_product_fields(product_name) if rank == 0 else None
+                    )
                     l_arr, product_l = self._compute_product_multipole(
                         product_name,
                         fields,
@@ -1394,9 +1497,13 @@ class Corr_3PCF_Multipole(TaskBase):
                         binning_window13,
                         sample_idx,
                     )
-                    if rank == 0:
+                    if rank == 0 and self.execution_mode != "serial":
                         product_rows.append(product_l)
                         del fields
+                    elif rank == 0:
+                        product_rows.append(product_l)
+                if rank == 0 and reusable_fields is not None:
+                    del reusable_fields
                 if rank == 0:
                     product_values = np.asarray(product_rows, dtype=np.float64)
                     self._store_product(product_name, l_arr, product_values)

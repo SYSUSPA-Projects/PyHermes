@@ -16,6 +16,12 @@ RADIAL_PROFILE_CODES = {
     "gaussian": 4,
 }
 
+# Only a delta-function shell currently has an exact arbitrary-order radial
+# response in this module.  The remaining profiles provide their monopole
+# transfer function and are intentionally restricted to l=0 until their
+# U_l(k) transforms are tabulated.
+EXACT_MULTIPOLE_RADIAL_PROFILES = {"shell"}
+
 
 def _require_arg(len_args, name, radial_type):
     if name not in len_args:
@@ -45,7 +51,22 @@ def radial_profile_args(radial_type, len_args):
         args[0] = _require_arg(len_args, "R", radial_type)
     elif radial_type == "gaussian":
         args[0] = _require_arg(len_args, "R", radial_type)
+    if not np.all(np.isfinite(args)):
+        raise ValueError(f"radial_multipole profile '{radial_type}' requires finite length arguments.")
+    if args[0] < 0.0:
+        raise ValueError(f"radial_multipole profile '{radial_type}' requires a non-negative radial scale.")
     return RADIAL_PROFILE_CODES[radial_type], args
+
+
+def validate_radial_multipole_profile(radial_type, len_args, l_max):
+    """Validate one radial profile for a requested multipole range."""
+    radial_type = str(radial_type).strip().lower()
+    radial_profile_args(radial_type, len_args)
+    if int(l_max) > 0 and radial_type not in EXACT_MULTIPOLE_RADIAL_PROFILES:
+        raise ValueError(
+            f"radial_multipole profile '{radial_type}' currently supports only l=0. "
+            "Only the thin 'shell' profile has an exact arbitrary-order U_l(k) kernel."
+        )
 
 
 @njit
@@ -171,6 +192,7 @@ def calculate_radial_multipole_window_array_numba(L, phi_fourier_power, radial_p
 
 def calculate_radial_multipole_window_array(L, phi_fourier_power, len_args, radial_type, l, m):
     """Build a complex full-FFT window for a radial profile times ``Y_lm``."""
+    validate_radial_multipole_profile(radial_type, len_args, l)
     radial_profile_code, args = radial_profile_args(radial_type, len_args)
     return calculate_radial_multipole_window_array_numba(
         L,

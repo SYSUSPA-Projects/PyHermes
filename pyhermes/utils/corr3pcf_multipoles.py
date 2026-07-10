@@ -2,7 +2,9 @@
 
 import hashlib
 import json
+import os
 import time
+import uuid
 from pathlib import Path
 
 import numba
@@ -12,6 +14,9 @@ from numba import cuda
 from pyhermes.io.window import WindowFunc
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum
 from pyhermes.utils.window_params import serialize_window_params
+
+
+MULTIPOLE_FIELD_CACHE_SCHEMA_VERSION = 2
 
 
 def cal_gamma(phi_array, phi_support, phi_resolution):
@@ -175,12 +180,48 @@ def combine_multipole_m_terms(m_values, l):
     return coeff.real
 
 
-def _cache_file_path(cache_dir, binning_window, l, m, cache_namespace=""):
-    """Return the cache path for one radial-profile multipole field."""
+def _array_digest(array):
+    """Return a stable content digest for one contiguous numeric array."""
+    contiguous = np.ascontiguousarray(array)
+    digest = hashlib.sha1()
+    digest.update(str(contiguous.dtype).encode("utf-8"))
+    digest.update(np.asarray(contiguous.shape, dtype=np.int64).tobytes())
+    digest.update(contiguous.view(np.uint8))
+    return digest.hexdigest()
+
+
+def _field_cache_signature(field):
+    """Return a cached identity for a convolved SFC field and its basis."""
+    cached = getattr(field, "_multipole_cache_signature", None)
+    if cached is not None:
+        return cached
+
+    metadata = {
+        key: getattr(field, key, None)
+        for key in ("L", "box_size", "phi_resolution", "wavelet_mode", "wavelet_level", "phi_support")
+    }
+    metadata["sfc_info"] = serialize_window_params(getattr(field, "sfc_info", {}))
+    payload = json.dumps(metadata, sort_keys=True, separators=(",", ":"), default=str)
+    digest = hashlib.sha1(payload.encode("utf-8"))
+    digest.update(_array_digest(field.epsilon).encode("utf-8"))
+    digest.update(_array_digest(field.phi_array).encode("utf-8"))
+    cached = digest.hexdigest()
+    field._multipole_cache_signature = cached
+    return cached
+
+
+def _cache_file_path(cache_dir, field, binning_window, l, m, cache_namespace=""):
+    """Return a cache path keyed by the source field and multipole operator."""
     sign = "m" if m >= 0 else "m_minus"
     suffix = f"{m}" if m >= 0 else f"{-m}"
-    serialized = serialize_window_params(binning_window)
-    payload = json.dumps(serialized, sort_keys=True, separators=(",", ":"))
+    payload = {
+        "schema": MULTIPOLE_FIELD_CACHE_SCHEMA_VERSION,
+        "field": _field_cache_signature(field),
+        "binning_window": serialize_window_params(binning_window),
+        "l": int(l),
+        "m": int(m),
+    }
+    payload = json.dumps(payload, sort_keys=True, separators=(",", ":"))
     digest = hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
     namespace = str(cache_namespace).strip()
     prefix = f"{namespace}_" if namespace else ""
@@ -244,9 +285,16 @@ def _stream_convolution_fields(
         cached = None
         cache_path = None
         if cache_multipole_fields and cache_dir:
-            cache_path = _cache_file_path(cache_dir, binning_window, l, m, cache_namespace=cache_namespace)
+            cache_path = _cache_file_path(
+                cache_dir, field, binning_window, l, m, cache_namespace=cache_namespace
+            )
             if cache_path.exists():
-                cached = np.load(cache_path)
+                try:
+                    cached = np.load(cache_path)
+                except (OSError, ValueError):
+                    cached = None
+                if cached is not None and cached.shape != field.epsilon.shape:
+                    cached = None
         if cached is None:
             window = WindowFunc(
                 _multipole_window_params(binning_window, l, m),
@@ -259,7 +307,15 @@ def _stream_convolution_fields(
             cached = (field @ window).epsilon
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
-                np.save(cache_path, cached)
+                temp_path = cache_path.with_name(
+                    f".{cache_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp.npy"
+                )
+                try:
+                    np.save(temp_path, cached)
+                    os.replace(temp_path, cache_path)
+                finally:
+                    if temp_path.exists():
+                        temp_path.unlink()
         m_fields.append(np.ascontiguousarray(cached, dtype=np.complex128))
     return m_fields
 
