@@ -1,5 +1,6 @@
 """3PCF multipole convolution, caching, and CUDA summation helpers."""
 
+import copy
 import hashlib
 import json
 import os
@@ -245,6 +246,7 @@ def _multipole_window_params(binning_window, l, m):
             "radial_type": radial_type,
             "l": int(l),
             "m": int(m),
+            "profile_config": copy.deepcopy(binning_window.get("other_args", {})),
         },
         "kernel_mode": "complex_full_fft",
     }

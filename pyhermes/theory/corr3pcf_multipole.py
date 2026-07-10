@@ -306,7 +306,9 @@ class Corr_3PCF_Multipole(TaskBase):
         ):
             for sample_idx, params in enumerate(windows):
                 try:
-                    validate_radial_multipole_profile(params["type"], params["len_args"], self.l_max)
+                    validate_radial_multipole_profile(
+                        params["type"], params["len_args"], self.l_max, params.get("other_args", {})
+                    )
                 except (TypeError, ValueError, KeyError) as exc:
                     raise ValueError(f"Invalid {name} for sample {sample_idx}: {exc}") from exc
 
@@ -604,6 +606,12 @@ class Corr_3PCF_Multipole(TaskBase):
             ("binning_window13", self.binning_window13),
         ):
             radial_type = str(windows[0]["type"]).strip().lower()
+            if radial_type not in scale_keys:
+                self.logger.info(
+                    f"Multipole resolution diagnostic | {name}: custom radial profile; "
+                    "use its declared r_max to assess Hankel-table convergence."
+                )
+                continue
             scale_key = scale_keys[radial_type]
             radii = np.asarray([float(params["len_args"][scale_key]) for params in windows], dtype=np.float64)
             positive_radii = radii[radii > 0.0]

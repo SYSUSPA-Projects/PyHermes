@@ -203,10 +203,12 @@ class WindowFunc(SFCField):
                 self.w_kernel = calculate_radial_multipole_window_array(
                     self.L,
                     self.phi_fourier_power,
-                    self.rescale_len_args,
+                    self.len_args,
                     radial_type,
                     l,
                     m,
+                    box_size=self.box_size,
+                    profile_config=self.other_args.get("profile_config", {}),
                 )
             except Exception as exc:
                 if self.rank == 0:
