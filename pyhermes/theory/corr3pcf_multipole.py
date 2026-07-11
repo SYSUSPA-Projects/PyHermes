@@ -12,6 +12,7 @@ from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
 from pyhermes.utils.radial_multipole_windows import validate_radial_multipole_profile
+from pyhermes.utils.radial_profiles import diagnose_radial_multipole_table
 from pyhermes.utils.special_functions import solve_multipoles_from_ratio
 from pyhermes.utils.window_params import serialize_window_params
 
@@ -113,12 +114,29 @@ class Corr_3PCF_Multipole(TaskBase):
         self.zeta_condition_warning = float(self.task_params.get("zeta_condition_warning", 1.0e12))
         if not np.isfinite(self.zeta_condition_warning) or self.zeta_condition_warning <= 0.0:
             raise ValueError("zeta_condition_warning must be a finite positive number.")
+        self.radial_profile_diagnostics_enabled = bool(
+            self.task_params.get("radial_profile_diagnostics", True)
+        )
+        self.radial_profile_diagnostic_tolerance = float(
+            self.task_params.get("radial_profile_diagnostic_tolerance", 1.0e-5)
+        )
+        if (
+            not np.isfinite(self.radial_profile_diagnostic_tolerance)
+            or self.radial_profile_diagnostic_tolerance <= 0.0
+        ):
+            raise ValueError("radial_profile_diagnostic_tolerance must be finite and positive.")
+        self.radial_profile_diagnostic_probes = int(
+            self.task_params.get("radial_profile_diagnostic_probes", 33)
+        )
+        if self.radial_profile_diagnostic_probes < 3:
+            raise ValueError("radial_profile_diagnostic_probes must be at least 3.")
         self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "zeta_l"))
         self.rho = None
         self.rho_legs = [None, None, None]
         self.reference_sfc = None
         self.resolution_diagnostics = []
+        self.radial_profile_diagnostics = []
         self._last_product_profile = None
         self._role_layout_logged = False
         self.fout_path = self.task_params["fout_path"]
@@ -321,6 +339,9 @@ class Corr_3PCF_Multipole(TaskBase):
         self.task_params["gpu_threads_per_block"] = list(self.gpu_threads_per_block)
         self.task_params["summation_backend"] = self.summation_backend
         self.task_params["zeta_condition_warning"] = self.zeta_condition_warning
+        self.task_params["radial_profile_diagnostics"] = self.radial_profile_diagnostics_enabled
+        self.task_params["radial_profile_diagnostic_tolerance"] = self.radial_profile_diagnostic_tolerance
+        self.task_params["radial_profile_diagnostic_probes"] = self.radial_profile_diagnostic_probes
         self.sync_runtime_options(context="Corr_3PCF multipole runtime configuration", blank_line=True)
         if self.rank == 0:
             self.logger.info(
@@ -428,11 +449,15 @@ class Corr_3PCF_Multipole(TaskBase):
             "verbose_m_progress": self.verbose_m_progress,
             "verbose_profile": self.verbose_profile,
             "zeta_condition_warning": self.zeta_condition_warning,
+            "radial_profile_diagnostics": self.radial_profile_diagnostics_enabled,
+            "radial_profile_diagnostic_tolerance": self.radial_profile_diagnostic_tolerance,
+            "radial_profile_diagnostic_probes": self.radial_profile_diagnostic_probes,
             "threads": self.threads,
             "products": copy.deepcopy(self.products),
             "expanded_products": self._expanded_products(),
             "rho_legs": copy.deepcopy(self.rho_legs),
             "resolution_diagnostics": copy.deepcopy(self.resolution_diagnostics),
+            "radial_profile_diagnostics_result": copy.deepcopy(self.radial_profile_diagnostics),
             "fout_path": self.fout_path,
         }
 
@@ -636,6 +661,58 @@ class Corr_3PCF_Multipole(TaskBase):
                     "The highest multipoles are close to the grid high-k range; check J convergence."
                 )
 
+    def _record_radial_profile_diagnostics(self, sample_indices=None):
+        """Validate each tabulated radial multipole before convolution work."""
+        self.radial_profile_diagnostics = []
+        if not self.radial_profile_diagnostics_enabled:
+            return
+
+        if sample_indices is None:
+            sample_indices = range(len(self.samples))
+        else:
+            sample_indices = [int(sample_idx) for sample_idx in sample_indices]
+
+        k_max = float(np.sqrt(3.0) * self.reference_sfc.L / self.reference_sfc.box_size)
+        for edge_name, windows in (
+            ("binning_window12", self.binning_window12),
+            ("binning_window13", self.binning_window13),
+        ):
+            for sample_idx in sample_indices:
+                params = windows[sample_idx]
+                radial_type = str(params["type"]).strip().lower()
+                if radial_type == "shell":
+                    continue
+                if radial_type == "gaussian_shell" and float(params["len_args"]["R_smooth"]) == 0.0:
+                    continue
+
+                first_tabulated_l = self.l_min if radial_type.startswith("custom_") else max(1, self.l_min)
+                for l in range(first_tabulated_l, self.l_max + 1):
+                    diagnostic = diagnose_radial_multipole_table(
+                        radial_type,
+                        params["len_args"],
+                        l,
+                        k_max,
+                        profile_config=params.get("other_args", {}),
+                        tolerance=self.radial_profile_diagnostic_tolerance,
+                        probe_count=self.radial_profile_diagnostic_probes,
+                    )
+                    diagnostic.update({"edge": edge_name, "sample_idx": int(sample_idx)})
+                    self.radial_profile_diagnostics.append(diagnostic)
+                    self.logger.info(
+                        "Radial profile diagnostic | "
+                        f"{edge_name}[{sample_idx}], type={radial_type}, l={l}, "
+                        f"zero_error={diagnostic['zero_mode_error']:.3e}, "
+                        f"table_error={diagnostic['table_convergence_error']:.3e}, "
+                        f"inverse_error={diagnostic['inverse_roundtrip_error']}"
+                    )
+                    if not diagnostic["passed"]:
+                        self.logger.warning(
+                            "Radial profile diagnostic exceeded tolerance | "
+                            f"{edge_name}[{sample_idx}], type={radial_type}, l={l}, "
+                            f"tolerance={self.radial_profile_diagnostic_tolerance:.3e}. "
+                            "Increase profile quadrature/table points or verify the profile support."
+                        )
+
     def _broadcast_sfc(self, rank, comm, sfc_field):
         serialized = pickle.dumps(sfc_field.sfc_info) if rank == 0 else None
         serialized = comm.bcast(serialized, root=0)
@@ -789,6 +866,12 @@ class Corr_3PCF_Multipole(TaskBase):
             self.rho = self._field_mean_density(self._field_in_task_normalization(compatibility_fields[0]))
             self.rho_legs = [self.rho, self.rho, self.rho]
             self._record_resolution_diagnostics()
+            if self.execution_mode == "sample_mpi":
+                self._record_radial_profile_diagnostics(
+                    self._sample_indices_for_rank(self.rank, self.comm.Get_size())
+                )
+            elif self.rank == 0:
+                self._record_radial_profile_diagnostics()
             self.logger.info("Corr_3PCF multipole input compatibility check passed.")
             self.logger.info(f"Shared required parameters | {shared_required_text}")
             self.logger.info(f"Shared density | rho={self.rho:.6g}")
@@ -840,6 +923,18 @@ class Corr_3PCF_Multipole(TaskBase):
             snapshot = self._current_task_params_snapshot()
             self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
             self.corr3pcf_multipole_data.task_params = snapshot
+
+        if self.execution_mode == "sample_mpi":
+            gathered_diagnostics = self.comm.gather(self.radial_profile_diagnostics, root=0)
+            if self.rank == 0:
+                self.radial_profile_diagnostics = [
+                    diagnostic
+                    for rank_diagnostics in gathered_diagnostics
+                    for diagnostic in rank_diagnostics
+                ]
+                snapshot = self._current_task_params_snapshot()
+                self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
+                self.corr3pcf_multipole_data.task_params = snapshot
         self._fields_prepared = True
 
     def _store_product(self, product_name, l_arr, values):

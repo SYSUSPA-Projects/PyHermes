@@ -183,6 +183,9 @@
 		"verbose_m_progress": false,
 		"verbose_profile": false,
 		"zeta_condition_warning": 1e12,
+		"radial_profile_diagnostics": true,
+		"radial_profile_diagnostic_tolerance": 1e-5,
+		"radial_profile_diagnostic_probes": 33,
 		"threads": 1,
 		"products": "zeta_l",
 		"fout_path": ""

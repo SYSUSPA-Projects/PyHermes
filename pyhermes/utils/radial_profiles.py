@@ -24,6 +24,8 @@ SUPPORTED_RADIAL_PROFILE_TYPES = BUILTIN_RADIAL_PROFILE_TYPES | CUSTOM_RADIAL_PR
 _GAUSS_LEGENDRE_CACHE = {}
 _RADIAL_TABLE_CACHE = OrderedDict()
 _RADIAL_TABLE_CACHE_LIMIT = 256
+_RADIAL_QUADRATURE_CACHE = OrderedDict()
+_RADIAL_QUADRATURE_CACHE_LIMIT = 256
 
 # The table is locally cubically interpolated while a Fourier kernel is built.
 # These defaults keep its interpolation error below the projection error for
@@ -32,6 +34,7 @@ _DEFAULT_QUADRATURE_POINTS = 1024
 _DEFAULT_QUADRATURE_POINTS_PER_CYCLE = 32
 _DEFAULT_TABLE_POINTS = 4097
 _DEFAULT_TABLE_POINTS_PER_CYCLE = 64
+_DEFAULT_DIAGNOSTIC_PROBES = 33
 
 
 def real_space_profile(func, r_max, *, r_min=0.0, normalization="unit_integral", allow_signed=False,
@@ -469,6 +472,183 @@ def _table_cache_key(radial_type, len_args, profile_config, l, k_max):
     )
 
 
+def _quadrature_cache_key(radial_type, len_args, profile_config, k_max):
+    return (
+        str(radial_type).strip().lower(),
+        _freeze_for_cache(dict(len_args)),
+        _freeze_for_cache(profile_config or {}),
+        float(k_max),
+    )
+
+
+def _store_lru(cache, key, value, limit):
+    cache[key] = value
+    cache.move_to_end(key)
+    while len(cache) > limit:
+        cache.popitem(last=False)
+
+
+def _normalized_radial_quadrature(radial_type, len_args, k_max, profile_config=None):
+    """Return cached ``(r, dr, w, options)`` for one physical radial profile."""
+    cache_key = _quadrature_cache_key(radial_type, len_args, profile_config, k_max)
+    cached = _RADIAL_QUADRATURE_CACHE.get(cache_key)
+    if cached is not None:
+        _RADIAL_QUADRATURE_CACHE.move_to_end(cache_key)
+        return cached
+
+    if radial_type in {"sphere", "thick_shell", "gaussian", "custom_real"}:
+        radii, weights, values, options = _real_quadrature(
+            radial_type, len_args, profile_config, k_max
+        )
+    elif radial_type in {"gaussian_shell", "custom_kspace"}:
+        radii, weights, values, options = _inverse_hankel_quadrature(
+            radial_type, len_args, profile_config, k_max
+        )
+    else:
+        raise ValueError(f"Unsupported tabulated radial profile '{radial_type}'.")
+
+    result = (radii, weights, _normalize_profile_values(radii, weights, values, options), options)
+    _store_lru(_RADIAL_QUADRATURE_CACHE, cache_key, result, _RADIAL_QUADRATURE_CACHE_LIMIT)
+    return result
+
+
+def _interpolate_uniform_table(k_values, table, k_max):
+    """Evaluate a uniform table with the same local cubic used by the kernel."""
+    k_values = np.asarray(k_values, dtype=np.float64)
+    clipped = np.clip(k_values, 0.0, float(k_max))
+    index = clipped * (table.size - 1) / float(k_max)
+    lower = np.floor(index).astype(np.intp)
+    fraction = index - lower
+    at_upper_bound = lower >= table.size - 1
+    lower = np.minimum(lower, table.size - 2)
+
+    output = table[lower] * (1.0 - fraction) + table[lower + 1] * fraction
+    interior = (lower > 0) & (lower < table.size - 2)
+    if np.any(interior):
+        idx = lower[interior]
+        t = fraction[interior]
+        p0 = table[idx - 1]
+        p1 = table[idx]
+        p2 = table[idx + 1]
+        p3 = table[idx + 2]
+        output[interior] = 0.5 * (
+            2.0 * p1
+            + (-p0 + p2) * t
+            + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t * t
+            + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t * t * t
+        )
+    output[at_upper_bound] = table[-1]
+    return output
+
+
+def _diagnostic_refinement_config(profile_config, radial_type, quadrature_points):
+    refined = dict(profile_config or {})
+    refined_points = max(2 * int(quadrature_points), 2 * _DEFAULT_QUADRATURE_POINTS)
+    refined["quadrature_points"] = refined_points
+    if radial_type in {"gaussian_shell", "custom_kspace"}:
+        refined["inverse_points"] = refined_points
+    return refined
+
+
+def _kspace_input_transfer(radial_type, len_args, profile_config, k_values):
+    if radial_type == "gaussian_shell":
+        return _standard_monopole_transfer(radial_type, k_values, len_args)
+    profile = _resolve_profile_config(profile_config)
+    return _evaluate_profile_function(profile["func"], k_values, len_args, profile.get("args", {}))
+
+
+def diagnose_radial_multipole_table(
+    radial_type,
+    len_args,
+    l,
+    k_max,
+    profile_config=None,
+    *,
+    tolerance=1.0e-5,
+    probe_count=_DEFAULT_DIAGNOSTIC_PROBES,
+):
+    """Quantify normalization and numerical convergence of one radial table.
+
+    The finite probe set compares the materialized table to a transform
+    recomputed with doubled quadrature.  For profiles defined natively in
+    k-space, the diagnostic also verifies the inverse-Hankel/forward-Hankel
+    monopole round trip against the supplied transfer function.
+    """
+    radial_type = str(radial_type).strip().lower()
+    validate_radial_profile_request(radial_type, len_args, profile_config)
+    if radial_type == "shell" or (
+        radial_type == "gaussian_shell" and float(len_args["R_smooth"]) == 0.0
+    ):
+        return {
+            "radial_type": radial_type,
+            "l": int(l),
+            "path": "analytic_shell",
+            "passed": True,
+        }
+    if not np.isfinite(tolerance) or tolerance <= 0.0:
+        raise ValueError("Radial-profile diagnostic tolerance must be finite and positive.")
+    probe_count = int(probe_count)
+    if probe_count < 3:
+        raise ValueError("Radial-profile diagnostics require at least three probe points.")
+
+    table_k_max, table = build_radial_multipole_table(
+        radial_type, len_args, l, k_max, profile_config=profile_config
+    )
+    radii, weights, values, options = _normalized_radial_quadrature(
+        radial_type, len_args, k_max, profile_config=profile_config
+    )
+    refined_config = _diagnostic_refinement_config(profile_config, radial_type, radii.size)
+    refined_radii, refined_weights, refined_values, _ = _normalized_radial_quadrature(
+        radial_type, len_args, k_max, profile_config=refined_config
+    )
+
+    probe_k = float(k_max) * (np.arange(probe_count, dtype=np.float64) + 0.5) / probe_count
+    table_values = _interpolate_uniform_table(probe_k, table, table_k_max)
+    refined_values_k = _forward_hankel(
+        refined_radii, refined_weights, refined_values, int(l), probe_k
+    )
+    convergence_error = float(
+        np.max(np.abs(table_values - refined_values_k))
+        / max(1.0, float(np.max(np.abs(refined_values_k))))
+    )
+
+    if int(l) == 0:
+        zero_target = float(4.0 * np.pi * np.sum(weights * radii ** 2 * values))
+    else:
+        zero_target = 0.0
+    zero_mode = float(table[0])
+    zero_mode_error = abs(zero_mode - zero_target)
+
+    inverse_roundtrip_error = None
+    if radial_type in {"gaussian_shell", "custom_kspace"} and int(l) == 0:
+        recovered_transfer = _forward_hankel(radii, weights, values, 0, probe_k)
+        input_transfer = _kspace_input_transfer(radial_type, len_args, profile_config, probe_k)
+        inverse_roundtrip_error = float(
+            np.max(np.abs(recovered_transfer - input_transfer))
+            / max(1.0, float(np.max(np.abs(input_transfer))))
+        )
+
+    errors = [convergence_error, zero_mode_error]
+    if inverse_roundtrip_error is not None:
+        errors.append(inverse_roundtrip_error)
+    return {
+        "radial_type": radial_type,
+        "l": int(l),
+        "path": "inverse_hankel" if radial_type in {"gaussian_shell", "custom_kspace"} else "real_space_hankel",
+        "table_points": int(table.size),
+        "quadrature_points": int(radii.size),
+        "refined_quadrature_points": int(refined_radii.size),
+        "probe_count": probe_count,
+        "zero_mode": zero_mode,
+        "zero_mode_target": zero_target,
+        "zero_mode_error": float(zero_mode_error),
+        "table_convergence_error": convergence_error,
+        "inverse_roundtrip_error": inverse_roundtrip_error,
+        "tolerance": float(tolerance),
+        "passed": bool(max(errors) <= tolerance),
+    }
+
+
 def build_radial_multipole_table(radial_type, len_args, l, k_max, profile_config=None):
     """Return a uniform physical-k table for ``U_l(k)``.
 
@@ -507,14 +687,9 @@ def build_radial_multipole_table(radial_type, len_args, l, k_max, profile_config
             _RADIAL_TABLE_CACHE.popitem(last=False)
         return result
 
-    if radial_type in {"sphere", "thick_shell", "gaussian", "custom_real"}:
-        radii, weights, values, options = _real_quadrature(radial_type, len_args, profile_config, k_max)
-    elif radial_type in {"gaussian_shell", "custom_kspace"}:
-        radii, weights, values, options = _inverse_hankel_quadrature(radial_type, len_args, profile_config, k_max)
-    else:
-        raise ValueError(f"Unsupported tabulated radial profile '{radial_type}'.")
-
-    values = _normalize_profile_values(radii, weights, values, options)
+    radii, weights, values, options = _normalized_radial_quadrature(
+        radial_type, len_args, k_max, profile_config=profile_config
+    )
     r_max = float(np.max(radii))
     configured_points = options.get("table_points")
     table_points = _adaptive_points(
