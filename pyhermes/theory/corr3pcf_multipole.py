@@ -1066,6 +1066,11 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"cache_multipole_fields={self.cache_multipole_fields}, "
                 f"verbose_m_progress={self.verbose_m_progress}, verbose_profile={self.verbose_profile}"
             )
+            if self.summation_backend == "cpu":
+                self.logger.info(
+                    "Pair-MPI CPU summation layout | each rank pair evaluates its m-term locally; "
+                    "rank 0 gathers scalar results only."
+                )
 
         field1, field2, field3 = local_fields
         pair_idx = rank if rank < n_pairs else rank - n_pairs
@@ -1080,7 +1085,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 gpu_device_id=self.gpu_device_id,
                 gpu_threads_per_block=self.gpu_threads_per_block,
             )
-            if rank == 0
+            if rank == 0 or (self.summation_backend == "cpu" and is_r1_rank)
             else None
         )
 
@@ -1137,53 +1142,109 @@ class Corr_3PCF_Multipole(TaskBase):
             conv_elapsed = time.perf_counter() - t_conv
             total_conv_elapsed += conv_elapsed
 
-            t_comm = time.perf_counter()
             round_summands = {} if rank == 0 else None
-            if pair_idx < active_count:
-                l_idx, l, m = local_meta
-                tag_base = 200000 + round_idx * 100 + pair_idx
-                if rank == 0:
-                    root_comm_elapsed = 0.0
-                    for idx in range(active_count):
-                        recv_l_idx, recv_l, recv_m = map(int, round_meta[idx])
-                        key = (recv_l_idx, recv_l, recv_m)
-                        if idx == 0:
-                            field_r1_m = local_field
-                            t_recv = time.perf_counter()
-                            recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
-                            comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs, tag=tag_base + 50)
-                            root_comm_elapsed += time.perf_counter() - t_recv
-                            field_r2_m = recv_r2
-                        else:
-                            t_recv = time.perf_counter()
-                            recv_r1 = np.empty(local_field.shape, dtype=np.complex128)
-                            recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
-                            comm.Recv([recv_r1, MPI.COMPLEX16], source=idx, tag=200000 + round_idx * 100 + idx)
-                            comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs + idx, tag=200000 + round_idx * 100 + idx + 50)
-                            root_comm_elapsed += time.perf_counter() - t_recv
-                            field_r1_m = recv_r1
-                            field_r2_m = recv_r2
+            if self.summation_backend == "cpu":
+                local_result = None
+                comm_elapsed = 0.0
+                if pair_idx < active_count:
+                    l_idx, l, m = map(int, local_meta)
+                    tag = 200000 + round_idx * 100 + pair_idx
+                    if is_r1_rank:
+                        t_recv = time.perf_counter()
+                        field_r2_m = np.empty(local_field.shape, dtype=np.complex128)
+                        comm.Recv([field_r2_m, MPI.COMPLEX16], source=n_pairs + pair_idx, tag=tag)
+                        comm_elapsed += time.perf_counter() - t_recv
+
                         t_sum = time.perf_counter()
-                        value, timing = multipole_util.compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context)
+                        value, timing = multipole_util.compute_multipole_m_summand(
+                            local_field, field_r2_m, sum_context
+                        )
                         sum_elapsed = time.perf_counter() - t_sum
-                        round_summands[key] = (value, timing, sum_elapsed)
-                        del field_r1_m, field_r2_m
-                        if idx == 0:
-                            del recv_r2
-                        else:
-                            del recv_r1, recv_r2
-                    local_field = None
-                    comm_elapsed = root_comm_elapsed
-                elif is_r1_rank:
-                    if rank != 0:
-                        comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base)
+                        total_sum_elapsed += sum_elapsed
+                        local_result = (l_idx, l, m, value, timing, sum_elapsed)
+                        del local_field, field_r2_m
+                    else:
+                        t_send = time.perf_counter()
+                        comm.Send(
+                            [np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16],
+                            dest=pair_idx,
+                            tag=tag,
+                        )
+                        comm_elapsed += time.perf_counter() - t_send
                         del local_field
-                else:
-                    comm.Send([np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16], dest=0, tag=tag_base + 50)
-                    del local_field
-            if rank != 0:
-                comm_elapsed = time.perf_counter() - t_comm
-            total_comm_elapsed += comm_elapsed
+
+                t_gather = time.perf_counter()
+                gathered_results = comm.gather(local_result, root=0)
+                comm_elapsed += time.perf_counter() - t_gather
+                if rank == 0:
+                    for result in gathered_results:
+                        if result is None:
+                            continue
+                        recv_l_idx, recv_l, recv_m, value, timing, sum_elapsed = result
+                        round_summands[(recv_l_idx, recv_l, recv_m)] = (value, timing, sum_elapsed)
+                    if len(round_summands) != active_count:
+                        raise RuntimeError(
+                            "pair_mpi CPU summation returned "
+                            f"{len(round_summands)}/{active_count} active m-task results."
+                        )
+                total_comm_elapsed += comm_elapsed
+            else:
+                t_comm = time.perf_counter()
+                if pair_idx < active_count:
+                    l_idx, l, m = local_meta
+                    tag_base = 200000 + round_idx * 100 + pair_idx
+                    if rank == 0:
+                        root_comm_elapsed = 0.0
+                        for idx in range(active_count):
+                            recv_l_idx, recv_l, recv_m = map(int, round_meta[idx])
+                            key = (recv_l_idx, recv_l, recv_m)
+                            if idx == 0:
+                                field_r1_m = local_field
+                                t_recv = time.perf_counter()
+                                recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
+                                comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs, tag=tag_base + 50)
+                                root_comm_elapsed += time.perf_counter() - t_recv
+                                field_r2_m = recv_r2
+                            else:
+                                t_recv = time.perf_counter()
+                                recv_r1 = np.empty(local_field.shape, dtype=np.complex128)
+                                recv_r2 = np.empty(local_field.shape, dtype=np.complex128)
+                                comm.Recv([recv_r1, MPI.COMPLEX16], source=idx, tag=200000 + round_idx * 100 + idx)
+                                comm.Recv([recv_r2, MPI.COMPLEX16], source=n_pairs + idx, tag=200000 + round_idx * 100 + idx + 50)
+                                root_comm_elapsed += time.perf_counter() - t_recv
+                                field_r1_m = recv_r1
+                                field_r2_m = recv_r2
+                            t_sum = time.perf_counter()
+                            value, timing = multipole_util.compute_multipole_m_summand(
+                                field_r1_m, field_r2_m, sum_context
+                            )
+                            sum_elapsed = time.perf_counter() - t_sum
+                            round_summands[key] = (value, timing, sum_elapsed)
+                            del field_r1_m, field_r2_m
+                            if idx == 0:
+                                del recv_r2
+                            else:
+                                del recv_r1, recv_r2
+                        local_field = None
+                        comm_elapsed = root_comm_elapsed
+                    elif is_r1_rank:
+                        if rank != 0:
+                            comm.Send(
+                                [np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16],
+                                dest=0,
+                                tag=tag_base,
+                            )
+                            del local_field
+                    else:
+                        comm.Send(
+                            [np.ascontiguousarray(local_field, dtype=np.complex128), MPI.COMPLEX16],
+                            dest=0,
+                            tag=tag_base + 50,
+                        )
+                        del local_field
+                if rank != 0:
+                    comm_elapsed = time.perf_counter() - t_comm
+                total_comm_elapsed += comm_elapsed
 
             round_timings = None
             if self.verbose_m_progress or self.verbose_profile:
@@ -1219,7 +1280,8 @@ class Corr_3PCF_Multipole(TaskBase):
                     comm_r1 = task_timing.get(0, (0.0, 0.0))[1]
                     comm_r2 = task_timing.get(1, (0.0, 0.0))[1]
                     value, timing, sum_elapsed = round_summands[key]
-                    total_sum_elapsed += sum_elapsed
+                    if self.summation_backend != "cpu":
+                        total_sum_elapsed += sum_elapsed
                     total_h2d += timing["h2d_elapsed_sec"]
                     total_kernel += timing["kernel_elapsed_sec"]
                     total_reduce += timing["reduce_elapsed_sec"]
@@ -1256,6 +1318,8 @@ class Corr_3PCF_Multipole(TaskBase):
 
         conv_max_rank = comm.reduce(total_conv_elapsed, op=MPI.MAX, root=0)
         comm_max_rank = comm.reduce(total_comm_elapsed, op=MPI.MAX, root=0)
+        sum_max_rank = comm.reduce(total_sum_elapsed, op=MPI.MAX, root=0)
+        sum_all_ranks = comm.reduce(total_sum_elapsed, op=MPI.SUM, root=0)
         conv_sum_all = comm.reduce(total_conv_elapsed, op=MPI.SUM, root=0) if self.verbose_profile else None
         comm_sum_all = comm.reduce(total_comm_elapsed, op=MPI.SUM, root=0) if self.verbose_profile else None
         if rank == 0:
@@ -1263,8 +1327,9 @@ class Corr_3PCF_Multipole(TaskBase):
                 "conv_rank0": total_conv_elapsed,
                 "conv_max": conv_max_rank,
                 "comm_max": comm_max_rank,
-                "sum": total_sum_elapsed,
-                "gpu_sum": total_sum_elapsed,
+                "sum": sum_max_rank,
+                "sum_all_ranks": sum_all_ranks,
+                "gpu_sum": sum_max_rank,
                 "h2d": total_h2d,
                 "kernel": total_kernel,
                 "d2h": total_d2h,
@@ -1275,7 +1340,7 @@ class Corr_3PCF_Multipole(TaskBase):
                 f"Pair-MPI timing [{product_name}] | conv_rank0={total_conv_elapsed:.2f} sec | "
                 f"conv_sum_all={conv_sum_all:.2f} sec | conv_max_rank={conv_max_rank:.2f} sec | "
                 f"comm_sum_all={comm_sum_all:.2f} sec | comm_max_rank={comm_max_rank:.2f} sec | "
-                f"summation={total_sum_elapsed:.2f} sec"
+                f"sum_max_rank={sum_max_rank:.2f} sec | sum_all_ranks={sum_all_ranks:.2f} sec"
             )
             self.logger.info(
                 f"Pair-MPI summation breakdown [{product_name}, backend={self.summation_backend}] | h2d={total_h2d:.2f} sec | "
@@ -1449,18 +1514,19 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
                 func_util.safe_exit(1)
             n_pairs = size // 2
+            field1_ranks = set(range(n_pairs)) if self.summation_backend == "cpu" else {0}
             if rank == 0:
                 self.logger.info(
                     f"Initializing multipole input for '{product_name}': role-aware broadcast to {size} MPI ranks ..."
                 )
                 if not self._role_layout_logged:
                     self.logger.info(
-                        "Role-aware layout | field1 -> rank0 only | "
+                        f"Role-aware layout | field1 -> ranks {sorted(field1_ranks)} | "
                         f"field2 -> ranks 0-{n_pairs - 1} | field3 -> ranks {n_pairs}-{size - 1}"
                     )
                     self._role_layout_logged = True
             local_fields = [
-                self._broadcast_sfc_to_ranks(comm, fields[0] if rank == 0 else None, {0}),
+                self._broadcast_sfc_to_ranks(comm, fields[0] if rank == 0 else None, field1_ranks),
                 self._broadcast_sfc_to_ranks(comm, fields[1] if rank == 0 else None, set(range(n_pairs))),
                 self._broadcast_sfc_to_ranks(comm, fields[2] if rank == 0 else None, set(range(n_pairs, size))),
             ]
