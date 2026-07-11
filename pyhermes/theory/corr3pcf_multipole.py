@@ -1424,11 +1424,17 @@ class Corr_3PCF_Multipole(TaskBase):
         size = comm.Get_size()
         local_sample_indices = self._sample_indices_for_rank(rank, size)
         if rank == 0:
+            sample_counts = [len(self._sample_indices_for_rank(i, size)) for i in range(size)]
             self.logger.info(
                 f"execution_mode=sample_mpi | ranks={size}, n_samples={len(self.samples)}, "
-                f"rank0_samples={local_sample_indices}"
+                "assignment=static_round_robin | "
+                f"samples_per_rank=[{min(sample_counts)}, {max(sample_counts)}]"
             )
-        self.logger.info(f"Rank {rank} handles sample indices {local_sample_indices}.")
+            if self.verbose_profile:
+                assignment = "; ".join(
+                    f"rank{i}:{self._sample_indices_for_rank(i, size)}" for i in range(size)
+                )
+                self.logger.info(f"sample_mpi assignment | {assignment}")
 
         local_l_arr = None
         local_rows = []

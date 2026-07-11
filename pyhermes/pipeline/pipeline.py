@@ -3,7 +3,7 @@ import pickle
 from pyhermes.utils import func_util
 from pyhermes.utils.runtime import configure
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.param.logbase import setup_logger
+from pyhermes.param.logbase import configure_mpi_logging, setup_logger
 from pyhermes.param.parambase import ParamBase
 
 
@@ -17,6 +17,7 @@ class TaskBase(object):
         self.size       = self.comm.Get_size()
         self.comm_local = self.comm.Split_type(MPI.COMM_TYPE_SHARED)
         self.size_local = self.comm_local.Get_size()
+        configure_mpi_logging(rank=self.rank, size=self.size)
         # Set new style logging, added by dingding, 20231113
         self.logger = setup_logger(__name__, self.__class__.__name__)
         params_serialized = None
