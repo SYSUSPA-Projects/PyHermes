@@ -7,6 +7,7 @@ from numba import njit
 
 from pyhermes.param.parambase import read_param
 from pyhermes.theory.corr2pcf import Corr_2PCF
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.special_functions import jn_numba
 
 
@@ -36,10 +37,11 @@ gaussian_ring_window = {
 }
 
 params = read_param(config_path=config_path)
-params["Corr_2PCF"]["binning_window"] = gaussian_ring_window
-params["Corr_2PCF"]["fout_path"] = (
-    f"./output/quijote8000_snap004_rsd_2pcf_smu_gaussian_ring_sigma{sigma_label}.pkl"
-)
+if MPI.COMM_WORLD.Get_rank() == 0:
+    params["Corr_2PCF"]["binning_window"] = gaussian_ring_window
+    params["Corr_2PCF"]["fout_path"] = (
+        f"./output/quijote8000_snap004_rsd_2pcf_smu_gaussian_ring_sigma{sigma_label}.pkl"
+    )
 
 task = Corr_2PCF(param_task=params)
 task.run(overwrite=True)
