@@ -1,7 +1,11 @@
 Corr_3PCF_Multipole:
    sfc_field: "./output/quijote8000_snap004_sfc.pkl"
-   random: "uniform"
-   window:
+   random: "./output/random_sfc.pkl"
+   window2:
+      type: "sphere"
+      len_args:
+         R: 5
+   window3:
       type: "sphere"
       len_args:
          R: 5
@@ -18,11 +22,11 @@ Corr_3PCF_Multipole:
       map:
          R: "r13"
    sampling:
-      r12: 60.0
-      r13: 80.0
-   l_max: 20
+      r12: 20.0
+      r13: 40.0
+   l_max: 14
    gpu_device_id: 0
    execution_mode: "pair_mpi"
    threads: 4
-   products: "zeta_l"
-   fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax20_r60_r80.pkl"
+   products: ["ddd_l", "zeta_l"]
+   fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax14_with_random.pkl"

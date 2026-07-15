@@ -2,7 +2,11 @@ Corr_3PCF_Multipole:
    sfc_field: "./output/quijote8000_snap004_sfc_J9.pkl"
    random: "uniform"
    fout_path: "./output/quijote8000_snap004_3pcf_multipole_J9_lmax14.pkl"
-   window:
+   window2:
+      type: "sphere"
+      len_args:
+         R: 5
+   window3:
       type: "sphere"
       len_args:
          R: 5
