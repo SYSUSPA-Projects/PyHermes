@@ -6,7 +6,9 @@ from pathlib import Path
 from pyhermes.base.sfc_projection import SFCProjection
 
 
-SNAPSHOT_PATH = "/Raid6/1/xutp/Quijote/Snapshots/fiducial/8000/snapdir_004/snap_004"
+SNAPSHOT_BASE = Path(
+    "/Raid6/1/xutp/Quijote/Snapshots/fiducial/8000/snapdir_004/snap_004"
+)
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
 OUTPUT_PATH = EXAMPLES_DIR / "output/quijote_fiducial_8000_snap004_dm_sfc_J8.pkl"
@@ -15,9 +17,9 @@ THREADS = int(os.environ.get("SLURM_CPUS_PER_TASK", "8"))
 
 task = SFCProjection()
 task.fin = {
-    "path": SNAPSHOT_PATH,
-    "format": "gadget",
-    "reader_params": {"ptype": 1},
+    "path": SNAPSHOT_BASE,
+    "format": "gadget_hdf5",
+    "reader_params": {"ptype": 1, "position_scale": 1.0e-3},
 }
 task.box_size = 1000
 task.J = 8

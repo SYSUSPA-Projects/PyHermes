@@ -211,6 +211,113 @@ def read_gadget(path, **kwargs):
     return _add_velocity_components(data)
 
 
+# Gadget HDF5 snapshot reader.
+def _find_gadget_hdf5_files(path):
+    """Resolve one HDF5 snapshot or a base path such as ``snap_004``."""
+    path = Path(path)
+    if path.is_file():
+        return [path]
+
+    files = list(path.parent.glob(f"{path.name}.*.hdf5"))
+    files.extend(path.parent.glob(f"{path.name}.*.h5"))
+
+    def split_index(filename):
+        split = filename.stem.rsplit(".", 1)[-1]
+        return (0, int(split)) if split.isdigit() else (1, filename.name)
+
+    files = sorted(set(files), key=split_index)
+    if not files:
+        raise FileNotFoundError(
+            f"Could not find Gadget HDF5 snapshot '{path}' or split files "
+            f"such as '{path.name}.0.hdf5'."
+        )
+    return files
+
+
+def _import_hdf5_reader():
+    """Import the optional HDF5 dependencies and register compression filters."""
+    try:
+        import hdf5plugin  # noqa: F401
+    except ImportError:
+        pass
+    try:
+        import h5py
+    except ImportError as exc:
+        raise ImportError(
+            "The gadget_hdf5 reader requires h5py. Compressed Quijote files "
+            "may additionally require hdf5plugin."
+        ) from exc
+    return h5py
+
+
+def read_gadget_hdf5(
+    path,
+    ptype=1,
+    position_scale=1.0,
+    velocity_scale=1.0,
+    mass_scale=1.0,
+    load_velocity=False,
+    load_mass=False,
+    **kwargs,
+):
+    """Read a single or split Gadget HDF5 snapshot.
+
+    ``position_scale``, ``velocity_scale``, and ``mass_scale`` explicitly
+    convert the units stored in the snapshot. For example, Quijote positions
+    in kpc/h use ``position_scale=1e-3`` to obtain Mpc/h.
+    """
+    _mod_name, _func_name = get_fname_info()
+    logger = setup_logger(_mod_name, _func_name)
+    h5py = _import_hdf5_reader()
+    files = _find_gadget_hdf5_files(path)
+    group_name = f"PartType{int(ptype)}"
+
+    logger.info(f"Reading Gadget HDF5 particle data from ---> {path} <---")
+    logger.info(f"Resolved {len(files)} HDF5 snapshot file(s).")
+
+    counts = []
+    for filename in files:
+        with h5py.File(filename, "r") as snapshot:
+            count = 0 if group_name not in snapshot else snapshot[group_name]["Coordinates"].shape[0]
+            counts.append(int(count))
+
+    size = int(sum(counts))
+    if size == 0:
+        raise ValueError(f"No particles found in HDF5 group '{group_name}'.")
+
+    pos = np.empty((size, 3), dtype=np.float32)
+    vel = np.empty((size, 3), dtype=np.float32) if load_velocity else None
+    mass = np.empty(size, dtype=np.float32) if load_mass else None
+
+    offset = 0
+    for filename, count in zip(files, counts):
+        if count == 0:
+            continue
+        end = offset + count
+        with h5py.File(filename, "r") as snapshot:
+            particle_group = snapshot[group_name]
+            pos[offset:end] = particle_group["Coordinates"][:]
+            if load_velocity:
+                vel[offset:end] = particle_group["Velocities"][:]
+            if load_mass:
+                if "Masses" in particle_group:
+                    mass[offset:end] = particle_group["Masses"][:]
+                else:
+                    mass[offset:end] = snapshot["Header"].attrs["MassTable"][int(ptype)]
+        offset = end
+
+    pos *= np.float32(position_scale)
+    data = {"pos": pos, "size": size}
+    if load_velocity:
+        vel *= np.float32(velocity_scale)
+        data["vel"] = vel
+    if load_mass:
+        mass *= np.float32(mass_scale)
+        data["mass"] = mass
+
+    return _add_velocity_components(_validate_reader_output(data, "read_gadget_hdf5"))
+
+
 # Gadget FoF binary helpers.
 def _read_gadget_fof_single(filename):
     """Read one legacy Gadget FoF catalog file."""
@@ -437,6 +544,7 @@ FORMAT_READERS = {
     "bin": read_bin,
     "npz": read_npz,
     "gadget": read_gadget,
+    "gadget_hdf5": read_gadget_hdf5,
     "gadget-fof": read_gadget_fof,
     "fof": read_fof,
 }

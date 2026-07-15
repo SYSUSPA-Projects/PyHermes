@@ -12,7 +12,8 @@ are:
 
 - ``bin``: raw binary table with configurable column mappings
 - ``npz``: NumPy ``.npz`` particle dataset
-- ``gadget``
+- ``gadget``: legacy Gadget binary snapshots
+- ``gadget_hdf5``: single or split Gadget HDF5 snapshots
 - ``gadget-fof``
 - ``fof``: Quijote/Pylians-style FoF ``group_tab`` halo catalogs
 
@@ -60,6 +61,32 @@ NPZ format
             completeness: "weight"
       catalog_weight_key: "completeness"
       field_value_key: null
+
+Gadget HDF5 format
+------------------
+
+``gadget_hdf5`` accepts either one HDF5 file or the common base path of a
+split snapshot. For example, ``snap_004`` resolves files named
+``snap_004.0.hdf5``, ``snap_004.1.hdf5``, and so on. Positions are read by
+default; velocity and mass arrays are optional to avoid unnecessary memory use.
+
+.. code-block:: yaml
+
+   fin:
+      path: "/path/to/snapdir_004/snap_004"
+      format: "gadget_hdf5"
+      reader_params:
+         ptype: 1
+         position_scale: 1.0e-3  # Quijote kpc/h -> Mpc/h
+         load_velocity: false
+         load_mass: false
+      catalog_weight_key: null
+      field_value_key: null
+
+Set ``load_velocity: true`` to expose ``vel``, ``vel_x``, ``vel_y``, and
+``vel_z``. Set ``load_mass: true`` to read ``Masses`` or the corresponding
+constant value from the Header ``MassTable``. The optional ``velocity_scale``
+and ``mass_scale`` parameters provide explicit unit conversion.
 
 FoF format
 ----------

@@ -200,6 +200,7 @@ PyHermes currently supports these particle input formats:
 - ``bin``
 - ``npz``
 - ``gadget``
+- ``gadget_hdf5``
 - ``gadget-fof``
 - ``fof``
 
