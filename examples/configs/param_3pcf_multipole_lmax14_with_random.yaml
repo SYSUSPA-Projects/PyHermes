@@ -13,13 +13,13 @@ Corr_3PCF_Multipole:
       type: "shell"
       len_args: {}
       other_args: {}
-      map:
+      mapping:
          R: "r12"
    binning_window13:
       type: "shell"
       len_args: {}
       other_args: {}
-      map:
+      mapping:
          R: "r13"
    sampling:
       r12: 20.0

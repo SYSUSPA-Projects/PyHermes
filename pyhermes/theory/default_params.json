@@ -159,13 +159,13 @@
 			"type": "shell",
 			"len_args": {},
 			"other_args": {},
-			"map": {}
+			"mapping": {}
 		},
 		"binning_window13": {
 			"type": "shell",
 			"len_args": {},
 			"other_args": {},
-			"map": {}
+			"mapping": {}
 		},
 		"sampling": {},
 		"l_min": 0,

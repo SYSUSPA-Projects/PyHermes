@@ -207,19 +207,19 @@ class Corr_3PCF_Multipole(TaskBase):
         params["type"] = str(params["type"]).strip().lower()
         params.setdefault("len_args", {})
         params.setdefault("other_args", {})
-        params.setdefault("map", {})
+        params.setdefault("mapping", {})
         if params["len_args"] is None:
             params["len_args"] = {}
         if params["other_args"] is None:
             params["other_args"] = {}
-        if params["map"] is None:
-            params["map"] = {}
+        if params["mapping"] is None:
+            params["mapping"] = {}
         if not isinstance(params["len_args"], dict):
             raise TypeError(f"{name}.len_args must be a dictionary.")
         if not isinstance(params["other_args"], dict):
             raise TypeError(f"{name}.other_args must be a dictionary.")
-        if not isinstance(params["map"], dict):
-            raise TypeError(f"{name}.map must be a dictionary.")
+        if not isinstance(params["mapping"], dict):
+            raise TypeError(f"{name}.mapping must be a dictionary.")
         return params
 
     def _normalize_sampling(self, sampling):
@@ -302,12 +302,12 @@ class Corr_3PCF_Multipole(TaskBase):
             return
         section, key = target.split(".", 1)
         if section not in {"len_args", "other_args"}:
-            raise ValueError(f"Unsupported binning-window map target '{target}'.")
+            raise ValueError(f"Unsupported binning-window mapping target '{target}'.")
         params.setdefault(section, {})[key] = value
 
     def _build_sample_binning_window(self, template, sample, name):
         params = copy.deepcopy(template)
-        mapping = params.pop("map")
+        mapping = params.pop("mapping")
         params["len_args"] = copy.deepcopy(params.get("len_args", {}))
         params["other_args"] = copy.deepcopy(params.get("other_args", {}))
         for target, source in mapping.items():
