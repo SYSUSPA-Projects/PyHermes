@@ -1,150 +1,122 @@
-Counting
-========
+Counting and one-point PDFs
+===========================
 
-``counting.ipynb`` is the one-point companion to ``sfc_projection.ipynb``. It starts
-from a saved ``SFCField`` field, optionally smooths it, evaluates it at
-many random positions, and studies the resulting distribution.
+``Counting`` filters an ``SFCField`` with one optional window and evaluates the
+continuous result at uniformly sampled box positions. The returned values can
+be used for count-in-cell PDFs, moments, environmental marks, and filtered-field
+diagnostics.
 
-What this notebook covers
--------------------------
-
-The notebook walks through:
-
-1. the standard ``Counting`` driver
-2. the config-driven Python API
-3. task-object overrides
-4. manual preparation of ``SFCField`` and ``WindowFunc``
-5. direct low-level sampling of the smoothed field
-6. one-field RMS fluctuation measurements with low-pass and high-pass windows
-
-The last section is useful because it makes the estimator interpretation
-explicit: ``Counting`` is fundamentally a random-position probe of a field.
-
-Minimal YAML Shape
-------------------
-
-``Counting`` reads a saved ``SFCField`` field, optionally applies an ordinary
-smoothing window, and samples the resulting field at random positions:
+Minimal YAML
+------------
 
 .. code-block:: yaml
 
    Counting:
-      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
-      random_count: 10000000
+      sfc_field: ./output/quijote8000_snap004_sfc.pkl
+      random_count: 1000000
+      seed: 42
+      weight_normalization: catalog
       window:
-         type: "sphere"
-         len_args:
-            R: 20
+         type: sphere
+         len_args: {R: 20.0}
       threads: 8
-      fout_path: "./output/quijote8000_snap004_counting_sph20.pkl"
+      fout_path: ./output/quijote8000_snap004_counting_sph20.pkl
 
-Omit ``window`` if you want to sample the unfiltered field. When ``window`` is present,
-it is a normal smoothing ``WindowFunc``, not a 2PCF binning window.
-
-Inputs and outputs
-------------------
-
-Inputs are produced by ``sfc_projection.ipynb`` or
-``examples/scripts/prepare_sfc_fields.py`` and live locally in
-``examples/output/``. The main tracked files involved in this stage are:
-
-- ``examples/notebooks/counting.ipynb``
-- ``examples/scripts/run_counting.py``
-- ``examples/configs/param_counting.yaml``
-
-The counting result itself is lightweight and is expected to be generated
-locally during notebook execution or by the driver script:
+Run it from ``examples/``:
 
 .. code-block:: bash
 
-   cd examples
-   python ./scripts/run_counting.py ./configs/param_counting.yaml
+   python scripts/run_counting.py configs/param_counting.yaml
 
-What you should learn here
---------------------------
+The result
+----------
 
-This notebook is where the field representation starts to feel concrete. It
-shows how smoothing radius changes the sampled distribution and how the saved
-``CountingData`` result relates to direct field evaluation.
+.. code-block:: python
 
-In other words, if ``SFCProjection`` explains how PyHermes stores the field,
-``Counting`` explains how PyHermes reads values back out of it.
+   import numpy as np
+   from pyhermes.io import CountingData
 
-The examples also make the role of per-object values explicit. With the
-default ``weight_normalization: catalog`` and unit field values, the sampled
-field is the catalogue-normalized tracer-density field. With mass as
-``field_value`` the sampled field carries the catalogue-weighted mean mass
-amplitude. The task-level ``weight_normalization: unit`` option can also
-rescale either a catalog or derived field to unit field integral before
-sampling. This is the simplest version of the broader weighted-field idea
-developed later in
-:doc:`../weighted_fields/weighted_fields`.
+   counts = CountingData(
+       data_path="./output/quijote8000_snap004_counting_sph20.pkl"
+   )
+   print(counts.nx.shape)
+   print(np.mean(counts.nx), np.std(counts.nx))
 
-Example outputs
+``CountingData.nx`` contains physical-unit field densities at the sampled
+positions. ``counting_info`` records the seed, sample count, window, input
+field, and normalisation. The random positions themselves are deterministic
+from those settings and are not stored separately.
+
+Python task interface
+---------------------
+
+.. code-block:: python
+
+   from pyhermes.theory.counting import Counting
+
+   task = Counting()
+   task.sfc_field = "./output/quijote8000_snap004_sfc.pkl"
+   task.random_count = 300000
+   task.seed = 7
+   task.window = {"type": "gaussian", "len_args": {"R": 10.0}}
+   task.threads = 8
+   task.fout_path = "./output/counting_gaussian_R10.pkl"
+   result = task.run()
+
+Low-level equivalent
+--------------------
+
+When positions are scientifically meaningful rather than random, evaluate the
+field directly:
+
+.. code-block:: python
+
+   from pyhermes.io import SFCField, WindowFunc
+
+   D = SFCField(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
+   W = WindowFunc(
+       {"type": "sphere", "len_args": {"R": 20.0}},
+       D.sfc_info,
+       threads=8,
+   )
+   local_density = (D @ W).field_density_at_pos(
+       halo_positions,
+       value_unit="physical",
+   )
+
+This is the route used to evaluate a local environment at each halo before
+constructing a marked field.
+
+Choose the window deliberately
+------------------------------
+
+``sphere``
+   Literal count-in-sphere or top-hat-smoothed density.
+
+``gaussian``
+   Smooth low-pass field without a hard boundary.
+
+``cubic`` or ``cylinder``
+   Anisotropic finite-volume average.
+
+``cw``, ``cws``, ``gdw``
+   Zero-mean localised fluctuation rather than a count density.
+
+For a sphere of radius :math:`R`, a raw number field can be converted to an
+expected count by multiplying density by :math:`4\pi R^3/3`. With catalogue
+normalisation, remember that the field integrates to one; use its metadata and
+mean density rather than assuming a raw particle count.
+
+MPI distribution
+----------------
+
+The filtered field is broadcast to all ranks. Each rank samples a disjoint
+deterministic subset of positions and rank 0 gathers the values. ``random_count``
+is padded internally only when needed for an even rank distribution; the
+returned array is trimmed to the requested size.
+
+Public tutorial
 ---------------
 
-The first diagnostic compares the one-point PDFs obtained from the same halo
-catalog under different field choices: the real-space tracer-density field, the
-mass-valued field, and the redshift-space tracer-density field.
-
-.. figure:: ../../_static/counting/counting_density_mass_rsd_pdf.png
-   :alt: Counting PDFs for tracer density, a mass-valued field, and redshift-space tracer density
-   :align: center
-   :width: 90%
-
-   Count-in-cell PDFs for tracer-density, mass-valued, and redshift-space
-   fields using the same spherical smoothing scale.
-
-The second diagnostic keeps the input field fixed and varies the spherical
-smoothing radius. This is the simplest way to see how the window scale changes
-the sampled one-point distribution.
-
-.. figure:: ../../_static/counting/counting_smoothing_radius_pdf.png
-   :alt: Counting PDFs for different spherical smoothing radii
-   :align: center
-   :width: 90%
-
-   One-point PDFs after applying several top-hat smoothing radii.
-
-The notebook then constructs the density-contrast field and measures the RMS
-fluctuation of the smoothed field,
-:math:`\sigma_W(R)=\langle\delta_W^2\rangle^{1/2}`. The low-pass example
-compares the spherical top-hat and Gaussian windows. The dashed line marks
-:math:`R=8\,h^{-1}{\rm Mpc}`, and the marker gives the directly computed
-top-hat value for this halo field.
-
-.. figure:: ../../_static/counting/counting_sigma_lowpass.png
-   :alt: Smoothed RMS fluctuation for top-hat and Gaussian windows
-   :align: center
-   :width: 90%
-
-   Low-pass :math:`\sigma_W(R)` curves for top-hat and Gaussian smoothing
-   windows.
-
-The same operation can be applied to high-pass windows. In this example CWS and
-GDW suppress the constant background and probe the fluctuation amplitude
-selected by their scale-dependent Fourier-space response.
-
-.. figure:: ../../_static/counting/counting_sigma_highpass.png
-   :alt: Smoothed RMS fluctuation for CWS and GDW high-pass windows
-   :align: center
-   :width: 90%
-
-   High-pass :math:`\sigma_W(R)` curves for CWS and GDW windows.
-
-Mathematical idea
------------------
-
-Counting is direct evaluation of a windowed field at sampled centers:
-
-.. math::
-
-   c_a =
-   (W\circ n)(\mathbf{y}_a)
-   =
-   \int W(\mathbf{y}_a-\mathbf{x})n(\mathbf{x})\,d^3x.
-
-The sampled values :math:`\{c_a\}` estimate the count-in-cell distribution, or
-the distribution of a smoothed fluctuation field when the input is
-:math:`\delta=(n-\bar n)/\bar n`. This is why changing the smoothing window in
-the notebook changes the measured one-point PDF.
+``examples/notebooks/counting.ipynb`` compares task and low-level interfaces,
+constructs one-point PDFs, and contrasts low-pass and high-pass responses.

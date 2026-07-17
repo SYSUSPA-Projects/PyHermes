@@ -1,289 +1,221 @@
-Corr_2PCF
-=========
+Two-point correlation functions
+===============================
 
-``corr2pcf.ipynb`` covers both the standard isotropic two-point correlation
-function ``xi(s)`` and the anisotropic redshift-space views ``(s, mu)`` and
-``(rp, pi)``.
+``Corr_2PCF`` evaluates products of filtered data and random fields over a
+sampled family of separation-binning windows. The same estimator handles
+isotropic, anisotropic, auto-, and cross-correlations.
 
-What this notebook covers
--------------------------
+Isotropic 2PCF
+--------------
 
-The notebook has two main halves:
-
-1. isotropic 2PCF on a one-dimensional separation grid
-2. anisotropic 2PCF in redshift space, including line-of-sight changes,
-   smoothing choices, and alternative binning-window families
-
-It also contains lower-level sections for custom binning windows and direct
-estimator comparisons. Those sections are useful when you want to understand
-what the task wrapper is doing under the hood.
-
-Minimal YAML Shapes
--------------------
-
-The current ``Corr_2PCF`` interface separates the sampled coordinates from the
-binning-window geometry. ``sampling`` names the output grid, while ``binning_window``
-describes how each sampled point becomes a Fourier-space bin window.
-
-For real-space ``xi(s)``, the minimal shape is a shell binning window sampled by
-``s``:
+The smallest configuration uses thin spherical shells:
 
 .. code-block:: yaml
 
    Corr_2PCF:
-      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
-      random: "uniform"
-      binning_window: "shell"
+      sfc_field: ./output/quijote8000_snap004_sfc.pkl
+      random: uniform
+      binning_window: shell
       sampling:
-         s:
-            min: 0.0
-            max: 150.0
-            n: 31
-      products: "xi"
-      threads: 2
-      fout_path: "./output/quijote8000_snap004_2pcf.pkl"
-
-For redshift-space ``xi(s, mu)``, use a line-of-sight binning window such as
-``ring``. Built-in string windows fill their own length arguments and default to
-the z-axis line of sight:
-
-.. code-block:: yaml
-
-   Corr_2PCF:
-      sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
-      random: "uniform"
-      binning_window: "ring"
-      sampling:
-         s:
-            min: 0.0
-            max: 180.0
-            n: 46
-         mu:
-            min: 0.0
-            max: 1.0
-            n: 51
-      products: "xi"
+         s: {min: 0.0, max: 150.0, n: 31}
+      products: [dd, dr, rd, xi]
       threads: 8
-      fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
+      fout_path: ./output/quijote8000_snap004_2pcf.pkl
 
-For ``xi(rp, pi)``, make the mapping explicit because the sampled coordinates
-are already the transverse and line-of-sight separations:
+``random: uniform`` uses the analytic constant reference density. Supply an
+``SFCField`` or path instead when the random catalogue is spatially varying.
 
-.. code-block:: yaml
-
-   Corr_2PCF:
-      sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
-      random: "./output/random_sfc.pkl"
-      window:
-         type: "sphere"
-         len_args:
-            R: 5
-      binning_window:
-         type: "ring"
-         mapping: "rppi_to_RH"
-      sampling:
-         rp:
-            min: 0.0
-            max: 180.0
-            n: 46
-         pi:
-            min: 0.0
-            max: 180.0
-            n: 46
-      products: "xi"
-      threads: 8
-      fout_path: "./output/quijote8000_snap004_rsd_2pcf_rppi_sph5_with_random.pkl"
-
-What is lightweight and what is not
------------------------------------
-
-Small smoke-test runs and direct API examples are meant to be executed inside
-the notebook.
-
-The production-style outputs compared later in the notebook are heavier and are
-not committed to the repository. At each relevant point, the notebook tells you
-which script and YAML file to run. Those jobs are intended for your own laptop,
-workstation, or cluster.
-
-Tracked files
--------------
-
-- ``examples/notebooks/corr2pcf.ipynb``
-- ``examples/scripts/run_2pcf.py``
-- ``examples/configs/param_2pcf.yaml``
-- the additional anisotropic configs in ``examples/configs/param_2pcf_*.yaml``
-
-Typical command-line runs look like:
+Run and load:
 
 .. code-block:: bash
 
    cd examples
-   python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
-   mpirun -np 4 python ./scripts/run_2pcf.py ./configs/param_2pcf_smu_test.yaml
+   python scripts/run_2pcf.py configs/param_2pcf.yaml
 
-Conceptual focus
-----------------
+.. code-block:: python
 
-This is the notebook where PyHermes' binning-window abstraction becomes important.
-Instead of hard-coding one estimator shape, the task combines:
+   from pyhermes.io import Corr2PCFData
 
-- a prepared field
-- optional smoothing windows
-- a binning window
-- a sampling grid
+   corr = Corr2PCFData(
+       data_path="./output/quijote8000_snap004_2pcf.pkl"
+   )
+   print(corr.sampling_names)  # ('s',)
+   print(corr.s, corr.xi)
 
-That is why the same task can cover ``xi(s)``, ``xi(s, mu)``, and
-``xi(rp, pi)`` in one interface. The notebook also uses custom Python pair
-windows to build a finite-thickness shell and a cylinder-surface binning window
-from existing Fourier kernels.
+Redshift-space anisotropy
+-------------------------
 
-The field formulation also makes the Landy-Szalay structure more direct.
-``SFCField`` stores the catalogue and field-weight sums needed to switch
-catalog fields between ``weight_normalization: catalog``, ``raw`` and
-``field`` before the estimator runs. The task-level ``unit`` option is also
-available and rescales either catalog or derived fields to unit field integral.
-``catalog`` is the default for ordinary tracer statistics and gives an ordinary
-unit-value field unit integral. ``field`` is useful for positive marked fields
-such as halo mass. Signed physical fields such as velocity components should
-generally use ``raw`` and be interpreted as physical weighted-field products
-rather than an ordinary density contrast. For an analytic uniform random
-shortcut PyHermes uses the
-prepared field's ``field_mean_density(value_unit="grid")`` internally. The raw
-``DD``/``DR``/``RR``-type products stored in the output are converted back to
-physical density units; dimensionless ratios such as ``xi`` are unchanged by
-this conversion.
-PyHermes then builds ``Delta = d - r`` and evaluates the binning-window product
+A ``ring`` bin maps each :math:`(s,\mu)` sample to transverse radius
+:math:`R=s\sqrt{1-\mu^2}` and line-of-sight offset :math:`H=s\mu`:
 
-.. math::
+.. code-block:: yaml
 
-   \xi_P =
-   { \left\langle
-      \Delta(\mathbf{x})
-      (W_P\circ\Delta)(\mathbf{x})
-     \right\rangle
-   \over
-     \left\langle
-      r(\mathbf{x})
-      (W_P\circ r)(\mathbf{x})
-     \right\rangle }.
+   Corr_2PCF:
+      sfc_field: ./output/quijote8000_snap004_rsd_sfc.pkl
+      random: uniform
+      binning_window: ring
+      sampling:
+         s: {min: 0.0, max: 180.0, n: 46}
+         mu: {min: 0.0, max: 1.0, n: 51}
+      products: xi
+      threads: 8
+      fout_path: ./output/quijote8000_snap004_rsd_2pcf_smu.pkl
 
-For symmetric binning windows the numerator is the usual
-``DD - DR - RD + RR`` combination. The important implementation difference is
-that PyHermes does not need four independent catalogue pair loops; the
-subtraction is done at the field level and the binning window defines the
-separation geometry.
+The result has ``xi.shape == (len(s), len(mu))``. The plotting helper converts
+it to the :math:`(s_\perp,s_\parallel)` plane:
 
-Changing the binning window changes the statistic itself. ``shell`` gives the
-usual isotropic ``xi(s)``, while replacing its Fourier response by a cosine
-kernel gives a generalized two-point statistic with a different phase weighting
-of Fourier modes. In redshift space, ``ring`` gives the familiar
-``xi(s,mu)`` or ``xi(rp,pi)`` geometry, whereas ``disk``, ``cylshell``, and
-custom combinations such as ``cylsurf`` average over different transverse and
-line-of-sight surfaces. The resulting maps are therefore responses to different
-estimator geometries, not just different plotting styles.
+.. code-block:: python
 
-Example outputs
+   from pyhermes.utils.plot import plot_corr2pcf_2d
+
+   plot_corr2pcf_2d(corr.s, corr.mu, corr.xi)
+
+.. figure:: ../../_static/paper/corr2pcf_ring_gaussian_ring_smu.png
+   :width: 92%
+   :align: center
+
+   The same redshift-space estimator with a thin ring and a transversely
+   Gaussian-blurred ring. The window changes; the field product does not.
+
+Smoothing and binning are separate
+----------------------------------
+
+Use ``window`` to smooth both legs, or ``window1`` and ``window2`` for
+independent filters. Use ``binning_window`` for the pair separation:
+
+.. code-block:: yaml
+
+   Corr_2PCF:
+      sfc_field: ./output/quijote8000_snap004_sfc.pkl
+      random: uniform
+      window:
+         type: gaussian
+         len_args: {R: 5.0}
+      binning_window:
+         type: thick_shell
+         len_args:
+            R: null
+            delta_R: 6.0
+         other_args: {}
+         mapping: s_to_R
+      sampling:
+         s: {min: 10.0, max: 150.0, n: 29}
+      products: xi
+
+The named mapping fills ``R`` from ``s`` and preserves the fixed
+``delta_R``. For a non-standard parameter mapping, provide a Python callable;
+2PCF mappings are either one of the named mappings or a callable, not a YAML
+dictionary. See :doc:`../../windows` for all built-in geometries.
+
+Result products
 ---------------
 
-The isotropic examples show how weighting and ordinary smoothing affect the
-real-space two-point statistic.
+``products`` may request:
 
-.. figure:: ../../_static/corr2pcf/corr2pcf_xi_s_weight_smoothing.png
-   :alt: Isotropic 2PCF comparison for raw, mass-weighted, and smoothed fields
+``dd``
+   Data--data field product.
+
+``dr`` and ``rd``
+   Ordered data--random cross-products.
+
+``delta_dd``
+   Product of :math:`\Delta=D-R` fields.
+
+``rr``
+   Random--random normalisation.
+
+``xi``
+   ``delta_dd / rr``. Dependencies are computed automatically.
+
+Only requested products and their dependencies are retained in the result.
+
+Cross-correlations
+------------------
+
+Use independent legs for a cross-correlation:
+
+.. code-block:: python
+
+   from pyhermes.theory.corr2pcf import Corr_2PCF
+
+   task = Corr_2PCF()
+   task.sfc_field1 = halo_field
+   task.sfc_field2 = mass_field
+   task.random1 = "uniform"
+   task.random2 = "uniform"
+   task.window1 = {"type": "gaussian", "len_args": {"R": 5.0}}
+   task.window2 = {"type": "gaussian", "len_args": {"R": 10.0}}
+   task.binning_window = {
+       "type": "shell",
+       "len_args": {"R": None},
+       "other_args": {},
+       "mapping": "s_to_R",
+   }
+   task.sampling = {"s": [20.0, 40.0, 60.0, 80.0]}
+   task.products = ["xi"]
+   cross = task.run(save_result=False)
+
+All field legs must share the same MRA geometry and basis. Task-level
+``weight_normalization`` converts compatible catalogue fields to one common
+normalisation before products are formed.
+
+Python overrides
+----------------
+
+.. code-block:: python
+
+   import numpy as np
+   import copy
+
+   from pyhermes.param.parambase import read_param
+   from pyhermes.theory.corr2pcf import Corr_2PCF
+
+   params = read_param(config_path="./configs/param_2pcf.yaml")
+
+   def s_to_gaussian_shell(sample, template):
+       mapped = copy.deepcopy(template)
+       mapped["len_args"]["R_shell"] = sample["s"]
+       return mapped
+
+   task = Corr_2PCF(params)
+   task.sampling = {"s": np.linspace(0.0, 180.0, 46)}
+   task.binning_window = {
+       "type": "gaussian_shell",
+       "len_args": {"R_smooth": 5.0},
+       "mapping": s_to_gaussian_shell,
+   }
+   task.products = ["xi"]
+   result = task.run(save_result=False)
+
+Resolution and bin width
+------------------------
+
+The smallest trustworthy scale is controlled jointly by field resolution and
+the binning window. A narrow bin does not recover structure unresolved by
+``J``; a broad bin can intentionally average small-scale variation.
+
+.. figure:: ../../_static/paper/benchmark_2pcf_isotropic_s2xi_curves.png
+   :width: 74%
    :align: center
-   :width: 90%
 
-   Isotropic :math:`s^2\xi(s)` for the tracer field, a mass-weighted field, and a
-   spherically smoothed field.
+   PyHermes converges toward conventional pair counters as the MRA resolution
+   increases. Residual differences are concentrated where the separation
+   approaches the field resolution.
 
-Changing the binning-window family changes the bin geometry used by the estimator.
-The one-dimensional shell and cosine examples are a compact check of that
-choice.
+Performance controls
+--------------------
 
-.. figure:: ../../_static/corr2pcf/corr2pcf_binning_window_shell_cosine.png
-   :alt: Isotropic 2PCF comparison for shell and cosine binning windows
-   :align: center
-   :width: 90%
+Sampling points are distributed across MPI ranks. The dominant cost is one
+window construction and convolution per sampled bin and required product.
 
-   Isotropic :math:`s^2\xi(s)` measured with shell and cosine binning windows.
-   The two curves use the same field product, but the cosine transfer has a
-   different Fourier phase from the shell transfer and therefore probes a
-   different generalized two-point statistic.
+``memory_strategy: speed`` keeps reusable fields in memory. ``memory`` reloads
+or rebuilds more aggressively to reduce peak storage. ``binning_window_cache``
+can persist expensive kernels across repeated runs; set an explicit
+``binning_window_cache_dir`` for production jobs.
 
-For redshift-space analyses, the notebook compares real-space and redshift-space
-``xi(s, mu)`` views directly.
+Public tutorial
+---------------
 
-.. figure:: ../../_static/corr2pcf/corr2pcf_real_vs_rsd_smu.png
-   :alt: Real-space and redshift-space anisotropic 2PCF comparison
-   :align: center
-   :width: 95%
-
-   Real-space and redshift-space anisotropic 2PCF comparison in ``(s, mu)``.
-
-The final diagnostic keeps the redshift-space field fixed and changes the
-line-of-sight-aware binning-window family.
-
-.. figure:: ../../_static/corr2pcf/corr2pcf_rsd_binning_windows_2d.png
-   :alt: Redshift-space 2PCF comparison across binning-window families
-   :align: center
-   :width: 95%
-
-   Redshift-space 2PCF morphology for several binning-window families. Ring,
-   disk, cylindrical-shell, and cylindrical-surface windows average over
-   different regions of the transverse/line-of-sight plane, so they respond
-   differently to redshift-space distortions.
-
-What to carry forward
----------------------
-
-If you mainly care about real-space 2PCF, the first half is enough.
-
-If you care about redshift-space distortions, the second half is the more
-important reference because it shows how line-of-sight choice, smoothing, and
-window family affect the result.
-
-The same binning-window viewpoint also suggests a future direct route to 2PCF
-multipoles: instead of first sampling ``xi(s, mu)`` and then projecting over
-``mu``, one can absorb the Legendre projection into a specialized binning window.
-That planned extension is discussed in :doc:`../../windows`.
-
-Mathematical idea
------------------
-
-PyHermes treats a 2PCF bin as a windowed copy of the same fluctuation field:
-
-.. math::
-
-   \xi_P =
-   \left\langle
-   \delta(\mathbf{x})\,
-   (W_P\circ\delta)(\mathbf{x})
-   \right\rangle.
-
-For real-space ``xi(s)``, :math:`W_P` is a spherical shell. In the thin-shell
-limit,
-
-.. math::
-
-   W_{\rm shell}(r;R)
-   =
-   {1\over 4\pi R^2}\delta_{\rm D}(r-R),
-   \qquad
-   \widehat W_{\rm shell}(k;R)
-   =
-   {\sin(2\pi kR)\over 2\pi kR}.
-
-For redshift-space ``(s, mu)`` and ``(rp, pi)`` measurements, the same
-estimator uses line-of-sight-aware windows. A thin ring window has the
-Fourier-space form
-
-.. math::
-
-   \widehat W_{\rm ring}(k_\perp,k_\parallel)
-   =
-   J_0(2\pi k_\perp r_\perp)\,
-   \cos(2\pi k_\parallel r_\parallel),
-
-with finite-bin and real-valued variants implemented by the built-in ring,
-disk, cylinder, and ``cylshell`` windows. Random fields provide the ``RR``
-normalization and the data-minus-random correction used in the estimator.
+``examples/notebooks/corr2pcf.ipynb`` contains high- and low-level isotropic
+reconstruction, anisotropic window composition, saved RSD results, and custom
+ring tests. ``examples/scripts/run_2pcf.py`` is the production entry point.

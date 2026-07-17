@@ -1,39 +1,40 @@
-Corr_3PCF
-=========
+Standard 3PCF
+=============
 
-``corr3pcf.ipynb`` is the most advanced tutorial notebook in the repository.
-It combines three related topics in one place:
+``Corr_3PCF`` measures the angular three-point correlation function for a
+triangle with fixed sides :math:`r_{12}` and :math:`r_{13}`. It evaluates the
+two displaced legs as window-filtered fields, samples their product around a
+set of primary vertices, and averages over random rotations. This is the
+direct-angular counterpart of the harmonic estimator described in
+:doc:`../corr_3pcf_multipole/corr_3pcf_multipole`.
 
-1. standard reduced 3PCF measurements
-2. low-level reconstruction of ``Q`` from saved components
-3. 3PCF multipole examples
+The public tutorial is ``examples/notebooks/corr3pcf.ipynb``. Its standard
+3PCF sections compare the two centre strategies and show how the saved
+count-level products assemble into :math:`\zeta` and the reduced statistic
+:math:`Q`.
 
-Notebook structure
-------------------
-
-The advanced multipole material is the last section of ``corr3pcf.ipynb``
-because it builds naturally on the same prepared fields and triangle
-configuration ideas as the standard 3PCF sections.
-
-What this notebook covers
--------------------------
-
-The main progression is:
-
-1. run the standard task with particle centers and box-random centers
-2. compare saved outputs and task-level API variants
-3. reconstruct ``Q`` from lower-level ingredients to make the estimator more
-   transparent
-4. inspect multipole truncation choices and field-resolution effects
-
-This is the notebook to read when you want both the practical workflow and the
-estimator logic.
-
-Minimal YAML Shapes
+Triangle convention
 -------------------
 
-For the standard reduced 3PCF, the minimal shape fixes the field inputs,
-triangle side lengths, angular sampling, center strategy, and products:
+The primary vertex is labelled 1. The two fixed sides are
+:math:`r_{12}=|\mathbf{x}_2-\mathbf{x}_1|` and
+:math:`r_{13}=|\mathbf{x}_3-\mathbf{x}_1|`; the angular coordinate is either
+:math:`\theta` or :math:`\mu=\cos\theta`. The third side follows from
+
+.. math::
+
+   r_{23}^2=r_{12}^2+r_{13}^2-2r_{12}r_{13}\mu.
+
+For every angular sample, PyHermes rotates this triangle ``n_rot`` times. The
+rotation average is Monte Carlo: increasing ``n_rot`` reduces orientation
+noise but increases runtime approximately linearly.
+
+A minimal run
+-------------
+
+The example configuration below uses halo positions as primary vertices and
+applies a :math:`5\,h^{-1}\mathrm{Mpc}` spherical window to the displaced
+legs:
 
 .. code-block:: yaml
 
@@ -43,314 +44,154 @@ triangle side lengths, angular sampling, center strategy, and products:
       window:
          type: "sphere"
          len_args:
-            R: 5
+            R: 5.0
       r12: 20.0
       r13: 40.0
+      angle_param: "theta"
       theta:
          n_theta: 20
       n_rot: 20
       center: "particle"
       products: ["ddd", "Q"]
+      base_seed: 42
       threads: 2
       fout_path: "./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
 
-For random box centers, switch the center strategy and provide the number of
-box centers:
-
-.. code-block:: yaml
-
-   Corr_3PCF:
-      center: "box_random"
-      n_box_centers: 1000000
-
-Choosing The Center Mode
-------------------------
-
-PyHermes provides two standard 3PCF center modes.
-
-``center: "particle"`` uses the input particles themselves as the first
-triangle vertex. This is usually the right choice for sparse tracer samples,
-such as halo or galaxy catalogs with particle counts below roughly a million.
-It is efficient because the number of centers is modest and the estimator
-samples physically occupied positions directly. The important limitation is
-that the first leg is a discrete center catalog, so ``window1`` cannot be
-applied to the center leg. Window convolutions only apply to the second and
-third legs in this mode.
-
-``center: "box_random"`` samples Monte Carlo centers uniformly in the periodic
-box. This is usually better for dense simulation fields, especially dark
-matter particle samples with counts at the ten-million level or above, where
-using every particle as a center would dominate the runtime. Because all three
-legs are evaluated as continuous convolved fields at the sampled box centers,
-this mode also allows the first leg to be window-convolved. Use
-``n_box_centers`` to control the Monte Carlo center count.
-
-In short: use particle centers for sparse halo/galaxy tracers, and box-random
-centers for very dense particle fields or whenever the center leg must carry a
-window convolution.
-
-Estimator logic
----------------
-
-Both center modes estimate the same reduced three-point statistic, but they
-sample the first triangle vertex differently. The task parameters ``r12`` and
-``r13`` are the two side lengths measured from the center vertex; in the
-formulae below ``R_2`` and ``R_3`` denote the radii of the corresponding leg
-windows. For the standard shell-leg examples, ``R_2 = r12`` and
-``R_3 = r13``. In particle-center mode the first vertex is drawn from the
-tracer catalog itself:
-
-.. math::
-
-   DDD_{\rm p}(\theta; r_{12}, r_{13})
-   =
-   \rho_1
-   {1\over\sum_i q_i}
-   \sum_i q_i\,
-   n_{R_2}(\mathbf{x}_i)\,
-   n_{R_3,\theta}(\mathbf{x}_i).
-
-Here :math:`q_i=w_{g,i}x_i/Z` follows the same
-``weight_normalization`` choice used by the projected field, and
-:math:`\rho_1=(\sum_i q_i)/V` supplies the center-leg mean density. For
-ordinary tracer density in ``catalog`` mode, :math:`x_i=1`,
-:math:`\sum_i q_i=1`, and :math:`\rho_1=1/V`. A signed field should not
-generally be used as a particle-center normalization. Derived fields produced
-by arithmetic or window convolution do not retain a recoverable particle list;
-pass ``particle_pos1`` and ``particle_weight1`` explicitly when such a field is
-used with ``center: "particle"``. These two explicit arrays must be provided
-together; when they are present, PyHermes uses them as given for the center leg
-instead of mixing them with particle metadata recovered from ``sfc_field1``.
-
-In box-random-center mode the centers are Monte Carlo positions in the periodic
-volume, so all three legs are evaluated as fields:
-
-.. math::
-
-   DDD_{\rm b}(\theta; r_{12}, r_{13})
-   \simeq
-   {1\over N_c}
-   \sum_{a=1}^{N_c}
-   n(\mathbf{y}_a)\,
-   n_{R_2}(\mathbf{y}_a)\,
-   n_{R_3,\theta}(\mathbf{y}_a).
-
-Catalog input fields retain the sums needed to switch to the task's requested
-``weight_normalization`` before any leg windows are applied. Derived fields
-are used as given, because their catalogue normalization is no longer defined,
-except that ``weight_normalization: unit`` can still rescale any field to unit
-field integral.
-The stored ``DDD``-type products are converted to physical density-cubed
-units. These products give the connected three-point statistic ``zeta`` after
-matching random normalization. The reduced statistic ``Q`` then divides by the
-hierarchical two-point denominator,
-
-.. math::
-
-   Q(\theta; r_{12}, r_{13})
-   =
-   {\zeta(\theta; r_{12}, r_{13})\over
-    \xi_{12}\xi_{13}+\xi_{12}\xi_{23}+\xi_{13}\xi_{23}}.
-
-The low-level reconstruction section of the notebook follows exactly this
-dependency chain: triplet products build ``zeta``, pair products build the
-denominator, and their ratio rebuilds ``Q``.
-
-Heavy outputs and external runs
--------------------------------
-
-Many of the comparison figures in this notebook rely on heavier saved products.
-Those outputs are not committed to the repository. Instead, the notebook marks
-the exact script and YAML file needed to generate them locally.
-
-Tracked files involved here include:
-
-- ``examples/notebooks/corr3pcf.ipynb``
-- ``examples/scripts/run_3pcf.py``
-- ``examples/scripts/run_3pcf_multipole.py``
-- the ``param_3pcf_*.yaml`` and ``param_3pcf_multipole_*.yaml`` files under
-  ``examples/configs/``
-
-Typical commands look like:
+Run the tracked example from ``examples/``:
 
 .. code-block:: bash
 
-   cd examples
-   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
-   mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
-   mpirun -np 4 python ./scripts/run_3pcf_multipole.py ./configs/param_3pcf_multipole_lmax7.yaml
+   python scripts/run_3pcf.py configs/param_3pcf_pcenter_nrot20.yaml
 
-Advanced topic: 3PCF multipoles
--------------------------------
+or construct the task directly:
 
-The final section switches from direct angular curves to a multipole
-representation. The cells below do not rerun the estimator from scratch;
-instead, they load saved multipole outputs and compare how the result changes
-with the truncation order ``l_max`` and the field resolution parameter ``J``.
+.. code-block:: python
 
-Conceptually, the multipole workflow replaces the ordinary shell legs by
-spherical-harmonic-filtered legs,
+   from pyhermes.param.parambase import read_param
+   from pyhermes.theory import Corr_3PCF
 
-.. math::
+   params = read_param(config_path="./configs/param_3pcf_pcenter_nrot20.yaml")
+   result = Corr_3PCF(params).run()
 
-   n_{\ell m}(\mathbf{x};R)
-   =
-   (W_{\ell m}(R)\circ n)(\mathbf{x}),
-   \qquad
-   \widehat W_{\ell m}(\mathbf{k};R)
-   \propto
-   j_\ell(2\pi kR)Y_{\ell m}(\widehat{\mathbf{k}}),
+Choosing primary vertices
+-------------------------
 
-with the multiresolution basis response included internally by ``WindowFunc``.
-The product is then coupled into rotationally invariant multipoles. PyHermes
-streams only the non-negative ``m`` fields explicitly and reconstructs the
-negative-``m`` contribution from spherical-harmonic conjugation symmetry. The
-convolution work is distributed over MPI ranks and Numba threads; the final
-summation stage uses the CUDA path documented in :doc:`../../benchmark`.
+``center: particle``
+   The first vertex is sampled at catalogue positions. This is efficient for
+   sparse tracer catalogues and gives a dual-window estimator: ``window2`` and
+   ``window3`` act on the two displaced legs, while ``window1`` has no effect
+   on the naked particle centre. The input ``SFCField`` must retain companion
+   particle data, or ``particle_pos1`` and ``particle_weight1`` must be passed
+   together.
 
-The saved multipole outputs used below can be produced from a config with this
-shape:
+``center: box_random``
+   ``n_box_centers`` positions are drawn uniformly in the periodic box. All
+   three vertices are evaluated as fields, so ``window1``, ``window2``, and
+   ``window3`` can all be active. This mode is useful for dense particle
+   samples or whenever the primary field itself must be filtered.
+
+The shared ``window`` is copied to every leg that does not define an explicit
+``window1``, ``window2``, or ``window3``. In particle-centre mode this still
+does not filter the first vertex. Use explicit leg windows when that distinction
+should be visible in the configuration.
+
+For box-random centres, change only the centre section:
 
 .. code-block:: yaml
 
-   Corr_3PCF_Multipole:
-      sfc_field: "./output/quijote8000_snap004_sfc.pkl"
-      random: "uniform"
-      window:
-         type: "sphere"
-         len_args:
-            R: 5
-      r12: 20.0
-      r13: 40.0
-      l_max: 7
-      execution_mode: "pair_mpi"
-      products: "zeta_l"
-      threads: 4
-      fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax7.pkl"
+   center: "box_random"
+   n_box_centers: 1000000
+   window2:
+      type: "sphere"
+      len_args: {R: 5.0}
+   window3:
+      type: "sphere"
+      len_args: {R: 5.0}
 
-Example outputs
----------------
+Data, randoms, and products
+---------------------------
 
-The standard 3PCF diagnostics first check convergence with the number of random
-triangle rotations.
+``sfc_field`` supplies a shared data field; ``sfc_field1`` through
+``sfc_field3`` override individual legs. The random inputs follow the same
+pattern. ``random: uniform`` uses the analytic constant-density shortcut,
+whereas a path or ``SFCField`` represents an explicit random catalogue.
 
-.. figure:: ../../_static/corr3pcf/corr3pcf_nrot_convergence.png
-   :alt: Reduced 3PCF convergence with number of triangle rotations
-   :align: center
-   :width: 90%
+Requesting a final statistic automatically expands its dependencies:
 
-   Particle-center reduced 3PCF curves for several values of ``n_rot`` at
-   ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
+.. list-table:: Main standard-3PCF products
+   :header-rows: 1
+   :widths: 20 80
 
-The center-mode comparison separates the particle-center estimator from the
-box-random-center estimator and also shows the effect of using an explicit
-random field.
+   * - Product
+     - Meaning
+   * - ``ddd``, ``rrr``
+     - Raw data and random triplet products.
+   * - ``delta_ddd``
+     - Connected data-minus-random triplet combination.
+   * - ``xi12``, ``xi13``, ``xi23``
+     - Two-point terms on the three triangle sides.
+   * - ``zeta``
+     - Connected three-point correlation function.
+   * - ``zeta_H``
+     - Hierarchical denominator
+       :math:`\xi_{12}\xi_{13}+\xi_{12}\xi_{23}+\xi_{13}\xi_{23}`.
+   * - ``Q``
+     - Reduced 3PCF, :math:`Q=\zeta/\zeta_H`.
 
-.. figure:: ../../_static/corr3pcf/corr3pcf_center_estimators.png
-   :alt: Reduced 3PCF comparison between particle-center and box-random-center estimators
-   :align: center
-   :width: 90%
+The particle-centre mode additionally exposes ``d_delta_dd`` and
+``r_delta_dd``, the two centre-weighted contributions used to form
+``delta_ddd``. Product availability is validated against the selected centre
+mode; unsupported combinations fail early rather than silently changing the
+estimator.
 
-   Reduced 3PCF curves for different center strategies and random-field
-   treatments at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``.
+Angle sampling
+--------------
 
-The multipole examples then show how truncation order and field resolution
-affect the recovered angular spectrum.
+Set ``angle_param`` to ``theta`` or ``mu`` and configure the matching section:
 
-.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_lmax.png
-   :alt: 3PCF multipoles for different lmax values
-   :align: center
-   :width: 90%
+.. code-block:: yaml
 
-   Multipole spectra for several choices of ``l_max`` at fixed field
-   resolution and radial pair ``(r12,r13)=(20,40) Mpc/h``.
+   angle_param: "mu"
+   mu:
+      mu_min: -1.0
+      mu_max: 1.0
+      n_mu: 20
 
-.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_resolution.png
-   :alt: 3PCF multipoles for different field resolutions
-   :align: center
-   :width: 90%
+Explicit one-dimensional arrays are also accepted from Python. The output
+stores both ``theta`` and ``mu`` together with ``r23``, so downstream plotting
+does not need to reconstruct the triangle geometry.
 
-   Multipole spectra at fixed ``l_max`` and ``(r12,r13)=(20,40) Mpc/h`` for
-   two field resolutions.
+Reading a result
+----------------
 
-The angular curve :math:`\zeta(\theta; r_{12}, r_{13})` and its Legendre
-multipoles :math:`\zeta_\ell(r_{12}, r_{13})` are two equivalent
-representations of the same triangle-shape dependence:
+.. code-block:: python
 
-.. math::
+   from pyhermes.io import Corr3PCFData
 
-   \zeta(\theta; r_{12}, r_{13})
-   =
-   \sum_\ell
-   \zeta_\ell(r_{12}, r_{13}) P_\ell(\cos\theta).
+   data = Corr3PCFData(
+       data_path="./output/quijote8000_snap004_3pcf_pcenter_nrot20.pkl"
+   )
+   theta, Q = data.theta, data.Q
 
-The next diagnostic reconstructs the angular curve from the computed
-``zeta_l`` coefficients and also projects the direct angular curves back to
-low-order multipoles.
+The arrays requested through ``products`` are available as attributes such as
+``data.ddd``, ``data.zeta``, and ``data.Q``. Configuration and field metadata
+are retained in ``data.corr3pcf_info`` and ``data.sfc_info1`` through
+``data.sfc_info3``.
 
-.. figure:: ../../_static/corr3pcf/corr3pcf_multipole_standard_consistency.png
-   :alt: Consistency between standard angular 3PCF and 3PCF multipoles
-   :align: center
-   :width: 90%
-
-   Consistency check between the standard angular 3PCF and the multipole
-   representation at ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``. The particle-center
-   curve uses ``n_part=406728`` halo centers and ``n_rot=1000``; the
-   box-random-center curve uses ``n_rand=8000000`` random centers and
-   ``n_rot=200``. The remaining differences mainly reflect finite angular
-   sampling, finite random rotations, center-sampling noise, and finite
-   multipole truncation.
-
-How to read the notebook
+Connection to multipoles
 ------------------------
 
-If you are new to PyHermes 3PCF, focus first on the standard workflow and the
-diagnostic plots.
+.. figure:: ../../_static/paper/corr3pcf_multipole_standard_consistency.png
+   :width: 96%
+   :align: center
+   :alt: Direct angular 3PCF compared with its multipole representation
 
-Then read the low-level ``Q`` reconstruction section. That part explains why
-the saved components are enough to rebuild the reduced statistic and is the
-best place to connect the code to the estimator formula.
+   Direct angular estimates and the 3PCF multipole representation describe the
+   same rotationally averaged signal. Residual differences arise from finite
+   angular sampling, random rotations, centre sampling, and multipole
+   truncation.
 
-Finally, treat the multipole section as an advanced extension. It is still part
-of the same notebook, but it is more computationally demanding and more useful
-once the standard 3PCF workflow is already familiar.
-
-Mathematical idea
------------------
-
-The standard 3PCF section estimates products of three fields arranged in a
-triangle. For a center :math:`\mathbf{x}` and two triangle legs,
-
-.. math::
-
-   DDD(\theta; r_{12}, r_{13}) =
-   \left\langle
-   n(\mathbf{x})\,
-   \widetilde n_{R_2}(\mathbf{x})\,
-   \widetilde n_{R_3,\theta}(\mathbf{x})
-   \right\rangle.
-
-After the matching random normalization, PyHermes stores the connected
-statistic :math:`\zeta`, the hierarchical denominator
-
-.. math::
-
-   \zeta_H =
-   \xi_{12}\xi_{13}
-   +
-   \xi_{12}\xi_{23}
-   +
-   \xi_{13}\xi_{23},
-
-and the reduced statistic
-
-.. math::
-
-   Q(\theta; r_{12}, r_{13}) =
-   {\zeta(\theta; r_{12}, r_{13})\over\zeta_H}.
-
-The low-level reconstruction section is therefore not a separate estimator; it
-rebuilds :math:`Q` from the same saved ingredients. The multipole section
-replaces shell-averaged legs with spherical-harmonic-filtered legs
-:math:`n_{\ell m}(\mathbf{x};R)`, then couples them into rotationally invariant
-3PCF components up to the requested ``lmax``.
+Use this task when the angular curve itself is the desired product. Use
+``Corr_3PCF_Multipole`` when many angular configurations, high angular order,
+or radial-window scans are more naturally represented through
+:math:`\zeta_\ell`.

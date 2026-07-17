@@ -1,127 +1,110 @@
-Weighted Fields
-===============
+Weighted, marked, and derived fields
+====================================
 
-``weighted_fields.ipynb`` is an additional application notebook to read after
-the main counting, 2PCF, and 3PCF workflow. PyHermes separates relative
-catalogue weights from per-object physical values, so the same Hermes
-representation is not limited to the tracer-density field. With different
-``field_value`` arrays it can reconstruct mass-valued and component-wise
-vector fields, such as velocity and momentum density.
+The field--window language is not limited to tracer counts. Catalogue weights
+and particle-carried values change *what field is represented*; windows change
+*what operation is applied to that field*. The same ``SFCProjection`` and
+``WindowFunc`` objects can therefore construct marked density fields,
+velocity and momentum fields, differential operators, the Newtonian potential,
+and acceleration.
 
-The most useful prerequisites are ``sfc_projection.ipynb`` and ``window.ipynb``:
-``SFCProjection`` explains how the weighted fields are built, and ``WindowFunc``
-explains how those fields are filtered or differentiated.
+The executable companion is ``examples/notebooks/weighted_fields.ipynb``. It
+keeps the field construction compact and spends most of its length on slice
+selection and publication-quality visualisation.
 
-The second ingredient is the field-derivative window. Since derivatives are
-simple Fourier-space multipliers, PyHermes can compute derivatives through the
-same convolution machinery used for ordinary windows. Combining weighted fields
-with derivative windows gives a compact way to measure velocity and
-momentum-density divergence and curl, which are useful quantities in
-large-scale-structure analyses and in observables related to line-of-sight
-momentum, such as the kinetic Sunyaev-Zel'dovich effect.
+Catalogue weight versus field value
+-----------------------------------
 
-The derivative-window method does not require choosing a finite-difference
-spacing ``dx`` or evaluating the field only on a regular grid. It can evaluate
-the derivative at arbitrary positions, with the accuracy controlled by the
-underlying PyHermes field resolution, especially ``J``, and by any smoothing
-window that is applied. The notebook therefore uses derivative windows as the
-main estimator and includes a finite-difference calculation only as a
-consistency check.
-
-What this notebook covers
--------------------------
-
-The notebook demonstrates how the weighted point-process view,
+For particle positions :math:`\mathbf{x}_i`, PyHermes projects
 
 .. math::
 
-   F_x(\mathbf{x}) =
-   \sum_i {w_{g,i}x_i\over Z}\,
-   \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i),
+   F_q(\mathbf{x})=
+   \sum_i {w_i^{\rm cat}q_i\over Z}
+   \delta_{\rm D}^{(3)}(\mathbf{x}-\mathbf{x}_i).
 
-where ``weight_normalization`` chooses the denominator :math:`Z`,
-can be reused for several related fields:
+``catalog_weight`` holds completeness, selection, or other catalogue weights.
+``field_value`` holds the quantity carried by each object: a mark, mass, or one
+velocity component. Keeping these roles separate prevents a signed physical
+quantity from being mistaken for a normalization weight.
 
-- ``field_value=1`` with ``weight_normalization: catalog`` produces the
-  catalogue-normalized tracer-density field
-- velocity ``field_value`` components produce velocity-weighted fields, which are divided by the
-  tracer-density field to estimate the velocity field
-- mass and mass-times-velocity ``field_value`` arrays produce mass-valued and
-  momentum-valued tracer fields
+``weight_normalization`` chooses :math:`Z`:
 
-Throughout these constructions, ``catalog_weight`` remains available for
-completeness or selection corrections. In particular, a signed velocity
-component is a physical field value, not a normalization weight.
+- ``catalog`` divides by :math:`\sum_i w_i^{\rm cat}` and is the default for
+  normalized clustering fields.
+- ``raw`` uses :math:`Z=1`; choose it when the absolute physical amplitude is
+  required.
+- ``field`` divides by :math:`\sum_i w_i^{\rm cat}q_i` and is appropriate only
+  when that field sum is meaningful and non-zero.
 
-It then visualizes the velocity field on a two-dimensional slice, computes
-velocity and momentum-density derivatives with directional-derivative windows,
-and uses a finite-difference grid only as a reference check.
+One small helper can build a family of fields on identical MRA metadata:
 
-Derivatives of weighted fields
-------------------------------
+.. code-block:: python
 
-For a scalar field :math:`f`, the gradient can be built from three
-directional-derivative windows:
+   import numpy as np
+   from pyhermes.base.sfc_projection import SFCProjection
 
-.. math::
+   base = {
+       "box_size": 1000.0,
+       "J": 8,
+       "wavelet_mode": "db2",
+       "wavelet_level": 10,
+       "phi_resolution": 1024,
+       "threads": 8,
+   }
 
-   \nabla f =
-   \left(
-   \partial_x f,\,
-   \partial_y f,\,
-   \partial_z f
-   \right).
+   def project(pos, value=None, normalization="catalog"):
+       params = dict(base, particle_pos=np.asarray(pos),
+                     field_value=None if value is None else np.asarray(value),
+                     weight_normalization=normalization)
+       return SFCProjection({"SFCProjection": params}).run(save_result=False)
 
-For a vector field whose components are constructed directly as weighted
-fields, such as the momentum-density field
-:math:`\mathbf{p}=(p_x,p_y,p_z)`, the divergence and curl follow from the
-usual component combinations:
+   count = project(pos)
+   vx_weighted = project(pos, velocity[:, 0])
 
-.. math::
+Velocity as a ratio of fields
+-----------------------------
 
-   \nabla\cdot\mathbf{p}
-   =
-   \partial_x p_x+\partial_y p_y+\partial_z p_z,
-   \qquad
-   \nabla\times\mathbf{p}
-   =
-   \begin{pmatrix}
-   \partial_y p_z-\partial_z p_y\\
-   \partial_z p_x-\partial_x p_z\\
-   \partial_x p_y-\partial_y p_x
-   \end{pmatrix}.
-
-For nonlinear derived fields, apply the chain rule. The velocity field is the
-main example here. If
+A velocity-weighted field is not yet a volume-weighted velocity. After applying
+the same smoothing window to numerator and denominator,
 
 .. math::
 
-   v_i(\mathbf{x})
-   =
-   {n_{v_i}(\mathbf{x})\over n(\mathbf{x})},
+   v_i(\mathbf{x})={n_{v_i}(\mathbf{x})\over n(\mathbf{x})}.
 
-then
+The derivative must obey the quotient rule:
 
 .. math::
 
-   \partial_j v_i
-   =
+   \partial_j v_i=
    {\partial_j n_{v_i}\over n}
-   -
-   {n_{v_i}\,\partial_j n\over n^2}.
+   -{n_{v_i}\,\partial_j n\over n^2}.
 
-In code the same chain rule is assembled from ordinary ``WindowFunc`` objects.
-Here ``D`` is the default catalogue-normalized tracer-density field
-constructed with per-halo unit field values, and ``Ux`` is the
-x-velocity-weighted field built from the same catalogue measure:
+This distinction matters in sparse regions. Mask points where the smoothed
+count field is too small instead of allowing a tiny denominator to manufacture
+large velocities.
+
+Differential windows
+--------------------
+
+With the package Fourier convention, a directional derivative along the unit
+vector :math:`\widehat{\mathbf n}` is the multiplier
+
+.. math::
+
+   \widehat W_{\partial_{\widehat n}}(\mathbf{k})
+   =2\pi i(\mathbf{k}\cdot\widehat{\mathbf n}).
+
+Three such windows give gradients; component combinations give divergence and
+curl. The Laplacian window applies :math:`-(2\pi k)^2`.
 
 .. code-block:: python
 
    from pyhermes.io import WindowFunc
 
    smooth = WindowFunc(
-       {"type": "gaussian", "len_args": {"R": 8.0}},
-       D.sfc_info,
+       {"type": "gaussian", "len_args": {"R": 10.0}},
+       count.sfc_info,
        threads=8,
    )
    dx = WindowFunc(
@@ -129,103 +112,126 @@ x-velocity-weighted field built from the same catalogue measure:
            "type": "directional_derivative",
            "los_args": {"nx": 1.0, "ny": 0.0, "nz": 0.0},
        },
-       D.sfc_info,
+       count.sfc_info,
        threads=8,
    )
 
-   N = (D @ smooth).as_array()
-   Nx = (Ux @ smooth).as_array()
-   dN_dx = (D @ smooth @ dx).as_array() * D.scale_factor
-   dNx_dx = (Ux @ smooth @ dx).as_array() * D.scale_factor
-   dvx_dx = dNx_dx / N - Nx * dN_dx / N**2
+   dcount_dx = count @ smooth @ dx
 
-The factor ``D.scale_factor`` converts the derivative from grid-coordinate
-units to physical box units. Repeating this pattern for the three velocity
-components and three derivative directions gives the full velocity-gradient
-tensor.
+Window derivatives are formed in grid coordinates. Multiply sampled values by
+``field.scale_factor`` when converting one derivative to inverse physical-box
+units. This is why the tutorial keeps coordinate conversion adjacent to the
+sampling code rather than hiding it inside the mathematical window.
 
-The notebook evaluates these derivative-window expressions directly at the
-random points used for the velocity slice, and later repeats the calculation on
-a subset of regular-grid positions to compare with periodic finite
-differences.
+Potential from the inverse Laplacian
+------------------------------------
 
-Example outputs
----------------
+The built-in ``inverse_laplacian`` is deliberately a pure mathematical
+operator:
 
-The first slice combines two pieces of information. The arrows show the
-transverse velocity estimated at random points, while the colored background
-shows the velocity divergence computed with derivative windows on the same
-``z`` slice.
+.. math::
 
-.. figure:: ../../_static/weighted_fields/weighted_fields_velocity_divergence_slice.png
-   :alt: Velocity divergence slice with transverse velocity arrows
+   \widehat W_{\nabla^{-2}}(\mathbf{k})=
+   -{1\over(2\pi k)^2},\qquad \widehat W_{\nabla^{-2}}(0)=0.
+
+Removing the zero mode fixes the arbitrary additive constant of the potential;
+it does not discard a measurable force. For the matter contrast
+:math:`\delta_{\rm m}` in comoving coordinates,
+
+.. math::
+
+   {\Phi\over c^2}
+   ={3\Omega_{\rm m0}H_0^2\over2ac^2}
+   \nabla^{-2}\delta_{\rm m}.
+
+Keeping the cosmological prefactor outside ``WindowFunc`` makes units and
+coordinate conventions explicit. If the box coordinates are in
+:math:`h^{-1}\mathrm{Mpc}`, use
+:math:`H_0=100\,\mathrm{km\,s^{-1}}/(h^{-1}\mathrm{Mpc})`; the numerical
+:math:`h` is already carried by the coordinate unit. The notebook also
+multiplies the grid-space inverse Laplacian by the squared cell size.
+
+.. code-block:: python
+
+   inv_lap = WindowFunc(
+       {"type": "inverse_laplacian"}, delta_m.sfc_info, threads=8
+   )
+   inv_lap_delta = delta_m @ inv_lap
+
+   c_light = 299792.458             # km/s
+   H0 = 100.0                       # km/s/(Mpc/h)
+   cell_size = delta_m.box_size / delta_m.L
+   poisson_scale = (
+       1.5 * omega_m0 * (H0 / c_light) ** 2 / a * cell_size**2
+   )
+   phi_over_c2 = inv_lap_delta * poisson_scale
+
+The resulting :math:`\Phi/c^2` is dimensionless and mean-zero. Its broad,
+smooth appearance is physical: the :math:`k^{-2}` response strongly emphasizes
+large scales.
+
+Acceleration and linear flow
+----------------------------
+
+Directional derivatives of the potential give the peculiar acceleration,
+
+.. math::
+
+   \mathbf{g}=-{c^2\over a}\nabla_x(\Phi/c^2).
+
+In linear theory the matter contrast, velocity divergence, potential, and
+acceleration are linked by the continuity and Poisson equations. After matching
+units and smoothing scales, their large-scale patterns should correlate; exact
+point-by-point equality is not expected for halo velocities because of bias,
+nonlinear motions, sparse sampling, and reconstruction error.
+
+.. figure:: ../../_static/paper/weighted_fields_velocity_divergence_delta_acceleration_potential_overlay.png
+   :width: 98%
    :align: center
+   :alt: Velocity divergence, matter contrast, potential, and acceleration
+
+   Halo velocity divergence, smoothed matter contrast, and the Newtonian
+   potential on a common slice. Velocity and acceleration arrows expose the
+   large-scale flow rather than merely the scalar amplitudes.
+
+.. figure:: ../../_static/paper/weighted_fields_velocity_divergence_dm_prediction_acceleration_linear_3panel.png
    :width: 95%
-
-   Velocity-divergence slice with transverse velocity arrows. This plot gives a
-   spatial check of the reconstructed velocity field and its large-scale
-   compression or expansion pattern.
-
-The velocity derivatives are then measured directly from the weighted
-``SFCField`` objects by applying directional-derivative windows. This avoids
-requiring a regular evaluation grid for the main derivative estimate.
-
-.. figure:: ../../_static/weighted_fields/weighted_fields_velocity_derivatives_pdf.png
-   :alt: Velocity divergence and curl magnitude PDFs
    :align: center
-   :width: 95%
+   :alt: Linear-theory comparisons for velocity divergence and acceleration
 
-   PDFs of the velocity divergence and curl magnitude from the
-   derivative-window method.
+   Linear-theory checks are most informative after using the same smoothing
+   scale and evaluating both fields at matched positions.
 
-The same derivative-window machinery applies to the momentum-valued field
-built from mass-times-velocity values. The divergence and curl are normalized
-by the mean mass-field amplitude so their units match the velocity-gradient
-scale.
+Marked 2PCFs
+------------
 
-.. figure:: ../../_static/weighted_fields/weighted_fields_momentum_derivatives_pdf.png
-   :alt: Scaled momentum-density divergence and curl magnitude PDFs
+A mark is simply another ``field_value``. A common choice derives it from a
+local smoothed density, for example
+
+.. math::
+
+   m_{\rm power}=(\rho_R+\epsilon)^\alpha,
+   \qquad
+   m_{\rm inverse}=\left({\rho_*+1\over\rho_*+\rho_R}\right)^p.
+
+Evaluate :math:`\rho_R` at catalogue positions, normalize the marks by their
+catalogue-weighted mean, project the marked catalogue, and pass that
+``SFCField`` to the unchanged ``Corr_2PCF`` task. No marked-pair estimator is
+needed: the mark changes the field, not the binning operation.
+
+.. figure:: ../../_static/paper/Mark_2pcf.png
+   :width: 90%
    :align: center
-   :width: 95%
+   :alt: Marked two-point correlation functions
 
-   PDFs of the scaled momentum-density divergence and curl magnitude.
+   Power-law and inverse-density marks emphasize different environments while
+   reusing the same 2PCF field--window estimator.
 
-Finally, the notebook samples a subset of the finite-difference grid and
-evaluates the derivative-window result at the same positions. The comparison is
-not the primary estimator; it is a consistency check showing how the
-spectral-window derivative agrees with the grid-based finite-difference
-reference when the same smoothing and density mask are used.
+Scope and interpretation
+------------------------
 
-.. figure:: ../../_static/weighted_fields/weighted_fields_derivative_window_comparison.png
-   :alt: Derivative-window and finite-difference divergence comparison
-   :align: center
-   :width: 95%
-
-   Derivative-window divergence estimates compared with finite-difference
-   estimates at matched grid positions for both velocity and scaled
-   momentum-density fields.
-
-Why it comes last
------------------
-
-The earlier notebooks are the core PyHermes tutorial path: prepare a field,
-apply windows, count samples, and measure two- and three-point statistics.
-``weighted_fields.ipynb`` is a "what else can this machinery do?" example. It
-shows that the same coefficient construction can be useful for physical field
-estimation, including quantities closely related to velocity-potential analyses
-and line-of-sight momentum observables such as the kinetic Sunyaev-Zel'dovich
-effect.
-
-Files
------
-
-Tracked in the repository:
-
-- ``examples/notebooks/weighted_fields.ipynb``
-
-Expected local inputs:
-
-- the Quijote halo example catalog under ``examples/data/quijote_halos/``
-
-The notebook builds its weighted fields interactively from the catalog, so it
-does not require the heavier 2PCF or 3PCF products.
+These operator windows make many derived fields concise, but they do not make
+all of them automatically physical. Always state the catalogue normalization,
+coordinate units, smoothing scale, zero-mode convention, and whether the field
+is tracer- or matter-based. The algebra is short; the assumptions still deserve
+their full names.

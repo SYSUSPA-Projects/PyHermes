@@ -1,74 +1,102 @@
-Input and Output (IO)
-=====================
+Input and output
+================
 
-This section describes how PyHermes reads particle data and how task outputs are
-stored on disk.
+PyHermes has two I/O layers. Particle readers turn catalogue files into a
+common ``{"pos": (N, 3), ...}`` structure. Task-specific data classes read and
+write reusable MRA fields and statistical products.
 
-Particle input formats
-----------------------
+Particle input
+--------------
 
-PyHermes dispatches particle readers based on ``fin.format``. Supported values
-are:
-
-- ``bin``: raw binary table with configurable column mappings
-- ``npz``: NumPy ``.npz`` particle dataset
-- ``gadget``: legacy Gadget binary snapshots
-- ``gadget_hdf5``: single or split Gadget HDF5 snapshots
-- ``gadget-fof``
-- ``fof``: Quijote/Pylians-style FoF ``group_tab`` halo catalogs
-
-Binary table format
--------------------
-
-``bin`` reads a raw binary table with ``reader_params``:
+``SFCProjection.fin`` selects a reader:
 
 .. code-block:: yaml
 
    fin:
-      path: "./data/halo.bin"
+      path: "./data/catalog.bin"
+      format: "bin"
+      reader_params: {}
+      catalog_weight_key: null
+      field_value_key: null
+
+``catalog_weight_key`` selects completeness or selection weights.
+``field_value_key`` selects a per-particle mark or physical quantity. Both must
+resolve to one-dimensional arrays with one entry per particle. ``null`` means
+unit values.
+
+Supported formats
+-----------------
+
+.. list-table:: Built-in particle readers
+   :header-rows: 1
+   :widths: 22 78
+
+   * - ``format``
+     - Reader
+   * - ``bin``
+     - Raw binary table with configurable dtype and column selectors.
+   * - ``npz``
+     - NumPy archive with a position key and optional field-key mapping.
+   * - ``gadget``
+     - Legacy Gadget-format snapshot, including split files.
+   * - ``gadget_hdf5``
+     - Single or split Gadget HDF5 snapshot with explicit unit scales.
+   * - ``gadget-fof``
+     - Legacy Gadget FoF catalogue without SUBFIND.
+   * - ``fof``
+     - Quijote/Pylians-style ``group_tab`` halo catalogue.
+
+The suffix can infer ``bin``, ``npz``, ``gadget``, or ``fof`` when ``format``
+is omitted. Directory and HDF5 base paths should set it explicitly.
+
+Raw binary tables
+-----------------
+
+.. code-block:: yaml
+
+   fin:
+      path: "./data/haloes.bin"
       format: "bin"
       reader_params:
          dtype: "float32"
          ncols: 7
          pos_cols: [0, 1, 2]
          fields:
-            vel_x: 3
-            vel_y: 4
-            vel_z: 5
+            vx: 3
+            vy: 4
+            vz: 5
             mass: 6
       catalog_weight_key: null
       field_value_key: "mass"
 
-Scalar field mappings return one-dimensional arrays. List mappings return
-two-dimensional arrays. ``catalog_weight_key`` selects observational or
-selection weights :math:`w_g`, while ``field_value_key`` selects the measured
-per-object quantity :math:`x`; both must refer to one-dimensional fields. Use
-``null`` for unit values.
+A scalar selector returns one column; a list selector returns multiple columns.
+Only scalar fields can be selected as catalogue weights or projected field
+values.
 
-NPZ format
-----------
-
-``npz`` reads an existing NumPy particle dataset:
+NPZ archives
+------------
 
 .. code-block:: yaml
 
    fin:
-      path: "./data/quijote_particles.npz"
+      path: "./data/haloes.npz"
       format: "npz"
       reader_params:
-         pos_key: "pos"
+         pos_key: "position"
          fields:
             completeness: "weight"
+            vx: "velocity_x"
       catalog_weight_key: "completeness"
-      field_value_key: null
+      field_value_key: "vx"
 
-Gadget HDF5 format
-------------------
+When ``fields`` is omitted, every array except ``pos_key`` is exposed under its
+original name.
 
-``gadget_hdf5`` accepts either one HDF5 file or the common base path of a
-split snapshot. For example, ``snap_004`` resolves files named
-``snap_004.0.hdf5``, ``snap_004.1.hdf5``, and so on. Positions are read by
-default; velocity and mass arrays are optional to avoid unnecessary memory use.
+Gadget snapshots
+----------------
+
+The HDF5 reader resolves either one file or a base path such as ``snap_004``
+with siblings ``snap_004.0.hdf5``, ``snap_004.1.hdf5``, and so on.
 
 .. code-block:: yaml
 
@@ -77,76 +105,116 @@ default; velocity and mass arrays are optional to avoid unnecessary memory use.
       format: "gadget_hdf5"
       reader_params:
          ptype: 1
-         position_scale: 1.0e-3  # Quijote kpc/h -> Mpc/h
+         position_scale: 1.0e-3
+         velocity_scale: 1.0
+         mass_scale: 1.0
          load_velocity: false
          load_mass: false
-      catalog_weight_key: null
-      field_value_key: null
 
-Set ``load_velocity: true`` to expose ``vel``, ``vel_x``, ``vel_y``, and
-``vel_z``. Set ``load_mass: true`` to read ``Masses`` or the corresponding
-constant value from the Header ``MassTable``. The optional ``velocity_scale``
-and ``mass_scale`` parameters provide explicit unit conversion.
+For Quijote coordinates stored in :math:`\mathrm{kpc}/h`,
+``position_scale=1e-3`` converts to :math:`\mathrm{Mpc}/h`. Velocity and mass
+are not loaded unless requested, which avoids large unused arrays. ``h5py`` is
+required; compressed snapshots may also require ``hdf5plugin``.
 
-FoF format
-----------
-
-``fof`` reads local Quijote/Pylians-style ``group_tab`` halo catalogs directly.
-By default it returns ``pos``, ``mass``, ``vel``, ``vel_x``, ``vel_y``,
-``vel_z``, ``npart``, and ``group_offset``. Use ``fields`` to select or rename
-optional fields; ``pos`` and ``size`` are always retained.
+Quijote FoF catalogues
+----------------------
 
 .. code-block:: yaml
 
    fin:
-      path: "./tests/data/halos/8000"
+      path: "./data/quijote_halos/8000"
       format: "fof"
       reader_params:
          snapnum: 4
          redshift: 0.0
          fields:
             mass: "mass"
-            vel_x: "vel_x"
+            vx: "vel_x"
+            vy: "vel_y"
+            vz: "vel_z"
       catalog_weight_key: null
-      field_value_key: "vel_x"
+      field_value_key: null
 
-The projected coefficient field uses
-:math:`w_g x / Z`, where ``weight_normalization`` chooses
-``Z = catalog_weight_sum`` (``catalog``), ``Z = 1`` (``raw``), or
-``Z = raw_field_weighted_sum`` (``field``). ``unit`` is accepted here as an
-alias for ``field`` when constructing a catalog field. Keeping catalogue
-weights and physical field values separate means that the usual ``catalog``
-convention is insensitive to an arbitrary global rescaling of the catalogue
-weight, while PyHermes still retains ``catalog_weight_sum``,
-``catalog_weight_sq_sum``, ``raw_field_weighted_sum`` and ``field_integral``.
-For example, use
-``field_value_key: "mass"`` for a mass-valued field and
-``field_value_key: "vel_x"`` for a signed velocity-weighted field.
-After field arithmetic or window convolution the result is a derived field:
-``weight_normalization`` becomes ``None`` and ``field_integral`` is the direct
-sum of the derived ``epsilon`` grid.
+The reader exposes ``pos``, ``mass``, ``vel``, component velocities, ``npart``,
+and ``group_offset`` before optional selection. It converts Quijote positions
+to :math:`\mathrm{Mpc}/h`, masses to :math:`M_\odot/h`, and applies the reader's
+redshift velocity convention.
 
-Task outputs
-------------
-
-PyHermes writes serialized task outputs as pickle-based ``.pkl`` files. Common
-examples are:
-
-- ``SFCField``
-- ``CountingData``
-- ``Corr2PCFData``
-- ``Corr3PCFData``
-
-Most workflows reuse the ``SFCProjection`` output file as the main upstream input for
-later tasks.
-
-Relevant fields
+In-memory input
 ---------------
 
-- ``fin.path``: local path of the particle catalog
-- ``fin.format``: declared input format; when omitted or ``null``, PyHermes
-  infers simple file formats from the suffix, such as ``.bin`` or ``.npz``
-- ``fin.reader_params``: format-specific reader options
-- ``fin.catalog_weight_key``: optional one-dimensional selection-weight selector; ``null`` means unit catalogue weights
-- ``fin.field_value_key``: optional one-dimensional physical-field selector; ``null`` means unit field values
-- ``fout_path``: output file path for the current task
+File input can be replaced by arrays:
+
+.. code-block:: python
+
+   task = SFCProjection()
+   task.particle_pos = pos
+   task.catalog_weight = completeness
+   task.field_value = mass
+   task.weight_normalization = "raw"
+   field = task.run(save_result=False)
+
+Positions must have shape ``(N, 3)``. Scalar weights or field values are
+broadcast; arrays must be finite and have shape ``(N,)``.
+
+Saved data classes
+------------------
+
+.. list-table:: Task output objects
+   :header-rows: 1
+   :widths: 28 30 42
+
+   * - Task
+     - Reader class
+     - Main arrays
+   * - ``SFCProjection``
+     - ``SFCField``
+     - ``epsilon`` and ``sfc_info``.
+   * - ``Counting``
+     - ``CountingData``
+     - sampled positions and ``nx`` values.
+   * - ``Corr_2PCF``
+     - ``Corr2PCFData``
+     - sampling coordinates, count products, and ``xi``.
+   * - ``Corr_3PCF``
+     - ``Corr3PCFData``
+     - angles, side geometry, triplet products, ``zeta``, and ``Q``.
+   * - ``Corr_3PCF_Multipole``
+     - ``Corr3PCFMultipoleData``
+     - samples, radial windows, ``l``, count multipoles, and ``zeta_l``.
+
+Read products through those classes:
+
+.. code-block:: python
+
+   from pyhermes.io import SFCField, Corr2PCFData, Corr3PCFMultipoleData
+
+   field = SFCField(data_path="./output/halo_sfc.pkl", threads=8)
+   corr = Corr2PCFData(data_path="./output/halo_2pcf.pkl")
+   multipoles = Corr3PCFMultipoleData(
+       data_path="./output/halo_3pcf_multipoles.pkl"
+   )
+
+The current files contain NumPy-framed, pickle-serialized Python metadata.
+They are trusted local products, not a safe interchange format for untrusted
+files. Treat the data-class interface as public and the internal dictionary
+layout as an implementation detail.
+
+Particle companions
+-------------------
+
+``save_particle_data: true`` writes positions, catalogue weights, and field
+values to ``particle_data_path`` as NPZ. When the path is empty, it is derived
+from ``fout_path``. This companion is required when a later particle-centred
+task cannot recover the original catalogue from ``fin``. Derived fields made by
+arithmetic or convolution do not preserve a unique particle catalogue; pass
+explicit centre arrays when using them as a particle-centred first leg.
+
+Output policy
+-------------
+
+Only rank 0 writes task products. Parent directories are created as needed.
+Existing files are protected unless ``overwrite=True`` is passed to ``run``.
+Store large generated products outside the tracked ``examples/`` source files;
+the repository's scripts and notebooks use ``examples/output/`` for this
+purpose.

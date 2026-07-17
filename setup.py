@@ -28,7 +28,7 @@ setup(
     long_description_content_type="text/markdown",
     author="PyHermes Team", 
     author_email="dingdluan@gmail.com", 
-    url="https://github.com/PyHermes/PyHermes", 
+    url="https://github.com/SYSUSPA-Projects/PyHermes",
     packages=find_packages(),
     install_requires=install_requires,
     classifiers=[  

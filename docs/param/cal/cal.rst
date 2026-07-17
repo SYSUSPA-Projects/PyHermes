@@ -1,90 +1,124 @@
-Calculation
-============
+Calculation parameters
+======================
 
-This section summarizes the main task-specific calculation parameters.
+This page collects the parameters that change the mathematical measurement.
+File readers and output objects are covered in :doc:`../io/io`; resource
+choices are covered in :doc:`../perform/perform`.
+
+Common window schema
+--------------------
+
+.. code-block:: yaml
+
+   window:
+      type: "gaussian"
+      len_args:
+         R: 10.0
+      los_args: {}
+      other_args: {}
+      kernel_mode: "auto"
+
+``len_args`` contains physical length scales, ``los_args`` contains an optional
+direction, and ``other_args`` contains non-length options. ``kernel_mode`` is
+needed only when overriding kernel construction. See :doc:`../../windows` for
+the built-in types and their exact arguments.
 
 SFCProjection
 -------------
 
-- ``J``: multiresolution level used for the field representation
-- ``phi_resolution``: number of samples used to tabulate ``phi``, the wavelet scaling function
-- ``box_size``: simulation box size
-- ``wavelet_mode``: wavelet family
-- ``wavelet_level``: wavelet decomposition depth
-- ``save_particle_data``: save particle positions and weights to a companion ``.npz`` file
-- ``particle_data_path``: optional companion particle-data path; derived from ``fout_path`` when empty
+``J`` and ``box_size`` set the grid geometry. ``wavelet_mode``,
+``wavelet_level``, and ``phi_resolution`` define the MRA basis. The input
+amplitude is ``catalog_weight * field_value`` and ``weight_normalization`` is
+one of ``catalog``, ``raw``, ``field``, or the construction-time alias ``unit``.
+
+All fields combined by arithmetic or window convolution must share compatible
+box geometry, ``J``, and basis metadata.
 
 Counting
 --------
 
-- ``N_randoms``: number of random points
-- ``window.type``: window shape used before sampling
-- ``window.len_args``: scale parameters for the window
-- ``seed``: random seed
-
-Window Parameter Names
-----------------------
-
-Window dictionaries pass ``len_args`` directly to the selected window function.
-Common radial windows use the following length parameters:
-
-- ``sphere``, ``gaussian``, ``shell``: ``R``
-- ``gaussian_shell``: ``R_shell`` for the shell-like oscillation scale and
-  ``R_smooth`` for the Gaussian damping scale
-- ``cubic``: ``Lx``, ``Ly``, and ``Lz`` for the three axis-aligned side lengths
-- ``ring``, ``disk``, ``cylshell``, and ``cylinder``: ``R`` and ``H``; optional
-  line-of-sight components ``nx``, ``ny``, and ``nz`` belong in
-  ``los_args``
+``random_count`` positions are drawn from the periodic box using ``seed``.
+``window`` optionally filters the input field before evaluating it. The result
+stores positions and sampled values; it does not histogram them, leaving PDF
+binning to the analysis code.
 
 Corr_2PCF
 ---------
 
-- ``sampling``: coordinate dictionary for the requested output grid. Supported
-  coordinate sets are ``s`` for ``xi(s)``, ``s`` and ``mu`` for
-  ``xi(s, mu)``, or ``rp`` and ``pi`` for ``xi(rp, pi)``.
-- ``window``, ``window1``, ``window2``: optional window definitions for custom
-  smoothing behavior
-- ``binning_window.mapping``: coordinate mapping from sampling variables to
-  binning-window length arguments. ``s_to_R`` maps ``R=s``; ``smu_to_RH`` maps
-  ``R=s sqrt(1-mu^2)``, ``H=s mu``; and ``rppi_to_RH`` maps ``R=rp``,
-  ``H=pi``. In ``Corr_2PCF`` binning windows, ``None`` marks a runtime
-  placeholder; fixed numeric values in ``len_args`` are left unchanged. LOS
-  information belongs in ``binning_window.los_args``.
-- ``binning_window.kernel_mode``: kernel construction strategy. ``full_rfft``
-  evaluates the full real-FFT kernel and is the default for custom windows.
-  ``octant`` uses symmetry folding and is appropriate only for windows with the
-  required octant symmetries. ``auto`` uses folding for coordinate-axis LOS
-  directions and full real-FFT otherwise; built-in ``ring``, ``disk``, and
-  ``cylinder`` binning windows default to ``auto``.
-  ``octant`` is mathematically safe only when the k-space window is invariant
-  under independent sign flips of all three components:
-  ``W(kx, ky, kz) = W(-kx, ky, kz) = W(kx, -ky, kz) = W(kx, ky, -kz)``.
-  Isotropic windows satisfy this condition. Axis-aligned LOS windows can also
-  satisfy it if the parallel dependence is even, for example through ``cos`` or
-  ``sin(q)/q``. Oblique LOS windows, for example
-  ``los_args: [1, 1, 1]``, generally do not satisfy the condition and should
-  use ``full_rfft`` unless the user has proven the required symmetry. This
-  criterion is about symmetry with respect to the FFT grid coordinates, not
-  just the apparent geometric symmetry of the window: for example, a ring with
-  ``los_args: [1, 1, 0]`` may look symmetric in a rotated coordinate system,
-  but it is not invariant under independent ``kx`` and ``ky`` sign flips in
-  the original grid coordinates.
-- ``memory_strategy``: ``speed`` keeps more fields in memory to reuse pair
-  windows across products; ``memory`` computes product groups sequentially to
-  reduce peak memory
-- ``binning_window_cache``: optional disk cache for binning-window kernels, most
-  useful with ``memory_strategy: memory``
-- ``binning_window_cache_dir``: directory for cached binning-window kernels
+``sfc_field`` and ``random`` are shared fallbacks for both legs. The numbered
+forms override individual legs. ``random: uniform`` is an analytic constant
+field.
+
+``window1`` and ``window2`` smooth or otherwise transform the input legs.
+``binning_window`` defines the separation measurement. These are distinct
+roles: a Gaussian leg window changes the fields being correlated; a
+``gaussian_shell`` binning window changes how separations are averaged.
+
+Built-in sampling mappings are:
+
+.. list-table:: 2PCF sampling mappings
+   :header-rows: 1
+   :widths: 28 27 45
+
+   * - Mapping
+     - Coordinates
+     - Runtime window arguments
+   * - ``s_to_R``
+     - ``s``
+     - ``R=s`` for isotropic radial windows.
+   * - ``smu_to_RH``
+     - ``s``, ``mu``
+     - ``R=s sqrt(1-mu^2)``, ``H=s mu``.
+   * - ``rppi_to_RH``
+     - ``rp``, ``pi``
+     - ``R=rp``, ``H=pi``.
+
+Set ``products`` to any subset of ``dd``, ``dr``, ``rd``, ``rr``, and ``xi``;
+dependencies are expanded automatically. ``memory_strategy=speed`` retains
+reusable fields, while ``memory`` reduces simultaneous field residency.
 
 Corr_3PCF
 ---------
 
-- ``r12``: first side length
-- ``r13``: second side length
-- ``n_theta``: number of angular bins
-- ``n_rot``: number of rotations
-- ``center``: center sampling strategy, usually ``box_random`` or ``particle``
-- ``n_box_centers``: number of Monte Carlo centers for ``center: "box_random"``
-- ``base_seed``: seed controlling random center generation
-- ``window2`` and ``window3``: window definitions for the two displaced legs
-- ``window1``: optional center-leg window, available when ``center: "box_random"``
+``r12`` and ``r13`` fix two triangle sides. ``angle_param`` chooses ``theta``
+or ``mu`` and the matching block supplies a range or explicit array.
+``n_rot`` controls the Monte Carlo orientation average.
+
+``center=particle`` samples the first vertex from particle metadata and applies
+only ``window2`` and ``window3`` to displaced legs. ``center=box_random`` uses
+``n_box_centers`` uniform centres and permits windows on all three legs.
+
+Products are ``ddd``, ``rrr``, ``delta_ddd``, ``xi12``, ``xi13``, ``xi23``,
+``zeta``, ``zeta_H``, and ``Q``. Particle-centred runs additionally expose
+``d_delta_dd`` and ``r_delta_dd``.
+
+Corr_3PCF_Multipole
+-------------------
+
+The two radial windows are mandatory templates:
+
+.. code-block:: yaml
+
+   binning_window12:
+      type: "shell"
+      len_args: {}
+      other_args: {}
+      mapping: {R: "r12"}
+   binning_window13:
+      type: "thick_shell"
+      len_args: {delta_R: 6.0}
+      other_args: {}
+      mapping: {R: "r13"}
+
+``sampling`` defines the values named by those mappings. Scalar, list,
+``values``, ``min/max/n``, and ``start/stop/step`` forms are accepted.
+``mode=grid`` forms a Cartesian product; ``mode=paired`` zips arrays and
+broadcasts scalars.
+
+``l_min`` and ``l_max`` select multipole orders. The products are ``ddd_l``,
+``rrr_l``, ``delta_ddd_l``, and ``zeta_l``. ``window1`` through ``window3`` are
+optional vertex smoothing operators and are separate from the two radial
+binning profiles.
+
+Radial-profile parameters and custom-profile interfaces are documented in
+:doc:`../../get_start/corr_3pcf_multipole/corr_3pcf_multipole`.

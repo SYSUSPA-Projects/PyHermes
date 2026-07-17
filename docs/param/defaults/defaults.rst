@@ -1,242 +1,134 @@
-Default Parameter Guide
-=======================
+Bundled defaults
+================
 
-PyHermes ships task-level default parameter dictionaries in:
+Defaults live beside the task implementations:
 
-- ``pyhermes/base/default_params.json``
-- ``pyhermes/theory/default_params.json``
+- ``pyhermes/base/default_params.json`` for ``SFCProjection``
+- ``pyhermes/theory/default_params.json`` for the statistical tasks
 
-These files define the fallback values used when a field is not specified in
-your YAML or JSON5 configuration. In practice, most users only override a small
-subset of these keys.
-
-This page explains the meaning of the most important default parameters used by
-the main public tasks.
+They are JSON5 files used internally by ``read_param``. Do not edit them for an
+individual analysis; override values in a user YAML file instead.
 
 SFCProjection
--------
+-------------
 
-The ``SFCProjection`` defaults come from ``pyhermes/base/default_params.json``.
+.. list-table:: Field-construction defaults
+   :header-rows: 1
+   :widths: 28 20 52
 
-Core field-construction parameters
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   * - Key
+     - Default
+     - Purpose
+   * - ``box_size``
+     - ``1000``
+     - Periodic-box side length in the coordinate units of ``particle_pos``.
+   * - ``J``
+     - ``8``
+     - Dilation level, with :math:`L=2^J` cells per axis.
+   * - ``wavelet_mode``
+     - ``db2``
+     - PyWavelets scaling-function family.
+   * - ``wavelet_level``
+     - ``10``
+     - Refinement depth used to tabulate the scaling function.
+   * - ``phi_resolution``
+     - ``1024``
+     - Sampling resolution of the tabulated scaling function.
+   * - ``weight_normalization``
+     - ``catalog``
+     - Normalization of ``catalog_weight * field_value``.
+   * - ``save_particle_data``
+     - ``false``
+     - Save positions and projected particle weights for particle-centred
+       estimators.
+   * - ``threads``
+     - ``1``
+     - Numba threads per MPI rank.
 
-- ``J``:
-  multiresolution level. The field size is ``L = 2^J``.
-- ``phi_resolution``:
-  number of samples used to tabulate ``phi``, the wavelet scaling function.
-- ``box_size``:
-  physical side length of the simulation box.
-- ``wavelet_mode``:
-  wavelet family name, such as ``"db2"``.
-- ``wavelet_level``:
-  level used in the wavelet decomposition.
-- ``threads``:
-  CPU threads per MPI rank.
-
-Particle input parameters
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-- ``particle_pos``:
-  optional in-memory particle position array. If provided, it can be used
-  instead of reading particle positions from file.
-- ``catalog_weight``:
-  optional in-memory observational or selection weights. If omitted, unit
-  catalogue weights are assumed.
-- ``field_value``:
-  optional in-memory per-object physical values, such as mass or one velocity
-  component. If omitted, unit values are assumed.
-- ``weight_normalization``:
-  projection convention for ``catalog_weight * field_value``. ``catalog`` is
-  the default and divides by the catalogue-weight sum. ``raw`` keeps the raw
-  weighted field. ``field`` divides by the raw weighted field sum. ``unit`` is
-  accepted as a construction-time alias for ``field``.
-- ``save_particle_data``:
-  whether to save particle positions and weights to a companion ``.npz`` file.
-- ``particle_data_path``:
-  optional companion particle-data path. If empty, PyHermes derives it from
-  ``fout_path``.
-- ``fin.path``:
-  local path to the particle catalog.
-- ``fin.format``:
-  particle file format, for example ``bin``.
-- ``fin.reader_params``:
-  format-specific reader options.
-- ``fin.catalog_weight_key``:
-  one-dimensional catalogue-weight field name, or ``null`` for unit weights.
-- ``fin.field_value_key``:
-  one-dimensional physical-field value name, or ``null`` for unit values.
-
-Output
-^^^^^^
-
-- ``fout_path``:
-  path where the serialized ``SFCField`` result is written.
+``particle_pos``, ``catalog_weight``, and ``field_value`` default to ``null``;
+file input then comes from ``fin``. The default reader is a three-column
+``float32`` raw binary table. ``fout_path`` and ``particle_data_path`` are empty
+until supplied by the user.
 
 Counting
 --------
 
-The ``Counting`` defaults come from ``pyhermes/theory/default_params.json``.
-
-- ``seed``:
-  random seed for the sampled positions.
-- ``N_randoms``:
-  number of random positions to evaluate.
-- ``sfc_field_path``:
-  fallback path to the input ``SFCField`` file.
-- ``window``:
-  optional smoothing window applied before counting.
-- ``weight_normalization``:
-  normalization applied before the optional counting window. ``raw``,
-  ``catalog`` and ``field`` apply to catalog fields; ``unit`` rescales either
-  catalog or derived fields to unit field integral.
-- ``threads``:
-  CPU threads per MPI rank.
-- ``fout_path``:
-  output path for the serialized counting result.
+``random_count=1000000`` and ``seed=42`` define the sampling positions. The
+default ``window.type`` is empty, so no optional smoothing is applied.
+``weight_normalization=catalog`` converts catalogue fields to their standard
+normalized amplitude before sampling.
 
 Corr_2PCF
 ---------
 
-- ``sfc_field_path``:
-  shared fallback input field path.
-- ``sfc_field1_path`` and ``sfc_field2_path``:
-  optional leg-specific field paths. If empty, they fall back to
-  ``sfc_field_path``.
-- ``window``:
-  shared fallback smoothing window for the two legs.
-- ``window1`` and ``window2``:
-  optional leg-specific smoothing windows.
-- ``binning_window``:
-  kernel template used in the pair-correlation measurement itself. The default
-  is a shell window with ``mapping: s_to_R``. Built-in mappings are
-  ``s_to_R``, ``smu_to_RH``, and ``rppi_to_RH``; the ``sampling`` keys must
-  match the selected mapping exactly. Only ``None`` values in ``len_args`` are
-  filled at runtime by the mapping; fixed numeric values are left unchanged.
-  LOS information belongs in ``binning_window.los_args``.
-- ``binning_window.kernel_mode``:
-  kernel construction strategy. ``full_rfft`` evaluates the full real-FFT
-  kernel and is the default for custom windows. ``octant`` uses symmetry
-  folding. ``auto`` folds only for coordinate-axis LOS directions and otherwise
-  uses ``full_rfft``; built-in ``ring``, ``disk``, and ``cylinder`` pair
-  windows default to ``auto``. ``octant`` is safe only when
-  ``W(kx, ky, kz)`` is unchanged by independent sign flips of ``kx``, ``ky``,
-  and ``kz``. Isotropic windows satisfy this automatically; oblique LOS
-  anisotropic windows generally require ``full_rfft``. This is a symmetry test
-  in the FFT grid coordinates, not merely a visual shape-symmetry test.
-- ``sampling``:
-  coordinate specification for the output grid. Supported built-in mapping
-  coordinate sets are ``s``, ``s`` and ``mu``, or ``rp`` and ``pi``.
-- ``binning_window.los_args``:
-  line-of-sight direction for LOS-aware binning windows, expressed as
-  ``[nx, ny, nz]`` or a dictionary with ``nx``, ``ny``, and ``nz``.
-- ``threads``:
-  CPU threads per MPI rank.
-- ``weight_normalization``:
-  input-weight convention for catalog fields. ``catalog`` (default) divides by
-  ``catalog_weight_sum``. ``raw`` keeps the raw weighted amplitude.
-  ``field`` divides by ``raw_field_weighted_sum`` for positive marked fields.
-  ``unit`` rescales either catalog or derived fields to unit field integral.
-- ``memory_strategy``:
-  ``speed`` keeps all required fields resident and reuses each binning window
-  across products at a sampling point. ``memory`` computes product groups in
-  sequence to reduce peak memory, at the cost of rebuilding binning windows.
-- ``binning_window_cache``:
-  optional disk cache for binning-window kernels, useful with
-  ``memory_strategy: memory`` when repeated product groups would otherwise
-  rebuild the same kernels. Disabled by default.
-- ``binning_window_cache_dir``:
-  directory used when ``binning_window_cache`` is enabled. If empty, PyHermes
-  derives a cache directory from ``fout_path``.
-- ``fout_path``:
-  output path for the 2PCF result.
+The shared field and random inputs are empty by default. The default estimator
+uses:
+
+.. code-block:: yaml
+
+   weight_normalization: "catalog"
+   binning_window:
+      type: "shell"
+      len_args: ["R"]
+      mapping: "s_to_R"
+   sampling:
+      s: {min: 1.0, max: 150.0, n: 30}
+   products: "xi"
+   memory_strategy: "speed"
+   binning_window_cache: false
+   threads: 1
+
+The list form ``len_args: ["R"]`` is normalized internally into a runtime
+placeholder. User configurations are clearer when written explicitly as
+``len_args: {R: null}``.
 
 Corr_3PCF
 ---------
 
-- ``sfc_field_path``:
-  shared fallback input field path.
-- ``sfc_field1_path``, ``sfc_field2_path``, ``sfc_field3_path``:
-  optional leg-specific input paths.
-- ``window``:
-  shared fallback smoothing window.
-- ``window1``, ``window2``, ``window3``:
-  optional leg-specific smoothing windows.
-- ``r12`` and ``r13``:
-  triangle side lengths used to define the 3PCF family.
-- ``n_theta``:
-  number of angular bins.
-- ``n_rot``:
-  number of rotations used in the Monte Carlo estimator.
-- ``center``:
-  center sampling mode, usually ``box_random`` or ``particle``.
-- ``field_mode``:
-  either ``delta`` or ``raw``.
-- ``n_box_centers``:
-  total number of Monte Carlo centers when ``center="box_random"``.
-- ``base_seed``:
-  random seed controlling reproducibility.
-- ``threads``:
-  CPU threads per MPI rank.
-- ``weight_normalization``:
-  same input-weight choices as ``Corr_2PCF``. With particle centers,
-  automatically recovered center marks follow this choice; explicitly supplied
-  ``particle_pos1`` and ``particle_weight1`` must be provided together and are
-  used as given.
-- ``fout_path``:
-  output path for the 3PCF result.
+The default direct-angular triangle has ``r12=20``, ``r13=40``, 20 angular
+samples, 100 rotations, and ``center=box_random`` with five million centres.
+``angle_param=theta``, ``base_seed=42``, and ``products=Q``. Shared and
+leg-specific fields, randoms, and windows remain empty until configured.
 
 Corr_3PCF_Multipole
 -------------------
 
-- ``sfc_field_path``:
-  shared fallback input field path.
-- ``sfc_field1_path``, ``sfc_field2_path``, ``sfc_field3_path``:
-  optional leg-specific input paths.
-- ``window``:
-  shared fallback smoothing window.
-- ``window1``, ``window2``, ``window3``:
-  optional leg-specific smoothing windows.
-- ``r12`` and ``r13``:
-  side lengths for the multipole family.
-- ``l_min`` and ``l_max``:
-  minimum and maximum multipole order.
-- ``gpu_device_id``:
-  CUDA device index used by the GPU summation stage.
-- ``field_mode``:
-  either ``delta`` or ``raw``.
-- ``execution_mode``:
-  ``serial`` or ``pair_mpi``.
-- ``cache_multipole_fields``:
-  whether to write intermediate multipole convolution fields to disk.
-- ``cache_dir``:
-  directory used for the optional intermediate cache.
-- ``verbose_m_progress``:
-  whether to print detailed progress and timing information for each multipole.
-- ``weight_normalization``:
-  same input-weight choices as ``Corr_2PCF``.
-- ``threads``:
-  CPU threads per MPI rank.
-- ``fout_path``:
-  output path for the multipole result.
+Multipole radii have no top-level defaults. Both edge windows and ``sampling``
+must be supplied. The execution defaults are:
 
-Notes
------
+.. code-block:: yaml
 
-- Empty path fields usually mean “use the shared fallback path instead”.
-- Window dictionaries follow the common PyHermes structure:
+   l_min: 0
+   l_max: 4
+   products: "zeta_l"
+   execution_mode: "serial"
+   summation_backend: "gpu"
+   gpu_device_id: 0
+   gpu_threads_per_block: [8, 8, 8]
+   sample_mpi:
+      ranks_per_sample: 1
+      gpu_device_ids: []
+   cache_multipole_fields: false
+   verbose_m_progress: false
+   verbose_profile: false
+   radial_profile_diagnostics: true
+   radial_profile_diagnostic_tolerance: 1.0e-5
+   radial_profile_diagnostic_probes: 33
+   zeta_condition_warning: 1.0e12
+   threads: 1
 
-  .. code-block:: yaml
+The default GPU backend requires a usable CUDA device. Set
+``summation_backend: cpu`` explicitly on CPU-only systems.
 
-     window:
-        type: "sphere"
-        len_args:
-           R: 20
-        other_args: {}
+Resolution and memory
+---------------------
 
-  Use descriptive length names for custom and compound windows. For example,
-  a custom finite shell can use ``R_in`` and ``R_out``; ``gaussian_shell`` uses
-  ``R_shell`` and ``R_smooth``; ``cubic`` uses ``Lx``, ``Ly``, and ``Lz``.
+The deceptively small ``J`` parameter controls a three-dimensional array:
 
-- In most workflows, you only need to override a small subset of the defaults.
-  The rest can safely remain untouched.
+.. math::
+
+   N_{\rm MRA}=L^3=2^{3J}.
+
+Increasing ``J`` by one multiplies the coefficient count by eight. Treat a
+change from :math:`J=8` to :math:`J=9` as a new resource regime, not a cosmetic
+resolution tweak.

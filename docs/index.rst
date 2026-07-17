@@ -1,28 +1,71 @@
-PyHermes documentation
-======================
+PyHermes
+========
 
-PyHermes is a workflow-oriented package for particle-based cosmic statistics.
-The central idea is simple: project a particle catalog into a reusable
-``SFCField`` field, act on that field with ``WindowFunc`` convolution
-operators, and read out one-point, two-point, three-point, multipole, or
-weighted-field measurements from the resulting field products.
+**PyHermes** is the Python implementation of **Hermes**, an in situ
+multiresolution framework for cosmic statistics. A particle catalogue is
+projected once into a reusable scaling-function-coefficient field
+(``SFCField``). Smoothing, binning, multipole projection, and differential
+operations are then expressed as windows acting on that field.
 
-The guide follows the example workflow in ``examples/notebooks/``. New users
-should start with the introduction, install the package, then work through the
-getting-started notebooks. The mathematical and window-function pages provide
-the compact reference behind those examples.
+This field--window language supports count-in-cell statistics, isotropic and
+anisotropic 2PCFs, standard and multipole 3PCFs, marked and weighted
+statistics, and derived physical fields such as velocity divergence,
+Newtonian potential, and acceleration.
 
-The repository tracks notebooks, scripts, and YAML configs. Example data and
-most outputs are generated locally while you work through the tutorials.
+.. figure:: _static/paper/PyHermes-Workflow.png
+   :width: 96%
+   :align: center
+   :alt: Catalogue, window, MRA field, and task layers in PyHermes
+
+   The four-layer PyHermes workflow used in the Hermes paper. Catalogue data
+   and window operators meet in the MRA layer; task objects assemble the
+   resulting filtered fields into statistics or physical diagnostics.
+
+The shortest route through the documentation is:
+
+1. :doc:`intro` for the algorithm and its scope.
+2. :doc:`install` and :doc:`get_start/quick_start` for a first run.
+3. :doc:`get_start/sfc_projection/sfc_projection` and
+   :doc:`get_start/window/window` for the two reusable core objects.
+4. Choose a task guide: Counting, 2PCF, standard 3PCF, 3PCF multipoles, or
+   weighted and derived fields.
+
+The public `examples directory
+<https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples>`_ is the
+executable companion to this guide. Its notebooks are tutorials; its scripts
+and YAML files are production-shaped starting points.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Guide
+   :caption: Start here
 
    intro
    install
+   get_start/quick_start
    get_start/get_start
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Field--window concepts
+
    math
+   get_start/sfc_projection/sfc_projection
+   get_start/window/window
    windows
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Statistics and physical fields
+
+   get_start/counting/counting
+   get_start/corr_2pcf/corr_2pcf
+   get_start/corr_3pcf/corr_3pcf
+   get_start/corr_3pcf_multipole/corr_3pcf_multipole
+   get_start/weighted_fields/weighted_fields
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Reference and validation
+
    param/param
    benchmark

@@ -4,183 +4,104 @@
 
 # PyHermes
 
-PyHermes implements **Hermes**: **HypER-speed MultiResolution cosmic
-Statistics**. It is an open-source Python toolkit for particle-based cosmic
-statistics, built around multiresolution fields and window convolutions.
+**PyHermes** is the Python implementation of **Hermes** (HypER-speed
+MultirEsolution cosmic Statistics), an in situ framework for measuring cosmic
+statistics with reusable multiresolution fields and window operators.
 
-Instead of recounting pairs or triplets for every requested configuration,
-PyHermes projects a particle catalog onto a grid, stores the result as reusable
-`SFCField`, and evaluates downstream measurements through field operations.
-This gives one common workflow for one-point counts, two-point correlations,
-three-point correlations, and multipoles, with GPU acceleration available for
-the multipole path.
+A catalogue is projected once into an `SFCField`. Smoothing, geometric binning,
+multipole decomposition, differentiation, and inverse-Laplacian operations are
+then expressed through `WindowFunc` objects. The same field can therefore feed
+counting, 2PCF, conventional 3PCF, 3PCF multipoles, marked statistics, and
+derived physical-field calculations without returning to particle-level tuple
+counting for every configuration.
 
-The typical workflow is:
+- **Documentation:** [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
+- **Source:** [SYSUSPA-Projects/PyHermes](https://github.com/SYSUSPA-Projects/PyHermes)
+- **Tutorials:** [`examples/notebooks/`](examples/notebooks)
+- **Runnable configurations:** [`examples/configs/`](examples/configs) and
+  [`examples/scripts/`](examples/scripts)
 
-1. build `SFCField` from particle positions with `SFCProjection`
-2. define the window functions required by the statistic
-3. reuse the same field for counting, 2PCF, 3PCF, and multipole measurements
+![Hermes field-window workflow](docs/_static/paper/PyHermes-Workflow.png)
 
-Project links:
+## What It Covers
 
-- Documentation: [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
-- Source code: [github.com/PyHermes/PyHermes](https://github.com/PyHermes/PyHermes)
-- Package code map: [pyhermes/README.md](pyhermes/README.md)
-
-![PyHermes workflow](docs/_static/pyhermes_workflow.png)
+- catalogue-to-field projection with configurable compactly supported scaling
+  functions and resolution `J`;
+- built-in and user-defined smoothing, binning, multipole, and operator windows;
+- one-point counting and field sampling;
+- isotropic and anisotropic 2PCF measurements;
+- Monte Carlo and spherical-harmonic 3PCF estimators;
+- MPI/thread parallelism and CPU or CUDA contraction for 3PCF multipoles;
+- weighted fields, velocity derivatives, Poisson potential, acceleration, and
+  density-dependent marks.
 
 ## Installation
 
-Create a clean environment and install from source:
-
 ```bash
-conda create -n pyhermes python=3.10
+conda create -n pyhermes python=3.12
 conda activate pyhermes
 pip install -r requirements.txt
-pip install .
+pip install -e .
 ```
 
-MPI is optional. Install `mpi4py` only if you plan to run multi-process jobs:
+MPI and CUDA are optional. See the
+[installation guide](https://pyhermes.astroslacker.com/install.html) for
+distributed and GPU setup.
+
+## Smallest Workflow
+
+The tracked examples use paths relative to `examples/`:
 
 ```bash
-pip install mpi4py
+cd examples
+python scripts/prepare_sfc_fields.py
 ```
-
-## Quick Start
-
-The examples use paths relative to `examples/`. From a fresh clone, first
-prepare the local Quijote halo catalog and the reusable `SFCField` products
-used by later examples. You can either run the data-preparation sections in
-`examples/notebooks/sfc_projection.ipynb`, or run the same preparation directly:
-
-```bash
-python examples/scripts/prepare_sfc_fields.py
-```
-
-After that, the core PyHermes workflow is only a few lines:
 
 ```python
-from pathlib import Path
-import os
-
-import matplotlib.pyplot as plt
-import numpy as np
-
 from pyhermes.base.sfc_projection import SFCProjection
 from pyhermes.io import WindowFunc
 from pyhermes.param.parambase import read_param
 
-# Use the same base directory as the example scripts and YAML files.
-os.chdir(Path("examples"))
+params = read_param("./configs/param_sfc_projection.yaml")
+field = SFCProjection(params).run(save_result=False)
 
-# Build the multiresolution field from the example particle catalog.
-task_params = read_param(config_path="./configs/param_sfc_projection.yaml")
-D = SFCProjection(task_params).run(save_result=False)
-D.threads = 8
-
-# Convert the normalized field into a fluctuation field.
-rho = 1 / D.V
-RR = rho**2
-deltaD = D - rho
-
-# Smooth the fluctuation field with a spherical top-hat window.
-smooth_window = WindowFunc(
-    {"type": "sphere", "len_args": {"R": 5}},
-    D.sfc_info,
+gaussian = WindowFunc(
+    {"type": "gaussian", "len_args": {"R": 10.0}},
+    field.sfc_info,
     threads=8,
 )
-deltaD_w = deltaD @ smooth_window
-
-# Estimate xi(r) with shell convolutions and a spatial average.
-r_arr = np.linspace(0, 150, 26)
-xi_arr = np.zeros_like(r_arr)
-
-for i, r in enumerate(r_arr):
-    shell_window = WindowFunc(
-        {"type": "shell", "len_args": {"R": r}},
-        D.sfc_info,
-        threads=8,
-    )
-    pair_field = deltaD_w @ shell_window * deltaD_w
-    xi_arr[i] = pair_field.as_array().mean() / RR
-
-plt.plot(r_arr, xi_arr * r_arr**2)
-plt.xlabel("r [Mpc/h]")
-plt.ylabel(r"$r^2 \xi(r)$")
-plt.show()
+smoothed_field = field @ gaussian
 ```
 
-## Start Here
+This is the core language of PyHermes: **field @ window**. Statistical tasks
+build the required window families and normalizations around the same objects.
 
-The repository is organized around seven notebooks in `examples/notebooks/`:
+## Start With The Notebooks
 
-- `quick_start.ipynb`: the smallest end-to-end example
-- `sfc_projection.ipynb`: build `SFCField` from particle catalogs
-- `window.ipynb`: work with `SFCField` and `WindowFunc` arithmetic
-- `counting.ipynb`: sample the field at random positions
-- `corr2pcf.ipynb`: isotropic and anisotropic 2PCF, including redshift-space examples
-- `corr3pcf.ipynb`: standard 3PCF, low-level `Q` reconstruction, and multipoles
-- `weighted_fields.ipynb`: an extra weighted-field application that builds velocity and momentum-density fields
+The recommended route through [`examples/notebooks/`](examples/notebooks) is:
 
-The recommended reading order is:
+1. [`quick_start.ipynb`](examples/notebooks/quick_start.ipynb)
+2. [`sfc_projection.ipynb`](examples/notebooks/sfc_projection.ipynb)
+3. [`window.ipynb`](examples/notebooks/window.ipynb)
+4. [`counting.ipynb`](examples/notebooks/counting.ipynb)
+5. [`corr2pcf.ipynb`](examples/notebooks/corr2pcf.ipynb)
+6. [`corr3pcf.ipynb`](examples/notebooks/corr3pcf.ipynb)
+7. [`weighted_fields.ipynb`](examples/notebooks/weighted_fields.ipynb)
 
-1. `quick_start.ipynb`
-2. `sfc_projection.ipynb`
-3. `window.ipynb`
-4. `counting.ipynb`
-5. `corr2pcf.ipynb`
-6. `corr3pcf.ipynb`
-7. `weighted_fields.ipynb`
-
-## Example Layout
-
-The tracked example assets are:
-
-- `examples/notebooks/`: tutorial notebooks
-- `examples/scripts/`: runnable task drivers
-- `examples/configs/`: YAML files used by those drivers
-
-The following directories are created and filled locally:
-
-- `examples/data/`: local example data. Use `examples/notebooks/sfc_projection.ipynb`
-  or `examples/scripts/prepare_sfc_fields.py` to download and prepare the
-  Quijote halo example used by the tutorials.
-- `examples/output/`: local outputs. Lightweight products are created during
-  notebook runs. Heavier 2PCF and 3PCF products are not committed; the
-  relevant cells in `corr2pcf.ipynb` and `corr3pcf.ipynb` point to the exact
-  script and YAML file you should run on your own machine or server.
-
-All example scripts and YAML files are written with `examples/` as the working
-directory. The notebooks switch to that directory at the top so the same
-relative paths work in both notebook and command-line usage.
-
-## Running The Example Scripts
-
-From the repository root:
-
-```bash
-cd examples
-python ./scripts/run_sfc_projection.py ./configs/param_sfc_projection.yaml
-python ./scripts/run_counting.py ./configs/param_counting.yaml
-python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
-python ./scripts/run_3pcf.py ./configs/param_3pcf_rcenter_nrot20.yaml
-```
-
-With MPI:
-
-```bash
-cd examples
-mpirun -np 4 python ./scripts/run_sfc_projection.py ./configs/param_sfc_projection.yaml
-mpirun -np 4 python ./scripts/run_2pcf.py ./configs/param_2pcf.yaml
-mpirun -np 4 python ./scripts/run_3pcf.py ./configs/param_3pcf_pcenter_nrot20.yaml
-```
-
-For heavier production-style runs, use the script and config combinations
-called out directly in `corr2pcf.ipynb` and `corr3pcf.ipynb`.
+Generated catalogues and estimator products are intentionally not committed.
+The notebooks state which lightweight cells run locally and which script/YAML
+pairs are intended for a workstation or cluster.
 
 ## Documentation
 
-The full written guide lives in `docs/` and follows the same notebook learning
-path as the examples: the traditional multipoint-statistics workflow first,
-then `weighted_fields.ipynb` as an additional PyHermes application beyond that
-main line.
+The full guide at [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
+follows the terminology and estimator definitions of the Hermes paper. It
+covers the mathematical construction, current APIs, window catalogue,
+parameter mappings, numerical validation, and performance interpretation.
+
+To build it locally:
+
+```bash
+pip install sphinx sphinx-rtd-theme sphinx-copybutton
+sphinx-build -W -b html docs docs/_build/html
+```

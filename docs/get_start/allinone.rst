@@ -1,20 +1,38 @@
-:orphan:
+Example catalogue
+=================
 
-Notebook guide
-==============
+The public tutorials are deliberately small enough to read from top to bottom.
+They are not a dump of internal tests.
 
-The main tutorial workflow is organized around the notebooks in
-``examples/notebooks/``:
+.. list-table::
+   :header-rows: 1
+   :widths: 24 34 42
 
-- ``quick_start.ipynb``
-- ``sfc_projection.ipynb``
-- ``window.ipynb``
-- ``counting.ipynb``
-- ``corr2pcf.ipynb``
-- ``corr3pcf.ipynb``
+   * - Notebook
+     - Main objects
+     - Scientific focus
+   * - ``quick_start.ipynb``
+     - ``SFCProjection``, ``WindowFunc``
+     - Smallest end-to-end field and 2PCF calculation
+   * - ``sfc_projection.ipynb``
+     - ``SFCProjection``, ``SFCField``
+     - Readers, field resolution, weights, and field reconstruction
+   * - ``window.ipynb``
+     - ``SFCField``, ``WindowFunc``
+     - Field algebra, kernels, custom windows, and composition caveats
+   * - ``counting.ipynb``
+     - ``Counting``, ``CountingData``
+     - One-point samples, PDFs, and smoothing response
+   * - ``corr2pcf.ipynb``
+     - ``Corr_2PCF``, ``Corr2PCFData``
+     - Isotropic and redshift-space two-point statistics
+   * - ``corr3pcf.ipynb``
+     - ``Corr_3PCF``, ``Corr_3PCF_Multipole``
+     - Monte Carlo 3PCF, multipoles, and consistency checks
+   * - ``weighted_fields.ipynb``
+     - weighted ``SFCField`` objects, operator windows
+     - Velocity derivatives, potential, and acceleration
 
-Beyond that main multipoint-statistics path, ``weighted_fields.ipynb`` shows
-how changing particle weights turns the same field-construction machinery into
-velocity and momentum-density field estimators.
-
-Use :doc:`get_start` as the entry point.
+Each tutorial names the script and YAML file that generate any heavy saved
+product it reads. Start with the notebook to understand a workflow; move to the
+script and configuration when the calculation belongs on a server.

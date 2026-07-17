@@ -1,450 +1,264 @@
-Benchmark
-=========
+Validation and Performance
+==========================
 
-This page summarizes the benchmark logs collected under ``examples/logs``.
-The numbers are intended as practical reference timings for the example
-workflows, not as hardware-independent performance claims.
+This page separates two questions that are easy to mix together:
 
-Reading The Tables
-------------------
+* **Validation:** does a field--window estimator recover the expected statistic,
+  and does it converge when the numerical controls are tightened?
+* **Performance:** once the estimator is fixed, which part of the workflow sets
+  the runtime and memory footprint?
 
-All rows use the Quijote halo example unless noted otherwise:
+The figures in the first half are generated from the current grouped test
+outputs.  The compact timing table and CPU/GPU comparison reproduce the
+reference benchmarks reported in the Hermes paper.
 
-- approximately ``4.07e5`` halos in a ``box_size = 1000`` volume
-- ``wavelet_mode = db2``, ``wavelet_level = 10``, and ``phi_resolution = 1024``
-- ``J = 8`` for the main examples, with extra ``J = 9`` multipole runs
+Reference Data
+--------------
 
-The ``main`` column reports the core measurement loop exposed in the log. The
-``task`` column includes setup, post-processing, and output writing. Resource
-labels are written as ``MPI ranks x threads per rank``. The logs do not record
-the CPU model. The multipole logs record an ``NVIDIA GeForce RTX 4090`` with
-CUDA 12.4; the CUDA product kernel uses an ``(8, 8, 8)`` layout, i.e. 512 GPU
-threads per block.
+Unless stated otherwise, the validation examples use the Quijote
+fiducial-cosmology halo catalogue from realisation 8000, snapshot 004
+(``z = 0``):
 
-The memory values below are the Slurm batch-step ``MaxRSS`` values collected
-with ``sacct``. They should be read as job-level planning numbers for these
-example workflows, not as universal minima. At fixed task structure, increasing
-``J`` by one increases the number of grid coefficients by a factor of eight.
-For memory-heavy jobs this can be partly balanced by reducing the number of
-MPI ranks and increasing the number of threads per rank, so fewer rank-local
-field buffers are replicated.
+* 406,728 FoF haloes in a periodic cube of side
+  ``1000 h^-1 Mpc``;
+* the ``db2`` scaling-function basis;
+* ``J = 8`` for the main tests, with selected ``J = 9`` comparisons;
+* the plane-parallel approximation for redshift-space measurements.
 
-Compact Planning Summary
-------------------------
+These are controlled algorithm tests, not a complete survey-analysis recipe.
+Survey masks and spatially varying selection functions require an explicit
+random catalogue or random ``SFCField``.
 
-The table below mirrors the compact benchmark summary used in the paper. The
-3PCF rows use ``r12=20 Mpc/h`` and ``r13=40 Mpc/h``. The later sections keep
-the fuller log-level breakdowns, including explicit-random variants and staged
-multipole products.
+Numerical Validation
+--------------------
 
-.. list-table::
+Anisotropic 2PCF
+~~~~~~~~~~~~~~~~
+
+The same ``Corr2PCF`` task can measure real- and redshift-space fields by
+changing the input ``SFCField`` while keeping the binning-window family fixed.
+The plot below maps :math:`s^2\xi(s,\mu)` to Cartesian
+:math:`(s_\perp,s_\parallel)` coordinates.  The line-of-sight structure is a
+useful end-to-end check of field loading, window orientation, sampling-grid
+ordering, and result reshaping.
+
+.. figure:: _static/results/docs_2pcf_real_rsd_smu.png
+   :alt: Real- and redshift-space anisotropic two-point correlation functions
+   :width: 100%
+
+   Current grouped-test outputs in real and redshift space.  Both panels use a
+   shared colour normalization; the white centre is outside the sampled radial
+   range.
+
+For an independent estimator-level check, the paper compares the isotropic
+Hermes result with direct periodic pair counting.  Agreement improves with
+increasing ``J`` and is best interpreted only above the effective resolution
+scale of the reconstructed field.
+
+.. figure:: _static/paper/benchmark_2pcf_isotropic_s2xi_curves.png
+   :alt: Isotropic PyHermes and direct pair-counting comparison
+   :width: 86%
+
+Standard 3PCF
+~~~~~~~~~~~~~
+
+The conventional ``Corr3PCF`` task estimates translational and rotational
+averages by Monte Carlo sampling.  Convergence must therefore be checked in
+``n_rot`` rather than inferred from one visually smooth curve.  In the current
+test, the low-rotation result fluctuates visibly while the curves and their RMS
+difference settle rapidly as ``n_rot`` increases.
+
+.. figure:: _static/results/docs_3pcf_rotation_convergence.png
+   :alt: Standard three-point correlation rotation convergence
+   :width: 100%
+
+   Left: :math:`Q(\theta)` for several rotation counts.  Right: RMS difference
+   from the ``n_rot = 2000`` result.
+
+3PCF Multipoles
+~~~~~~~~~~~~~~~
+
+Multipole measurements have two separate convergence controls.  ``lmax``
+truncates the angular expansion, while ``J`` controls the MRA field resolution.
+The left panel below verifies that increasing ``lmax`` appends higher orders
+without changing the already computed low-order multipoles.  The right panel
+compares those common modes between ``J = 8`` and ``J = 9``.
+
+.. figure:: _static/results/docs_3pcf_multipole_lmax_resolution.png
+   :alt: Three-point multipole truncation and field-resolution comparison
+   :width: 100%
+
+For non-shell radial profiles, PyHermes tabulates the required radial transform.
+The default and refined tables should agree before a profile is used for
+production measurements.  The following check covers the thin-shell analytic
+path and the numerical thick- and Gaussian-shell paths.
+
+.. figure:: _static/results/docs_3pcf_radial_profile_convergence.png
+   :alt: Multipole radial-profile convergence at J equals 7 and 8
+   :width: 100%
+
+An Ensemble-Level Check
+~~~~~~~~~~~~~~~~~~~~~~~
+
+The Kun scan provides a larger application test: ``r12 = 20 h^-1 Mpc`` is held
+fixed while ``r13`` varies.  The 129 mocks used here span different cosmological
+parameters.  Their spread is therefore **not** a covariance estimate for one
+cosmology; it is shown to inspect the stability of the full projection and
+monopole pipeline over a deliberately broad simulation ensemble.
+
+.. figure:: _static/results/docs_kun_monopole_ensemble.png
+   :alt: Thin- and thick-shell three-point monopoles for 129 Kun mocks
+   :width: 100%
+
+The binning profile is part of the observable, not merely a plotting choice.
+For one mock, widening a finite shell or increasing the Gaussian-shell width
+averages a broader neighbourhood of triangle configurations:
+
+.. figure:: _static/results/docs_kun_mock0_binning_windows.png
+   :alt: Kun mock zero monopole measured with thin, thick, and Gaussian shells
+   :width: 86%
+
+   One input field and one radial scan measured with six binning profiles. The
+   smooth variation between profiles is the expected finite-bin response.
+
+Performance Model
+-----------------
+
+The catalogue is projected once onto
+:math:`N_{\mathrm{MRA}}=2^{3J}` coefficients.  Subsequent measurements operate
+on fields and windows, so their leading cost depends on field resolution and
+the number of requested window evaluations, rather than directly on the
+original catalogue size.
+
+For ``N_w`` window applications on a matching FFT grid,
+
+.. math::
+
+   T_{\mathrm{conv}}
+   = \mathcal{O}\!\left(N_w N_{\mathrm{MRA}}
+     \log N_{\mathrm{MRA}}\right).
+
+The task-specific multiplicities are:
+
+* ``Corr2PCF``: ``N_s * N_mu`` or ``N_rp * N_pi`` sampled binning windows;
+* ``Corr3PCF``: translation samples times random rotations;
+* ``Corr3PCFMultipole``:
+  :math:`N_m=(\ell_{\max}+1)(\ell_{\max}+2)/2` explicitly evaluated
+  non-negative-:math:`m` fields.
+
+Increasing ``J`` by one multiplies the number of three-dimensional field
+coefficients by eight.  Since some work buffers are rank-local, a high-``J``
+job often benefits from fewer MPI ranks and more threads per rank.
+
+Reference Benchmarks
+--------------------
+
+The CPU measurements used two AMD EPYC 9754 processors (256 physical cores in
+total).  GPU measurements used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
+``ranks x threads`` below describes the CPU layout; the multipole GPU jobs use
+the same CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the
+final contraction.
+
+.. list-table:: Representative results reported in the Hermes paper
    :header-rows: 1
-   :widths: 18 34 7 12 12 13 10
+   :widths: 17 34 6 12 12 13 10
 
    * - Product
      - Representative setup
      - ``J``
-     - Resources
+     - Parallel
      - Total loop
      - Average
-     - ``MaxRSS``
-   * - ``DD(s,mu)``
-     - Octant kernel, ``n_s=46``, ``n_mu=51``
-     - ``8``
+     - MaxRSS
+   * - :math:`DD(s,\mu)`
+     - Ring windows, ``46 x 51`` samples
+     - 8
      - ``16 x 8``
-     - ``78 s``
-     - ``33.21 ms/sample``
-     - ``16.5 GB``
-   * - ``DD(s,mu)``
-     - Full ``rfft`` kernel, ``n_s=46``, ``n_mu=51``
-     - ``8``
+     - 78 s
+     - 33.21 ms/sample
+     - 16.5 GB
+   * - :math:`DDD(\theta)`
+     - 406,728 particle centres, ``n_rot=1000``, ``n_theta=20``
+     - 8
      - ``16 x 8``
-     - ``149.5 s``
-     - ``63.5 ms/sample``
-     - ``15.5 GB``
-   * - ``DDD(theta; r12,r13)``
-     - Particle centres, ``N_cen=406728``, ``n_rot=1000``, ``n_theta=20``
-     - ``8``
+     - 110 s
+     - 14 ns/comb.
+     - 11.5 GB
+   * - :math:`DDD(\theta)`
+     - 8 million box-random centres, ``n_rot=200``, ``n_theta=20``
+     - 8
      - ``16 x 8``
-     - ``110 s``
-     - ``14 ns/comb.``
-     - ``11.5 GB``
-   * - ``DDD(theta; r12,r13)``
-     - Box-random centres, ``N_cen=8.0e6``, ``n_rot=200``, ``n_theta=20``
-     - ``8``
-     - ``16 x 8``
-     - ``467 s``
-     - ``14 ns/comb.``
-     - ``15.7 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=7`` (``N_m=36``)
-     - ``8``
+     - 467 s
+     - 14 ns/comb.
+     - 15.7 GB
+   * - :math:`DDD_\ell`
+     - ``lmax=7`` (36 non-negative-``m`` fields)
+     - 8
      - ``24 x 4``
-     - ``31 s``
-     - ``0.86 s/m``
-     - ``23.3 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=10`` (``N_m=66``)
-     - ``8``
+     - 30 s
+     - 0.84 s/field
+     - 17.8 GB
+   * - :math:`DDD_\ell`
+     - ``lmax=14`` (120 non-negative-``m`` fields)
+     - 8
      - ``24 x 4``
-     - ``62 s``
-     - ``0.94 s/m``
-     - ``24.1 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=14`` (``N_m=120``)
-     - ``8``
+     - 108 s
+     - 0.90 s/field
+     - 18.1 GB
+   * - :math:`DDD_\ell`
+     - ``lmax=20`` (231 non-negative-``m`` fields)
+     - 8
      - ``24 x 4``
-     - ``109 s``
-     - ``0.91 s/m``
-     - ``22.5 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=20`` (``N_m=231``)
-     - ``8``
-     - ``24 x 4``
-     - ``231 s``
-     - ``1.00 s/m``
-     - ``22.8 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=7`` (``N_m=36``)
-     - ``9``
+     - 230 s
+     - 1.00 s/field
+     - 17.8 GB
+   * - :math:`DDD_\ell`
+     - ``lmax=7`` (36 non-negative-``m`` fields)
+     - 9
      - ``12 x 8``
-     - ``221 s``
-     - ``6.1 s/m``
-     - ``77.4 GB``
-   * - ``DDD_ell(r12,r13)``
-     - ``lmax=14`` (``N_m=120``)
-     - ``9``
+     - 221 s
+     - 6.14 s/field
+     - 62.0 GB
+   * - :math:`DDD_\ell`
+     - ``lmax=14`` (120 non-negative-``m`` fields)
+     - 9
      - ``12 x 8``
-     - ``849 s``
-     - ``7.1 s/m``
-     - ``81.7 GB``
+     - 822 s
+     - 6.85 s/field
+     - 61.0 GB
 
-2PCF
-----
+CPU and GPU Multipole Backends
+------------------------------
 
-The 2PCF examples are grouped by the choices that change the actual workload:
-coordinate grid, line of sight, and random-field treatment. Real-space and
-redshift-space inputs have the same loop structure here, so they are pooled
-when the sampling grid, LOS, and random treatment match. Ring, cylinder, disk,
-and ``sph5`` smoothing options have comparable cost in this benchmark.
+The backend switch applies to the final multipole-field contraction.  FFT
+window convolutions and MPI communication remain CPU-side for both backends.
+Consequently, the GPU strongly accelerates the contraction stage, while the
+end-to-end gain is bounded by the unchanged convolution stage.
 
-.. image:: _static/benchmark_2pcf.png
-   :alt: 2PCF benchmark chart
-   :class: benchmark-figure
+.. figure:: _static/paper/3pcf_multipole_cpu_gpu_runtime_phases.png
+   :alt: CPU and GPU three-point multipole runtime and host-memory comparison
+   :width: 100%
 
-Label notes: ``smu(46x51)`` means 46 radial bins times 51 ``mu`` bins, while
-``rppi(46x46)`` means 46 ``rp`` bins times 46 ``pi`` bins. ``axis LOS`` uses
-``(0, 0, 1)`` and ``diag LOS`` uses ``(1, 1, 1)``. ``uniform shortcut`` uses
-the analytic uniform random density, while ``explicit random`` reads a saved
-random ``SFCField`` field.
+Across these five configurations, GPU offload reduces the contraction cost by
+about ``4.2--4.4x`` and the complete multipole workflow by about ``2.2--3.1x``.
+At fixed ``J``, host memory is nearly independent of ``lmax`` because windows
+are generated and processed sequentially.  The CPU backend uses more rank-local
+contraction storage; the plotted memory is Slurm ``MaxRSS`` and excludes GPU
+device memory.
 
-.. list-table::
-   :header-rows: 1
-   :widths: 30 14 14 12 14 14 18
+Reproducing the Checks
+----------------------
 
-   * - Case
-     - Samples
-     - Resources
-     - Logs
-     - Main [s]
-     - Task [s]
-     - Main / sample
-   * - ``smu`` axis LOS, uniform shortcut
-     - ``46 x 51``
-     - ``16 x 8``
-     - ``6``
-     - ``77.91 +/- 2.36``
-     - ``79.23 +/- 2.76``
-     - ``33.21 ms``
-   * - ``smu`` diagonal LOS, uniform shortcut
-     - ``46 x 51``
-     - ``16 x 8``
-     - ``2``
-     - ``146.89 +/- 14.87``
-     - ``149.55 +/- 17.50``
-     - ``62.61 ms``
-   * - ``smu`` axis LOS, explicit random
-     - ``46 x 51``
-     - ``16 x 8``
-     - ``1``
-     - ``120.18``
-     - ``125.41``
-     - ``51.23 ms``
-   * - ``rppi`` axis LOS, explicit random
-     - ``46 x 46``
-     - ``16 x 8``
-     - ``1``
-     - ``108.86``
-     - ``114.10``
-     - ``51.45 ms``
+The public ``examples/notebooks`` directory contains the user-facing workflows.
+For maintainers, the current grouped outputs are analysed by four deliberately
+small notebooks:
 
-The diagonal LOS is much slower because the kernel can no longer exploit the
-axis-aligned geometry of ``(0, 0, 1)``. For an axis LOS, many binning-window
-operations reduce to simpler separations along the grid axes. For
-``(1, 1, 1)``, the code must evaluate the full LOS-aware geometry, so each
-sample point does more coordinate work and memory access is less direct.
-Explicit random fields are also slower than the uniform shortcut because the
-random density field must be read and convolved rather than represented by an
-analytic constant.
+* ``tests/notebooks/docs_2pcf_results.ipynb``;
+* ``tests/notebooks/docs_3pcf_results.ipynb``;
+* ``tests/notebooks/docs_3pcf_multipole_results.ipynb``;
+* ``tests/notebooks/docs_kun_monopole_results.ipynb``.
 
-The representative ``J=8`` memory footprint is ``16--17 GB`` for the
-axis-aligned uniform-shortcut runs. The more general ``full_rfft`` path changes
-runtime more than memory, because the main field buffers are still set by the
-same grid resolution and binning-window construction.
-
-Standard 3PCF
--------------
-
-These runs correspond to the standard ``Q`` and low-level reconstruction
-workflows in ``corr3pcf.ipynb``. They use ``r12 = 20``, ``r13 = 40``, sphere
-smoothing with ``R = 5`` on the second and third legs, and 20 angular samples.
-The ``theta`` and ``mu`` modes both have 20 angular samples, so the
-``nrot=1000`` particle-center rows are pooled.
-
-For average timings, two normalizations are useful:
-
-- ``main / (n_rot x n_angle)`` is easy to read and tracks the time per
-  angular-rotation batch.
-- ``main / (n_rot x n_angle x total_centers)`` is the fairer kernel-level
-  normalization across different center counts. It is reported in nanoseconds
-  to avoid tiny decimal seconds.
-
-.. image:: _static/benchmark_3pcf.png
-   :alt: Standard 3PCF benchmark chart
-   :class: benchmark-figure
-
-Label notes: ``pcenter`` means particle centers and ``rcenter`` means
-box-random Monte Carlo centers. ``4k rot-angle`` means
-``n_rot x n_angle = 200 x 20``. ``explicit R`` uses a saved random field.
-Stacked bars show staged workflows: random-center normalization products in
-orange, box-random data/delta products in dark teal, and particle-center
-data-minus-random products in light teal.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 28 16 15 14 14 18 22
-
-   * - Case
-     - ``n_rot x n_angle``
-     - Centers
-     - Resources
-     - Main [s]
-     - Main / rot-angle
-     - Main / center-rot-angle
-   * - ``pcenter`` ``nrot=200``
-     - ``4,000``
-     - ``406,728``
-     - ``16 x 8``
-     - ``25.94``
-     - ``6.48 ms``
-     - ``15.94 ns``
-   * - ``pcenter`` ``nrot=500``
-     - ``10,000``
-     - ``406,728``
-     - ``16 x 8``
-     - ``57.22``
-     - ``5.72 ms``
-     - ``14.07 ns``
-   * - ``pcenter`` ``nrot=1000``, ``theta+mu`` average
-     - ``20,000``
-     - ``406,728``
-     - ``16 x 8``
-     - ``110.57 +/- 2.80``
-     - ``5.53 ms``
-     - ``13.59 ns``
-   * - ``pcenter`` ``nrot=2000``
-     - ``40,000``
-     - ``406,728``
-     - ``16 x 8``
-     - ``216.92``
-     - ``5.42 ms``
-     - ``13.33 ns``
-   * - ``rcenter`` ``nrot=200``, uniform shortcut
-     - ``4,000``
-     - ``8,000,000``
-     - ``16 x 8``
-     - ``466.88``
-     - ``116.72 ms``
-     - ``14.59 ns``
-
-The center-normalized values are much more stable than the raw wall times.
-That is why ``main / center-rot-angle`` is the better metric for comparing
-particle-center and box-random-center kernels, while raw ``main`` time is the
-more useful metric for planning how long a full example will take.
-
-The particle-center ``J=8`` runs use about ``11.5 GB`` in the representative
-``nrot=1000`` benchmark. The box-random-center run uses about ``15.7 GB``
-because it carries the larger Monte Carlo center sample and associated sampled
-field values in addition to the shared convolved fields.
-
-The explicit-random 3PCF workflows are split into products, because their
-total time combines physically different stages.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 24 22 16 15 14 18 22
-
-   * - Workflow
-     - Stage / product
-     - ``n_rot x n_angle``
-     - Centers
-     - Time [s]
-     - Time / rot-angle
-     - Time / center-rot-angle
-   * - ``pcenter`` explicit ``R``
-     - ``ddd`` random-center normalization
-     - ``4,000``
-     - ``8,000,000``
-     - ``386.11``
-     - ``96.53 ms``
-     - ``12.07 ns``
-   * - ``pcenter`` explicit ``R``
-     - ``rrr`` random-only normalization
-     - ``4,000``
-     - ``8,000,000``
-     - ``382.24``
-     - ``95.56 ms``
-     - ``11.95 ns``
-   * - ``pcenter`` explicit ``R``
-     - ``d_delta_dd`` particle-center correction
-     - ``20,000``
-     - ``406,728``
-     - ``114.08``
-     - ``5.70 ms``
-     - ``14.02 ns``
-   * - ``rcenter`` explicit ``R``
-     - ``delta_ddd`` box-random data-minus-random
-     - ``4,000``
-     - ``8,000,000``
-     - ``484.61``
-     - ``121.15 ms``
-     - ``15.14 ns``
-   * - ``rcenter`` explicit ``R``
-     - ``rrr`` random-only normalization
-     - ``4,000``
-     - ``8,000,000``
-     - ``383.09``
-     - ``95.77 ms``
-     - ``11.97 ns``
-
-3PCF Multipoles
----------------
-
-The multipole examples use ``pair_mpi`` execution and the RTX 4090 recorded in
-the logs. The number of independent ``m`` tasks is
-``(lmax + 1) x (lmax + 2) / 2``. The table reports
-``multipole time / m`` as the compact average. For ``full`` rows this includes
-the three heavy products ``ddd_l``, ``delta_ddd_l``, and ``rrr_l``; for
-``shortcut`` rows the analytic uniform-random contribution is effectively
-negligible, so the cost is dominated by ``delta_ddd_l``.
-
-.. image:: _static/benchmark_3pcf_multipole.png
-   :alt: 3PCF multipole benchmark chart
-   :class: benchmark-figure
-
-Label notes: ``J8`` and ``J9`` are the multiresolution grid levels. ``lmax`` is
-the maximum multipole order. ``shortcut`` means the uniform random contribution
-uses the analytic shortcut. ``full`` means explicit random-field products are
-computed. ``24 x 4`` means 24 MPI ranks with 4 threads per rank.
-
-For the shortcut runs summarized in the paper, ``J=8`` uses about
-``23--24 GB`` for ``lmax=7--20``. The ``J=9`` shortcut runs use ``77--82 GB``:
-the grid volume is eight times larger, while the MPI rank count is halved from
-24 to 12, so the observed job-level memory increase is closer to four than to
-eight. The CUDA product-kernel layout is ``(8, 8, 8)`` on the RTX 4090 for
-these multipole runs.
-
-.. list-table::
-   :header-rows: 1
-   :widths: 22 8 10 10 13 23 14 14 12
-
-   * - Case
-     - ``J``
-     - ``lmax``
-     - ``m``
-     - Resources
-     - Heavy products
-     - Multipole [s]
-     - Multipole / ``m``
-     - Task [s]
-   * - Shortcut
-     - ``8``
-     - ``7``
-     - ``36``
-     - ``24 x 4``
-     - ``delta_ddd_l``
-     - ``24.65``
-     - ``0.68 s``
-     - ``30.75``
-   * - Shortcut
-     - ``8``
-     - ``10``
-     - ``66``
-     - ``24 x 4``
-     - ``delta_ddd_l``
-     - ``57.33``
-     - ``0.87 s``
-     - ``62.03``
-   * - Shortcut
-     - ``8``
-     - ``14``
-     - ``120``
-     - ``24 x 4``
-     - ``delta_ddd_l``
-     - ``104.17``
-     - ``0.87 s``
-     - ``109.22``
-   * - Shortcut
-     - ``8``
-     - ``20``
-     - ``231``
-     - ``24 x 4``
-     - ``delta_ddd_l``
-     - ``225.77``
-     - ``0.98 s``
-     - ``230.71``
-   * - Full
-     - ``8``
-     - ``7``
-     - ``36``
-     - ``24 x 4``
-     - ``ddd_l + delta_ddd_l + rrr_l``
-     - ``64.30``
-     - ``1.79 s``
-     - ``72.38``
-   * - Full
-     - ``8``
-     - ``10``
-     - ``66``
-     - ``24 x 4``
-     - ``ddd_l + delta_ddd_l + rrr_l``
-     - ``156.90``
-     - ``2.38 s``
-     - ``164.15``
-   * - Full
-     - ``8``
-     - ``14``
-     - ``120``
-     - ``24 x 4``
-     - ``ddd_l + delta_ddd_l + rrr_l``
-     - ``298.71``
-     - ``2.49 s``
-     - ``304.89``
-   * - Shortcut
-     - ``9``
-     - ``7``
-     - ``36``
-     - ``12 x 8``
-     - ``delta_ddd_l``
-     - ``209.31``
-     - ``5.81 s``
-     - ``221.46``
-   * - Shortcut
-     - ``9``
-     - ``14``
-     - ``120``
-     - ``12 x 8``
-     - ``delta_ddd_l``
-     - ``838.36``
-     - ``6.99 s``
-     - ``848.85``
+They read existing products rather than rerunning expensive estimators.  The
+corresponding grouped Slurm jobs live under ``tests/slurm``.  Treat absolute
+times as hardware-specific; convergence patterns, stage-level scaling, and
+same-node CPU/GPU ratios are the more portable diagnostics.

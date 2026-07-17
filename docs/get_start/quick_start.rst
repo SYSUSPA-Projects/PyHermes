@@ -1,74 +1,104 @@
-Quick Start
+Quick start
 ===========
 
-``quick_start.ipynb`` is the smallest PyHermes example. It uses
-``examples/configs/param_sfc_projection.yaml`` to build a field, then demonstrates the
-core numerical idea in one short path:
+This page runs one complete field-to-2PCF workflow. The matching interactive
+version is ``examples/notebooks/quick_start.ipynb``.
 
-1. build a ``SFCField`` field from particle positions
-2. subtract a uniform random field to form ``delta``
-3. smooth the field with a spherical window
-4. estimate a simple two-point statistic with shell convolutions
-
-When to use this notebook
+Prepare the example field
 -------------------------
 
-Use ``quick_start.ipynb`` when the example halo data have already been prepared
-and you want a compact end-to-end calculation.
-
-When starting from a fresh clone, prepare the example data first. You can do
-this interactively with ``examples/notebooks/sfc_projection.ipynb`` or from the command
-line with:
+From the repository root:
 
 .. code-block:: bash
 
    python examples/scripts/prepare_sfc_fields.py
 
-Input expectation
------------------
+The preparation script downloads or reads the Quijote halo example and writes
+``examples/output/quijote8000_snap004_sfc.pkl``.
 
-The notebook reads the same configuration file used by the main ``SFCProjection``
-example:
+Run a task from YAML
+--------------------
 
-.. code-block:: text
+.. code-block:: bash
 
-   examples/configs/param_sfc_projection.yaml
+   cd examples
+   python scripts/run_2pcf.py configs/param_2pcf.yaml
 
-That config points to the local Quijote halo example prepared by
-``sfc_projection.ipynb`` or ``examples/scripts/prepare_sfc_fields.py``:
+The task writes a ``Corr2PCFData`` product. Load it without knowing its internal
+serialisation format:
 
-.. code-block:: text
+.. code-block:: python
 
-   examples/data/quijote_halos/8000
+   from pyhermes.io import Corr2PCFData
 
-If that directory is not present yet, start with :doc:`sfc_projection/sfc_projection` or run
-``python examples/scripts/prepare_sfc_fields.py`` from the repository root.
+   corr = Corr2PCFData(
+       data_path="./output/quijote8000_snap004_2pcf.pkl"
+   )
+   print(corr.s)
+   print(corr.xi)
 
-What you should take away
--------------------------
+Run and override from Python
+----------------------------
 
-The important idea is that PyHermes turns particle data into a reusable field
-object. Later notebooks keep the same pattern, but add task-level workflows,
-saved outputs, redshift-space variants, and heavier estimators.
+YAML is useful for reproducible runs, while task attributes are convenient for
+small experiments:
 
-Mathematical idea
------------------
+.. code-block:: python
 
-The quick start uses the core in-situ 2PCF identity:
+   import numpy as np
 
-.. math::
+   from pyhermes.param.parambase import read_param
+   from pyhermes.theory.corr2pcf import Corr_2PCF
 
-   \xi(R)
-   =
-   \left\langle
-   \delta_W(\mathbf{x})\,
-   (W_{\rm shell}(R)\circ\delta_W)(\mathbf{x})
-   \right\rangle.
+   params = read_param(config_path="./configs/param_2pcf.yaml")
+   task = Corr_2PCF(params)
+   task.sampling = {"s": np.linspace(0.0, 180.0, 46)}
+   task.products = ["xi"]
+   task.fout_path = "./output/quick_start_2pcf.pkl"
+   corr = task.run()
 
-Here ``SFCProjection`` supplies a unit-value field in the default
-``weight_normalization: catalog`` convention. For this ordinary-density
-example its integral is already one. The notebook forms :math:`\delta`
-against the field's uniform-density shortcut, smooths it into
-:math:`\delta_W`, and each shell convolution reads one separation bin. For
-the field-value distinction and full notation, see
-:doc:`../math`.
+See the operation directly
+--------------------------
+
+The high-level task is assembled from the same lower-level field and window
+objects exposed to users:
+
+.. code-block:: python
+
+   import numpy as np
+
+   from pyhermes.io import SFCField, WindowFunc
+
+   D = SFCField(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
+   rho = D.field_mean_density(value_unit="grid")
+   delta = D - rho
+
+   smooth = WindowFunc(
+       {"type": "sphere", "len_args": {"R": 5.0}},
+       D.sfc_info,
+       threads=8,
+   )
+   delta_s = delta @ smooth
+
+   radii = np.linspace(0.0, 150.0, 31)
+   xi = np.empty_like(radii)
+   for i, radius in enumerate(radii):
+       shell = WindowFunc(
+           {"type": "shell", "len_args": {"R": radius}},
+           D.sfc_info,
+           threads=8,
+       )
+       xi[i] = ((delta_s @ shell) * delta_s).as_array().mean() / rho**2
+
+``@`` applies a window by FFT convolution; ``*`` multiplies two fields
+coefficient by coefficient. The task API handles data/random bookkeeping,
+normalisation, sampling, MPI distribution, and output metadata around these
+same operations.
+
+Where next?
+-----------
+
+- :doc:`sfc_projection/sfc_projection` explains what is stored in ``D``.
+- :doc:`window/window` explains the two operators used above.
+- :doc:`corr_2pcf/corr_2pcf` covers random fields, anisotropic bins, and result
+  products.
