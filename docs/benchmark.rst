@@ -8,9 +8,10 @@ This page separates two questions that are easy to mix together:
 * **Performance:** once the estimator is fixed, which part of the workflow sets
   the runtime and memory footprint?
 
-The figures in the first half are generated from the current grouped test
-outputs.  The compact timing table and CPU/GPU comparison reproduce the
-reference benchmarks reported in the Hermes paper.
+The validation figures and the current CPU/GPU runtime comparison are generated
+from the latest grouped test outputs.  The compact timing table and the
+host-memory panel reproduce the reference benchmarks reported in the Hermes
+paper.
 
 Reference Data
 --------------
@@ -235,14 +236,32 @@ window convolutions and MPI communication remain CPU-side for both backends.
 Consequently, the GPU strongly accelerates the contraction stage, while the
 end-to-end gain is bounded by the unchanged convolution stage.
 
+.. figure:: _static/results/docs_3pcf_multipole_cpu_gpu_runtime.png
+   :alt: Current CPU and GPU three-point multipole task and contraction times
+   :width: 100%
+
+   Latest grouped rerun using ``24 x 4`` at ``J=8`` and ``12 x 8`` at ``J=9``.
+   The left panel includes input, convolution, communication, contraction, and
+   output; the right panel isolates the backend-selected contraction stage.
+
+The CPU and GPU products agree to relative :math:`L_2` differences of
+``9.5e-15--2.2e-14``.  Across the five configurations, the current GPU backend
+accelerates the contraction by ``4.1--4.3x`` and the complete task by
+``1.4--1.75x``.  The smaller end-to-end ratio is expected: the CPU contraction
+has been optimized since the paper benchmark, while FFT convolution and MPI
+communication remain common CPU-side costs.
+
+Paper benchmark snapshot
+~~~~~~~~~~~~~~~~~~~~~~~~
+
 .. figure:: _static/paper/3pcf_multipole_cpu_gpu_runtime_phases.png
    :alt: CPU and GPU three-point multipole runtime and host-memory comparison
    :width: 100%
 
-Across these five configurations, GPU offload reduces the contraction cost by
-about ``4.2--4.4x`` and the complete multipole workflow by about ``2.2--3.1x``.
-At fixed ``J``, host memory is nearly independent of ``lmax`` because windows
-are generated and processed sequentially.  The CPU backend uses more rank-local
+At the paper snapshot, GPU offload reduced the contraction cost by about
+``4.2--4.4x`` and the complete multipole workflow by about ``2.2--3.1x``.  At
+fixed ``J``, host memory is nearly independent of ``lmax`` because windows are
+generated and processed sequentially.  The CPU backend uses more rank-local
 contraction storage; the plotted memory is Slurm ``MaxRSS`` and excludes GPU
 device memory.
 

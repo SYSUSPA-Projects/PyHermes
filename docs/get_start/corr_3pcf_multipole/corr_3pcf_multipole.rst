@@ -198,14 +198,14 @@ input fields. At high :math:`\ell_{\max}` the GPU path is usually most useful;
 for a short monopole scan, sample-level CPU parallelism may be simpler and
 competitive.
 
-.. figure:: ../../_static/paper/3pcf_multipole_cpu_gpu_runtime_phases.png
+.. figure:: ../../_static/results/docs_3pcf_multipole_cpu_gpu_runtime.png
    :width: 92%
    :align: center
    :alt: CPU and GPU timing phases for 3PCF multipoles
 
-   Representative CPU/GPU timing and host-memory measurements from the paper.
-   The GPU accelerates the final contraction; the common convolution work
-   remains visible in both paths.
+   Current CPU/GPU task and contraction timings. The saved multipoles agree to
+   relative :math:`L_2` differences below ``2.3e-14``; only the contraction
+   backend changes.
 
 Products and output
 -------------------
