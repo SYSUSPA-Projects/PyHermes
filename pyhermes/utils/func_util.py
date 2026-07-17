@@ -109,7 +109,7 @@ def validate_sfc_compatibility(sfc_list, required_keys, logger=None, label="SFCF
                 mismatches.append((idx, key, ref_val, cur_val))
     if mismatches:
         mismatch_text = ", ".join(
-            [f"leg{idx}.{key}={cur_val} (reference={ref_val})" for idx, key, ref_val, cur_val in mismatches]
+            [f"vertex{idx}.{key}={cur_val} (reference={ref_val})" for idx, key, ref_val, cur_val in mismatches]
         )
         if logger is not None:
             logger.error(f"{label} require matching required parameters. Found mismatches: {mismatch_text}")

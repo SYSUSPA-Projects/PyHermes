@@ -3,7 +3,7 @@ Standard 3PCF
 
 ``Corr_3PCF`` measures the angular three-point correlation function for a
 triangle with fixed sides :math:`r_{12}` and :math:`r_{13}`. It evaluates the
-two displaced legs as window-filtered fields, samples their product around a
+two displaced vertices as window-filtered fields, samples their product around a
 set of primary vertices, and averages over random rotations. This is the
 direct-angular counterpart of the harmonic estimator described in
 :doc:`../corr_3pcf_multipole/corr_3pcf_multipole`.
@@ -34,7 +34,7 @@ A minimal run
 
 The example configuration below uses halo positions as primary vertices and
 applies a :math:`5\,h^{-1}\mathrm{Mpc}` spherical window to the displaced
-legs:
+vertices:
 
 .. code-block:: yaml
 
@@ -79,7 +79,7 @@ Choosing primary vertices
 ``center: particle``
    The first vertex is sampled at catalogue positions. This is efficient for
    sparse tracer catalogues and gives a dual-window estimator: ``window2`` and
-   ``window3`` act on the two displaced legs, while ``window1`` has no effect
+   ``window3`` act on the two displaced vertices, while ``window1`` has no effect
    on the naked particle centre. The input ``SFCField`` must retain companion
    particle data, or ``particle_pos1`` and ``particle_weight1`` must be passed
    together.
@@ -90,9 +90,9 @@ Choosing primary vertices
    ``window3`` can all be active. This mode is useful for dense particle
    samples or whenever the primary field itself must be filtered.
 
-The shared ``window`` is copied to every leg that does not define an explicit
+The shared ``window`` is copied to every vertex that does not define an explicit
 ``window1``, ``window2``, or ``window3``. In particle-centre mode this still
-does not filter the first vertex. Use explicit leg windows when that distinction
+does not filter the first vertex. Use explicit vertex windows when that distinction
 should be visible in the configuration.
 
 For box-random centres, change only the centre section:
@@ -112,7 +112,7 @@ Data, randoms, and products
 ---------------------------
 
 ``sfc_field`` supplies a shared data field; ``sfc_field1`` through
-``sfc_field3`` override individual legs. The random inputs follow the same
+``sfc_field3`` override individual vertices. The random inputs follow the same
 pattern. ``random: uniform`` uses the analytic constant-density shortcut,
 whereas a path or ``SFCField`` represents an explicit random catalogue.
 

@@ -133,7 +133,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.threads = int(self.task_params["threads"])
         self.products = self._normalize_products(self.task_params.get("products", "zeta_l"))
         self.rho = None
-        self.rho_legs = [None, None, None]
+        self.rho_vertices = [None, None, None]
         self.reference_sfc = None
         self.resolution_diagnostics = []
         self.radial_profile_diagnostics = []
@@ -455,7 +455,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "threads": self.threads,
             "products": copy.deepcopy(self.products),
             "expanded_products": self._expanded_products(),
-            "rho_legs": copy.deepcopy(self.rho_legs),
+            "rho_vertices": copy.deepcopy(self.rho_vertices),
             "resolution_diagnostics": copy.deepcopy(self.resolution_diagnostics),
             "radial_profile_diagnostics_result": copy.deepcopy(self.radial_profile_diagnostics),
             "fout_path": self.fout_path,
@@ -473,29 +473,29 @@ class Corr_3PCF_Multipole(TaskBase):
             return self._broadcast_sfc(self.rank, self.comm, field)
         return SFCField(data_path=path, threads=self.threads)
 
-    def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
+    def _resolve_base_sfc(self, vertex_idx, provided_sfc, base_sfc_cache):
         if isinstance(provided_sfc, str) and provided_sfc:
             if provided_sfc not in base_sfc_cache:
                 base_sfc_cache[provided_sfc] = self._load_sfc_from_path(provided_sfc)
             return base_sfc_cache[provided_sfc], f"path={provided_sfc}"
         if isinstance(provided_sfc, SFCField):
-            return provided_sfc, f"provided sfc_field{leg_idx}"
+            return provided_sfc, f"provided sfc_field{vertex_idx}"
         if provided_sfc in (None, ""):
             self.logger.error(
-                f"Missing input for field leg {leg_idx}. Products {self._expanded_products()} require "
-                f"'sfc_field{leg_idx}' or shared 'sfc_field'."
+                f"Missing input for field vertex {vertex_idx}. Products {self._expanded_products()} require "
+                f"'sfc_field{vertex_idx}' or shared 'sfc_field'."
             )
             func_util.safe_exit(1)
         self.logger.error(
-            f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
+            f"Unexpected input: 'sfc_field{vertex_idx}' must be a string path or a SFCField instance."
         )
         func_util.safe_exit(1)
 
-    def _resolve_random_base(self, leg_idx, provided_random, random_cache):
+    def _resolve_random_base(self, vertex_idx, provided_random, random_cache):
         if provided_random is None or provided_random == "":
             self.logger.error(
-                f"Missing input for random leg {leg_idx}. Products {self._expanded_products()} require "
-                f"'random{leg_idx}' or shared 'random'. Use 'uniform' for the analytic uniform random field."
+                f"Missing input for random vertex {vertex_idx}. Products {self._expanded_products()} require "
+                f"'random{vertex_idx}' or shared 'random'. Use 'uniform' for the analytic uniform random field."
             )
             func_util.safe_exit(1)
         if isinstance(provided_random, str):
@@ -505,13 +505,13 @@ class Corr_3PCF_Multipole(TaskBase):
                 random_cache[provided_random] = self._load_sfc_from_path(provided_random)
             return random_cache[provided_random], f"path={provided_random}"
         if isinstance(provided_random, SFCField):
-            return provided_random, f"provided random{leg_idx}"
+            return provided_random, f"provided random{vertex_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, or a SFCField instance."
+            f"Unexpected input: 'random{vertex_idx}' must be 'uniform', a string path, or a SFCField instance."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_sfc, provided_window):
+    def _resolve_window(self, vertex_idx, base_sfc, provided_window):
         if isinstance(provided_window, WindowFunc):
             return provided_window, "provided WindowFunc instance"
         if isinstance(provided_window, dict):
@@ -520,7 +520,7 @@ class Corr_3PCF_Multipole(TaskBase):
             )
         if provided_window is not None:
             self.logger.error(
-                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
+                f"Unsupported window input for vertex {vertex_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
             )
             func_util.safe_exit(1)
         return None, "no additional window convolution"
@@ -580,7 +580,7 @@ class Corr_3PCF_Multipole(TaskBase):
             raise ValueError("Shared density is not initialized.")
         return float(self.rho)
 
-    def _materialize_uniform_random(self, reference_field, rho, leg_idx):
+    def _materialize_uniform_random(self, reference_field, rho, vertex_idx):
         field = reference_field._spawn_like()
         field.epsilon = np.full((reference_field.L,) * 3, rho, dtype=np.float64)
         field.sfc_info.update({
@@ -595,13 +595,13 @@ class Corr_3PCF_Multipole(TaskBase):
             "particle_data_format": "",
             "field_kind": "derived_field",
             "uniform_random_materialized": True,
-            "uniform_random_leg": int(leg_idx),
+            "uniform_random_vertex": int(vertex_idx),
         })
         field.format_sfc_params()
         return field
 
-    def _uniform_random_after_window(self, reference_field, rho, window_obj, leg_idx):
-        """Return a uniform random leg after the same field-level window."""
+    def _uniform_random_after_window(self, reference_field, rho, window_obj, vertex_idx):
+        """Return a uniform random vertex after the same field-level window."""
         if window_obj is None:
             return float(rho), "uniform shortcut"
 
@@ -611,7 +611,7 @@ class Corr_3PCF_Multipole(TaskBase):
         ):
             return float(rho), "uniform shortcut with W(0)=1"
 
-        uniform_field = self._materialize_uniform_random(reference_field, rho, leg_idx)
+        uniform_field = self._materialize_uniform_random(reference_field, rho, vertex_idx)
         return uniform_field @ window_obj, f"uniform field convolved with W(0)={zero_mode:.6g}"
 
     def _record_resolution_diagnostics(self):
@@ -820,20 +820,20 @@ class Corr_3PCF_Multipole(TaskBase):
 
             base_sfc_cache = {}
             random_cache = {}
-            data_legs = []
-            random_legs = []
+            data_vertices = []
+            random_vertices = []
             compatibility_fields = []
 
             if needs_data:
                 for i, cdata in enumerate(data_inputs, start=1):
                     base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
-                    data_legs.append((i, base_sfc, source_desc, window_inputs[i - 1]))
+                    data_vertices.append((i, base_sfc, source_desc, window_inputs[i - 1]))
                     compatibility_fields.append(base_sfc)
 
             if needs_random:
                 for i, random_input in enumerate(random_inputs, start=1):
                     base_random, source_desc = self._resolve_random_base(i, random_input, random_cache)
-                    random_legs.append((i, base_random, source_desc, window_inputs[i - 1]))
+                    random_vertices.append((i, base_random, source_desc, window_inputs[i - 1]))
                     if isinstance(base_random, SFCField):
                         compatibility_fields.append(base_random)
 
@@ -844,7 +844,7 @@ class Corr_3PCF_Multipole(TaskBase):
                     base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
                     compatibility_fields.append(base_sfc)
                     self.logger.info(
-                        f"Geometry reference loaded from field leg {i} | source={source_desc}"
+                        f"Geometry reference loaded from field vertex {i} | source={source_desc}"
                     )
                     break
 
@@ -864,7 +864,7 @@ class Corr_3PCF_Multipole(TaskBase):
             self.reference_sfc = compatibility_fields[0]._spawn_like()
             self.reference_sfc.format_sfc_params()
             self.rho = self._field_mean_density(self._field_in_task_normalization(compatibility_fields[0]))
-            self.rho_legs = [self.rho, self.rho, self.rho]
+            self.rho_vertices = [self.rho, self.rho, self.rho]
             self._record_resolution_diagnostics()
             if self.execution_mode == "sample_mpi":
                 self._record_radial_profile_diagnostics(
@@ -878,10 +878,10 @@ class Corr_3PCF_Multipole(TaskBase):
 
             normalized_data_fields = {}
             if needs_data:
-                for i, base_sfc, source_desc, win in data_legs:
+                for i, base_sfc, source_desc, win in data_vertices:
                     base_sfc = self._field_in_task_normalization(base_sfc)
                     normalized_data_fields[i] = base_sfc
-                    self.rho_legs[i - 1] = self._field_mean_density(base_sfc)
+                    self.rho_vertices[i - 1] = self._field_mean_density(base_sfc)
                     window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                     if window_obj is not None:
                         final_sfc = base_sfc @ window_obj
@@ -891,23 +891,23 @@ class Corr_3PCF_Multipole(TaskBase):
 
                     setattr(self, f"sfc_field{i}", final_sfc)
                     setattr(self.corr3pcf_multipole_data, f"sfc_info{i}", final_sfc.sfc_info)
-                    self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+                    self.logger.info(f"Field vertex {i} ready | source={source_desc} | window={window_desc}")
             else:
                 for i in range(1, 4):
                     setattr(self.corr3pcf_multipole_data, f"sfc_info{i}", self.reference_sfc.sfc_info)
 
             if needs_random:
-                for i, base_random, source_desc, win in random_legs:
+                for i, base_random, source_desc, win in random_vertices:
                     if isinstance(base_random, str) and base_random == "uniform":
                         reference_field = normalized_data_fields.get(i, self.reference_sfc)
-                        leg_rho = float(self.rho_legs[i - 1])
+                        vertex_rho = float(self.rho_vertices[i - 1])
                         window_obj, _ = self._resolve_window(i, reference_field, win)
                         uniform_random, uniform_desc = self._uniform_random_after_window(
-                            reference_field, leg_rho, window_obj, i
+                            reference_field, vertex_rho, window_obj, i
                         )
                         setattr(self, f"random{i}", uniform_random)
                         self.logger.info(
-                            f"Random leg {i} ready | source={source_desc} | window={uniform_desc} | rho={leg_rho:.6g}"
+                            f"Random vertex {i} ready | source={source_desc} | window={uniform_desc} | rho={vertex_rho:.6g}"
                         )
                         continue
                     base_random = self._field_in_task_normalization(base_random)
@@ -918,7 +918,7 @@ class Corr_3PCF_Multipole(TaskBase):
                         final_random = base_random.copy()
                         final_random.format_sfc_params()
                     setattr(self, f"random{i}", final_random)
-                    self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+                    self.logger.info(f"Random vertex {i} ready | source={source_desc} | window={window_desc}")
 
             snapshot = self._current_task_params_snapshot()
             self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
@@ -1371,7 +1371,7 @@ class Corr_3PCF_Multipole(TaskBase):
             for i, random_field in enumerate([self.random1, self.random2, self.random3], start=1):
                 if self._is_uniform_random(random_field):
                     self.logger.info(
-                        f"Random leg {i} for rrr_l materialized from uniform density for the generic multipole kernel."
+                        f"Random vertex {i} for rrr_l materialized from uniform density for the generic multipole kernel."
                     )
                     fields.append(self._materialize_uniform_random(reference, float(random_field), i))
                 else:

@@ -45,13 +45,13 @@ binning to the analysis code.
 Corr_2PCF
 ---------
 
-``sfc_field`` and ``random`` are shared fallbacks for both legs. The numbered
-forms override individual legs. ``random: uniform`` is an analytic constant
+``sfc_field`` and ``random`` are shared fallbacks for both vertices. The numbered
+forms override individual vertices. ``random: uniform`` is an analytic constant
 field.
 
-``window1`` and ``window2`` smooth or otherwise transform the input legs.
+``window1`` and ``window2`` smooth or otherwise transform the input vertices.
 ``binning_window`` defines the separation measurement. These are distinct
-roles: a Gaussian leg window changes the fields being correlated; a
+roles: a Gaussian vertex window changes the fields being correlated; a
 ``gaussian_shell`` binning window changes how separations are averaged.
 
 Built-in sampling mappings are:
@@ -85,8 +85,8 @@ or ``mu`` and the matching block supplies a range or explicit array.
 ``n_rot`` controls the Monte Carlo orientation average.
 
 ``center=particle`` samples the first vertex from particle metadata and applies
-only ``window2`` and ``window3`` to displaced legs. ``center=box_random`` uses
-``n_box_centers`` uniform centres and permits windows on all three legs.
+only ``window2`` and ``window3`` to displaced vertices. ``center=box_random`` uses
+``n_box_centers`` uniform centres and permits windows on all three vertices.
 
 Products are ``ddd``, ``rrr``, ``delta_ddd``, ``xi12``, ``xi13``, ``xi23``,
 ``zeta``, ``zeta_H``, and ``Q``. Particle-centred runs additionally expose

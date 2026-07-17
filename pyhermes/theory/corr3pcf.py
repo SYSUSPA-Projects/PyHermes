@@ -42,7 +42,7 @@ PRODUCT_RULES = {
     },
 }
 
-# Each product declares whether it needs data legs, random legs, or both.
+# Each product declares whether it needs data vertices, random vertices, or both.
 PRODUCT_INPUT_FLAGS = {
     "ddd": (True, False),
     "rrr": (False, True),
@@ -410,8 +410,8 @@ class Corr_3PCF(TaskBase):
 
     ### Input resolution and field preparation helpers ###
 
-    def _resolve_base_sfc(self, leg_idx, provided_sfc, cache):
-        """Resolve one signal leg from a path, shared fallback, or SFCField instance."""
+    def _resolve_base_sfc(self, vertex_idx, provided_sfc, cache):
+        """Resolve one signal vertex from a path, shared fallback, or SFCField instance."""
         if provided_sfc is not None:
             if isinstance(provided_sfc, str):
                 if provided_sfc not in cache:
@@ -419,26 +419,26 @@ class Corr_3PCF(TaskBase):
                 return cache[provided_sfc], f"path={provided_sfc}"
             if not isinstance(provided_sfc, SFCField):
                 self.logger.error(
-                    f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
+                    f"Unexpected input: 'sfc_field{vertex_idx}' must be a string path or a SFCField instance."
                 )
                 func_util.safe_exit(1)
-            return provided_sfc, f"provided sfc_field{leg_idx}"
+            return provided_sfc, f"provided sfc_field{vertex_idx}"
 
-        base_input = getattr(self, f"sfc_field{leg_idx}")
+        base_input = getattr(self, f"sfc_field{vertex_idx}")
         if isinstance(base_input, str) and base_input:
             if base_input not in cache:
                 cache[base_input] = SFCField(data_path=base_input, threads=self.threads)
             return cache[base_input], f"path={base_input}"
         if isinstance(base_input, SFCField):
-            return base_input, f"provided sfc_field{leg_idx}"
+            return base_input, f"provided sfc_field{vertex_idx}"
         self.logger.error(
-            f"Missing usable input for field leg {leg_idx}. Expected a string path or SFCField instance in "
-            f"'sfc_field{leg_idx}' or shared 'sfc_field'."
+            f"Missing usable input for field vertex {vertex_idx}. Expected a string path or SFCField instance in "
+            f"'sfc_field{vertex_idx}' or shared 'sfc_field'."
         )
         func_util.safe_exit(1)
 
-    def _resolve_random_base(self, leg_idx, provided_random, cache):
-        """Resolve one random leg, allowing the special uniform shortcut."""
+    def _resolve_random_base(self, vertex_idx, provided_random, cache):
+        """Resolve one random vertex, allowing the special uniform shortcut."""
         provided_random = self._normalize_random(provided_random)
         if provided_random is None:
             return None, "no random input"
@@ -449,14 +449,14 @@ class Corr_3PCF(TaskBase):
                 cache[provided_random] = SFCField(data_path=provided_random, threads=self.threads)
             return cache[provided_random], f"path={provided_random}"
         if isinstance(provided_random, SFCField):
-            return provided_random, f"provided random{leg_idx}"
+            return provided_random, f"provided random{vertex_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a SFCField instance, or None."
+            f"Unexpected input: 'random{vertex_idx}' must be 'uniform', a string path, a SFCField instance, or None."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_sfc, provided_window):
-        """Resolve a smoothing window for one leg from dict/WindowFunc/None."""
+    def _resolve_window(self, vertex_idx, base_sfc, provided_window):
+        """Resolve a smoothing window for one vertex from dict/WindowFunc/None."""
         if isinstance(provided_window, WindowFunc):
             return provided_window, "provided WindowFunc instance"
         if isinstance(provided_window, dict):
@@ -465,7 +465,7 @@ class Corr_3PCF(TaskBase):
             )
         if provided_window is not None:
             self.logger.error(
-                f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
+                f"Unsupported window input for vertex {vertex_idx}. Expected dict, WindowFunc, or None, got {type(provided_window)}."
             )
             func_util.safe_exit(1)
         return None, "no additional window convolution"
@@ -573,7 +573,7 @@ class Corr_3PCF(TaskBase):
     def _resolve_pos1_array(
         self, provided_pos, provided_weight, fallback_field, label, explicit_pos_name, explicit_weight_name
     ):
-        """Resolve leg-1 center coordinates from explicit arrays or from a SFCField source."""
+        """Resolve vertex-1 centre coordinates from explicit arrays or from a SFCField source."""
         has_explicit_pos = provided_pos is not None
         has_explicit_weight = provided_weight is not None
         if has_explicit_pos != has_explicit_weight:
@@ -723,7 +723,7 @@ class Corr_3PCF(TaskBase):
     ### Low-order pair and random-product shortcuts ###
 
     def calc_pair_product(self, radius, field1, field2):
-        """Compute a pair product, using density shortcuts whenever one leg is uniform."""
+        """Compute a pair product, using density shortcuts whenever one vertex is uniform."""
         if isinstance(field1, (float, int, np.floating)) or isinstance(field2, (float, int, np.floating)):
             return self._field_mean_density(field1) * self._field_mean_density(field2)
         return compute_pair_product_at_sample({"s": radius}, field1, field2)
@@ -766,41 +766,41 @@ class Corr_3PCF(TaskBase):
             rho1=rho1_eff,
         )
 
-    def _configure_particle_center_leg1(
+    def _configure_particle_center_vertex1(
         self, expanded_products, particle_pos1_arr, particle_weight1_arr,
         random1, random2, random3, random_pos1_arr, random_weight1_arr,
-        data_legs, random_legs, window1
+        data_vertices, random_vertices, window1
     ):
-        """Resolve particle-center leg-1 state for data centers, random centers, and warnings."""
-        leg1_base = next((base for i, base, _, _ in data_legs if i == 1), None)
-        random1_base = next((base for i, base, _, _ in random_legs if i == 1), None)
+        """Resolve particle-centre vertex-1 state for data centres, random centres, and warnings."""
+        vertex1_base = next((base for i, base, _, _ in data_vertices if i == 1), None)
+        random1_base = next((base for i, base, _, _ in random_vertices if i == 1), None)
 
-        if particle_pos1_arr is not None and (expanded_products & {"xi12", "xi13", "zeta_H", "Q"}) and leg1_base is None:
+        if particle_pos1_arr is not None and (expanded_products & {"xi12", "xi13", "zeta_H", "Q"}) and vertex1_base is None:
             self.logger.error(
                 "particle_pos1 can replace sfc_field1 only for particle-center products that do not require "
                 "xi12/xi13/zeta_H/Q. Please provide sfc_field1 as well if those products are requested."
             )
             func_util.safe_exit(1)
-        if particle_pos1_arr is not None and leg1_base is not None:
+        if particle_pos1_arr is not None and vertex1_base is not None:
             self.logger.warning(
                 "particle_pos1/particle_weight1 are provided for center='particle'; "
-                "sfc_field1 remains available only as the leg-1 signal field for products that require it."
+                "sfc_field1 remains available only as the vertex-1 signal field for products that require it."
             )
         if random_pos1_arr is not None and random1_base is not None and "r_delta_dd" in expanded_products:
             self.logger.warning(
                 "random_pos1/random_weight1 are provided for center='particle'; "
-                "random1 remains available only as the leg-1 random field for products that require it."
+                "random1 remains available only as the vertex-1 random field for products that require it."
             )
         if random_pos1_arr is not None and random1_base is None:
-            for idx, (i, base, src, win) in enumerate(random_legs):
+            for idx, (i, base, src, win) in enumerate(random_vertices):
                 if i == 1:
-                    random_legs[idx] = (i, "uniform", "uniform random density", win)
+                    random_vertices[idx] = (i, "uniform", "uniform random density", win)
                     random1_base = "uniform"
                     break
 
-        leg1_center_base = (
-            self._field_in_task_normalization(leg1_base)
-            if isinstance(leg1_base, SFCField) else leg1_base
+        vertex1_center_base = (
+            self._field_in_task_normalization(vertex1_base)
+            if isinstance(vertex1_base, SFCField) else vertex1_base
         )
         random1_center_base = (
             self._field_in_task_normalization(random1_base)
@@ -811,7 +811,7 @@ class Corr_3PCF(TaskBase):
             self._resolve_pos1_array(
                 particle_pos1_arr,
                 particle_weight1_arr,
-                leg1_center_base,
+                vertex1_center_base,
                 "sfc_field1",
                 "particle_pos1",
                 "particle_weight1",
@@ -829,13 +829,13 @@ class Corr_3PCF(TaskBase):
         )
 
         if window1 is not None:
-            self.logger.warning("window1 has no effect for center='particle'; leg 1 uses particle centers directly.")
-            data_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_legs]
-            random_legs = [(i, base, src, None if i == 1 else win) for i, base, src, win in random_legs]
+            self.logger.warning("window1 has no effect for center='particle'; vertex 1 uses particle centres directly.")
+            data_vertices = [(i, base, src, None if i == 1 else win) for i, base, src, win in data_vertices]
+            random_vertices = [(i, base, src, None if i == 1 else win) for i, base, src, win in random_vertices]
 
         return {
-            "data_legs": data_legs,
-            "random_legs": random_legs,
+            "data_vertices": data_vertices,
+            "random_vertices": random_vertices,
             "particle_pos1": particle_pos1,
             "particle_weight1": particle_weight1,
             "particle_pos1_source": particle_pos1_source,
@@ -896,10 +896,10 @@ class Corr_3PCF(TaskBase):
         if missing_random_inputs:
             self.logger.error(
                 "Random-related products were requested, but no random inputs were provided. "
-                "Please set shared 'random', leg-specific 'random1/2/3', or 'random_pos1' when appropriate."
+                "Please set shared 'random', vertex-specific 'random1/2/3', or 'random_pos1' when appropriate."
             )
             func_util.safe_exit(1)
-        requires_signal_leg1 = needs_data and (
+        requires_signal_vertex1 = needs_data and (
             not use_particle_pos1 or bool(expanded_products & {"xi12", "xi13", "zeta_H", "Q"})
         )
 
@@ -914,43 +914,43 @@ class Corr_3PCF(TaskBase):
                 self.logger.info(f"angle_param=mu, mu_min={self.mu_min}, mu_max={self.mu_max}, n_mu={self.n_mu}")
             self.logger.info(f"requested_products={self.products}, expanded_products={self._expanded_products()}")
             cache = {}
-            data_legs = []
+            data_vertices = []
             if needs_data:
                 for i, cdata, win in zip([1, 2, 3], [sfc_field1, sfc_field2, sfc_field3], [window1, window2, window3]):
-                    if i == 1 and not requires_signal_leg1:
+                    if i == 1 and not requires_signal_vertex1:
                         continue
                     base_sfc, source_desc = self._resolve_base_sfc(i, cdata, cache)
-                    data_legs.append((i, base_sfc, source_desc, win))
+                    data_vertices.append((i, base_sfc, source_desc, win))
 
-            random_legs = []
+            random_vertices = []
             if needs_random:
                 for i, rdata, win in zip([1, 2, 3], [random1, random2, random3], [window1, window2, window3]):
                     base_random, source_desc = self._resolve_random_base(i, rdata, cache)
-                    random_legs.append((i, base_random, source_desc, win))
+                    random_vertices.append((i, base_random, source_desc, win))
 
             if self.center == "particle":
-                leg1_ctx = self._configure_particle_center_leg1(
+                vertex1_ctx = self._configure_particle_center_vertex1(
                     expanded_products, particle_pos1_arr, particle_weight1_arr,
                     random1, random2, random3, random_pos1_arr, random_weight1_arr,
-                    data_legs, random_legs, window1
+                    data_vertices, random_vertices, window1
                 )
-                data_legs = leg1_ctx["data_legs"]
-                random_legs = leg1_ctx["random_legs"]
-                self.particle_pos1 = leg1_ctx["particle_pos1"]
-                self.particle_weight1 = leg1_ctx["particle_weight1"]
-                self.random_pos1 = leg1_ctx["random_pos1"]
-                self.random_weight1 = leg1_ctx["random_weight1"]
-                particle_pos1_source = leg1_ctx["particle_pos1_source"]
-                random_pos1_source = leg1_ctx["random_pos1_source"]
+                data_vertices = vertex1_ctx["data_vertices"]
+                random_vertices = vertex1_ctx["random_vertices"]
+                self.particle_pos1 = vertex1_ctx["particle_pos1"]
+                self.particle_weight1 = vertex1_ctx["particle_weight1"]
+                self.random_pos1 = vertex1_ctx["random_pos1"]
+                self.random_weight1 = vertex1_ctx["random_weight1"]
+                particle_pos1_source = vertex1_ctx["particle_pos1_source"]
+                random_pos1_source = vertex1_ctx["random_pos1_source"]
             else:
                 particle_pos1_source = None
                 random_pos1_source = None
                 self.random_weight1 = None
 
-            # All SFCField inputs, including random legs, must agree on the
+            # All SFCField inputs, including random vertices, must agree on the
             # same geometry and wavelet metadata before any mixed statistics are valid.
-            compat_fields = [item[1] for item in data_legs if isinstance(item[1], SFCField)]
-            compat_fields.extend(item[1] for item in random_legs if isinstance(item[1], SFCField))
+            compat_fields = [item[1] for item in data_vertices if isinstance(item[1], SFCField)]
+            compat_fields.extend(item[1] for item in random_vertices if isinstance(item[1], SFCField))
             if compat_fields:
                 shared_required = func_util.validate_sfc_compatibility(
                     compat_fields,
@@ -969,29 +969,29 @@ class Corr_3PCF(TaskBase):
             if self.particle_pos1 is not None:
                 weight_sum = float(np.sum(self.particle_weight1))
                 self.logger.info(
-                    f"Particle leg 1 ready | source={particle_pos1_source} | "
+                    f"Particle vertex 1 ready | source={particle_pos1_source} | "
                     f"particle_count={self.particle_pos1.shape[0]} | weight_sum={weight_sum:.6e}"
                 )
             elif self.center != "particle":
                 self.particle_pos1 = None
 
-            self._prepare_signal_legs(data_legs)
+            self._prepare_signal_vertices(data_vertices)
 
-            if not requires_signal_leg1:
+            if not requires_signal_vertex1:
                 self.sfc_field1 = None
                 self.corr3pcf_data.sfc_info1 = None
 
             if self.random_pos1 is not None:
                 weight_sum = float(np.sum(self.random_weight1))
                 self.logger.info(
-                    f"Random leg 1 centers ready | source={random_pos1_source} | "
+                    f"Random vertex 1 centres ready | source={random_pos1_source} | "
                     f"particle_count={self.random_pos1.shape[0]} | weight_sum={weight_sum:.6e}"
                 )
             elif self.center != "particle":
                 self.random_pos1 = None
                 self.random_weight1 = None
 
-            self._prepare_random_legs(data_legs, random_legs)
+            self._prepare_random_vertices(data_vertices, random_vertices)
 
             self.window1 = window1
             self.window2 = window2
@@ -1001,7 +1001,7 @@ class Corr_3PCF(TaskBase):
             self.corr3pcf_data.task_params = snapshot
         self._fields_prepared = True
 
-    ### 2PCF-derived caches and leg finalization ###
+    ### 2PCF-derived caches and vertex finalization ###
 
     def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
         """Compute RR, delta_DD, and xi for one pair radius."""
@@ -1030,9 +1030,9 @@ class Corr_3PCF(TaskBase):
             return {"rr": float(rr[0]), "delta_dd": float(delta_dd[0]), "xi": float(xi[0])}
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
 
-    def _prepare_signal_legs(self, data_legs):
-        """Apply optional smoothing windows and finalize the signal-leg fields."""
-        for i, base_sfc, source_desc, win in data_legs:
+    def _prepare_signal_vertices(self, data_vertices):
+        """Apply optional smoothing windows and finalize the signal-vertex fields."""
+        for i, base_sfc, source_desc, win in data_vertices:
             base_sfc = self._field_in_task_normalization(base_sfc)
             window_obj, window_desc = self._resolve_window(i, base_sfc, win)
             if window_obj is not None:
@@ -1042,11 +1042,11 @@ class Corr_3PCF(TaskBase):
                 final_sfc.format_sfc_params()
             setattr(self, f"sfc_field{i}", final_sfc)
             setattr(self.corr3pcf_data, f"sfc_info{i}", final_sfc.sfc_info)
-            self.logger.info(f"Field leg {i} ready | source={source_desc} | window={window_desc}")
+            self.logger.info(f"Field vertex {i} ready | source={source_desc} | window={window_desc}")
 
-    def _prepare_random_legs(self, data_legs, random_legs):
-        """Apply random-leg smoothing and inject uniform-density shortcuts when requested."""
-        for i, base_random, source_desc, win in random_legs:
+    def _prepare_random_vertices(self, data_vertices, random_vertices):
+        """Apply random-vertex smoothing and inject uniform-density shortcuts when requested."""
+        for i, base_random, source_desc, win in random_vertices:
             if (
                 self.center == "particle"
                 and i == 1
@@ -1055,12 +1055,12 @@ class Corr_3PCF(TaskBase):
             ):
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"sfc_field{i}", None),
-                    *[item[1] for item in data_legs if isinstance(item[1], SFCField)],
-                    *[item[1] for item in random_legs if isinstance(item[1], SFCField)],
+                    *[item[1] for item in data_vertices if isinstance(item[1], SFCField)],
+                    *[item[1] for item in random_vertices if isinstance(item[1], SFCField)],
                 )
                 if signal_ref is None:
                     self.logger.error(
-                        "Cannot resolve the geometry for particle-center random leg 1. "
+                        "Cannot resolve the geometry for particle-centre random vertex 1. "
                         "Please provide at least one SFCField input field."
                     )
                     func_util.safe_exit(1)
@@ -1071,19 +1071,19 @@ class Corr_3PCF(TaskBase):
             if base_random == "uniform":
                 signal_ref = self._find_geometry_reference(
                     getattr(self, f"sfc_field{i}", None),
-                    *[item[1] for item in data_legs if isinstance(item[1], SFCField)],
-                    *[item[1] for item in random_legs if isinstance(item[1], SFCField)],
+                    *[item[1] for item in data_vertices if isinstance(item[1], SFCField)],
+                    *[item[1] for item in random_vertices if isinstance(item[1], SFCField)],
                 )
                 if signal_ref is None:
                     self.logger.error(
-                        f"Cannot resolve the geometry for uniform random leg {i}. "
+                        f"Cannot resolve the geometry for uniform random vertex {i}. "
                         f"Please provide at least one SFCField input field or an explicit random field."
                     )
                     func_util.safe_exit(1)
                 signal_ref = self._field_in_task_normalization(signal_ref)
                 rho = self._field_mean_density(signal_ref)
                 setattr(self, f"random{i}", rho)
-                self.logger.info(f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
+                self.logger.info(f"Random vertex {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}")
             else:
                 base_random = self._field_in_task_normalization(base_random)
                 window_obj, window_desc = self._resolve_window(i, base_random, win)
@@ -1093,7 +1093,7 @@ class Corr_3PCF(TaskBase):
                     final_random = base_random.copy()
                     final_random.format_sfc_params()
                 setattr(self, f"random{i}", final_random)
-                self.logger.info(f"Random leg {i} ready | source={source_desc} | window={window_desc}")
+                self.logger.info(f"Random vertex {i} ready | source={source_desc} | window={window_desc}")
 
     ### Theta-local triplet kernels ###
 
@@ -1160,7 +1160,7 @@ class Corr_3PCF(TaskBase):
             )
         if "r_delta_dd" in local_results:
             if pos_local_random1 is None and isinstance(_local_random1, (float, int, np.floating)):
-                # The uniform-random leg-1 shortcut is cheaper to assemble from
+                # The uniform-random vertex-1 shortcut is cheaper to assemble from
                 # rrr * xi23 after the loop than to sample explicitly here.
                 pass
             else:
@@ -1240,7 +1240,7 @@ class Corr_3PCF(TaskBase):
         return loop_products
 
     def _product_field_requirements(self, product):
-        """Return data/random legs needed by one explicit theta-loop product."""
+        """Return data/random vertices needed by one explicit theta-loop product."""
         if self.center == "box_random":
             if product == "ddd":
                 return {1, 2, 3}, set()
@@ -1261,12 +1261,12 @@ class Corr_3PCF(TaskBase):
 
     def _broadcast_product_runtime(self, product):
         """Broadcast only the fields needed by one product."""
-        data_legs, random_legs = self._product_field_requirements(product)
+        data_vertices, random_vertices = self._product_field_requirements(product)
         local_data = {}
         local_random = {}
-        for idx in sorted(data_legs):
+        for idx in sorted(data_vertices):
             local_data[idx] = self._broadcast_field(getattr(self, f"sfc_field{idx}"))
-        for idx in sorted(random_legs):
+        for idx in sorted(random_vertices):
             local_random[idx] = self._broadcast_field(getattr(self, f"random{idx}"))
         return local_data, local_random
 
@@ -1602,7 +1602,7 @@ class Corr_3PCF(TaskBase):
                 if self.center == "particle" and "r_delta_dd" in expanded_products and self.corr3pcf_data.r_delta_dd is None:
                     if not has_random_pos1 and isinstance(self.random1, (float, int, np.floating)):
                         self.corr3pcf_data.r_delta_dd = self.corr3pcf_data.rrr * self.corr3pcf_data.xi23
-                    self.logger.info("Computed r_delta_dd from xi23 and rrr for particle center with uniform random leg 1.")
+                    self.logger.info("Computed r_delta_dd from xi23 and rrr for particle centre with uniform random vertex 1.")
 
                 if self.center == "particle" and "delta_ddd" in expanded_products:
                     self.corr3pcf_data.delta_ddd = self.corr3pcf_data.d_delta_dd - self.corr3pcf_data.r_delta_dd

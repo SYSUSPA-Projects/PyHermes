@@ -208,7 +208,7 @@ values to ``particle_data_path`` as NPZ. When the path is empty, it is derived
 from ``fout_path``. This companion is required when a later particle-centred
 task cannot recover the original catalogue from ``fin``. Derived fields made by
 arithmetic or convolution do not preserve a unique particle catalogue; pass
-explicit centre arrays when using them as a particle-centred first leg.
+explicit centre arrays when using them as a particle-centred first vertex.
 
 Output policy
 -------------

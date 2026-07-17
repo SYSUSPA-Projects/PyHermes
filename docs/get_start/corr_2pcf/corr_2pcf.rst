@@ -80,7 +80,7 @@ it to the :math:`(s_\perp,s_\parallel)` plane:
 Smoothing and binning are separate
 ----------------------------------
 
-Use ``window`` to smooth both legs, or ``window1`` and ``window2`` for
+Use ``window`` to smooth both vertices, or ``window1`` and ``window2`` for
 independent filters. Use ``binning_window`` for the pair separation:
 
 .. code-block:: yaml
@@ -132,7 +132,7 @@ Only requested products and their dependencies are retained in the result.
 Cross-correlations
 ------------------
 
-Use independent legs for a cross-correlation:
+Use independent vertices for a cross-correlation:
 
 .. code-block:: python
 
@@ -155,7 +155,7 @@ Use independent legs for a cross-correlation:
    task.products = ["xi"]
    cross = task.run(save_result=False)
 
-All field legs must share the same MRA geometry and basis. Task-level
+All field vertices must share the same MRA geometry and basis. Task-level
 ``weight_normalization`` converts compatible catalogue fields to one common
 normalisation before products are formed.
 
@@ -194,13 +194,9 @@ The smallest trustworthy scale is controlled jointly by field resolution and
 the binning window. A narrow bin does not recover structure unresolved by
 ``J``; a broad bin can intentionally average small-scale variation.
 
-.. figure:: ../../_static/paper/benchmark_2pcf_isotropic_s2xi_curves.png
-   :width: 74%
-   :align: center
-
-   PyHermes converges toward conventional pair counters as the MRA resolution
-   increases. Residual differences are concentrated where the separation
-   approaches the field resolution.
+The direct periodic pair-counting comparison and its :math:`J` convergence are
+shown on :doc:`../../benchmark`.  Residual differences are concentrated where
+the separation approaches the field resolution.
 
 Performance controls
 --------------------

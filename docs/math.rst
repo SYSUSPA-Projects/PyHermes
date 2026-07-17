@@ -60,12 +60,9 @@ nearest-grid-point cells, but :math:`\Delta x` remains the useful first check:
 measurements at separations or bin widths comparable to it require a
 convergence test.
 
-.. figure:: _static/paper/sfc_field_reconstructed_density_j7_j8_j9_halo_binned.png
-   :width: 72%
-   :align: center
-
-   Reconstructed halo density at :math:`J=7,8,9` compared with a directly
-   binned halo field. Higher ``J`` resolves progressively finer structure.
+The visual :math:`J=7,8,9` reconstruction comparison and practical resolution
+guidance are kept with the projection workflow in
+:doc:`get_start/sfc_projection/sfc_projection`.
 
 Normalisation carried by SFCField
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -180,7 +177,7 @@ The geometry resides in :math:`W_b`:
 - ``disk``, ``cylshell``, and ``cylinder`` define alternative anisotropic
   averages.
 
-Additional ``window1`` and ``window2`` filters act on the two input legs before
+Additional ``window1`` and ``window2`` filters act on the two input vertices before
 the binning window is applied.
 
 Standard three-point statistics
@@ -188,7 +185,7 @@ Standard three-point statistics
 
 ``Corr_3PCF`` performs a Monte Carlo translational and rotational average for
 a triangle with fixed :math:`r_{12}`, :math:`r_{13}`, and sampled included
-angle. Its three input legs may have independent smoothing windows.
+angle. Its three input vertices may have independent smoothing windows.
 
 ``center="particle"`` uses catalogue objects as primary vertices. This is the
 dual-sphere construction in the paper. ``center="box_random"`` samples

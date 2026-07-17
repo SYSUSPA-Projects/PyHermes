@@ -6,7 +6,7 @@ data/random SFCField objects, attaches heavy arrays to each Corr_3PCF task,
 and lets Corr_3PCF broadcast only the fields needed by each product.
 
 Stage 1 computes random-center ``r_delta_dd`` through the existing box-random
-``ddd`` product by setting leg 1 to the unit-weight random field and legs 2/3
+``ddd`` product by setting vertex 1 to the unit-weight random field and vertices 2/3
 to the already normalized contrast field ``d-r``.
 Stage 2 computes particle-center ``d_delta_dd`` and the reduced denominator
 ``zeta_H``. Rank 0 then combines both stages and saves the final result.
@@ -149,7 +149,7 @@ if rank == 0:
             "center": "box_random",
             "n_rot": 200,
             "n_box_centers": 8_000_000,
-            "r_delta_dd_source": "box_random ddd with leg1=r and legs2/3=d-r",
+            "r_delta_dd_source": "box_random ddd with vertex1=r and vertices2/3=d-r",
         },
         "d_delta_dd_zeta_H": {
             "center": "particle",

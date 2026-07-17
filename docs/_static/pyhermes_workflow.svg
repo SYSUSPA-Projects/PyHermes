@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">PyHermes workflow</title>
-  <desc id="desc">Particle catalogs are converted into SFCField, then window functions define smoothing, pair bins, triangle legs, and multipole filters for downstream statistics.</desc>
+  <desc id="desc">Particle catalogs are converted into SFCField, then window functions define smoothing, pair bins, triangle vertices, and multipole filters for downstream statistics.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#fbfbf7"/>
@@ -61,7 +61,7 @@
     <circle cx="410" cy="467" r="13" fill="none" stroke="#8d641d" stroke-width="4"/>
     <text x="480" y="448" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700" fill="#3c2c10">Window functions</text>
     <text x="480" y="481" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="700" fill="#6b5522">W-convolved fields define the geometry</text>
-    <text x="480" y="514" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#6b5522">smooth fields | pair bins | triangle legs | multipole filters</text>
+    <text x="480" y="514" font-family="Arial, Helvetica, sans-serif" font-size="17" fill="#6b5522">smooth fields | pair bins | triangle vertices | multipole filters</text>
     <rect x="930" y="421" width="270" height="42" rx="21" fill="#ffffff" stroke="#e1c76e"/>
     <text x="958" y="448" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#533d12">sphere / gaussian</text>
     <rect x="930" y="477" width="270" height="42" rx="21" fill="#ffffff" stroke="#e1c76e"/>
@@ -87,7 +87,7 @@
   <g filter="url(#shadow)">
     <rect x="830" y="650" width="300" height="145" rx="16" fill="#ffffff" stroke="#d7dfdc"/>
     <text x="860" y="707" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700" fill="#152522">Corr_3PCF</text>
-    <text x="860" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">window1/2/3 set legs</text>
+    <text x="860" y="737" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">window1/2/3 set vertices</text>
     <text x="860" y="766" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700" fill="#52645f">Q(theta), Q(mu)</text>
   </g>
 

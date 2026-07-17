@@ -21,13 +21,6 @@ The important consequence is reuse. Once a catalogue has become an
 ``SFCField``, changing a separation bin, smoothing scale, multipole projector,
 or differential operator does not require projecting the catalogue again.
 
-.. figure:: _static/paper/PyHermes-Workflow.png
-   :width: 96%
-   :align: center
-
-   Catalogue, Window, MRA field, and Task are separate layers. This separation
-   is the organising principle of both the software and this documentation.
-
 Why a field--window language?
 -----------------------------
 
@@ -140,7 +133,7 @@ Terminology used in this guide
    The catalogue-to-field projection task.
 
 ``window``
-   An optional smoothing or physical operator applied to an input leg.
+   An optional smoothing or physical operator applied to an input vertex.
 
 ``binning_window``
    A window whose parameters are mapped from sampled pair or triangle

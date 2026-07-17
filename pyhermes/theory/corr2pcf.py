@@ -498,7 +498,7 @@ class Corr_2PCF(TaskBase):
         return params
 
     # Input field resolution.
-    def _resolve_base_sfc(self, leg_idx, provided_sfc, base_sfc_cache):
+    def _resolve_base_sfc(self, vertex_idx, provided_sfc, base_sfc_cache):
         if provided_sfc is not None:
             if isinstance(provided_sfc, str):
                 base_path = provided_sfc
@@ -507,36 +507,36 @@ class Corr_2PCF(TaskBase):
                 return base_sfc_cache[base_path], f"path={base_path}"
             if not isinstance(provided_sfc, SFCField):
                 self.logger.error(
-                    f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
+                    f"Unexpected input: 'sfc_field{vertex_idx}' must be a string path or a SFCField instance."
                 )
                 func_util.safe_exit(1)
-            return provided_sfc, f"provided sfc_field{leg_idx}"
+            return provided_sfc, f"provided sfc_field{vertex_idx}"
 
-        base_input = getattr(self, f"sfc_field{leg_idx}")
+        base_input = getattr(self, f"sfc_field{vertex_idx}")
         if isinstance(base_input, str) and base_input:
             if base_input not in base_sfc_cache:
                 base_sfc_cache[base_input] = SFCField(data_path=base_input, threads=self.threads)
             return base_sfc_cache[base_input], f"path={base_input}"
         if isinstance(base_input, SFCField):
-            return base_input, f"provided sfc_field{leg_idx}"
+            return base_input, f"provided sfc_field{vertex_idx}"
         if base_input not in (None, ""):
             self.logger.error(
-                f"Unexpected input: 'sfc_field{leg_idx}' must be a string path or a SFCField instance."
+                f"Unexpected input: 'sfc_field{vertex_idx}' must be a string path or a SFCField instance."
             )
             func_util.safe_exit(1)
         if not self.sfc_field and not self.sfc_field1 and not self.sfc_field2:
             self.logger.error(
-                f"Missing input for field leg {leg_idx}. Please pass sfc_field{leg_idx} or set "
-                f"'sfc_field{leg_idx}' / 'sfc_field'."
+                f"Missing input for field vertex {vertex_idx}. Please pass sfc_field{vertex_idx} or set "
+                f"'sfc_field{vertex_idx}' / 'sfc_field'."
             )
             func_util.safe_exit(1)
         self.logger.error(
-            f"Missing usable input for field leg {leg_idx}. Expected a string path or SFCField instance in "
-            f"'sfc_field{leg_idx}' or shared 'sfc_field'."
+            f"Missing usable input for field vertex {vertex_idx}. Expected a string path or SFCField instance in "
+            f"'sfc_field{vertex_idx}' or shared 'sfc_field'."
         )
         func_util.safe_exit(1)
 
-    def _resolve_random_base(self, leg_idx, provided_random, base_sfc_cache):
+    def _resolve_random_base(self, vertex_idx, provided_random, base_sfc_cache):
         if provided_random is None or provided_random == "":
             return None, "no random input"
         if provided_random == "uniform":
@@ -547,13 +547,13 @@ class Corr_2PCF(TaskBase):
                 base_sfc_cache[base_path] = SFCField(data_path=base_path, threads=self.threads)
             return base_sfc_cache[base_path], f"path={base_path}"
         if isinstance(provided_random, SFCField):
-            return provided_random, f"provided random{leg_idx}"
+            return provided_random, f"provided random{vertex_idx}"
         self.logger.error(
-            f"Unexpected input: 'random{leg_idx}' must be 'uniform', a string path, a SFCField instance, or None."
+            f"Unexpected input: 'random{vertex_idx}' must be 'uniform', a string path, a SFCField instance, or None."
         )
         func_util.safe_exit(1)
 
-    def _resolve_window(self, leg_idx, base_sfc, provided_window):
+    def _resolve_window(self, vertex_idx, base_sfc, provided_window):
         if provided_window is None:
             return None, "no additional window convolution"
         else:
@@ -565,7 +565,7 @@ class Corr_2PCF(TaskBase):
                 )
             else:
                 self.logger.error(
-                    f"Unsupported window input for leg {leg_idx}. Expected dict, WindowFunc, or None, "
+                    f"Unsupported window input for vertex {vertex_idx}. Expected dict, WindowFunc, or None, "
                     f"got {type(provided_window)}."
                 )
                 func_util.safe_exit(1)
@@ -729,62 +729,62 @@ class Corr_2PCF(TaskBase):
         return values
 
     # Memory-strategy execution helpers.
-    def _prepare_memory_leg_field(self, kind, leg_idx, base_sfc_cache):
+    def _prepare_memory_vertex_field(self, kind, vertex_idx, base_sfc_cache):
         if kind == "data":
-            base_field, source_desc = self._resolve_base_sfc(leg_idx, None, base_sfc_cache)
+            base_field, source_desc = self._resolve_base_sfc(vertex_idx, None, base_sfc_cache)
         elif kind == "random":
             base_field, source_desc = self._resolve_random_base(
-                leg_idx, getattr(self, f"random{leg_idx}"), base_sfc_cache
+                vertex_idx, getattr(self, f"random{vertex_idx}"), base_sfc_cache
             )
             if base_field is None:
                 self.logger.error(
-                    f"Missing input for random leg {leg_idx}. Products {self.products} require "
-                    f"'random{leg_idx}' or shared 'random'."
+                    f"Missing input for random vertex {vertex_idx}. Products {self.products} require "
+                    f"'random{vertex_idx}' or shared 'random'."
                 )
                 func_util.safe_exit(1)
             if base_field == "uniform":
-                signal_ref, _ = self._resolve_base_sfc(leg_idx, None, base_sfc_cache)
+                signal_ref, _ = self._resolve_base_sfc(vertex_idx, None, base_sfc_cache)
                 signal_ref = self._field_in_task_normalization(signal_ref)
                 self._validate_uniform_random_signal(signal_ref)
                 rho = field_mean_density(signal_ref)
                 if self.rank == 0:
-                    setattr(self.corr2pcf_data, f"sfc_info{leg_idx}", copy.deepcopy(signal_ref.sfc_info))
+                    setattr(self.corr2pcf_data, f"sfc_info{vertex_idx}", copy.deepcopy(signal_ref.sfc_info))
                 return rho, f"{source_desc}, rho={rho:.5e}"
         else:
-            raise ValueError(f"Unsupported memory leg kind: {kind}")
+            raise ValueError(f"Unsupported memory vertex kind: {kind}")
 
         base_field = self._field_in_task_normalization(base_field)
 
-        window_obj, window_desc = self._resolve_window(leg_idx, base_field, getattr(self, f"window{leg_idx}"))
+        window_obj, window_desc = self._resolve_window(vertex_idx, base_field, getattr(self, f"window{vertex_idx}"))
         if window_obj is not None:
             final_field = base_field @ window_obj
         else:
             final_field = base_field.copy()
             final_field.format_sfc_params()
         if self.rank == 0:
-            setattr(self.corr2pcf_data, f"sfc_info{leg_idx}", copy.deepcopy(final_field.sfc_info))
-        window_desc = compact_window_desc(getattr(self, f"window{leg_idx}"))
+            setattr(self.corr2pcf_data, f"sfc_info{vertex_idx}", copy.deepcopy(final_field.sfc_info))
+        window_desc = compact_window_desc(getattr(self, f"window{vertex_idx}"))
         return final_field, f"{source_desc}, {window_desc}"
 
     def _prepare_memory_product_fields(self, product):
         base_sfc_cache = {}
         if product == "dd":
-            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
-            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
+            field1, desc1 = self._prepare_memory_vertex_field("data", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_vertex_field("data", 2, base_sfc_cache)
         elif product == "dr":
-            field1, desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
-            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
+            field1, desc1 = self._prepare_memory_vertex_field("data", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_vertex_field("random", 2, base_sfc_cache)
         elif product == "rd":
-            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
-            field2, desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
+            field1, desc1 = self._prepare_memory_vertex_field("random", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_vertex_field("data", 2, base_sfc_cache)
         elif product == "rr":
-            field1, desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
-            field2, desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
+            field1, desc1 = self._prepare_memory_vertex_field("random", 1, base_sfc_cache)
+            field2, desc2 = self._prepare_memory_vertex_field("random", 2, base_sfc_cache)
         elif product == "delta_dd":
-            data1, data_desc1 = self._prepare_memory_leg_field("data", 1, base_sfc_cache)
-            random1, random_desc1 = self._prepare_memory_leg_field("random", 1, base_sfc_cache)
-            data2, data_desc2 = self._prepare_memory_leg_field("data", 2, base_sfc_cache)
-            random2, random_desc2 = self._prepare_memory_leg_field("random", 2, base_sfc_cache)
+            data1, data_desc1 = self._prepare_memory_vertex_field("data", 1, base_sfc_cache)
+            random1, random_desc1 = self._prepare_memory_vertex_field("random", 1, base_sfc_cache)
+            data2, data_desc2 = self._prepare_memory_vertex_field("data", 2, base_sfc_cache)
+            random2, random_desc2 = self._prepare_memory_vertex_field("random", 2, base_sfc_cache)
             field1 = self._delta_field(data1, random1)
             field2 = self._delta_field(data2, random2)
             desc1 = f"delta1=({data_desc1}) - ({random_desc1})"
@@ -803,8 +803,8 @@ class Corr_2PCF(TaskBase):
             )
         self.logger.info(
             f"Memory product {product} fields ready:\n"
-            f"  leg1: {desc1}\n"
-            f"  leg2: {desc2}"
+            f"  vertex1: {desc1}\n"
+            f"  vertex2: {desc2}"
         )
         return field1, field2
 
@@ -970,27 +970,27 @@ class Corr_2PCF(TaskBase):
             self.logger.info(describe_products(self.products, expanded_products))
             self.logger.info(describe_binning_window(self.binning_window))
             base_sfc_cache = {}
-            resolved_data_legs = []
+            resolved_data_vertices = []
             if needs_data:
                 for i, cdata, win in zip([1, 2], [sfc_field1, sfc_field2], [window1, window2]):
                     base_sfc, source_desc = self._resolve_base_sfc(i, cdata, base_sfc_cache)
-                    resolved_data_legs.append((i, base_sfc, source_desc, win))
+                    resolved_data_vertices.append((i, base_sfc, source_desc, win))
 
-            resolved_random_legs = []
+            resolved_random_vertices = []
             if needs_random:
                 for i, rdata, win in zip([1, 2], [random1, random2], [window1, window2]):
                     base_random, source_desc = self._resolve_random_base(i, rdata, base_sfc_cache)
                     if base_random is None:
                         self.logger.error(
-                            f"Missing input for random leg {i}. Products {self.products} require "
+                            f"Missing input for random vertex {i}. Products {self.products} require "
                             f"'random{i}' or shared 'random'. Corr_2PCF now defaults random to null, "
                             f"so please set it explicitly when RR/DR/RD/delta_DD/xi-related products are requested."
                         )
                         func_util.safe_exit(1)
-                    resolved_random_legs.append((i, base_random, source_desc, win))
+                    resolved_random_vertices.append((i, base_random, source_desc, win))
 
-            compat_fields = [item[1] for item in resolved_data_legs if isinstance(item[1], SFCField)]
-            compat_fields.extend(item[1] for item in resolved_random_legs if isinstance(item[1], SFCField))
+            compat_fields = [item[1] for item in resolved_data_vertices if isinstance(item[1], SFCField)]
+            compat_fields.extend(item[1] for item in resolved_random_vertices if isinstance(item[1], SFCField))
             if compat_fields:
                 shared_required = func_util.validate_sfc_compatibility(
                     compat_fields,
@@ -1002,7 +1002,7 @@ class Corr_2PCF(TaskBase):
                 self.logger.info("Corr_2PCF input compatibility check passed.")
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
 
-            for i, base_sfc, source_desc, win in resolved_data_legs:
+            for i, base_sfc, source_desc, win in resolved_data_vertices:
                 base_sfc = self._field_in_task_normalization(base_sfc)
                 window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                 if window_obj is not None:
@@ -1013,10 +1013,10 @@ class Corr_2PCF(TaskBase):
                 setattr(self, f"sfc_field{i}", final_sfc)
                 setattr(self.corr2pcf_data, f"sfc_info{i}", final_sfc.sfc_info)
                 self.logger.info(
-                    f"Field leg {i} ready | source={source_desc} | window={window_desc}"
+                    f"Field vertex {i} ready | source={source_desc} | window={window_desc}"
                 )
 
-            for i, base_random, source_desc, win in resolved_random_legs:
+            for i, base_random, source_desc, win in resolved_random_vertices:
                 if base_random == "uniform":
                     signal_ref = getattr(self, f"sfc_field{i}", None)
                     if not isinstance(signal_ref, SFCField):
@@ -1026,7 +1026,7 @@ class Corr_2PCF(TaskBase):
                     rho = field_mean_density(signal_ref)
                     setattr(self, f"random{i}", rho)
                     self.logger.info(
-                        f"Random leg {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}"
+                        f"Random vertex {i} ready | source={source_desc} | window=uniform shortcut | rho={rho:.5e}"
                     )
                 else:
                     base_random = self._field_in_task_normalization(base_random)
@@ -1038,7 +1038,7 @@ class Corr_2PCF(TaskBase):
                         final_random.format_sfc_params()
                     setattr(self, f"random{i}", final_random)
                     self.logger.info(
-                        f"Random leg {i} ready | source={source_desc} | window={window_desc}"
+                        f"Random vertex {i} ready | source={source_desc} | window={window_desc}"
                     )
 
             self.window1 = window1

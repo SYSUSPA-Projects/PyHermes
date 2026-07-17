@@ -198,14 +198,10 @@ input fields. At high :math:`\ell_{\max}` the GPU path is usually most useful;
 for a short monopole scan, sample-level CPU parallelism may be simpler and
 competitive.
 
-.. figure:: ../../_static/results/docs_3pcf_multipole_cpu_gpu_runtime.png
-   :width: 92%
-   :align: center
-   :alt: CPU and GPU timing phases for 3PCF multipoles
-
-   Current CPU/GPU task and contraction timings. The saved multipoles agree to
-   relative :math:`L_2` differences below ``2.3e-14``; only the contraction
-   backend changes.
+The current CPU/GPU timing, numerical-agreement, and host-memory comparison is
+kept in one place on :doc:`../../benchmark`.  The saved multipoles agree to
+relative :math:`L_2` differences below ``2.3e-14``; only the contraction
+backend changes.
 
 Products and output
 -------------------
@@ -232,5 +228,9 @@ Inspect unusually large values before interpreting a noisy high-order result.
    :align: center
    :alt: 3PCF multipoles for smoothing and triangle configurations
 
-   Multipoles compactly expose how smoothing windows and triangle geometry
-   redistribute angular information.
+   Current ``J=8``, ``lmax=20`` grouped results.  Left: fixed
+   :math:`(r_{12},r_{13})=(20,40)\,h^{-1}\mathrm{Mpc}` with top-hat and
+   Gaussian vertex smoothing at matched radii.  Right: fixed top-hat
+   :math:`R=5\,h^{-1}\mathrm{Mpc}` with six triangle side-length pairs.
+   Multipoles compactly expose how smoothing and triangle geometry redistribute
+   angular information.

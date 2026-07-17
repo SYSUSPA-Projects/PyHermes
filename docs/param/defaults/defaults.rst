@@ -88,7 +88,7 @@ Corr_3PCF
 The default direct-angular triangle has ``r12=20``, ``r13=40``, 20 angular
 samples, 100 rotations, and ``center=box_random`` with five million centres.
 ``angle_param=theta``, ``base_seed=42``, and ``products=Q``. Shared and
-leg-specific fields, randoms, and windows remain empty until configured.
+vertex-specific fields, randoms, and windows remain empty until configured.
 
 Corr_3PCF_Multipole
 -------------------

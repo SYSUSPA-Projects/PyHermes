@@ -8,10 +8,10 @@ This page separates two questions that are easy to mix together:
 * **Performance:** once the estimator is fixed, which part of the workflow sets
   the runtime and memory footprint?
 
-The validation figures and the current CPU/GPU runtime comparison are generated
-from the latest grouped test outputs.  The compact timing table and the
-host-memory panel reproduce the reference benchmarks reported in the Hermes
-paper.
+The validation figures, timing table, and CPU/GPU memory comparison are all
+generated from the current grouped jobs under ``tests/``.  They therefore form
+one internally consistent benchmark set rather than mixing results from
+different runs.
 
 Reference Data
 --------------
@@ -151,82 +151,125 @@ Increasing ``J`` by one multiplies the number of three-dimensional field
 coefficients by eight.  Since some work buffers are rank-local, a high-``J``
 job often benefits from fewer MPI ranks and more threads per rank.
 
-Reference Benchmarks
---------------------
+Current Grouped Benchmark
+-------------------------
 
 The CPU measurements used two AMD EPYC 9754 processors (256 physical cores in
 total).  GPU measurements used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
-``ranks x threads`` below describes the CPU layout; the multipole GPU jobs use
-the same CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the
-final contraction.
+``ranks x threads`` below describes the CPU layout; GPU jobs use the same
+CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the final
+contraction.
 
-.. list-table:: Representative results reported in the Hermes paper
+The table is parsed from the selected completed logs in
+``tests/logs/3pcf_multipole_window23_*`` and the matching Slurm ``sacct``
+records.  ``Field + MPI`` is the multipole-loop residual after subtracting the
+final contraction; it combines convolution and communication because their
+critical paths overlap.  ``Task total`` also includes input, setup, and output
+overhead.
+
+.. list-table:: Current 3PCF-multipole CPU/GPU benchmark
    :header-rows: 1
-   :widths: 17 34 6 12 12 13 10
+   :widths: 5 8 8 9 11 13 12 12 10
 
-   * - Product
-     - Representative setup
-     - ``J``
+   * - ``J``
+     - ``lmax``
+     - :math:`N_m`
+     - Backend
      - Parallel
-     - Total loop
-     - Average
-     - MaxRSS
-   * - :math:`DD(s,\mu)`
-     - Ring windows, ``46 x 51`` samples
-     - 8
-     - ``16 x 8``
-     - 78 s
-     - 33.21 ms/sample
-     - 16.5 GB
-   * - :math:`DDD(\theta)`
-     - 406,728 particle centres, ``n_rot=1000``, ``n_theta=20``
-     - 8
-     - ``16 x 8``
-     - 110 s
-     - 14 ns/comb.
-     - 11.5 GB
-   * - :math:`DDD(\theta)`
-     - 8 million box-random centres, ``n_rot=200``, ``n_theta=20``
-     - 8
-     - ``16 x 8``
-     - 467 s
-     - 14 ns/comb.
-     - 15.7 GB
-   * - :math:`DDD_\ell`
-     - ``lmax=7`` (36 non-negative-``m`` fields)
-     - 8
+     - Field + MPI [s]
+     - Sum [s]
+     - Task total [s]
+     - MaxRSS [GiB]
+   * - 8
+     - 7
+     - 36
+     - CPU
      - ``24 x 4``
-     - 30 s
-     - 0.84 s/field
-     - 17.8 GB
-   * - :math:`DDD_\ell`
-     - ``lmax=14`` (120 non-negative-``m`` fields)
-     - 8
+     - 23.1
+     - 34.3
+     - 62.4
+     - 18.7
+   * - 8
+     - 7
+     - 36
+     - GPU
      - ``24 x 4``
-     - 108 s
-     - 0.90 s/field
-     - 18.1 GB
-   * - :math:`DDD_\ell`
-     - ``lmax=20`` (231 non-negative-``m`` fields)
-     - 8
+     - 22.2
+     - 8.4
+     - 36.3
+     - 18.1
+   * - 8
+     - 14
+     - 120
+     - CPU
      - ``24 x 4``
-     - 230 s
-     - 1.00 s/field
-     - 17.8 GB
-   * - :math:`DDD_\ell`
-     - ``lmax=7`` (36 non-negative-``m`` fields)
-     - 9
+     - 82.4
+     - 111.7
+     - 199.0
+     - 19.1
+   * - 8
+     - 14
+     - 120
+     - GPU
+     - ``24 x 4``
+     - 82.0
+     - 27.0
+     - 114.0
+     - 18.3
+   * - 8
+     - 20
+     - 231
+     - CPU
+     - ``24 x 4``
+     - 183.2
+     - 222.3
+     - 410.6
+     - 18.9
+   * - 8
+     - 20
+     - 231
+     - GPU
+     - ``24 x 4``
+     - 184.6
+     - 51.4
+     - 241.1
+     - 17.8
+   * - 9
+     - 7
+     - 36
+     - CPU
      - ``12 x 8``
-     - 221 s
-     - 6.14 s/field
-     - 62.0 GB
-   * - :math:`DDD_\ell`
-     - ``lmax=14`` (120 non-negative-``m`` fields)
-     - 9
+     - 157.7
+     - 269.0
+     - 438.5
+     - 65.9
+   * - 9
+     - 7
+     - 36
+     - GPU
      - ``12 x 8``
-     - 822 s
-     - 6.85 s/field
-     - 61.0 GB
+     - 229.7
+     - 65.3
+     - 311.6
+     - 72.5
+   * - 9
+     - 14
+     - 120
+     - CPU
+     - ``12 x 8``
+     - 615.4
+     - 886.4
+     - 1513.6
+     - 65.9
+   * - 9
+     - 14
+     - 120
+     - GPU
+     - ``12 x 8``
+     - 740.7
+     - 208.3
+     - 964.6
+     - 64.1
 
 CPU and GPU Multipole Backends
 ------------------------------
@@ -234,48 +277,39 @@ CPU and GPU Multipole Backends
 The backend switch applies to the final multipole-field contraction.  FFT
 window convolutions and MPI communication remain CPU-side for both backends.
 Consequently, the GPU strongly accelerates the contraction stage, while the
-end-to-end gain is bounded by the unchanged convolution stage.
+end-to-end gain is bounded by the unchanged field and communication stages.
 
-.. figure:: _static/results/docs_3pcf_multipole_cpu_gpu_runtime.png
-   :alt: Current CPU and GPU three-point multipole task and contraction times
+.. figure:: _static/results/docs_3pcf_multipole_cpu_gpu_runtime_memory.png
+   :alt: Current CPU and GPU three-point multipole runtime phases and host memory
    :width: 100%
 
-   Latest grouped rerun using ``24 x 4`` at ``J=8`` and ``12 x 8`` at ``J=9``.
-   The left panel includes input, convolution, communication, contraction, and
-   output; the right panel isolates the backend-selected contraction stage.
+   Current grouped benchmark using ``24 x 4`` at ``J=8`` and ``12 x 8`` at
+   ``J=9``.  Left: multipole-loop wall time split into field/MPI work and the
+   backend-selected contraction.  Right: Slurm ``MaxRSS`` host memory; GPU
+   device memory is not included.
 
 The CPU and GPU products agree to relative :math:`L_2` differences of
-``9.5e-15--2.2e-14``.  Across the five configurations, the current GPU backend
-accelerates the contraction by ``4.1--4.3x`` and the complete task by
-``1.4--1.75x``.  The smaller end-to-end ratio is expected: the CPU contraction
-has been optimized since the paper benchmark, while FFT convolution and MPI
-communication remain common CPU-side costs.
-
-Paper benchmark snapshot
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. figure:: _static/paper/3pcf_multipole_cpu_gpu_runtime_phases.png
-   :alt: CPU and GPU three-point multipole runtime and host-memory comparison
-   :width: 100%
-
-At the paper snapshot, GPU offload reduced the contraction cost by about
-``4.2--4.4x`` and the complete multipole workflow by about ``2.2--3.1x``.  At
-fixed ``J``, host memory is nearly independent of ``lmax`` because windows are
-generated and processed sequentially.  The CPU backend uses more rank-local
-contraction storage; the plotted memory is Slurm ``MaxRSS`` and excludes GPU
-device memory.
+``9.5e-15--2.2e-14``.  Across the five configurations, GPU contraction is
+``4.1--4.3x`` faster and complete task time is ``1.4--1.75x`` faster.  The
+smaller end-to-end ratio is expected because only the contraction is offloaded.
+At fixed ``J``, host memory depends only weakly on ``lmax`` because multipole
+windows are generated and processed sequentially.  Increasing ``J`` has the
+much larger memory effect: it multiplies the three-dimensional coefficient
+count by eight.
 
 Reproducing the Checks
 ----------------------
 
 The public ``examples/notebooks`` directory contains the user-facing workflows.
-For maintainers, the current grouped outputs are analysed by four deliberately
+For maintainers, the current grouped outputs are analysed by five deliberately
 small notebooks:
 
 * ``tests/notebooks/docs_2pcf_results.ipynb``;
 * ``tests/notebooks/docs_3pcf_results.ipynb``;
 * ``tests/notebooks/docs_3pcf_multipole_results.ipynb``;
-* ``tests/notebooks/docs_kun_monopole_results.ipynb``.
+* ``tests/notebooks/docs_kun_monopole_results.ipynb``;
+* ``tests/notebooks/paper_figures_performance.ipynb`` for the current timing
+  and Slurm-memory table used above.
 
 They read existing products rather than rerunning expensive estimators.  The
 corresponding grouped Slurm jobs live under ``tests/slurm``.  Treat absolute

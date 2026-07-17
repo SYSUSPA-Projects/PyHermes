@@ -191,11 +191,11 @@ Smoothing windows and binning windows
 The distinction is semantic and important:
 
 - a task ``window`` or ``window1``/``window2``/``window3`` filters an input
-  field leg before the estimator is assembled;
+  field vertex before the estimator is assembled;
 - a ``binning_window`` maps sampled coordinates into the spatial support of a
   pair or triangle edge.
 
-For example, this 2PCF smooths both data legs with a spherical top-hat and
+For example, this 2PCF smooths both data vertices with a spherical top-hat and
 then samples thin-shell separations:
 
 .. code-block:: yaml
