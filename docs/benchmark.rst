@@ -38,18 +38,20 @@ Anisotropic 2PCF
 
 The same ``Corr2PCF`` task can measure real- and redshift-space fields by
 changing the input ``SFCField`` while keeping the binning-window family fixed.
-The plot below maps :math:`s^2\xi(s,\mu)` to Cartesian
-:math:`(s_\perp,s_\parallel)` coordinates.  The line-of-sight structure is a
-useful end-to-end check of field loading, window orientation, sampling-grid
-ordering, and result reshaping.
+The plot below maps :math:`s^2\xi(s,\mu)` to the
+:math:`(s_\perp,s_\parallel)` plane.  Joining two measurements at
+:math:`s_\perp=0` makes the line-of-sight response immediately visible and
+also provides a compact check of tracer weighting.
 
 .. figure:: _static/results/docs_2pcf_real_rsd_smu.png
-   :alt: Real- and redshift-space anisotropic two-point correlation functions
+   :alt: Real-space, redshift-space, and mass-weighted anisotropic two-point correlation functions
    :width: 100%
 
-   Current grouped-test outputs in real and redshift space.  Both panels use a
-   shared colour normalization; the white centre is outside the sampled radial
-   range.
+   Current grouped-test outputs.  Left: real space and unit-weight redshift
+   space.  Right: unit- and mass-weighted redshift space.  The two halves of
+   each circle share a colour normalization, while the two panels have
+   separate colour bars because mass weighting has a larger dynamic range.
+   The white centre excludes :math:`s<20\,h^{-1}{\rm Mpc}`.
 
 For an independent estimator-level check, the paper compares the isotropic
 Hermes result with direct periodic pair counting.  Agreement improves with
