@@ -156,17 +156,56 @@ job often benefits from fewer MPI ranks and more threads per rank.
 Current Grouped Benchmark
 -------------------------
 
+The representative end-to-end jobs below use the same Quijote field and
+geometric setup as the validation examples.  ``Average time`` is normalized by
+the natural sampling unit of each estimator: one :math:`(s,\mu)` binning window
+for the 2PCF and one centre--rotation--angle combination for the standard 3PCF.
+Memory is the Slurm batch-step ``MaxRSS`` and therefore excludes GPU device
+memory.
+
+.. list-table:: Representative 2PCF and standard-3PCF jobs
+   :header-rows: 1
+   :widths: 13 33 6 10 12 15 11
+
+   * - Product
+     - Representative setup
+     - ``J``
+     - Parallel
+     - Task total
+     - Average time
+     - MaxRSS
+   * - :math:`DD(s,\mu)`
+     - Ring binning windows, ``46 x 51`` samples
+     - 8
+     - ``8 x 8``
+     - 119.7 s
+     - 51.0 ms/sample
+     - 8.7 GiB
+   * - :math:`DDD(\theta;r_{12},r_{13})`
+     - Particle centres, ``Ncen=406728``, ``n_rot=1000``, ``n_theta=20``
+     - 8
+     - ``16 x 8``
+     - 84.0 s
+     - 10.3 ns/comb.
+     - 11.3 GiB
+   * - :math:`DDD(\theta;r_{12},r_{13})`
+     - Box-random centres, ``Ncen=8e6``, ``n_rot=200``, ``n_theta=20``
+     - 8
+     - ``16 x 8``
+     - 280.6 s
+     - 8.77 ns/comb.
+     - 21.2 GiB
+
 The CPU measurements used two AMD EPYC 9754 processors (256 physical cores in
 total).  GPU measurements used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
 ``ranks x threads`` below describes the CPU layout; GPU jobs use the same
 CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the final
 contraction.
 
-The table is parsed from the selected completed logs in
-``tests/logs/3pcf_multipole_window23_*`` and the matching Slurm ``sacct``
-records.  ``Field + MPI`` is the multipole-loop residual after subtracting the
-final contraction; it combines convolution and communication because their
-critical paths overlap.  ``Task total`` also includes input, setup, and output
+The multipole table reports the same five configurations on both backends.
+``Convolution + MPI`` is the multipole-loop residual after subtracting the final
+contraction; the two contributions are kept together because their critical
+paths overlap.  ``Task total`` additionally includes input, setup, and output
 overhead.
 
 .. list-table:: Current 3PCF-multipole CPU/GPU benchmark
@@ -178,7 +217,7 @@ overhead.
      - :math:`N_m`
      - Backend
      - Parallel
-     - Field + MPI [s]
+     - Convolution + MPI [s]
      - Sum [s]
      - Task total [s]
      - MaxRSS [GiB]
@@ -187,91 +226,91 @@ overhead.
      - 36
      - CPU
      - ``24 x 4``
-     - 23.1
-     - 34.3
-     - 62.4
-     - 18.7
+     - 23.5
+     - 34.4
+     - 62.8
+     - 19.2
    * - 8
      - 7
      - 36
      - GPU
      - ``24 x 4``
-     - 22.2
-     - 8.4
-     - 36.3
-     - 18.1
+     - 21.9
+     - 8.3
+     - 35.3
+     - 17.4
    * - 8
      - 14
      - 120
      - CPU
      - ``24 x 4``
-     - 82.4
-     - 111.7
-     - 199.0
+     - 86.0
+     - 113.0
+     - 204.0
      - 19.1
    * - 8
      - 14
      - 120
      - GPU
      - ``24 x 4``
-     - 82.0
-     - 27.0
-     - 114.0
-     - 18.3
+     - 80.3
+     - 26.7
+     - 112.2
+     - 18.0
    * - 8
      - 20
      - 231
      - CPU
      - ``24 x 4``
-     - 183.2
-     - 222.3
-     - 410.6
-     - 18.9
+     - 180.6
+     - 238.7
+     - 424.3
+     - 19.4
    * - 8
      - 20
      - 231
      - GPU
      - ``24 x 4``
-     - 184.6
-     - 51.4
-     - 241.1
+     - 178.5
+     - 51.1
+     - 234.6
      - 17.8
    * - 9
      - 7
      - 36
      - CPU
      - ``12 x 8``
-     - 157.7
-     - 269.0
-     - 438.5
-     - 65.9
+     - 152.0
+     - 274.7
+     - 445.2
+     - 66.9
    * - 9
      - 7
      - 36
      - GPU
      - ``12 x 8``
-     - 229.7
-     - 65.3
-     - 311.6
-     - 72.5
+     - 156.5
+     - 62.1
+     - 234.3
+     - 61.5
    * - 9
      - 14
      - 120
      - CPU
      - ``12 x 8``
-     - 615.4
-     - 886.4
-     - 1513.6
+     - 613.0
+     - 903.6
+     - 1528.4
      - 65.9
    * - 9
      - 14
      - 120
      - GPU
      - ``12 x 8``
-     - 740.7
-     - 208.3
-     - 964.6
-     - 64.1
+     - 616.2
+     - 206.0
+     - 833.9
+     - 61.5
 
 CPU and GPU Multipole Backends
 ------------------------------
@@ -292,12 +331,15 @@ end-to-end gain is bounded by the unchanged field and communication stages.
 
 The CPU and GPU products agree to relative :math:`L_2` differences of
 ``9.5e-15--2.2e-14``.  Across the five configurations, GPU contraction is
-``4.1--4.3x`` faster and complete task time is ``1.4--1.75x`` faster.  The
+``4.1--4.7x`` faster and complete task time is ``1.8--1.9x`` faster.  The
 smaller end-to-end ratio is expected because only the contraction is offloaded.
 At fixed ``J``, host memory depends only weakly on ``lmax`` because multipole
-windows are generated and processed sequentially.  Increasing ``J`` has the
-much larger memory effect: it multiplies the three-dimensional coefficient
-count by eight.
+windows are generated and processed sequentially.  The GPU jobs use
+``5.6--9.1%`` less host memory in these measurements, but this comparison does
+not include device memory and is not a total CPU-plus-GPU footprint.  Increasing
+``J`` has the much larger memory effect: it multiplies the three-dimensional
+coefficient count by eight.  Using fewer MPI ranks at ``J=9`` limits the
+observed host-memory increase to approximately ``3.4--3.5x``.
 
 Reproducing the Checks
 ----------------------
@@ -313,7 +355,10 @@ small notebooks:
 * ``tests/notebooks/paper_figures_performance.ipynb`` for the current timing
   and Slurm-memory table used above.
 
-They read existing products rather than rerunning expensive estimators.  The
-corresponding grouped Slurm jobs live under ``tests/slurm``.  Treat absolute
-times as hardware-specific; convergence patterns, stage-level scaling, and
-same-node CPU/GPU ratios are the more portable diagnostics.
+Once the grouped jobs have produced their outputs, these notebooks read the
+saved products rather than rerunning expensive estimators.  The corresponding
+scripts and grouped Slurm recipes live under ``tests/scripts`` and
+``tests/slurm``.  Raw logs and estimator products are treated as transient test
+artifacts and are intentionally not distributed with the repository.  Treat
+absolute times as hardware-specific; convergence patterns, stage-level scaling,
+and same-node CPU/GPU ratios are the more portable diagnostics.
