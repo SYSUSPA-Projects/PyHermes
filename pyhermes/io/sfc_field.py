@@ -546,7 +546,7 @@ class SFCField(HermesData):
             dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
             if 'epsilon' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'epsilon' key.")
+                self.logger.error("Failed to load the dataset. The file is missing the 'epsilon' key.")
                 func_util.safe_exit(1)
             self.epsilon = dataset['epsilon']
             # Assign the dictionary from the file to self.sfc_info

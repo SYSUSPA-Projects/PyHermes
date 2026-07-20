@@ -13,9 +13,10 @@ examples/logs/*.log
 **/__pycache__/
 
 ## ignore the generated file when install 
-pyhermes.egg-info/
+*.egg-info/
+.pytest_cache/
 build/
-tests/
+dist/
 .DS_Store
 .vscode/
 tmp/

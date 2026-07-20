@@ -35,7 +35,7 @@ class CountingData(HermesData):
             serialized_data = np.lib.format.read_array(f, allow_pickle=True)
             dataset = pickle.loads(serialized_data.tobytes())
             if 'nx' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'nx' key.")
+                self.logger.error("Failed to load the dataset. The file is missing the 'nx' key.")
                 func_util.safe_exit(1)
             self.nx = dataset['nx']
             _sfc_info = dataset.get('sfc_info')

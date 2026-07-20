@@ -37,14 +37,29 @@ counting for every configuration.
 
 ## Installation
 
+Install the serial, single-process package from PyPI:
+
 ```bash
-conda create -n pyhermes python=3.12
-conda activate pyhermes
-pip install -r requirements.txt
-pip install -e .
+pip install pyhermes-cosmo
 ```
 
-MPI and CUDA are optional. See the
+The Python import name remains unchanged:
+
+```python
+import pyhermes
+```
+
+For a ready-to-use MPICH environment on Linux or macOS:
+
+```bash
+conda create -n pyhermes -c conda-forge python=3.12 mpi4py mpich pip
+conda activate pyhermes
+pip install pyhermes-cosmo
+mpiexec -n 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
+```
+
+Without `mpi4py`, PyHermes automatically uses its single-process MPI fallback.
+MPI and CUDA remain optional. See the
 [installation guide](https://pyhermes.astroslacker.com/install.html) for
 distributed and GPU setup.
 
@@ -55,6 +70,13 @@ The tracked examples use paths relative to `examples/`:
 ```bash
 cd examples
 python scripts/prepare_sfc_fields.py
+```
+
+The optional dark-matter snapshot builder accepts the local Gadget HDF5
+snapshot prefix explicitly; no cluster-specific path is embedded in the code:
+
+```bash
+python scripts/build_quijote_dm_sfc_field.py /path/to/snapdir_004/snap_004
 ```
 
 ```python

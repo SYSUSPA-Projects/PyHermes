@@ -12,6 +12,7 @@ the repository root or from examples/.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import shutil
 import tarfile
@@ -29,9 +30,9 @@ CATALOG_DIR = DATA_DIR / "quijote_halos"
 CATALOG_REL = "./data/quijote_halos/8000"
 ARCHIVE_PATH = DATA_DIR / "quijote_halos.tar.gz"
 DOWNLOAD_URL = (
-    "https://pyhermes.astroslacker.com/_downloads/"
-    "87691d6e7eb8dd0b954576b2bc71fb51/quijote_halos.tar.gz"
+    "https://pyhermes.astroslacker.com/downloads/quijote_halos.tar.gz"
 )
+ARCHIVE_SHA256 = "c88c798fd7aec44b73b1909040f03738c7c223bfa5805f7f7f778b49bfe88b20"
 
 
 def parse_args() -> argparse.Namespace:
@@ -84,9 +85,23 @@ def remove_macos_junk(root: Path) -> None:
         shutil.rmtree(macosx_dir)
 
 
+def verify_archive(path: Path) -> None:
+    digest = hashlib.sha256()
+    with path.open("rb") as file_obj:
+        for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
+            digest.update(chunk)
+    actual = digest.hexdigest()
+    if actual != ARCHIVE_SHA256:
+        raise RuntimeError(
+            f"SHA256 mismatch for {path}: expected {ARCHIVE_SHA256}, got {actual}. "
+            "Delete the file or rerun with --overwrite."
+        )
+
+
 def download_archive(overwrite: bool) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     if ARCHIVE_PATH.exists() and not overwrite:
+        verify_archive(ARCHIVE_PATH)
         print(f"Archive already exists: {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
         return
 
@@ -98,8 +113,15 @@ def download_archive(overwrite: bool) -> None:
             "Referer": "https://pyhermes.astroslacker.com/",
         },
     )
-    with urlopen(request) as response, ARCHIVE_PATH.open("wb") as file_obj:
-        shutil.copyfileobj(response, file_obj)
+    partial_path = ARCHIVE_PATH.with_name(f"{ARCHIVE_PATH.name}.part")
+    partial_path.unlink(missing_ok=True)
+    try:
+        with urlopen(request) as response, partial_path.open("wb") as file_obj:
+            shutil.copyfileobj(response, file_obj)
+        verify_archive(partial_path)
+        partial_path.replace(ARCHIVE_PATH)
+    finally:
+        partial_path.unlink(missing_ok=True)
     print(f"Saved archive to {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
 
 
@@ -112,6 +134,7 @@ def should_skip_member(member: tarfile.TarInfo) -> bool:
         or "__MACOSX" in parts
         or member_path.name == ".DS_Store"
         or member_path.name.startswith("._")
+        or not (member.isfile() or member.isdir())
     )
 
 
@@ -126,6 +149,7 @@ def extract_archive(overwrite: bool) -> None:
             f"Missing {ARCHIVE_PATH}. Run without --skip-download or place the archive manually."
         )
 
+    verify_archive(ARCHIVE_PATH)
     print(f"Extracting {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
     with tarfile.open(ARCHIVE_PATH, "r:gz") as archive:
         for member in archive.getmembers():
