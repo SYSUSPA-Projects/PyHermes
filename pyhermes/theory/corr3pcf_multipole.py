@@ -5,7 +5,7 @@ import pickle
 import time
 
 import numpy as np
-from mpi4py import MPI
+from pyhermes.utils.mpi_util import MPI
 
 from pyhermes.io import WindowFunc, SFCField, Corr3PCFMultipoleData, normalize_task_weight_normalization
 from pyhermes.pipeline import TaskBase

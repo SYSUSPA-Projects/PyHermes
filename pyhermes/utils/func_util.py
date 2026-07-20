@@ -17,13 +17,12 @@ def in_jupyter_notebook():
     Check if the current environment is Jupyter Notebook.
     """
     try:
-        # Jupyter Notebook will have an IPython kernel
         from IPython import get_ipython
-        if 'IPKernelApp' in get_ipython().config:
-            return True
-    except:
-        pass
-    return False
+    except ImportError:
+        return False
+
+    ipython = get_ipython()
+    return ipython is not None and "IPKernelApp" in getattr(ipython, "config", {})
 
 def safe_exit(exit_code=1):
     """
@@ -39,17 +38,13 @@ def safe_exit(exit_code=1):
         import sys
         sys.exit(exit_code)
     else:
+        from pyhermes.utils.mpi_util import MPI
+
         try:
-            from mpi4py import MPI
-            # If mpi4py is available, assume an MPI environment and abort
-            comm = MPI.COMM_WORLD
-            comm.Abort(exit_code)
-        except ImportError:
-            # If mpi4py is not available, fall back to sys.exit
-            import sys
-            sys.exit(exit_code)
+            MPI.COMM_WORLD.Abort(exit_code)
+        except SystemExit:
+            raise
         except Exception as e:
-            # Handle any errors during MPI abort, fallback to sys.exit
             print(f"Error while trying to abort MPI: {e}")
             import sys
             sys.exit(exit_code)

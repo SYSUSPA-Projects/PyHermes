@@ -487,7 +487,7 @@ class WindowFunc(SFCField):
             dataset = pickle.loads(serialized_data.tobytes())
             # Check if the 'data' key is present in the dataset
             if 'window_kernal' not in dataset:
-                self.logger.error(f"Failed to load the dataset. The file is missing the 'window_kernal' key.")
+                self.logger.error("Failed to load the dataset. The file is missing the 'window_kernal' key.")
                 func_util.safe_exit(1)
             # Assign the dictionary from the file to self.sfc_info
             self.input_params = {key: value for key, value in dataset.items() if key != 'window_kernal'}

@@ -1,21 +1,17 @@
 Installation
 ============
 
-Local installation
-------------------
+PyPI installation
+-----------------
 
-A fresh environment is recommended because NumPy, SciPy, Numba, and
-PyWavelets need mutually compatible builds. From a repository clone:
+The default installation does not require MPI or CUDA:
 
 .. code-block:: bash
 
-   conda create -n pyhermes python=3.12
-   conda activate pyhermes
-   pip install -r requirements.txt
-   pip install -e .
+   pip install pyhermes-cosmo
 
-The editable install is convenient while following the notebooks. Use
-``pip install .`` for an ordinary non-editable installation.
+The distribution name is ``pyhermes-cosmo`` while the Python import name is
+``pyhermes``.
 
 Verify the installation
 -----------------------
@@ -35,17 +31,42 @@ The core package should import without MPI or CUDA. A minimal object check is:
 MPI support
 -----------
 
-MPI is optional for local notebook work and required for distributed runs. An
-MPI implementation must be available before installing ``mpi4py``:
+MPI is optional for local notebook work and required for distributed runs.
+When ``mpi4py`` is unavailable, PyHermes uses a single-process compatibility
+layer automatically.
+
+For a ready-to-use MPICH environment on Linux or macOS:
 
 .. code-block:: bash
 
-   pip install mpi4py
-   mpirun -np 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
+   conda create -n pyhermes -c conda-forge python=3.12 mpi4py mpich pip
+   conda activate pyhermes
+   pip install pyhermes-cosmo
+   mpiexec -n 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
+
+Users of an existing cluster MPI should load that implementation first and
+then install the optional Python binding:
+
+.. code-block:: bash
+
+   module load openmpi
+   pip install "pyhermes-cosmo[mpi]"
 
 Use one consistent MPI stack. Mixing a system ``mpirun`` with an ``mpi4py``
 wheel linked against a different implementation is a common source of startup
 failures.
+
+Development installation
+------------------------
+
+From a repository clone:
+
+.. code-block:: bash
+
+   python -m venv .venv
+   source .venv/bin/activate
+   python -m pip install --upgrade pip
+   python -m pip install -e ".[test,docs]"
 
 CUDA support
 ------------
@@ -76,6 +97,18 @@ Alternatively, execute the download and preparation cells in
 ``examples/notebooks/sfc_projection.ipynb``. Later notebooks reuse the fields
 written to ``examples/output/``.
 
+The public halo catalogue is sufficient for the tutorials. If you also have a
+local Quijote Gadget HDF5 dark-matter snapshot, build the optional DM field by
+passing its snapshot prefix explicitly:
+
+.. code-block:: bash
+
+   python examples/scripts/build_quijote_dm_sfc_field.py \
+      /path/to/snapdir_004/snap_004
+
+Use ``--output`` and ``--threads`` to override the documented defaults. No
+private cluster path is embedded in the script.
+
 Build the documentation
 -----------------------
 
@@ -84,7 +117,7 @@ errors:
 
 .. code-block:: bash
 
-   pip install sphinx sphinx-rtd-theme sphinx-copybutton
+   pip install -e ".[docs]"
    sphinx-build -W -b html docs docs/_build/html
 
 The generated site starts at ``docs/_build/html/index.html``.

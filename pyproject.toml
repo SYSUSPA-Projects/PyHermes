@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyhermes-cosmo"
+dynamic = ["version"]
+description = "High-performance multiresolution cosmic statistics in Python"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+  { name = "PyHermes Team", email = "dingdluan@gmail.com" },
+]
+keywords = [
+  "cosmology",
+  "large-scale structure",
+  "correlation function",
+  "MPI",
+  "scientific computing",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+  "h5py",
+  "hdf5plugin",
+  "json5",
+  "numba",
+  "numpy",
+  "PyWavelets",
+  "pyyaml",
+  "requests",
+  "rich",
+  "scipy",
+  "termcolor>=1.1",
+]
+
+[project.optional-dependencies]
+mpi = ["mpi4py>=4"]
+plot = ["matplotlib>=3.7"]
+camb = ["camb>=1.5"]
+docs = [
+  "sphinx>=7",
+  "sphinx-copybutton>=0.5",
+  "sphinx-rtd-theme>=2",
+]
+test = ["pytest>=8"]
+dev = [
+  "build>=1.2",
+  "pytest>=8",
+  "ruff>=0.12",
+  "twine>=5",
+]
+
+[project.urls]
+Homepage = "https://pyhermes.astroslacker.com"
+Documentation = "https://pyhermes.astroslacker.com"
+Repository = "https://github.com/SYSUSPA-Projects/PyHermes"
+Issues = "https://github.com/SYSUSPA-Projects/PyHermes/issues"
+
+[tool.setuptools.dynamic]
+version = { attr = "pyhermes.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["pyhermes*"]
+
+[tool.setuptools.package-data]
+pyhermes = [
+  "*.json",
+  "*.yaml",
+  "base/*.json",
+  "theory/*.json",
+  "utils/*.json",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+# ``l`` is the conventional multipole index throughout the scientific code.
+ignore = ["E741"]
+
+[tool.ruff.lint.per-file-ignores]
+# Package initializers intentionally define the public API by re-exporting names.
+"**/__init__.py" = ["F401", "F403"]

@@ -12,7 +12,6 @@ import pyhermes
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import setup_logger 
-import pyhermes.pipeline.custom_exceptions as ce
 
 
 REPLACE_KEYS = {
@@ -102,7 +101,7 @@ class ParamBase(object):
         except Exception as e:
             self.logger.error(f"Cannot determine file type: {e}")
             self.logger.error("Support parameter file formats: <JSON> and <YAML>")
-            self.logger.error(f"Please see the document for details")
+            self.logger.error("Please see the document for details")
             func_util.safe_exit(1)
     
     def read_paramfile(self, file_path):
@@ -273,12 +272,12 @@ class ParamBase(object):
                 user_params = self.read_paramfile(self.config_file_path)
                 return user_params
             else:
-                self.logger.error(f"No configure file specified in pipeline")
+                self.logger.error("No configure file specified in pipeline")
                 parser = self.get_parser()
                 print("")
                 print("----------------------------------------------------------------------")
                 parser.print_help()
                 print("----------------------------------------------------------------------")
                 print("")
-                self.logger.error(f"Please set configure file path with '-c' then try again")
+                self.logger.error("Please set configure file path with '-c' then try again")
                 func_util.safe_exit(1)
