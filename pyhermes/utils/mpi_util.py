@@ -22,7 +22,10 @@ _FAKE_COMM_NULL = FakeNullComm()
 
 try:
     from mpi4py import MPI as MPI
-except ImportError:
+except ModuleNotFoundError as exc:
+    if exc.name != "mpi4py":
+        raise
+
     # The single-process fallback is used when mpi4py is not available.
     # This implementation mimics basic MPI functionality and ensures compatibility
     # with mpi4py-like code. Users can write code that works seamlessly both with
