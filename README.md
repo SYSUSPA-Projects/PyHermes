@@ -133,9 +133,6 @@ parameter mappings, numerical validation, and performance interpretation.
 
 To build the documentation locally:
 
-The Clarity documentation theme requires Python 3.11 or later. This does not
-change the Python 3.10+ requirement for installing and using PyHermes itself.
-
 ```bash
 python -m pip install ".[docs]"
 sphinx-build -W -b html docs docs/_build/html

@@ -21,4 +21,9 @@ docs/_build/
 .DS_Store
 .vscode/
 tmp/
-tests/
+
+# Keep private integration assets under tests/ untracked while allowing the
+# public unit-test suite to grow normally.
+tests/*
+!tests/test_*.py
+!tests/conftest.py
