@@ -18,7 +18,6 @@ examples/logs/*.log
 build/
 dist/
 docs/_build/
-**/*.mo
 .DS_Store
 .vscode/
 tmp/

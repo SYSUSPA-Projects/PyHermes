@@ -14,10 +14,10 @@ can be used:
 .. code-block:: bibtex
 
    @software{pyhermes_software_2026,
-     author  = {Luan, Dingding and the PyHermes Team},
+     author  = {Feng, Long-Long and Xu, Tengpeng and Luan, Tian-Cheng and collaborators},
      title   = {PyHermes: High-performance multiresolution cosmic statistics in Python},
      year    = {2026},
-     version = {1.1.0rc2},
+     version = {1.1.0rc3},
      url     = {https://github.com/SYSUSPA-Projects/PyHermes}
    }
 
@@ -27,13 +27,13 @@ Paper citation placeholder
 .. important::
 
    The entry below is a visible placeholder, not a published-paper citation.
-   Replace the author list, title, journal, year, and identifier before the
-   repository becomes public and the manuscript is announced.
+   Replace the title, journal, year, and identifier before the repository
+   becomes public and the manuscript is announced.
 
 .. code-block:: bibtex
 
    @article{pyhermes_paper_placeholder,
-     author  = {Luan, Dingding and collaborators},
+     author  = {Feng, Long-Long and Xu, Tengpeng and Luan, Tian-Cheng and collaborators},
      title   = {PyHermes: Multiresolution field--window estimators for cosmic statistics},
      journal = {To be announced},
      year    = {2026},

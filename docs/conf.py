@@ -46,8 +46,6 @@ extensions = ['sphinx.ext.mathjax'] + [
 
 templates_path = ['_templates']
 exclude_patterns = ['_build']
-locale_dirs = ['locale/']
-gettext_compact = False
 
 # favicons = [
 #    {
@@ -78,7 +76,6 @@ html_theme = 'sphinx_rtd_theme'
 
 html_static_path = ['_static']
 html_css_files = ['style.css']
-html_js_files = ['language-switcher.js']
 # html_show_sourcelink = False
 
 html_logo = '_static/pyhermes_logo_dark.png'
