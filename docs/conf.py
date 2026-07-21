@@ -76,14 +76,14 @@ html_static_path = ['_static']
 html_css_files = ['style.css']
 # html_show_sourcelink = False
 
-html_favicon = '_static/pyhermes_mark.png'
+html_favicon = '_static/pyhermes_mark_round.png'
 
 html_theme_options = {
     'logo': {
         'text': 'PyHermes',
         'alt_text': 'PyHermes documentation - Home',
-        'image_light': '_static/pyhermes_mark.png',
-        'image_dark': '_static/pyhermes_mark.png',
+        'image_light': '_static/pyhermes_mark_round.png',
+        'image_dark': '_static/pyhermes_mark_round.png',
     },
     'navbar_align': 'left',
     'navbar_center': [],
