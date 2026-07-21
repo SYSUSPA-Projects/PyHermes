@@ -14,6 +14,15 @@ The distribution name is ``pyhermes-cosmo`` while the Python import name is
 ``pyhermes``. Pip installs the regular Python dependencies automatically. MPI
 and CUDA are optional and are not needed for this default installation.
 
+Choose the route that matches the machine:
+
+* **Local or notebook use:** install only ``pyhermes-cosmo`` with pip. The
+  single-process compatibility layer is selected automatically.
+* **A ready-to-use workstation MPI:** let conda-forge provide ``mpi4py`` and
+  MPICH, then install PyHermes with pip in the same environment.
+* **An existing cluster MPI:** load the site's MPI module first, then install
+  the ``mpi`` optional dependency so that every rank uses the same MPI stack.
+
 Verify the installation
 -----------------------
 
@@ -50,6 +59,17 @@ This deliberately combines the two package managers: conda-forge supplies a
 matched MPI runtime and ``mpi4py`` build, while pip installs PyHermes and its
 remaining Python dependencies. A separate PyHermes conda package is not
 required for this setup.
+
+For a lightweight pip-only MPICH environment on a supported Linux or macOS
+workstation, the equivalent setup is:
+
+.. code-block:: bash
+
+   python -m pip install "pyhermes-cosmo[mpi]" mpich
+   mpiexec -n 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
+
+The conda and pip MPI packages prioritize portability. On an HPC system,
+prefer the MPI implementation supplied and tuned by the site administrator.
 
 Users of an existing cluster MPI should load that implementation first and
 then install the optional Python binding:

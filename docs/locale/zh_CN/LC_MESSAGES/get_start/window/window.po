@@ -1,0 +1,160 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../get_start/window/window.rst:2
+msgid "Field and window operations"
+msgstr ""
+
+#: ../../get_start/window/window.rst:4
+msgid ""
+"``SFCField`` stores a represented field. ``WindowFunc`` stores an "
+"operator compatible with that representation. Their small algebra is the "
+"low-level language from which PyHermes tasks are assembled."
+msgstr ""
+
+#: ../../get_start/window/window.rst:9
+msgid "Load a field"
+msgstr ""
+
+#: ../../get_start/window/window.rst:21
+msgid "Field arithmetic"
+msgstr ""
+
+#: ../../get_start/window/window.rst:23
+msgid "Compatible fields support coefficient-wise arithmetic:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:32
+msgid ""
+"``+`` and ``-`` combine fields. ``*`` between two fields forms their "
+"local coefficient-space product; ``*`` with a scalar rescales a field. "
+"The result is another ``SFCField`` marked as a derived field."
+msgstr ""
+
+#: ../../get_start/window/window.rst:37
+msgid "Apply a window"
+msgstr ""
+
+#: ../../get_start/window/window.rst:48
+msgid ""
+"``@`` is reserved for field--window convolution. The kernel is built "
+"lazily the first time ``smooth.as_array()`` or ``delta @ smooth`` is "
+"called, then cached on the object."
+msgstr ""
+
+#: ../../get_start/window/window.rst:52
+msgid "The two multiplications are deliberately different:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:59
+msgid ""
+"This distinction mirrors the Hermes equations: first construct window-"
+"filtered fields, then multiply and average them."
+msgstr ""
+
+#: ../../get_start/window/window.rst:63
+msgid "Inspect values"
+msgstr ""
+
+#: ../../get_start/window/window.rst:65
+msgid "``as_array()`` returns the represented coefficient array:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:72
+msgid "To evaluate the reconstructed continuous field at positions, use:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:82
+msgid "Compatibility"
+msgstr ""
+
+#: ../../get_start/window/window.rst:84
+msgid ""
+"Fields and windows must agree in ``J``, ``box_size``, ``wavelet_mode``, "
+"``wavelet_level``, and ``phi_resolution``. Always construct a window from"
+" the ``sfc_info`` of the field it will act on. A visually similar array "
+"from another grid is not interchangeable."
+msgstr ""
+
+#: ../../get_start/window/window.rst:90
+msgid "Window arithmetic"
+msgstr ""
+
+#: ../../get_start/window/window.rst:92
+msgid ""
+"Window addition, subtraction, and scalar arithmetic combine materialised "
+"projected kernels. For example, a projected finite shell can be explored "
+"as a volume-weighted difference of two top-hats:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:111
+msgid ""
+"The built-in ``thick_shell`` is preferable for production because its "
+"complete continuous Fourier expression is projected once."
+msgstr ""
+
+#: ../../get_start/window/window.rst:114
+msgid ""
+"Likewise, ``W1 * W2`` is a pointwise product of two already projected "
+"kernels. It is useful for experiments with separable factors, but it is "
+"not identical to projecting the bare continuous product once. See "
+":doc:`../../windows` for the full numerical note."
+msgstr ""
+
+#: ../../get_start/window/window.rst:120
+msgid "A custom window"
+msgstr ""
+
+#: ../../get_start/window/window.rst:122
+msgid "Custom ordinary kernels use the same interface:"
+msgstr ""
+
+#: ../../get_start/window/window.rst:140
+msgid ""
+"``ki``, ``kj``, and ``kk`` are cycle frequencies in grid coordinates. "
+"Physical lengths belong in ``len_args`` and are rescaled automatically."
+msgstr ""
+
+#: ../../get_start/window/window.rst:144
+msgid "Use the task layer when appropriate"
+msgstr ""
+
+#: ../../get_start/window/window.rst:146
+msgid ""
+"Direct operations are ideal for understanding an estimator, constructing "
+"a new physical field, or prototyping a custom statistic. For production "
+"Counting, 2PCF, and 3PCF runs, task classes also manage data/random "
+"fields, sampling grids, MPI distribution, dependencies among output "
+"products, and metadata. Low-level and high-level paths use the same "
+"field/window machinery."
+msgstr ""
+
+#: ../../get_start/window/window.rst:153
+msgid "Public tutorial"
+msgstr ""
+
+#: ../../get_start/window/window.rst:155
+msgid ""
+"``examples/notebooks/window.ipynb`` demonstrates field arithmetic, "
+"ordinary windows, custom kernels, projected-kernel composition, smoothing"
+" versus binning roles, and Fourier-space sketches of the built-in "
+"library."
+msgstr ""

@@ -1,0 +1,465 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../math.rst:2
+msgid "Hermes concepts and equations"
+msgstr ""
+
+#: ../../math.rst:4
+msgid ""
+"This page is the compact mathematical map behind the task guides. It "
+"follows the notation of the Hermes paper while naming the corresponding "
+"PyHermes objects explicitly."
+msgstr ""
+
+#: ../../math.rst:9
+msgid "From a catalogue to a continuous field"
+msgstr ""
+
+#: ../../math.rst:11
+#, python-brace-format
+msgid ""
+"For particle positions :math:`\\mathbf{x}_i`, catalogue weights "
+":math:`w_i`, and optional particle-carried values :math:`q_i`, define"
+msgstr ""
+
+#: ../../math.rst:14
+#, python-brace-format
+msgid ""
+"F(\\mathbf{x}) = \\sum_i w_i q_i\\,\n"
+"\\delta_{\\mathrm D}^{3}(\\mathbf{x}-\\mathbf{x}_i)."
+msgstr ""
+
+#: ../../math.rst:19
+msgid ""
+"``catalog_weight`` supplies :math:`w_i`; ``field_value`` supplies "
+":math:`q_i`. Unit values produce an ordinary number-density field. Mass, "
+"velocity components, marks, or other scalar values produce weighted "
+"fields without changing the projection algorithm."
+msgstr ""
+
+#: ../../math.rst:24
+msgid ""
+"At multiresolution level :math:`J`, PyHermes projects the catalogue onto "
+"a tensor-product scaling-function basis,"
+msgstr ""
+
+#: ../../math.rst:27
+msgid ""
+"F_J(\\mathbf{x}) = \\sum_{\\mathbf{l}}\n"
+"\\epsilon_{J\\mathbf{l}}\\,\\phi_{J\\mathbf{l}}(\\mathbf{x}),\n"
+"\\qquad\n"
+"\\epsilon_{J\\mathbf{l}} = \\int F(\\mathbf{x})\n"
+"\\phi_{J\\mathbf{l}}(\\mathbf{x})\\,d^3x."
+msgstr ""
+
+#: ../../math.rst:35
+msgid ""
+"The array of :math:`\\epsilon_{J\\mathbf{l}}` is ``SFCField.epsilon``. "
+"``SFCProjection`` computes it directly from particle positions using the "
+"compact support of the scaling function."
+msgstr ""
+
+#: ../../math.rst:43
+msgid ""
+"Multiresolution field reconstruction in the Hermes paper: a discrete "
+"catalogue is represented by compact scaling-function coefficients and may"
+" then be evaluated as a continuous field."
+msgstr ""
+
+#: ../../math.rst:48
+msgid "Resolution and the role of J"
+msgstr ""
+
+#: ../../math.rst:50
+msgid "The MRA grid has"
+msgstr ""
+
+#: ../../math.rst:52
+msgid ""
+"L = 2^J, \\qquad N_{\\mathrm{MRA}} = L^3 = 2^{3J},\n"
+"\\qquad \\Delta x = \\frac{L_{\\mathrm{box}}}{2^J}."
+msgstr ""
+
+#: ../../math.rst:57
+msgid ""
+"Increasing ``J`` by one halves the nominal cell size and multiplies the "
+"number of three-dimensional coefficients by eight. The scaling functions "
+"are not nearest-grid-point cells, but :math:`\\Delta x` remains the "
+"useful first check: measurements at separations or bin widths comparable "
+"to it require a convergence test."
+msgstr ""
+
+#: ../../math.rst:63
+msgid ""
+"The visual :math:`J=7,8,9` reconstruction comparison and practical "
+"resolution guidance are kept with the projection workflow in "
+":doc:`get_start/sfc_projection/sfc_projection`."
+msgstr ""
+
+#: ../../math.rst:68
+msgid "Normalisation carried by SFCField"
+msgstr ""
+
+#: ../../math.rst:70
+msgid "Projection weights are divided according to ``weight_normalization``:"
+msgstr ""
+
+#: ../../math.rst:72
+msgid "``raw``"
+msgstr ""
+
+#: ../../math.rst:73
+msgid "No division. The field integral is :math:`\\sum_i w_i q_i`."
+msgstr ""
+
+#: ../../math.rst:75
+msgid "``catalog``"
+msgstr ""
+
+#: ../../math.rst:76
+msgid ""
+"Divide by :math:`\\sum_i w_i`. For an unweighted number field the field "
+"integral is one. This is the default for catalogue statistics."
+msgstr ""
+
+#: ../../math.rst:79
+msgid "``field``"
+msgstr ""
+
+#: ../../math.rst:80
+msgid "Divide by :math:`\\sum_i w_i q_i`, giving a unit-integral weighted field."
+msgstr ""
+
+#: ../../math.rst:82
+msgid ""
+"``unit`` is accepted by high-level tasks as a request to convert each "
+"input field to unit integral. On an ``SFCField`` itself, use "
+"``to_unit_weight()`` or ``with_normalization(\"unit\")``."
+msgstr ""
+
+#: ../../math.rst:86
+msgid ""
+"``field_mean_density(value_unit=\"grid\")`` divides the field integral by"
+" ``L**3``. ``value_unit=\"physical\"`` divides by ``box_size**3``. The "
+"same choice is available when evaluating the continuous field with "
+"``field_density_at_pos``."
+msgstr ""
+
+#: ../../math.rst:92
+msgid "Window projection and convolution"
+msgstr ""
+
+#: ../../math.rst:94
+#, python-brace-format
+msgid ""
+"Let :math:`W(\\mathbf{x})` be a translation-invariant window and "
+":math:`\\widehat W(\\mathbf{k})` its Fourier transform. Projection onto "
+"the same scaling-function space introduces the autocorrelation factor "
+":math:`\\widehat\\Phi`, so the stored discrete kernel is schematically"
+msgstr ""
+
+#: ../../math.rst:99
+#, python-brace-format
+msgid "K_W(\\mathbf{k}) = \\widehat W(\\mathbf{k})\\widehat\\Phi(\\mathbf{k})."
+msgstr ""
+
+#: ../../math.rst:103
+msgid "Applying a window is then"
+msgstr ""
+
+#: ../../math.rst:105
+#, python-brace-format
+msgid ""
+"\\epsilon_W = \\operatorname{iFT}\n"
+"\\left[\\operatorname{FT}(\\epsilon)K_W\\right]."
+msgstr ""
+
+#: ../../math.rst:110
+msgid "In Python this is simply:"
+msgstr ""
+
+#: ../../math.rst:116
+msgid ""
+"The output is another ``SFCField``. Field addition and subtraction "
+"combine coefficient arrays; field multiplication forms a coefficient-"
+"space product:"
+msgstr ""
+
+#: ../../math.rst:125
+msgid ""
+"The scaling-function connection relations make these coefficient-space "
+"products the MRA representation of the spatial products used by Hermes "
+"estimators."
+msgstr ""
+
+#: ../../math.rst:130
+msgid "One-point statistics"
+msgstr ""
+
+#: ../../math.rst:132
+msgid ""
+"A smoothing window :math:`W_R` gives a local field :math:`F_R = F * W_R`."
+" ``Counting`` samples this continuous filtered field at uniform random "
+"positions. Histograms, moments, and one-point PDFs are ordinary post-"
+"processing of the returned samples."
+msgstr ""
+
+#: ../../math.rst:137
+msgid "The one-field second moment can also be written as"
+msgstr ""
+
+#: ../../math.rst:139
+#, python-brace-format
+msgid ""
+"\\sigma_W^2(R) = \\left\\langle \\delta_W^2(\\mathbf{x})\\right\\rangle,\n"
+"\\qquad \\delta_W = \\delta * W_R."
+msgstr ""
+
+#: ../../math.rst:144
+msgid ""
+"Changing the window changes the statistic: ``sphere`` and ``gaussian`` "
+"are low-pass filters; ``cw``, ``cws``, and ``gdw`` are localised high-"
+"pass or band-pass filters."
+msgstr ""
+
+#: ../../math.rst:149
+msgid "Two-point statistics"
+msgstr ""
+
+#: ../../math.rst:151
+msgid ""
+"Let :math:`D` and :math:`R` denote consistently normalised data and "
+"random fields, and :math:`\\Delta = D-R`. For a separation-binning window"
+" :math:`W_b`, PyHermes evaluates"
+msgstr ""
+
+#: ../../math.rst:155
+msgid ""
+"\\Delta DD[W_b] =\n"
+"\\left\\langle (\\Delta_1 * W_b)\\,\\Delta_2\\right\\rangle,\n"
+"\\qquad\n"
+"RR[W_b] =\n"
+"\\left\\langle (R_1 * W_b)\\,R_2\\right\\rangle,"
+msgstr ""
+
+#: ../../math.rst:163
+msgid "and returns"
+msgstr ""
+
+#: ../../math.rst:165
+#, python-brace-format
+msgid "\\xi[W_b] = \\frac{\\Delta DD[W_b]}{RR[W_b]}."
+msgstr ""
+
+#: ../../math.rst:169
+msgid ""
+"This is the field form of the Landy--Szalay combination. The task may "
+"also return ``dd``, ``dr``, ``rd``, ``delta_dd``, and ``rr`` separately."
+msgstr ""
+
+#: ../../math.rst:172
+msgid "The geometry resides in :math:`W_b`:"
+msgstr ""
+
+#: ../../math.rst:174
+msgid "``shell`` gives an isotropic separation;"
+msgstr ""
+
+#: ../../math.rst:175
+msgid "``thick_shell`` and ``gaussian_shell`` average over a finite radial range;"
+msgstr ""
+
+#: ../../math.rst:176
+msgid "``ring`` maps :math:`(s,\\mu)` into transverse and line-of-sight offsets;"
+msgstr ""
+
+#: ../../math.rst:177
+msgid ""
+"``disk``, ``cylshell``, and ``cylinder`` define alternative anisotropic "
+"averages."
+msgstr ""
+
+#: ../../math.rst:180
+msgid ""
+"Additional ``window1`` and ``window2`` filters act on the two input "
+"vertices before the binning window is applied."
+msgstr ""
+
+#: ../../math.rst:184
+msgid "Standard three-point statistics"
+msgstr ""
+
+#: ../../math.rst:186
+#, python-brace-format
+msgid ""
+"``Corr_3PCF`` performs a Monte Carlo translational and rotational average"
+" for a triangle with fixed :math:`r_{12}`, :math:`r_{13}`, and sampled "
+"included angle. Its three input vertices may have independent smoothing "
+"windows."
+msgstr ""
+
+#: ../../math.rst:190
+msgid ""
+"``center=\"particle\"`` uses catalogue objects as primary vertices. This "
+"is the dual-sphere construction in the paper. ``center=\"box_random\"`` "
+"samples primary vertices uniformly in the volume, corresponding to the "
+"triplet-sphere construction. ``n_rot`` controls the random rotational "
+"average around each centre."
+msgstr ""
+
+#: ../../math.rst:196
+msgid ""
+"The connected three-point statistic is assembled from data and random "
+"field products. ``zeta`` is the connected 3PCF and ``Q`` is the reduced "
+"3PCF,"
+msgstr ""
+
+#: ../../math.rst:199
+msgid ""
+"Q = \\frac{\\zeta}\n"
+"{\\xi_{12}\\xi_{13}+\\xi_{12}\\xi_{23}+\\xi_{13}\\xi_{23}}."
+msgstr ""
+
+#: ../../math.rst:205
+msgid "3PCF multipoles"
+msgstr ""
+
+#: ../../math.rst:207
+msgid "The angular dependence of the 3PCF can be expanded as"
+msgstr ""
+
+#: ../../math.rst:209
+#, python-brace-format
+msgid ""
+"\\zeta(r_{12},r_{13},\\mu)\n"
+"= \\sum_{\\ell}(2\\ell+1)\\,\n"
+"\\zeta_\\ell(r_{12},r_{13})P_\\ell(\\mu)."
+msgstr ""
+
+#: ../../math.rst:215
+msgid "For a thin shell, the Fourier-space multipole window has the form"
+msgstr ""
+
+#: ../../math.rst:217
+msgid ""
+"W_{r}^{\\ell m}(\\mathbf{k}) =\n"
+"4\\pi i^\\ell j_\\ell(2\\pi kr)Y_\\ell^m(\\widehat{\\mathbf{k}})."
+msgstr ""
+
+#: ../../math.rst:222
+msgid ""
+"``Corr_3PCF_Multipole`` constructs the required window-filtered "
+":math:`(\\ell,m)` fields and contracts their local products. Only "
+":math:`m\\geq0` fields are built explicitly; negative modes follow from "
+"spherical-harmonic conjugation symmetry."
+msgstr ""
+
+#: ../../math.rst:227
+msgid ""
+"The two radial supports are supplied by ``binning_window12`` and "
+"``binning_window13``. Thin shells use the analytic spherical-Bessel "
+"response. General radial profiles use :math:`U_\\ell(k)Y_\\ell^m` "
+"kernels, with numerical spherical-Hankel tabulation when no direct "
+"analytic higher-order response is available."
+msgstr ""
+
+#: ../../math.rst:234
+msgid "Weighted and derived physical fields"
+msgstr ""
+
+#: ../../math.rst:236
+msgid ""
+"Weights modify the field before projection; windows modify it afterwards."
+" This separation makes marked and physical-field statistics natural:"
+msgstr ""
+
+#: ../../math.rst:239
+msgid ""
+"F_q(\\mathbf{x}) = \\sum_i\n"
+"w_i^{\\mathrm c}w_i^{\\mathrm{opt}}m_iq_i\n"
+"\\delta_{\\mathrm D}^{3}(\\mathbf{x}-\\mathbf{x}_i)."
+msgstr ""
+
+#: ../../math.rst:245
+msgid ""
+"Factorisable catalogue weights belong in ``catalog_weight`` or "
+"``field_value``. A separation-dependent factor may belong in a window. "
+"General non-separable pair weights do not preserve one translation-"
+"invariant convolution and require a decomposition or explicit correction."
+msgstr ""
+
+#: ../../math.rst:250
+msgid "Operator windows use the Fourier identities"
+msgstr ""
+
+#: ../../math.rst:252
+msgid ""
+"\\widehat{\\partial_{\\hat n}f}=i(\\mathbf{k}\\cdot\\hat{\\mathbf "
+"n})\\hat f,\n"
+"\\qquad\n"
+"\\widehat{\\nabla^2 f}=-k^2\\hat f,\n"
+"\\qquad\n"
+"\\widehat{\\nabla^{-2}f}=-\\frac{1}{k^2}\\hat f."
+msgstr ""
+
+#: ../../math.rst:260
+msgid ""
+"The inverse-Laplacian zero mode is set to zero, fixing the arbitrary "
+"additive constant of the potential. Cosmological prefactors are "
+"intentionally applied outside that mathematical operator, where "
+"coordinate and unit conventions are explicit."
+msgstr ""
+
+#: ../../math.rst:266
+msgid "Projection and repeated windows"
+msgstr ""
+
+#: ../../math.rst:268
+msgid ""
+"The finite scaling-function projection matters when operations are "
+"composed. A ``WindowFunc`` stores :math:`K_W`, not a bare "
+":math:`\\widehat W`. Therefore:"
+msgstr ""
+
+#: ../../math.rst:272
+msgid "``field @ W1 @ W2`` applies two projected kernels;"
+msgstr ""
+
+#: ../../math.rst:273
+msgid "``W1 * W2`` multiplies two already projected kernels point by point;"
+msgstr ""
+
+#: ../../math.rst:274
+msgid ""
+"neither expression is, in general, identical to projecting the continuous"
+" product :math:`\\widehat W_1\\widehat W_2` exactly once."
+msgstr ""
+
+#: ../../math.rst:277
+msgid ""
+"For a production composite window, the cleanest current route is to "
+"define the complete Fourier expression in one built-in or custom window "
+"and apply it once. ``W1 * W2`` remains useful for exploratory projected-"
+"kernel composition and for testing separable constructions, provided this"
+" distinction is kept in mind. See :doc:`windows` for code and kernel-mode"
+" details."
+msgstr ""

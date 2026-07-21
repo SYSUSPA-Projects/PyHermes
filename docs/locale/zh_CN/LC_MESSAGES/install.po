@@ -1,0 +1,265 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: 2026-07-21 11:15+0800\n"
+"Last-Translator: PyHermes Team <dingdluan@gmail.com>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../install.rst:2
+msgid "Installation"
+msgstr "安装"
+
+#: ../../install.rst:5
+msgid "PyPI installation"
+msgstr "从 PyPI 安装"
+
+#: ../../install.rst:7
+msgid ""
+"For notebooks, development, and other single-process work, install from "
+"PyPI:"
+msgstr "对于 Notebook、开发和其他单进程工作，可直接从 PyPI 安装："
+
+#: ../../install.rst:13
+msgid ""
+"The distribution name is ``pyhermes-cosmo`` while the Python import name "
+"is ``pyhermes``. Pip installs the regular Python dependencies "
+"automatically. MPI and CUDA are optional and are not needed for this "
+"default installation."
+msgstr ""
+"发行包名称是 ``pyhermes-cosmo``，Python 导入名称仍为 ``pyhermes``。pip 会自动安装"
+"常规 Python 依赖。MPI 和 CUDA 均为可选项，默认安装不需要它们。"
+
+#: ../../install.rst:17
+msgid "Choose the route that matches the machine:"
+msgstr "请选择与机器环境匹配的安装路径："
+
+#: ../../install.rst:19
+msgid ""
+"**Local or notebook use:** install only ``pyhermes-cosmo`` with pip. The "
+"single-process compatibility layer is selected automatically."
+msgstr ""
+"**本地或 Notebook 使用：** 只需使用 pip 安装 ``pyhermes-cosmo``；程序会自动选择"
+"单进程兼容层。"
+
+#: ../../install.rst:21
+msgid ""
+"**A ready-to-use workstation MPI:** let conda-forge provide ``mpi4py`` "
+"and MPICH, then install PyHermes with pip in the same environment."
+msgstr ""
+"**开箱即用的工作站 MPI：** 由 conda-forge 提供 ``mpi4py`` 和 MPICH，再在同一环境"
+"中使用 pip 安装 PyHermes。"
+
+#: ../../install.rst:23
+msgid ""
+"**An existing cluster MPI:** load the site's MPI module first, then "
+"install the ``mpi`` optional dependency so that every rank uses the same "
+"MPI stack."
+msgstr ""
+"**已有集群 MPI：** 先加载站点提供的 MPI module，再安装 ``mpi`` 可选依赖，确保"
+"所有进程使用同一套 MPI。"
+
+#: ../../install.rst:27
+msgid "Verify the installation"
+msgstr "验证安装"
+
+#: ../../install.rst:33
+msgid ""
+"The core package should import without MPI or CUDA. A minimal object "
+"check is:"
+msgstr "核心包在没有 MPI 或 CUDA 时也应能正常导入。可以进行下面的最小对象检查："
+
+#: ../../install.rst:42
+msgid "MPI support"
+msgstr "MPI 支持"
+
+#: ../../install.rst:44
+msgid ""
+"MPI is optional for local work and required only for distributed runs. "
+"When ``mpi4py`` is unavailable, PyHermes uses its single-process "
+"compatibility layer automatically, so users do not need to install an MPI"
+" implementation just to import or use the package locally."
+msgstr ""
+"本地工作不强制需要 MPI，只有分布式运行才需要它。当 ``mpi4py`` 不可用时，PyHermes "
+"会自动使用单进程兼容层，因此仅为了在本机导入或使用本包，无需安装 MPI 实现。"
+
+#: ../../install.rst:49
+msgid "For a ready-to-use MPICH environment on Linux or macOS:"
+msgstr "要在 Linux 或 macOS 上创建开箱即用的 MPICH 环境："
+
+#: ../../install.rst:58
+msgid ""
+"This deliberately combines the two package managers: conda-forge supplies"
+" a matched MPI runtime and ``mpi4py`` build, while pip installs PyHermes "
+"and its remaining Python dependencies. A separate PyHermes conda package "
+"is not required for this setup."
+msgstr ""
+"这里有意组合使用两种包管理器：conda-forge 提供相互匹配的 MPI 运行时和 ``mpi4py`` "
+"构建，pip 则安装 PyHermes 及其余 Python 依赖。该方案不要求额外发布 PyHermes 的 "
+"conda 包。"
+
+#: ../../install.rst:63
+msgid ""
+"For a lightweight pip-only MPICH environment on a supported Linux or "
+"macOS workstation, the equivalent setup is:"
+msgstr "在受支持的 Linux 或 macOS 工作站上，也可以使用下面的纯 pip 轻量 MPICH 环境："
+
+#: ../../install.rst:71
+msgid ""
+"The conda and pip MPI packages prioritize portability. On an HPC system, "
+"prefer the MPI implementation supplied and tuned by the site "
+"administrator."
+msgstr ""
+"conda 和 pip 提供的 MPI 包优先考虑可移植性。在 HPC 系统上，应优先使用由站点管理员"
+"提供并调优的 MPI 实现。"
+
+#: ../../install.rst:74
+msgid ""
+"Users of an existing cluster MPI should load that implementation first "
+"and then install the optional Python binding:"
+msgstr "已有集群 MPI 的用户应先加载对应实现，再安装可选的 Python 绑定："
+
+#: ../../install.rst:82
+msgid ""
+"Use one consistent MPI stack. Mixing a system ``mpirun`` with an "
+"``mpi4py`` wheel linked against a different implementation is a common "
+"source of startup failures."
+msgstr ""
+"请始终使用一致的 MPI 软件栈。将系统 ``mpirun`` 与链接到另一种 MPI 实现的 "
+"``mpi4py`` wheel 混用，是启动失败的常见原因。"
+
+#: ../../install.rst:87
+msgid "Development installation"
+msgstr "开发模式安装"
+
+#: ../../install.rst:89
+msgid "From a repository clone:"
+msgstr "从克隆的仓库开始："
+
+#: ../../install.rst:99
+msgid "CUDA support"
+msgstr "CUDA 支持"
+
+#: ../../install.rst:101
+msgid ""
+"CUDA is optional and is currently used by the ``Corr_3PCF_Multipole`` "
+"summation backend. Field projection and FFT window convolution remain "
+"CPU-side operations. A CUDA-capable NVIDIA GPU, a working driver, and "
+"Numba CUDA support are required when ``summation_backend: gpu`` is "
+"selected."
+msgstr ""
+"CUDA 是可选功能，目前用于 ``Corr_3PCF_Multipole`` 的求和后端。场投影和 FFT 窗口"
+"卷积仍在 CPU 上执行。选择 ``summation_backend: gpu`` 时，需要支持 CUDA 的 NVIDIA "
+"GPU、可用的驱动程序以及 Numba CUDA 支持。"
+
+#: ../../install.rst:106
+msgid "CPU-only systems should set:"
+msgstr "纯 CPU 系统应设置："
+
+#: ../../install.rst:114
+msgid "Example data"
+msgstr "示例数据"
+
+#: ../../install.rst:116
+msgid ""
+"The repository does not commit the Quijote catalogue or generated "
+"products. Prepare the public example inputs from the repository root "
+"with:"
+msgstr ""
+"仓库不会提交 Quijote 目录或生成的结果。请在仓库根目录运行以下命令，准备公开示例"
+"所需的输入："
+
+#: ../../install.rst:123
+msgid ""
+"Alternatively, execute the download and preparation cells in "
+"``examples/notebooks/sfc_projection.ipynb``. Later notebooks reuse the "
+"fields written to ``examples/output/``."
+msgstr ""
+"也可以执行 ``examples/notebooks/sfc_projection.ipynb`` 中的下载和准备单元。后续 "
+"Notebook 会复用写入 ``examples/output/`` 的场。"
+
+#: ../../install.rst:127
+msgid ""
+"The public halo catalogue is sufficient for the tutorials. If you also "
+"have a local Quijote Gadget HDF5 dark-matter snapshot, build the optional"
+" DM field by passing its snapshot prefix explicitly:"
+msgstr ""
+"公开的暗晕目录足以运行教程。如果本地还有 Quijote Gadget HDF5 暗物质快照，可以"
+"显式传入快照前缀，构建可选的暗物质场："
+
+#: ../../install.rst:136
+msgid ""
+"Use ``--output`` and ``--threads`` to override the documented defaults. "
+"No private cluster path is embedded in the script."
+msgstr ""
+"可使用 ``--output`` 和 ``--threads`` 覆盖文档中的默认值。脚本中没有嵌入任何私有"
+"集群路径。"
+
+#: ../../install.rst:140
+msgid "Build the documentation"
+msgstr "构建文档"
+
+#: ../../install.rst:142
+msgid ""
+"Install the documentation dependencies and build with warnings treated as"
+" errors:"
+msgstr "安装文档依赖，并将警告视为错误进行构建："
+
+#: ../../install.rst:150
+msgid "The generated site starts at ``docs/_build/html/index.html``."
+msgstr "生成的网站入口为 ``docs/_build/html/index.html``。"
+
+#: ../../install.rst:153
+msgid "Troubleshooting"
+msgstr "故障排查"
+
+#: ../../install.rst:155
+msgid "**An import fails inside SciPy**"
+msgstr "**在 SciPy 内部发生导入失败**"
+
+#: ../../install.rst:156
+msgid ""
+"Confirm that the active interpreter and the environment receiving ``pip``"
+" packages are the same. Reinstall NumPy, SciPy, and Numba together rather"
+" than mixing packages from several environments."
+msgstr ""
+"请确认当前解释器与 ``pip`` 安装包的环境相同。应将 NumPy、SciPy 和 Numba 一起重新"
+"安装，避免混用多个环境中的包。"
+
+#: ../../install.rst:160
+msgid "**An MPI job starts too many threads**"
+msgstr "**MPI 任务启动了过多线程**"
+
+#: ../../install.rst:161
+msgid ""
+"Match the YAML ``threads`` value, ``OMP_NUM_THREADS``, and the "
+"scheduler's ``--cpus-per-task``. Their product with the MPI rank count "
+"must fit the allocation."
+msgstr ""
+"请协调 YAML 中的 ``threads``、``OMP_NUM_THREADS`` 和调度器的 ``--cpus-per-task``。"
+"它们与 MPI 进程数的乘积必须处于申请的资源范围内。"
+
+#: ../../install.rst:165
+msgid "**A high-``J`` job runs out of memory**"
+msgstr "**高 ``J`` 任务耗尽内存**"
+
+#: ../../install.rst:166
+msgid ""
+"Increasing ``J`` by one multiplies the number of three-dimensional field "
+"coefficients by eight. Prefer fewer MPI ranks and more threads per rank "
+"when rank-local copies dominate memory."
+msgstr ""
+"``J`` 每增加 1，三维场系数数量会增加到原来的 8 倍。当各进程的局部副本占据主要"
+"内存时，应减少 MPI 进程数并增加每个进程的线程数。"

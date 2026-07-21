@@ -1,0 +1,273 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:2
+msgid "Standard 3PCF"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:4
+#, python-brace-format
+msgid ""
+"``Corr_3PCF`` measures the angular three-point correlation function for a"
+" triangle with fixed sides :math:`r_{12}` and :math:`r_{13}`. It "
+"evaluates the two displaced vertices as window-filtered fields, samples "
+"their product around a set of primary vertices, and averages over random "
+"rotations. This is the direct-angular counterpart of the harmonic "
+"estimator described in :doc:`../corr_3pcf_multipole/corr_3pcf_multipole`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:11
+msgid ""
+"The public tutorial is ``examples/notebooks/corr3pcf.ipynb``. Its "
+"standard 3PCF sections compare the two centre strategies and show how the"
+" saved count-level products assemble into :math:`\\zeta` and the reduced "
+"statistic :math:`Q`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:17
+msgid "Triangle convention"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:19
+#, python-brace-format
+msgid ""
+"The primary vertex is labelled 1. The two fixed sides are "
+":math:`r_{12}=|\\mathbf{x}_2-\\mathbf{x}_1|` and "
+":math:`r_{13}=|\\mathbf{x}_3-\\mathbf{x}_1|`; the angular coordinate is "
+"either :math:`\\theta` or :math:`\\mu=\\cos\\theta`. The third side "
+"follows from"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:24
+#, python-brace-format
+msgid "r_{23}^2=r_{12}^2+r_{13}^2-2r_{12}r_{13}\\mu."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:28
+msgid ""
+"For every angular sample, PyHermes rotates this triangle ``n_rot`` times."
+" The rotation average is Monte Carlo: increasing ``n_rot`` reduces "
+"orientation noise but increases runtime approximately linearly."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:33
+msgid "A minimal run"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:35
+#, python-brace-format
+msgid ""
+"The example configuration below uses halo positions as primary vertices "
+"and applies a :math:`5\\,h^{-1}\\mathrm{Mpc}` spherical window to the "
+"displaced vertices:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:60
+msgid "Run the tracked example from ``examples/``:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:66
+msgid "or construct the task directly:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:77
+msgid "Choosing primary vertices"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:79
+msgid "``center: particle``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:80
+msgid ""
+"The first vertex is sampled at catalogue positions. This is efficient for"
+" sparse tracer catalogues and gives a dual-window estimator: ``window2`` "
+"and ``window3`` act on the two displaced vertices, while ``window1`` has "
+"no effect on the naked particle centre. The input ``SFCField`` must "
+"retain companion particle data, or ``particle_pos1`` and "
+"``particle_weight1`` must be passed together."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:87
+msgid "``center: box_random``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:88
+msgid ""
+"``n_box_centers`` positions are drawn uniformly in the periodic box. All "
+"three vertices are evaluated as fields, so ``window1``, ``window2``, and "
+"``window3`` can all be active. This mode is useful for dense particle "
+"samples or whenever the primary field itself must be filtered."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:93
+msgid ""
+"The shared ``window`` is copied to every vertex that does not define an "
+"explicit ``window1``, ``window2``, or ``window3``. In particle-centre "
+"mode this still does not filter the first vertex. Use explicit vertex "
+"windows when that distinction should be visible in the configuration."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:98
+msgid "For box-random centres, change only the centre section:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:112
+msgid "Data, randoms, and products"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:114
+msgid ""
+"``sfc_field`` supplies a shared data field; ``sfc_field1`` through "
+"``sfc_field3`` override individual vertices. The random inputs follow the"
+" same pattern. ``random: uniform`` uses the analytic constant-density "
+"shortcut, whereas a path or ``SFCField`` represents an explicit random "
+"catalogue."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:119
+msgid "Requesting a final statistic automatically expands its dependencies:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:121
+msgid "Main standard-3PCF products"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:125
+msgid "Product"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:126
+msgid "Meaning"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:127
+msgid "``ddd``, ``rrr``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:128
+msgid "Raw data and random triplet products."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:129
+msgid "``delta_ddd``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:130
+msgid "Connected data-minus-random triplet combination."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:131
+msgid "``xi12``, ``xi13``, ``xi23``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:132
+msgid "Two-point terms on the three triangle sides."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:133
+msgid "``zeta``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:134
+msgid "Connected three-point correlation function."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:135
+msgid "``zeta_H``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:136
+#, python-brace-format
+msgid ""
+"Hierarchical denominator "
+":math:`\\xi_{12}\\xi_{13}+\\xi_{12}\\xi_{23}+\\xi_{13}\\xi_{23}`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:138
+msgid "``Q``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:139
+msgid "Reduced 3PCF, :math:`Q=\\zeta/\\zeta_H`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:141
+msgid ""
+"The particle-centre mode additionally exposes ``d_delta_dd`` and "
+"``r_delta_dd``, the two centre-weighted contributions used to form "
+"``delta_ddd``. Product availability is validated against the selected "
+"centre mode; unsupported combinations fail early rather than silently "
+"changing the estimator."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:148
+msgid "Angle sampling"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:150
+msgid ""
+"Set ``angle_param`` to ``theta`` or ``mu`` and configure the matching "
+"section:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:160
+msgid ""
+"Explicit one-dimensional arrays are also accepted from Python. The output"
+" stores both ``theta`` and ``mu`` together with ``r23``, so downstream "
+"plotting does not need to reconstruct the triangle geometry."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:165
+msgid "Reading a result"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:176
+msgid ""
+"The arrays requested through ``products`` are available as attributes "
+"such as ``data.ddd``, ``data.zeta``, and ``data.Q``. Configuration and "
+"field metadata are retained in ``data.corr3pcf_info`` and "
+"``data.sfc_info1`` through ``data.sfc_info3``."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:182
+msgid "Connection to multipoles"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:184
+msgid "Direct angular 3PCF compared with its multipole representation"
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:189
+msgid ""
+"Direct angular estimates and the 3PCF multipole representation describe "
+"the same rotationally averaged signal. Residual differences arise from "
+"finite angular sampling, random rotations, centre sampling, and multipole"
+" truncation."
+msgstr ""
+
+#: ../../get_start/corr_3pcf/corr_3pcf.rst:194
+msgid ""
+"Use this task when the angular curve itself is the desired product. Use "
+"``Corr_3PCF_Multipole`` when many angular configurations, high angular "
+"order, or radial-window scans are more naturally represented through "
+":math:`\\zeta_\\ell`."
+msgstr ""

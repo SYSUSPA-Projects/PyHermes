@@ -1,0 +1,302 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:2
+msgid "Weighted, marked, and derived fields"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:4
+msgid ""
+"The field--window language is not limited to tracer counts. Catalogue "
+"weights and particle-carried values change *what field is represented*; "
+"windows change *what operation is applied to that field*. The same "
+"``SFCProjection`` and ``WindowFunc`` objects can therefore construct "
+"marked density fields, velocity and momentum fields, differential "
+"operators, the Newtonian potential, and acceleration."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:11
+msgid ""
+"The executable companion is ``examples/notebooks/weighted_fields.ipynb``."
+" It keeps the field construction compact and spends most of its length on"
+" slice selection and publication-quality visualisation."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:16
+msgid "Catalogue weight versus field value"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:18
+#, python-brace-format
+msgid "For particle positions :math:`\\mathbf{x}_i`, PyHermes projects"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:20
+msgid ""
+"F_q(\\mathbf{x})=\n"
+"\\sum_i {w_i^{\\rm cat}q_i\\over Z}\n"
+"\\delta_{\\rm D}^{(3)}(\\mathbf{x}-\\mathbf{x}_i)."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:26
+msgid ""
+"``catalog_weight`` holds completeness, selection, or other catalogue "
+"weights. ``field_value`` holds the quantity carried by each object: a "
+"mark, mass, or one velocity component. Keeping these roles separate "
+"prevents a signed physical quantity from being mistaken for a "
+"normalization weight."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:31
+msgid "``weight_normalization`` chooses :math:`Z`:"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:33
+#, python-brace-format
+msgid ""
+"``catalog`` divides by :math:`\\sum_i w_i^{\\rm cat}` and is the default "
+"for normalized clustering fields."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:35
+msgid ""
+"``raw`` uses :math:`Z=1`; choose it when the absolute physical amplitude "
+"is required."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:37
+#, python-brace-format
+msgid ""
+"``field`` divides by :math:`\\sum_i w_i^{\\rm cat}q_i` and is appropriate"
+" only when that field sum is meaningful and non-zero."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:40
+msgid "One small helper can build a family of fields on identical MRA metadata:"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:66
+msgid "Velocity as a ratio of fields"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:68
+msgid ""
+"A velocity-weighted field is not yet a volume-weighted velocity. After "
+"applying the same smoothing window to numerator and denominator,"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:71
+msgid "v_i(\\mathbf{x})={n_{v_i}(\\mathbf{x})\\over n(\\mathbf{x})}."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:75
+msgid "The derivative must obey the quotient rule:"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:77
+msgid ""
+"\\partial_j v_i=\n"
+"{\\partial_j n_{v_i}\\over n}\n"
+"-{n_{v_i}\\,\\partial_j n\\over n^2}."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:83
+msgid ""
+"This distinction matters in sparse regions. Mask points where the "
+"smoothed count field is too small instead of allowing a tiny denominator "
+"to manufacture large velocities."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:88
+msgid "Differential windows"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:90
+#, python-brace-format
+msgid ""
+"With the package Fourier convention, a directional derivative along the "
+"unit vector :math:`\\widehat{\\mathbf n}` is the multiplier"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:93
+msgid ""
+"\\widehat W_{\\partial_{\\widehat n}}(\\mathbf{k})\n"
+"=2\\pi i(\\mathbf{k}\\cdot\\widehat{\\mathbf n})."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:98
+msgid ""
+"Three such windows give gradients; component combinations give divergence"
+" and curl. The Laplacian window applies :math:`-(2\\pi k)^2`."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:121
+msgid ""
+"Window derivatives are formed in grid coordinates. Multiply sampled "
+"values by ``field.scale_factor`` when converting one derivative to "
+"inverse physical-box units. This is why the tutorial keeps coordinate "
+"conversion adjacent to the sampling code rather than hiding it inside the"
+" mathematical window."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:127
+msgid "Potential from the inverse Laplacian"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:129
+msgid ""
+"The built-in ``inverse_laplacian`` is deliberately a pure mathematical "
+"operator:"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:132
+msgid ""
+"\\widehat W_{\\nabla^{-2}}(\\mathbf{k})=\n"
+"-{1\\over(2\\pi k)^2},\\qquad \\widehat W_{\\nabla^{-2}}(0)=0."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:137
+#, python-brace-format
+msgid ""
+"Removing the zero mode fixes the arbitrary additive constant of the "
+"potential; it does not discard a measurable force. For the matter "
+"contrast :math:`\\delta_{\\rm m}` in comoving coordinates,"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:141
+msgid ""
+"{\\Phi\\over c^2}\n"
+"={3\\Omega_{\\rm m0}H_0^2\\over2ac^2}\n"
+"\\nabla^{-2}\\delta_{\\rm m}."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:147
+msgid ""
+"Keeping the cosmological prefactor outside ``WindowFunc`` makes units and"
+" coordinate conventions explicit. If the box coordinates are in "
+":math:`h^{-1}\\mathrm{Mpc}`, use "
+":math:`H_0=100\\,\\mathrm{km\\,s^{-1}}/(h^{-1}\\mathrm{Mpc})`; the "
+"numerical :math:`h` is already carried by the coordinate unit. The "
+"notebook also multiplies the grid-space inverse Laplacian by the squared "
+"cell size."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:169
+#, python-brace-format
+msgid ""
+"The resulting :math:`\\Phi/c^2` is dimensionless and mean-zero. Its "
+"broad, smooth appearance is physical: the :math:`k^{-2}` response "
+"strongly emphasizes large scales."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:174
+msgid "Acceleration and linear flow"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:176
+msgid "Directional derivatives of the potential give the peculiar acceleration,"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:178
+#, python-brace-format
+msgid "\\mathbf{g}=-{c^2\\over a}\\nabla_x(\\Phi/c^2)."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:182
+msgid ""
+"In linear theory the matter contrast, velocity divergence, potential, and"
+" acceleration are linked by the continuity and Poisson equations. After "
+"matching units and smoothing scales, their large-scale patterns should "
+"correlate; exact point-by-point equality is not expected for halo "
+"velocities because of bias, nonlinear motions, sparse sampling, and "
+"reconstruction error."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:188
+msgid "Velocity divergence, matter contrast, potential, and acceleration"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:193
+msgid ""
+"Halo velocity divergence, smoothed matter contrast, and the Newtonian "
+"potential on a common slice. Velocity and acceleration arrows expose the "
+"large-scale flow rather than merely the scalar amplitudes."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:197
+msgid "Linear-theory comparisons for velocity divergence and acceleration"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:202
+msgid ""
+"Linear-theory checks are most informative after using the same smoothing "
+"scale and evaluating both fields at matched positions."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:206
+msgid "Marked 2PCFs"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:208
+msgid ""
+"A mark is simply another ``field_value``. A common choice derives it from"
+" a local smoothed density, for example"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:211
+#, python-brace-format
+msgid ""
+"m_{\\rm power}=(\\rho_R+\\epsilon)^\\alpha,\n"
+"\\qquad\n"
+"m_{\\rm inverse}=\\left({\\rho_*+1\\over\\rho_*+\\rho_R}\\right)^p."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:217
+msgid ""
+"Evaluate :math:`\\rho_R` at catalogue positions, normalize the marks by "
+"their catalogue-weighted mean, project the marked catalogue, and pass "
+"that ``SFCField`` to the unchanged ``Corr_2PCF`` task. No marked-pair "
+"estimator is needed: the mark changes the field, not the binning "
+"operation."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:222
+msgid "Marked two-point correlation functions"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:227
+msgid ""
+"Power-law and inverse-density marks emphasize different environments "
+"while reusing the same 2PCF field--window estimator."
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:231
+msgid "Scope and interpretation"
+msgstr ""
+
+#: ../../get_start/weighted_fields/weighted_fields.rst:233
+msgid ""
+"These operator windows make many derived fields concise, but they do not "
+"make all of them automatically physical. Always state the catalogue "
+"normalization, coordinate units, smoothing scale, zero-mode convention, "
+"and whether the field is tracer- or matter-based. The algebra is short; "
+"the assumptions still deserve their full names."
+msgstr ""
