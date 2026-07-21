@@ -18,27 +18,3 @@
   box-shadow: 0 14px 35px rgba(31, 36, 48, 0.10);
   margin: 1rem 0 1.5rem;
 }
-
-.pyhermes-language-switch {
-  display: inline-block;
-  margin: 0.55rem 0 0.15rem;
-  padding: 0.32rem 0.72rem;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  border-radius: 999px;
-  color: #fff !important;
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-.pyhermes-language-switch:hover {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.pyhermes-translation-notice {
-  margin: 0 0 1.25rem;
-  padding: 0.75rem 1rem;
-  border-left: 4px solid #2980b9;
-  border-radius: 4px;
-  background: #eef7fc;
-  color: #24445a;
-}

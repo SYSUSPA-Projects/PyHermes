@@ -95,5 +95,3 @@ jobs:
       - name: Build documentation with warnings as errors
         run: |
           sphinx-build -W --keep-going -b html docs docs/_build/html
-          sphinx-build -W --keep-going -b html -D language=zh_CN \
-            -d docs/_build/doctrees/zh_CN docs docs/_build/html/zh_CN

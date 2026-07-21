@@ -32,8 +32,6 @@ jobs:
       - name: Build documentation
         run: |
           sphinx-build -W --keep-going -b html docs docs/_build/site
-          sphinx-build -W --keep-going -b html -D language=zh_CN \
-            -d docs/_build/doctrees/zh_CN docs docs/_build/site/zh_CN
       - name: Configure deployment SSH key
         env:
           DOCS_SSH_KEY: ${{ secrets.DOCS_SSH_KEY }}

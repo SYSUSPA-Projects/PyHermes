@@ -16,7 +16,6 @@ derived physical-field calculations without returning to particle-level tuple
 counting for every configuration.
 
 - **Documentation:** [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
-- **简体中文文档:** [pyhermes.astroslacker.com/zh_CN/](https://pyhermes.astroslacker.com/zh_CN/)
 - **Source:** [SYSUSPA-Projects/PyHermes](https://github.com/SYSUSPA-Projects/PyHermes)
 - **Tutorials:** [`examples/notebooks/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks)
 - **Runnable configurations:** [`examples/configs/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/configs) and
@@ -132,15 +131,10 @@ follows the terminology and estimator definitions of the Hermes paper. It
 covers the mathematical construction, current APIs, window catalogue,
 parameter mappings, numerical validation, and performance interpretation.
 
-English is the canonical documentation language. A maintained Simplified
-Chinese edition is available from the language switcher on every page; pages
-awaiting translation continue to show the English source rather than stale
-content.
-
-To build it locally:
+To build the documentation locally:
 
 ```bash
-pip install sphinx sphinx-rtd-theme sphinx-copybutton
+python -m pip install ".[docs]"
 sphinx-build -W -b html docs docs/_build/html
 ```
 
@@ -152,5 +146,7 @@ provided in [`CITATION.cff`](https://github.com/SYSUSPA-Projects/PyHermes/blob/m
 with BibTeX examples in the
 [citation guide](https://pyhermes.astroslacker.com/citing.html).
 
-The manuscript entry is intentionally marked as a placeholder until the final
-author list, title, journal, and identifier are available.
+The current citation author list is Long-Long Feng, Tengpeng Xu, Tian-Cheng
+Luan, and the PyHermes collaborators. The manuscript entry remains clearly
+marked as a placeholder until its final title, journal, and identifier are
+available.
