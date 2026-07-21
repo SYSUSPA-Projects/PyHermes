@@ -26,9 +26,10 @@ Paper citation placeholder
 
 .. important::
 
-   The entry below is a visible placeholder, not a published-paper citation.
-   Replace the title, journal, year, and identifier before the repository
-   becomes public and the manuscript is announced.
+   **A note from Dingding:** I have deliberately left the citation below as a
+   visible placeholder for now. I will replace the provisional title, journal,
+   year, and identifier as soon as the paper is public and the manuscript is
+   announced.
 
 .. code-block:: bibtex
 
