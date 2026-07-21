@@ -70,10 +70,11 @@ exclude_patterns = ['_build']
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = 'sphinx_clarity_theme'
+html_title = 'PyHermes'
 
 html_static_path = ['_static']
 html_css_files = ['style.css']
 # html_show_sourcelink = False
 
-html_logo = '_static/pyhermes_logo_transparent.png'
-# html_favicon = ''
+html_logo = '_static/pyhermes_mark.png'
+html_favicon = '_static/pyhermes_mark.png'

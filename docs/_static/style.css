@@ -1,5 +1,19 @@
 /* Minimal project-specific styling for Sphinx builds. */
 
+.header-branding__logo {
+  height: 2.5rem !important;
+  width: 2.5rem;
+  object-fit: contain;
+}
+
+.pyhermes-hero-logo {
+  display: block;
+  width: min(260px, 48vw);
+  height: auto;
+  margin: 0.5rem auto 2rem;
+  filter: drop-shadow(0 14px 28px rgba(196, 115, 14, 0.16));
+}
+
 .workflow-diagram {
   border-radius: 16px;
   box-shadow: 0 18px 45px rgba(31, 36, 48, 0.12);
