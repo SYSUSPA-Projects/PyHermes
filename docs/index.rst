@@ -1,11 +1,6 @@
 PyHermes
 ========
 
-.. image:: _static/pyhermes_logo_transparent.png
-   :alt: PyHermes
-   :align: center
-   :class: pyhermes-hero-logo
-
 **PyHermes** is the Python implementation of **Hermes**, an in situ
 multiresolution framework for cosmic statistics. A particle catalogue is
 projected once into a reusable scaling-function-coefficient field

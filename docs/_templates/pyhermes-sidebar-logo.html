@@ -1,0 +1,10 @@
+<a class="pyhermes-sidebar-brand" href="{{ pathto(root_doc) }}">
+  <img
+    src="{{ pathto('_static/pyhermes_logo_transparent.png', 1) }}"
+    alt="PyHermes documentation - Home"
+  >
+</a>
+
+<nav class="pyhermes-global-nav" aria-label="Documentation navigation">
+  {{ toctree(maxdepth=1, collapse=False, includehidden=True, titles_only=True) }}
+</nav>

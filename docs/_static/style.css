@@ -1,17 +1,62 @@
 /* Minimal project-specific styling for Sphinx builds. */
 
-.header-branding__logo {
-  height: 2.5rem !important;
-  width: 2.5rem;
+.navbar-brand img {
+  height: 2.75rem;
+  width: 2.75rem;
   object-fit: contain;
 }
 
-.pyhermes-hero-logo {
+.navbar-brand .logo__title {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.55rem;
+  font-weight: 500;
+}
+
+.pyhermes-sidebar-brand {
   display: block;
-  width: min(260px, 48vw);
+  width: min(150px, 78%);
+  margin: 0.25rem auto 1.5rem;
+}
+
+.pyhermes-sidebar-brand img {
+  display: block;
+  width: 100%;
   height: auto;
-  margin: 0.5rem auto 2rem;
   filter: drop-shadow(0 14px 28px rgba(196, 115, 14, 0.16));
+}
+
+.pyhermes-global-nav .caption {
+  margin: 1.1rem 0 0.35rem;
+  color: var(--pst-color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.pyhermes-global-nav ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pyhermes-global-nav li {
+  margin: 0.18rem 0;
+}
+
+.pyhermes-global-nav a {
+  display: block;
+  padding: 0.28rem 0.45rem;
+  border-radius: 0.35rem;
+  color: var(--pst-color-text-base);
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.pyhermes-global-nav a:hover,
+.pyhermes-global-nav a.current {
+  background: var(--pst-color-surface);
+  color: var(--pst-color-primary);
 }
 
 .workflow-diagram {

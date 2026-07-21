@@ -69,12 +69,41 @@ exclude_patterns = ['_build']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-html_theme = 'sphinx_clarity_theme'
+html_theme = 'pydata_sphinx_theme'
 html_title = 'PyHermes'
 
 html_static_path = ['_static']
 html_css_files = ['style.css']
 # html_show_sourcelink = False
 
-html_logo = '_static/pyhermes_mark.png'
 html_favicon = '_static/pyhermes_mark.png'
+
+html_theme_options = {
+    'logo': {
+        'text': 'PyHermes',
+        'alt_text': 'PyHermes documentation - Home',
+        'image_light': '_static/pyhermes_mark.png',
+        'image_dark': '_static/pyhermes_mark.png',
+    },
+    'navbar_align': 'left',
+    'navbar_center': [],
+    'navigation_with_keys': True,
+    'show_nav_level': 2,
+    'show_toc_level': 2,
+    'icon_links': [
+        {
+            'name': 'GitHub',
+            'url': 'https://github.com/SYSUSPA-Projects/PyHermes',
+            'icon': 'fa-brands fa-github',
+        },
+        {
+            'name': 'PyPI',
+            'url': 'https://pypi.org/project/pyhermes-cosmo/',
+            'icon': 'fa-solid fa-box',
+        },
+    ],
+}
+
+html_sidebars = {
+    '**': ['pyhermes-sidebar-logo.html'],
+}
