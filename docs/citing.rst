@@ -14,7 +14,7 @@ can be used:
 .. code-block:: bibtex
 
    @software{pyhermes_software_2026,
-     author  = {Feng, Long-Long and Xu, Tengpeng and Luan, Tian-Cheng and collaborators},
+     author  = {Long-Long Feng and Tengpeng Xu and Tian-Cheng Luan and collaborators},
      title   = {PyHermes: High-performance multiresolution cosmic statistics in Python},
      year    = {2026},
      version = {1.1.0rc3},
@@ -33,7 +33,7 @@ Paper citation placeholder
 .. code-block:: bibtex
 
    @article{pyhermes_paper_placeholder,
-     author  = {Feng, Long-Long and Xu, Tengpeng and Luan, Tian-Cheng and collaborators},
+     author  = {Long-Long Feng and Tengpeng Xu and Tian-Cheng Luan and collaborators},
      title   = {PyHermes: Multiresolution field--window estimators for cosmic statistics},
      journal = {To be announced},
      year    = {2026},

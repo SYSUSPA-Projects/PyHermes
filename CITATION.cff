@@ -5,13 +5,13 @@ message: >-
 title: PyHermes
 type: software
 authors:
-  - family-names: Feng
-    given-names: Long-Long
-  - family-names: Xu
-    given-names: Tengpeng
-  - family-names: Luan
-    given-names: Tian-Cheng
-  - name: PyHermes collaborators
+  - given-names: Long-Long
+    family-names: Feng
+  - given-names: Tengpeng
+    family-names: Xu
+  - given-names: Tian-Cheng
+    family-names: Luan
+  - name: collaborators
 version: 1.1.0rc3
 date-released: 2026-07-21
 repository-code: https://github.com/SYSUSPA-Projects/PyHermes

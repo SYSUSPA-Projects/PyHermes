@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://pyhermes.astroslacker.com/_static/pyhermes_logo.png" alt="PyHermes logo" width="220">
+  <img src="https://pyhermes.astroslacker.com/_static/pyhermes_logo_transparent.png" alt="PyHermes logo" width="220">
 </p>
 
 # PyHermes
@@ -147,6 +147,6 @@ with BibTeX examples in the
 [citation guide](https://pyhermes.astroslacker.com/citing.html).
 
 The current citation author list is Long-Long Feng, Tengpeng Xu, Tian-Cheng
-Luan, and the PyHermes collaborators. The manuscript entry remains clearly
+Luan and collaborators. The manuscript entry remains clearly
 marked as a placeholder until its final title, journal, and identifier are
 available.
