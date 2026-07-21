@@ -1,0 +1,698 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../windows.rst:2
+msgid "Window reference"
+msgstr ""
+
+#: ../../windows.rst:4
+msgid ""
+"``WindowFunc`` is the common operator interface in PyHermes. A window may"
+" smooth a field, define a separation bin, select a multipole, or apply a "
+"mathematical operator. Its scientific role is determined by where the "
+"task uses it, not by a separate class hierarchy."
+msgstr ""
+
+#: ../../windows.rst:10
+msgid "Basic construction"
+msgstr ""
+
+#: ../../windows.rst:12
+msgid ""
+"Every window must be constructed with metadata from a compatible "
+"``SFCField``:"
+msgstr ""
+
+#: ../../windows.rst:27
+msgid "The parameter dictionary has four main sections:"
+msgstr ""
+
+#: ../../windows.rst:29
+msgid "``type``"
+msgstr ""
+
+#: ../../windows.rst:30
+msgid "Name of a built-in window."
+msgstr ""
+
+#: ../../windows.rst:32
+msgid "``len_args``"
+msgstr ""
+
+#: ../../windows.rst:33
+msgid ""
+"Physical length parameters in the same units as ``box_size``. PyHermes "
+"rescales them to MRA-grid coordinates internally."
+msgstr ""
+
+#: ../../windows.rst:36
+msgid "``los_args``"
+msgstr ""
+
+#: ../../windows.rst:37
+msgid ""
+"A line-of-sight direction ``nx``, ``ny``, ``nz``. The default is the "
+"positive z axis."
+msgstr ""
+
+#: ../../windows.rst:40
+msgid "``other_args``"
+msgstr ""
+
+#: ../../windows.rst:41
+msgid "Dimensionless or profile-specific controls."
+msgstr ""
+
+#: ../../windows.rst:44
+msgid "Built-in ordinary windows"
+msgstr ""
+
+#: ../../windows.rst:46
+msgid ""
+"The Fourier expressions below use angular wavenumber :math:`k`. Built-in "
+"functions are evaluated internally in cycle-frequency grid coordinates, "
+"where the required factors of :math:`2\\pi` are included by the "
+"implementation. Unit-integral smoothing and binning windows satisfy "
+":math:`\\widehat W(0)=1`."
+msgstr ""
+
+#: ../../windows.rst:56 ../../windows.rst:154
+msgid "Type"
+msgstr ""
+
+#: ../../windows.rst:57
+msgid "Role"
+msgstr ""
+
+#: ../../windows.rst:58
+msgid "Length arguments"
+msgstr ""
+
+#: ../../windows.rst:59
+msgid "Fourier response"
+msgstr ""
+
+#: ../../windows.rst:60
+msgid "``sphere``"
+msgstr ""
+
+#: ../../windows.rst:61
+msgid "Spherical top-hat"
+msgstr ""
+
+#: ../../windows.rst:62 ../../windows.rst:66 ../../windows.rst:70
+msgid "``R``"
+msgstr ""
+
+#: ../../windows.rst:63
+msgid ":math:`3[\\sin(kR)-kR\\cos(kR)]/(kR)^3`"
+msgstr ""
+
+#: ../../windows.rst:64
+msgid "``gaussian``"
+msgstr ""
+
+#: ../../windows.rst:65
+msgid "Isotropic low-pass filter"
+msgstr ""
+
+#: ../../windows.rst:67
+msgid ":math:`\\exp[-k^2R^2/2]`"
+msgstr ""
+
+#: ../../windows.rst:68
+msgid "``shell``"
+msgstr ""
+
+#: ../../windows.rst:69
+msgid "Infinitesimal spherical bin"
+msgstr ""
+
+#: ../../windows.rst:71
+msgid ":math:`j_0(kR)=\\sin(kR)/(kR)`"
+msgstr ""
+
+#: ../../windows.rst:72
+msgid "``thick_shell``"
+msgstr ""
+
+#: ../../windows.rst:73
+msgid "Finite spherical bin"
+msgstr ""
+
+#: ../../windows.rst:74
+msgid "``R``, ``delta_R``"
+msgstr ""
+
+#: ../../windows.rst:75
+msgid "Volume-weighted difference of two ``sphere`` responses"
+msgstr ""
+
+#: ../../windows.rst:76
+msgid "``gaussian_shell``"
+msgstr ""
+
+#: ../../windows.rst:77
+msgid "Smooth radial shell"
+msgstr ""
+
+#: ../../windows.rst:78
+msgid "``R_shell``, ``R_smooth``"
+msgstr ""
+
+#: ../../windows.rst:79
+msgid "Gaussian-damped shell response"
+msgstr ""
+
+#: ../../windows.rst:80
+msgid "``cubic``"
+msgstr ""
+
+#: ../../windows.rst:81
+msgid "Axis-aligned box top-hat"
+msgstr ""
+
+#: ../../windows.rst:82
+msgid "``Lx``, ``Ly``, ``Lz``"
+msgstr ""
+
+#: ../../windows.rst:83
+msgid "Product of three sinc factors"
+msgstr ""
+
+#: ../../windows.rst:84
+msgid "``ring``"
+msgstr ""
+
+#: ../../windows.rst:85
+msgid "Thin anisotropic pair bin"
+msgstr ""
+
+#: ../../windows.rst:86 ../../windows.rst:90 ../../windows.rst:94
+#: ../../windows.rst:98
+msgid "``R``, ``H``"
+msgstr ""
+
+#: ../../windows.rst:87
+msgid ":math:`J_0(k_\\perp R)\\cos(k_\\parallel H)`"
+msgstr ""
+
+#: ../../windows.rst:88
+msgid "``disk``"
+msgstr ""
+
+#: ../../windows.rst:89
+msgid "Filled transverse disk at :math:`\\pm H`"
+msgstr ""
+
+#: ../../windows.rst:91
+msgid ":math:`2J_1(k_\\perp R)/(k_\\perp R)\\cos(k_\\parallel H)`"
+msgstr ""
+
+#: ../../windows.rst:92
+msgid "``cylshell``"
+msgstr ""
+
+#: ../../windows.rst:93
+msgid "Cylindrical side wall"
+msgstr ""
+
+#: ../../windows.rst:95
+#, python-brace-format
+msgid ":math:`J_0(k_\\perp R)\\operatorname{sinc}(k_\\parallel H)`"
+msgstr ""
+
+#: ../../windows.rst:96
+msgid "``cylinder``"
+msgstr ""
+
+#: ../../windows.rst:97
+msgid "Filled finite cylinder"
+msgstr ""
+
+#: ../../windows.rst:99
+msgid "Disk factor times line-of-sight sinc"
+msgstr ""
+
+#: ../../windows.rst:101
+msgid ""
+"For ``ring`` and ``disk``, ``H`` is the line-of-sight offset. For "
+"``cylshell`` and ``cylinder``, ``H`` is the half-height, so the real-"
+"space support is :math:`|z|\\leq H`."
+msgstr ""
+
+#: ../../windows.rst:105
+msgid ""
+"``thick_shell`` clips its inner radius at zero and requires ``delta_R > "
+"0``:"
+msgstr ""
+
+#: ../../windows.rst:123
+msgid ""
+"Thin, finite-thickness, and Gaussian-shell bins change the effective "
+"radial averaging while leaving the 2PCF estimator itself unchanged."
+msgstr ""
+
+#: ../../windows.rst:127
+msgid "High-pass and wavelet-like filters"
+msgstr ""
+
+#: ../../windows.rst:129
+#, python-brace-format
+msgid ""
+"``cw``, ``cws``, and ``gdw`` are scale-normalised, zero-mean filters used"
+" to isolate localised fluctuations and band-averaged power. They take "
+"``len_args: {R: ...}``."
+msgstr ""
+
+#: ../../windows.rst:133
+msgid "``cw``"
+msgstr ""
+
+#: ../../windows.rst:134
+msgid "Cosine-wavelet response."
+msgstr ""
+
+#: ../../windows.rst:136
+msgid "``cws``"
+msgstr ""
+
+#: ../../windows.rst:137
+msgid "Spherical cosine-wavelet response."
+msgstr ""
+
+#: ../../windows.rst:139
+msgid "``gdw``"
+msgstr ""
+
+#: ../../windows.rst:140
+msgid ""
+"Isotropic Gaussian-derivative wavelet, proportional to "
+":math:`(kR)^2\\exp[-(kR)^2/2]` in Fourier space."
+msgstr ""
+
+#: ../../windows.rst:143
+msgid ""
+"These filters do not satisfy :math:`\\widehat W(0)=1`; their zero mode "
+"vanishes by design. Their amplitude is scale-normalised, so do not "
+"interpret them as ordinary local-density averages."
+msgstr ""
+
+#: ../../windows.rst:148
+msgid "Differential and inverse operators"
+msgstr ""
+
+#: ../../windows.rst:155
+msgid "Parameters"
+msgstr ""
+
+#: ../../windows.rst:156
+msgid "Kernel"
+msgstr ""
+
+#: ../../windows.rst:157
+msgid "``directional_derivative``"
+msgstr ""
+
+#: ../../windows.rst:158
+#, python-brace-format
+msgid "``los_args: {nx, ny, nz}``"
+msgstr ""
+
+#: ../../windows.rst:159
+#, python-brace-format
+msgid ":math:`i\\,\\mathbf{k}\\cdot\\hat{\\mathbf n}`"
+msgstr ""
+
+#: ../../windows.rst:160
+msgid "``laplacian``"
+msgstr ""
+
+#: ../../windows.rst:161 ../../windows.rst:164
+msgid "none"
+msgstr ""
+
+#: ../../windows.rst:162
+msgid ":math:`-k^2`"
+msgstr ""
+
+#: ../../windows.rst:163
+msgid "``inverse_laplacian``"
+msgstr ""
+
+#: ../../windows.rst:165
+msgid ":math:`-1/k^2`, with the zero mode set to zero"
+msgstr ""
+
+#: ../../windows.rst:167
+msgid ""
+"In the code's cycle-frequency convention the derivative includes "
+":math:`2\\pi` and the Laplacian includes :math:`(2\\pi)^2`. Length "
+"rescaling by ``L / box_size`` is handled consistently with other windows."
+msgstr ""
+
+#: ../../windows.rst:183
+#, python-brace-format
+msgid ""
+"For a density contrast :math:`\\delta_m`, ``inverse_laplacian`` returns "
+":math:`\\nabla^{-2}\\delta_m`. Multiply by the physical Poisson prefactor"
+" outside the window, where the scale factor, Hubble convention, speed of "
+"light, and coordinate units are explicit."
+msgstr ""
+
+#: ../../windows.rst:189
+msgid "Smoothing windows and binning windows"
+msgstr ""
+
+#: ../../windows.rst:191
+msgid "The distinction is semantic and important:"
+msgstr ""
+
+#: ../../windows.rst:193
+msgid ""
+"a task ``window`` or ``window1``/``window2``/``window3`` filters an input"
+" field vertex before the estimator is assembled;"
+msgstr ""
+
+#: ../../windows.rst:195
+msgid ""
+"a ``binning_window`` maps sampled coordinates into the spatial support of"
+" a pair or triangle edge."
+msgstr ""
+
+#: ../../windows.rst:198
+msgid ""
+"For example, this 2PCF smooths both data vertices with a spherical top-"
+"hat and then samples thin-shell separations:"
+msgstr ""
+
+#: ../../windows.rst:214
+msgid ""
+"Changing ``window`` changes the fields being correlated. Changing "
+"``binning_window`` changes the definition of the sampled separation bin."
+msgstr ""
+
+#: ../../windows.rst:218
+msgid "Line-of-sight geometry"
+msgstr ""
+
+#: ../../windows.rst:220
+msgid "Axis-aligned LOS directions are:"
+msgstr ""
+
+#: ../../windows.rst:226
+msgid ""
+"For a ``ring`` 2PCF sampled in :math:`(s,\\mu)`, the built-in "
+"``smu_to_RH`` mapping sets"
+msgstr ""
+
+#: ../../windows.rst:229
+#, python-brace-format
+msgid "R=s\\sqrt{1-\\mu^2}, \\qquad H=s\\mu."
+msgstr ""
+
+#: ../../windows.rst:233
+msgid "The short YAML form applies this mapping automatically:"
+msgstr ""
+
+#: ../../windows.rst:242
+msgid "The explicit form is useful when setting the LOS or kernel mode:"
+msgstr ""
+
+#: ../../windows.rst:254
+msgid "2PCF sampling mappings"
+msgstr ""
+
+#: ../../windows.rst:256
+msgid "``Corr_2PCF`` provides three named mappings:"
+msgstr ""
+
+#: ../../windows.rst:258
+msgid "``s_to_R``"
+msgstr ""
+
+#: ../../windows.rst:259
+msgid "Set ``R = s`` for isotropic shell-like windows."
+msgstr ""
+
+#: ../../windows.rst:261
+msgid "``smu_to_RH``"
+msgstr ""
+
+#: ../../windows.rst:262
+msgid "Set ``R = s*sqrt(1-mu**2)`` and ``H = s*mu``."
+msgstr ""
+
+#: ../../windows.rst:264
+msgid "``rppi_to_RH``"
+msgstr ""
+
+#: ../../windows.rst:265
+msgid "Set ``R = rp`` and ``H = pi``."
+msgstr ""
+
+#: ../../windows.rst:267
+msgid ""
+"Short string values such as ``binning_window: shell`` and "
+"``binning_window: ring`` are normalised to the appropriate defaults by "
+"the task."
+msgstr ""
+
+#: ../../windows.rst:272
+msgid "3PCF-multipole radial mappings"
+msgstr ""
+
+#: ../../windows.rst:274
+msgid ""
+"``Corr_3PCF_Multipole`` uses explicit mappings from sampled parameter "
+"names to the two edge windows:"
+msgstr ""
+
+#: ../../windows.rst:292
+msgid ""
+"``mode: grid`` forms the Cartesian product of all sampled arrays. ``mode:"
+" paired`` aligns arrays element by element; each array must have either "
+"one value or the common sample count."
+msgstr ""
+
+#: ../../windows.rst:297
+msgid "Radial multipole profiles"
+msgstr ""
+
+#: ../../windows.rst:299
+msgid ""
+"For 3PCF multipoles, an edge window becomes "
+":math:`U_\\ell(k)Y_\\ell^m(\\hat{\\mathbf{k}})`."
+msgstr ""
+
+#: ../../windows.rst:302
+msgid "``shell`` uses the analytic :math:`j_\\ell(kr)` response at every order."
+msgstr ""
+
+#: ../../windows.rst:303
+msgid ""
+"the monopoles of the other built-ins use their direct analytic Fourier "
+"responses;"
+msgstr ""
+
+#: ../../windows.rst:305
+msgid ""
+"higher orders for ``sphere``, ``thick_shell``, and ``gaussian`` are "
+"tabulated from analytic real-space profiles;"
+msgstr ""
+
+#: ../../windows.rst:307
+msgid "higher orders for ``gaussian_shell`` use the general inverse-Hankel route;"
+msgstr ""
+
+#: ../../windows.rst:308
+msgid ""
+"local cubic interpolation evaluates the resulting one-dimensional "
+":math:`U_\\ell(k)` table while constructing the three-dimensional kernel."
+msgstr ""
+
+#: ../../windows.rst:311
+msgid ""
+"The task can diagnose radial-table accuracy with "
+"``radial_profile_diagnostics``, ``radial_profile_diagnostic_tolerance``, "
+"and ``radial_profile_diagnostic_probes``."
+msgstr ""
+
+#: ../../windows.rst:315
+msgid ""
+"Custom radial profiles are Python-level inputs. Use the helpers in "
+"``pyhermes.utils.radial_profiles``:"
+msgstr ""
+
+#: ../../windows.rst:333
+msgid ""
+"Pass the resulting dictionary through the binning window's ``other_args``"
+" and use ``type: custom_real``. ``tabulated_real_space_profile`` and "
+"``kspace_profile`` provide the corresponding tabulated-real and inverse-"
+"Hankel k-space routes. Callable profiles are not serialisable YAML "
+"values, so define them in Python after reading a base configuration."
+msgstr ""
+
+#: ../../windows.rst:340
+msgid "Custom ordinary Fourier windows"
+msgstr ""
+
+#: ../../windows.rst:342
+msgid ""
+"A custom ordinary window is a Numba-compatible function receiving grid "
+"cycle-frequencies ``ki``, ``kj``, and ``kk`` followed by the values from "
+"``len_args``, ``los_args``, and ``other_args``:"
+msgstr ""
+
+#: ../../windows.rst:364
+msgid ""
+"Define removable singularities and the zero mode explicitly. Put every "
+"physical length in ``len_args`` so it receives the same grid rescaling as"
+" a built-in window."
+msgstr ""
+
+#: ../../windows.rst:369
+msgid "Window arithmetic and its projection caveat"
+msgstr ""
+
+#: ../../windows.rst:371
+msgid ""
+"Windows support addition, subtraction, scalar multiplication and "
+"division, and pointwise multiplication:"
+msgstr ""
+
+#: ../../windows.rst:390
+#, python-brace-format
+msgid ""
+"Arithmetic materialises a composite ``w_kernel``. Crucially, each operand"
+" is already a projected MRA kernel :math:`K_W=\\widehat W\\widehat\\Phi`."
+" Thus ``W1 * W2`` computes :math:`K_{W_1}K_{W_2}`, not a fresh single "
+"projection of :math:`\\widehat W_1\\widehat W_2`."
+msgstr ""
+
+#: ../../windows.rst:396
+msgid ""
+"For exact control of one continuous composite expression, implement the "
+"full Fourier product in one custom function or use a built-in composite "
+"window such as ``thick_shell``. Projected-kernel arithmetic is still "
+"useful for rapid experiments and for quantifying projection effects, but "
+"it should be named as such in an analysis."
+msgstr ""
+
+#: ../../windows.rst:403
+msgid "Kernel modes"
+msgstr ""
+
+#: ../../windows.rst:405
+msgid "``kernel_mode`` controls how the discrete kernel is built:"
+msgstr ""
+
+#: ../../windows.rst:407
+msgid "``octant``"
+msgstr ""
+
+#: ../../windows.rst:408
+msgid ""
+"Build one real symmetric octant and fold it to an rFFT kernel. Fast and "
+"appropriate for even, axis-aligned real windows."
+msgstr ""
+
+#: ../../windows.rst:411
+msgid "``full_rfft``"
+msgstr ""
+
+#: ../../windows.rst:412
+msgid ""
+"Evaluate every stored rFFT mode. Use it for a real window without octant "
+"symmetry, including an oblique LOS."
+msgstr ""
+
+#: ../../windows.rst:415
+msgid "``complex_rfft``"
+msgstr ""
+
+#: ../../windows.rst:416
+msgid "Build a directional complex rFFT kernel, used by first derivatives."
+msgstr ""
+
+#: ../../windows.rst:418
+msgid "``complex_full_fft``"
+msgstr ""
+
+#: ../../windows.rst:419
+msgid ""
+"Build a full complex FFT kernel, required by spherical-harmonic multipole"
+" windows."
+msgstr ""
+
+#: ../../windows.rst:422
+msgid "``auto``"
+msgstr ""
+
+#: ../../windows.rst:423
+msgid ""
+"Select a compatible mode from the window type and LOS. Custom ordinary "
+"windows default conservatively to ``full_rfft``."
+msgstr ""
+
+#: ../../windows.rst:426
+msgid ""
+"``octant`` and ``full_rfft`` evaluate the same projected real kernel when"
+" the symmetry assumptions hold. The difference is construction strategy, "
+"not a different physical window. An invalid symmetry assumption, however,"
+" can fold distinct modes together and change the result."
+msgstr ""
+
+#: ../../windows.rst:432
+msgid "Practical checks"
+msgstr ""
+
+#: ../../windows.rst:434
+msgid ""
+"Match ``J``, ``box_size``, ``wavelet_mode``, ``wavelet_level``, and "
+"``phi_resolution`` between fields and windows."
+msgstr ""
+
+#: ../../windows.rst:436
+msgid "Compare the MRA cell scale with every smoothing radius and bin width."
+msgstr ""
+
+#: ../../windows.rst:437
+msgid ""
+"Treat smoothing parameters and binning parameters as part of the "
+"statistic's definition and record them in plots and output names."
+msgstr ""
+
+#: ../../windows.rst:439
+msgid "Use one complete custom kernel when composite-window accuracy matters."
+msgstr ""
+
+#: ../../windows.rst:440
+msgid ""
+"Keep axis-aligned LOS choices when possible for cheaper kernel "
+"construction."
+msgstr ""
+
+#: ../../windows.rst:441
+msgid ""
+"Enable binning-window caching only for repeated heavy runs where disk "
+"reuse outweighs cache management."
+msgstr ""

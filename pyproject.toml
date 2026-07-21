@@ -52,6 +52,7 @@ camb = ["camb>=1.5"]
 docs = [
   "sphinx>=7",
   "sphinx-copybutton>=0.5",
+  "sphinx-intl>=2.3",
   "sphinx-rtd-theme>=2",
 ]
 test = ["pytest>=8"]

@@ -1,0 +1,65 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: 2026-07-21 11:15+0800\n"
+"Last-Translator: PyHermes Team <dingdluan@gmail.com>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../citing.rst:2
+msgid "Citing PyHermes"
+msgstr "引用 PyHermes"
+
+#: ../../citing.rst:4
+msgid ""
+"If PyHermes contributes to a publication, presentation, or released data "
+"product, please cite the software version used. GitHub and compatible "
+"reference managers can read the repository's ``CITATION.cff`` file "
+"directly."
+msgstr ""
+"如果 PyHermes 对论文、报告或已发布的数据产品有所贡献，请引用实际使用的软件版本。"
+"GitHub 及兼容的文献管理软件可以直接读取仓库中的 ``CITATION.cff`` 文件。"
+
+#: ../../citing.rst:9
+msgid "Software citation"
+msgstr "软件引用"
+
+#: ../../citing.rst:11
+msgid ""
+"Until the accompanying paper is available, the following software "
+"citation can be used:"
+msgstr "在配套论文正式发表前，可以使用下面的软件引用："
+
+#: ../../citing.rst:25
+msgid "Paper citation placeholder"
+msgstr "论文引用占位示例"
+
+#: ../../citing.rst:29
+msgid ""
+"The entry below is a visible placeholder, not a published-paper citation."
+" Replace the author list, title, journal, year, and identifier before the"
+" repository becomes public and the manuscript is announced."
+msgstr ""
+"下面的条目是明确标注的占位内容，并非已发表论文的正式引用。在仓库公开并宣布论文"
+"之前，必须替换作者列表、标题、期刊、年份和文献标识符。"
+
+#: ../../citing.rst:43
+msgid ""
+"Please also cite the scientific datasets, simulations, and external "
+"methods used in a particular analysis. A PyHermes citation does not "
+"replace those method-specific references."
+msgstr ""
+"还请引用具体分析中使用的科学数据集、模拟和外部方法。引用 PyHermes 不能替代这些"
+"与方法相关的参考文献。"

@@ -1,0 +1,137 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../param/param.rst:2
+msgid "Configuration reference"
+msgstr ""
+
+#: ../../param/param.rst:4
+msgid ""
+"PyHermes task configurations are YAML or JSON5 dictionaries with one top-"
+"level task section:"
+msgstr ""
+
+#: ../../param/param.rst:7
+msgid "``SFCProjection``"
+msgstr ""
+
+#: ../../param/param.rst:8
+msgid "``Counting``"
+msgstr ""
+
+#: ../../param/param.rst:9
+msgid "``Corr_2PCF``"
+msgstr ""
+
+#: ../../param/param.rst:10
+msgid "``Corr_3PCF``"
+msgstr ""
+
+#: ../../param/param.rst:11
+msgid "``Corr_3PCF_Multipole``"
+msgstr ""
+
+#: ../../param/param.rst:13
+msgid ""
+"The task class loads its bundled defaults and overlays the user section. "
+"A configuration therefore needs to state only the scientific choices and "
+"paths that differ from the defaults."
+msgstr ""
+
+#: ../../param/param.rst:26
+msgid "Reading a configuration"
+msgstr ""
+
+#: ../../param/param.rst:36
+msgid ""
+"The public scripts accept the same file as their first positional "
+"argument:"
+msgstr ""
+
+#: ../../param/param.rst:43
+msgid ""
+"Paths in a configuration are ordinary process-relative paths. The tracked"
+" examples are written to run with ``examples/`` as the working directory."
+msgstr ""
+
+#: ../../param/param.rst:47
+msgid "Nested replacement rules"
+msgstr ""
+
+#: ../../param/param.rst:49
+msgid ""
+"Most dictionaries are merged recursively. A few structural dictionaries "
+"are replaced as a whole because retaining an omitted coordinate or "
+"mapping from a default would change the requested estimator:"
+msgstr ""
+
+#: ../../param/param.rst:53
+msgid "``Corr_2PCF.binning_window`` and ``Corr_2PCF.sampling``"
+msgstr ""
+
+#: ../../param/param.rst:54
+msgid "``Corr_3PCF_Multipole.binning_window12``"
+msgstr ""
+
+#: ../../param/param.rst:55
+msgid "``Corr_3PCF_Multipole.binning_window13``"
+msgstr ""
+
+#: ../../param/param.rst:56
+msgid "``Corr_3PCF_Multipole.sampling`` and ``sample_mpi``"
+msgstr ""
+
+#: ../../param/param.rst:58
+msgid ""
+"Write those blocks completely in user configurations. Unknown keys "
+"produce a warning but may still be retained; a warning is not evidence "
+"that the runtime uses the key."
+msgstr ""
+
+#: ../../param/param.rst:63
+msgid "Programmatic changes"
+msgstr ""
+
+#: ../../param/param.rst:65
+msgid ""
+"When varying structural parameters from Python, modify the parameter "
+"dictionary *before* constructing the task. Constructors normalize "
+"sampling arrays, expand product dependencies, and build mapped window "
+"templates."
+msgstr ""
+
+#: ../../param/param.rst:79
+msgid ""
+"Simple runtime choices such as ``threads`` and ``products`` are "
+"synchronized by the task, but constructing a new task from the final "
+"dictionary is clearer and less error-prone for a parameter scan."
+msgstr ""
+
+#: ../../param/param.rst:84
+msgid "Where to begin"
+msgstr ""
+
+#: ../../param/param.rst:86
+msgid ""
+"The most reliable templates are the tracked files in "
+"``examples/configs/``. Read them beside the matching notebook and task "
+"guide; use this section when a field needs a precise definition."
+msgstr ""

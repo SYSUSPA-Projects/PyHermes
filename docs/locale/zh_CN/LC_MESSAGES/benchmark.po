@@ -1,0 +1,732 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../benchmark.rst:2
+msgid "Validation and Performance"
+msgstr ""
+
+#: ../../benchmark.rst:4
+msgid "This page separates two questions that are easy to mix together:"
+msgstr ""
+
+#: ../../benchmark.rst:6
+msgid ""
+"**Validation:** does a field--window estimator recover the expected "
+"statistic, and does it converge when the numerical controls are "
+"tightened?"
+msgstr ""
+
+#: ../../benchmark.rst:8
+msgid ""
+"**Performance:** once the estimator is fixed, which part of the workflow "
+"sets the runtime and memory footprint?"
+msgstr ""
+
+#: ../../benchmark.rst:11
+msgid ""
+"The validation figures, timing table, and CPU/GPU memory comparison are "
+"all generated from the current grouped jobs under ``tests/``.  They "
+"therefore form one internally consistent benchmark set rather than mixing"
+" results from different runs."
+msgstr ""
+
+#: ../../benchmark.rst:17
+msgid "Reference Data"
+msgstr ""
+
+#: ../../benchmark.rst:19
+msgid ""
+"Unless stated otherwise, the validation examples use the Quijote "
+"fiducial-cosmology halo catalogue from realisation 8000, snapshot 004 "
+"(``z = 0``):"
+msgstr ""
+
+#: ../../benchmark.rst:23
+msgid "406,728 FoF haloes in a periodic cube of side ``1000 h^-1 Mpc``;"
+msgstr ""
+
+#: ../../benchmark.rst:25
+msgid "the ``db2`` scaling-function basis;"
+msgstr ""
+
+#: ../../benchmark.rst:26
+msgid "``J = 8`` for the main tests, with selected ``J = 9`` comparisons;"
+msgstr ""
+
+#: ../../benchmark.rst:27
+msgid "the plane-parallel approximation for redshift-space measurements."
+msgstr ""
+
+#: ../../benchmark.rst:29
+msgid ""
+"These are controlled algorithm tests, not a complete survey-analysis "
+"recipe. Survey masks and spatially varying selection functions require an"
+" explicit random catalogue or random ``SFCField``."
+msgstr ""
+
+#: ../../benchmark.rst:34
+msgid "Numerical Validation"
+msgstr ""
+
+#: ../../benchmark.rst:37
+msgid "Anisotropic 2PCF"
+msgstr ""
+
+#: ../../benchmark.rst:39
+msgid ""
+"The same ``Corr2PCF`` task can measure real- and redshift-space fields by"
+" changing the input ``SFCField`` while keeping the binning-window family "
+"fixed. The plot below maps :math:`s^2\\xi(s,\\mu)` to the "
+":math:`(s_\\perp,s_\\parallel)` plane.  Joining two measurements at "
+":math:`s_\\perp=0` makes the line-of-sight response immediately visible "
+"and also provides a compact check of tracer weighting."
+msgstr ""
+
+#: ../../benchmark.rst:46
+msgid ""
+"Real-space, redshift-space, and mass-weighted anisotropic two-point "
+"correlation functions"
+msgstr ""
+
+#: ../../benchmark.rst:50
+#, python-brace-format
+msgid ""
+"Current grouped-test outputs.  Left: real space and unit-weight redshift "
+"space.  Right: unit- and mass-weighted redshift space.  The two halves of"
+" each circle share a colour normalization, while the two panels have "
+"separate colour bars because mass weighting has a larger dynamic range. "
+"The white centre excludes :math:`s<20\\,h^{-1}{\\rm Mpc}`."
+msgstr ""
+
+#: ../../benchmark.rst:56
+msgid ""
+"For an independent estimator-level check, the paper compares the "
+"isotropic Hermes result with direct periodic pair counting.  Agreement "
+"improves with increasing ``J`` and is best interpreted only above the "
+"effective resolution scale of the reconstructed field."
+msgstr ""
+
+#: ../../benchmark.rst:61
+msgid "Isotropic PyHermes and direct pair-counting comparison"
+msgstr ""
+
+#: ../../benchmark.rst:66
+msgid "Standard 3PCF"
+msgstr ""
+
+#: ../../benchmark.rst:68
+msgid ""
+"The conventional ``Corr3PCF`` task estimates translational and rotational"
+" averages by Monte Carlo sampling.  Convergence must therefore be checked"
+" in ``n_rot`` rather than inferred from one visually smooth curve.  In "
+"the current test, the low-rotation result fluctuates visibly while the "
+"curves and their RMS difference settle rapidly as ``n_rot`` increases."
+msgstr ""
+
+#: ../../benchmark.rst:74
+msgid "Standard three-point correlation rotation convergence"
+msgstr ""
+
+#: ../../benchmark.rst:78
+msgid ""
+"Left: :math:`Q(\\theta)` for several rotation counts.  Right: RMS "
+"difference from the ``n_rot = 2000`` result."
+msgstr ""
+
+#: ../../benchmark.rst:82
+msgid "3PCF Multipoles"
+msgstr ""
+
+#: ../../benchmark.rst:84
+msgid ""
+"Multipole measurements have two separate convergence controls.  ``lmax`` "
+"truncates the angular expansion, while ``J`` controls the MRA field "
+"resolution. The left panel below verifies that increasing ``lmax`` "
+"appends higher orders without changing the already computed low-order "
+"multipoles.  The right panel compares those common modes between ``J = "
+"8`` and ``J = 9``."
+msgstr ""
+
+#: ../../benchmark.rst:90
+msgid "Three-point multipole truncation and field-resolution comparison"
+msgstr ""
+
+#: ../../benchmark.rst:94
+msgid ""
+"For non-shell radial profiles, PyHermes tabulates the required radial "
+"transform. The default and refined tables should agree before a profile "
+"is used for production measurements.  The following check covers the "
+"thin-shell analytic path and the numerical thick- and Gaussian-shell "
+"paths."
+msgstr ""
+
+#: ../../benchmark.rst:99
+msgid "Multipole radial-profile convergence at J equals 7 and 8"
+msgstr ""
+
+#: ../../benchmark.rst:104
+msgid "An Ensemble-Level Check"
+msgstr ""
+
+#: ../../benchmark.rst:106
+msgid ""
+"The Kun scan provides a larger application test: ``r12 = 20 h^-1 Mpc`` is"
+" held fixed while ``r13`` varies.  The 129 mocks used here span different"
+" cosmological parameters.  Their spread is therefore **not** a covariance"
+" estimate for one cosmology; it is shown to inspect the stability of the "
+"full projection and monopole pipeline over a deliberately broad "
+"simulation ensemble."
+msgstr ""
+
+#: ../../benchmark.rst:112
+msgid "Thin- and thick-shell three-point monopoles for 129 Kun mocks"
+msgstr ""
+
+#: ../../benchmark.rst:116
+msgid ""
+"The binning profile is part of the observable, not merely a plotting "
+"choice. For one mock, widening a finite shell or increasing the Gaussian-"
+"shell width averages a broader neighbourhood of triangle configurations:"
+msgstr ""
+
+#: ../../benchmark.rst:120
+msgid "Kun mock zero monopole measured with thin, thick, and Gaussian shells"
+msgstr ""
+
+#: ../../benchmark.rst:124
+msgid ""
+"One input field and one radial scan measured with six binning profiles. "
+"The smooth variation between profiles is the expected finite-bin "
+"response."
+msgstr ""
+
+#: ../../benchmark.rst:128
+msgid "Performance Model"
+msgstr ""
+
+#: ../../benchmark.rst:130
+msgid ""
+"The catalogue is projected once onto :math:`N_{\\mathrm{MRA}}=2^{3J}` "
+"coefficients.  Subsequent measurements operate on fields and windows, so "
+"their leading cost depends on field resolution and the number of "
+"requested window evaluations, rather than directly on the original "
+"catalogue size."
+msgstr ""
+
+#: ../../benchmark.rst:136
+msgid "For ``N_w`` window applications on a matching FFT grid,"
+msgstr ""
+
+#: ../../benchmark.rst:138
+msgid ""
+"T_{\\mathrm{conv}}\n"
+"= \\mathcal{O}\\!\\left(N_w N_{\\mathrm{MRA}}\n"
+"  \\log N_{\\mathrm{MRA}}\\right)."
+msgstr ""
+
+#: ../../benchmark.rst:144
+msgid "The task-specific multiplicities are:"
+msgstr ""
+
+#: ../../benchmark.rst:146
+msgid "``Corr2PCF``: ``N_s * N_mu`` or ``N_rp * N_pi`` sampled binning windows;"
+msgstr ""
+
+#: ../../benchmark.rst:147
+msgid "``Corr3PCF``: translation samples times random rotations;"
+msgstr ""
+
+#: ../../benchmark.rst:148
+#, python-brace-format
+msgid ""
+"``Corr3PCFMultipole``: :math:`N_m=(\\ell_{\\max}+1)(\\ell_{\\max}+2)/2` "
+"explicitly evaluated non-negative-:math:`m` fields."
+msgstr ""
+
+#: ../../benchmark.rst:152
+msgid ""
+"Increasing ``J`` by one multiplies the number of three-dimensional field "
+"coefficients by eight.  Since some work buffers are rank-local, a "
+"high-``J`` job often benefits from fewer MPI ranks and more threads per "
+"rank."
+msgstr ""
+
+#: ../../benchmark.rst:157
+msgid "Current Grouped Benchmark"
+msgstr ""
+
+#: ../../benchmark.rst:159
+msgid ""
+"The representative end-to-end jobs below use the same Quijote field and "
+"geometric setup as the validation examples.  ``Average time`` is "
+"normalized by the natural sampling unit of each estimator: one "
+":math:`(s,\\mu)` binning window for the 2PCF and one centre--rotation--"
+"angle combination for the standard 3PCF. Memory is the Slurm batch-step "
+"``MaxRSS`` and therefore excludes GPU device memory."
+msgstr ""
+
+#: ../../benchmark.rst:166
+msgid "Representative 2PCF and standard-3PCF jobs"
+msgstr ""
+
+#: ../../benchmark.rst:170
+msgid "Product"
+msgstr ""
+
+#: ../../benchmark.rst:171
+msgid "Representative setup"
+msgstr ""
+
+#: ../../benchmark.rst:172 ../../benchmark.rst:215
+msgid "``J``"
+msgstr ""
+
+#: ../../benchmark.rst:173 ../../benchmark.rst:219
+msgid "Parallel"
+msgstr ""
+
+#: ../../benchmark.rst:174
+msgid "Task total"
+msgstr ""
+
+#: ../../benchmark.rst:175
+msgid "Average time"
+msgstr ""
+
+#: ../../benchmark.rst:176
+msgid "MaxRSS"
+msgstr ""
+
+#: ../../benchmark.rst:177
+msgid ":math:`DD(s,\\mu)`"
+msgstr ""
+
+#: ../../benchmark.rst:178
+msgid "Ring binning windows, ``46 x 51`` samples"
+msgstr ""
+
+#: ../../benchmark.rst:179 ../../benchmark.rst:186 ../../benchmark.rst:193
+#: ../../benchmark.rst:224 ../../benchmark.rst:233 ../../benchmark.rst:242
+#: ../../benchmark.rst:251 ../../benchmark.rst:260 ../../benchmark.rst:269
+msgid "8"
+msgstr ""
+
+#: ../../benchmark.rst:180
+msgid "``8 x 8``"
+msgstr ""
+
+#: ../../benchmark.rst:181
+msgid "119.7 s"
+msgstr ""
+
+#: ../../benchmark.rst:182
+msgid "51.0 ms/sample"
+msgstr ""
+
+#: ../../benchmark.rst:183
+msgid "8.7 GiB"
+msgstr ""
+
+#: ../../benchmark.rst:184 ../../benchmark.rst:191
+#, python-brace-format
+msgid ":math:`DDD(\\theta;r_{12},r_{13})`"
+msgstr ""
+
+#: ../../benchmark.rst:185
+msgid "Particle centres, ``Ncen=406728``, ``n_rot=1000``, ``n_theta=20``"
+msgstr ""
+
+#: ../../benchmark.rst:187 ../../benchmark.rst:194
+msgid "``16 x 8``"
+msgstr ""
+
+#: ../../benchmark.rst:188
+msgid "84.0 s"
+msgstr ""
+
+#: ../../benchmark.rst:189
+msgid "10.3 ns/comb."
+msgstr ""
+
+#: ../../benchmark.rst:190
+msgid "11.3 GiB"
+msgstr ""
+
+#: ../../benchmark.rst:192
+msgid "Box-random centres, ``Ncen=8e6``, ``n_rot=200``, ``n_theta=20``"
+msgstr ""
+
+#: ../../benchmark.rst:195
+msgid "280.6 s"
+msgstr ""
+
+#: ../../benchmark.rst:196
+msgid "8.77 ns/comb."
+msgstr ""
+
+#: ../../benchmark.rst:197
+msgid "21.2 GiB"
+msgstr ""
+
+#: ../../benchmark.rst:199
+msgid ""
+"The CPU measurements used two AMD EPYC 9754 processors (256 physical "
+"cores in total).  GPU measurements used one NVIDIA GeForce RTX 4090 with "
+"CUDA 12.4. ``ranks x threads`` below describes the CPU layout; GPU jobs "
+"use the same CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block "
+"for the final contraction."
+msgstr ""
+
+#: ../../benchmark.rst:205
+msgid ""
+"The multipole table reports the same five configurations on both "
+"backends. ``Convolution + MPI`` is the multipole-loop residual after "
+"subtracting the final contraction; the two contributions are kept "
+"together because their critical paths overlap.  ``Task total`` "
+"additionally includes input, setup, and output overhead."
+msgstr ""
+
+#: ../../benchmark.rst:211
+msgid "Current 3PCF-multipole CPU/GPU benchmark"
+msgstr ""
+
+#: ../../benchmark.rst:216
+msgid "``lmax``"
+msgstr ""
+
+#: ../../benchmark.rst:217
+msgid ":math:`N_m`"
+msgstr ""
+
+#: ../../benchmark.rst:218
+msgid "Backend"
+msgstr ""
+
+#: ../../benchmark.rst:220
+msgid "Convolution + MPI [s]"
+msgstr ""
+
+#: ../../benchmark.rst:221
+msgid "Sum [s]"
+msgstr ""
+
+#: ../../benchmark.rst:222
+msgid "Task total [s]"
+msgstr ""
+
+#: ../../benchmark.rst:223
+msgid "MaxRSS [GiB]"
+msgstr ""
+
+#: ../../benchmark.rst:225 ../../benchmark.rst:234 ../../benchmark.rst:279
+#: ../../benchmark.rst:288
+msgid "7"
+msgstr ""
+
+#: ../../benchmark.rst:226 ../../benchmark.rst:235 ../../benchmark.rst:280
+#: ../../benchmark.rst:289
+msgid "36"
+msgstr ""
+
+#: ../../benchmark.rst:227 ../../benchmark.rst:245 ../../benchmark.rst:263
+#: ../../benchmark.rst:281 ../../benchmark.rst:299
+msgid "CPU"
+msgstr ""
+
+#: ../../benchmark.rst:228 ../../benchmark.rst:237 ../../benchmark.rst:246
+#: ../../benchmark.rst:255 ../../benchmark.rst:264 ../../benchmark.rst:273
+msgid "``24 x 4``"
+msgstr ""
+
+#: ../../benchmark.rst:229
+msgid "23.5"
+msgstr ""
+
+#: ../../benchmark.rst:230
+msgid "34.4"
+msgstr ""
+
+#: ../../benchmark.rst:231
+msgid "62.8"
+msgstr ""
+
+#: ../../benchmark.rst:232
+msgid "19.2"
+msgstr ""
+
+#: ../../benchmark.rst:236 ../../benchmark.rst:254 ../../benchmark.rst:272
+#: ../../benchmark.rst:290 ../../benchmark.rst:308
+msgid "GPU"
+msgstr ""
+
+#: ../../benchmark.rst:238
+msgid "21.9"
+msgstr ""
+
+#: ../../benchmark.rst:239
+msgid "8.3"
+msgstr ""
+
+#: ../../benchmark.rst:240
+msgid "35.3"
+msgstr ""
+
+#: ../../benchmark.rst:241
+msgid "17.4"
+msgstr ""
+
+#: ../../benchmark.rst:243 ../../benchmark.rst:252 ../../benchmark.rst:297
+#: ../../benchmark.rst:306
+msgid "14"
+msgstr ""
+
+#: ../../benchmark.rst:244 ../../benchmark.rst:253 ../../benchmark.rst:298
+#: ../../benchmark.rst:307
+msgid "120"
+msgstr ""
+
+#: ../../benchmark.rst:247
+msgid "86.0"
+msgstr ""
+
+#: ../../benchmark.rst:248
+msgid "113.0"
+msgstr ""
+
+#: ../../benchmark.rst:249
+msgid "204.0"
+msgstr ""
+
+#: ../../benchmark.rst:250
+msgid "19.1"
+msgstr ""
+
+#: ../../benchmark.rst:256
+msgid "80.3"
+msgstr ""
+
+#: ../../benchmark.rst:257
+msgid "26.7"
+msgstr ""
+
+#: ../../benchmark.rst:258
+msgid "112.2"
+msgstr ""
+
+#: ../../benchmark.rst:259
+msgid "18.0"
+msgstr ""
+
+#: ../../benchmark.rst:261 ../../benchmark.rst:270
+msgid "20"
+msgstr ""
+
+#: ../../benchmark.rst:262 ../../benchmark.rst:271
+msgid "231"
+msgstr ""
+
+#: ../../benchmark.rst:265
+msgid "180.6"
+msgstr ""
+
+#: ../../benchmark.rst:266
+msgid "238.7"
+msgstr ""
+
+#: ../../benchmark.rst:267
+msgid "424.3"
+msgstr ""
+
+#: ../../benchmark.rst:268
+msgid "19.4"
+msgstr ""
+
+#: ../../benchmark.rst:274
+msgid "178.5"
+msgstr ""
+
+#: ../../benchmark.rst:275
+msgid "51.1"
+msgstr ""
+
+#: ../../benchmark.rst:276
+msgid "234.6"
+msgstr ""
+
+#: ../../benchmark.rst:277
+msgid "17.8"
+msgstr ""
+
+#: ../../benchmark.rst:278 ../../benchmark.rst:287 ../../benchmark.rst:296
+#: ../../benchmark.rst:305
+msgid "9"
+msgstr ""
+
+#: ../../benchmark.rst:282 ../../benchmark.rst:291 ../../benchmark.rst:300
+#: ../../benchmark.rst:309
+msgid "``12 x 8``"
+msgstr ""
+
+#: ../../benchmark.rst:283
+msgid "152.0"
+msgstr ""
+
+#: ../../benchmark.rst:284
+msgid "274.7"
+msgstr ""
+
+#: ../../benchmark.rst:285
+msgid "445.2"
+msgstr ""
+
+#: ../../benchmark.rst:286
+msgid "66.9"
+msgstr ""
+
+#: ../../benchmark.rst:292
+msgid "156.5"
+msgstr ""
+
+#: ../../benchmark.rst:293
+msgid "62.1"
+msgstr ""
+
+#: ../../benchmark.rst:294
+msgid "234.3"
+msgstr ""
+
+#: ../../benchmark.rst:295 ../../benchmark.rst:313
+msgid "61.5"
+msgstr ""
+
+#: ../../benchmark.rst:301
+msgid "613.0"
+msgstr ""
+
+#: ../../benchmark.rst:302
+msgid "903.6"
+msgstr ""
+
+#: ../../benchmark.rst:303
+msgid "1528.4"
+msgstr ""
+
+#: ../../benchmark.rst:304
+msgid "65.9"
+msgstr ""
+
+#: ../../benchmark.rst:310
+msgid "616.2"
+msgstr ""
+
+#: ../../benchmark.rst:311
+msgid "206.0"
+msgstr ""
+
+#: ../../benchmark.rst:312
+msgid "833.9"
+msgstr ""
+
+#: ../../benchmark.rst:316
+msgid "CPU and GPU Multipole Backends"
+msgstr ""
+
+#: ../../benchmark.rst:318
+msgid ""
+"The backend switch applies to the final multipole-field contraction.  FFT"
+" window convolutions and MPI communication remain CPU-side for both "
+"backends. Consequently, the GPU strongly accelerates the contraction "
+"stage, while the end-to-end gain is bounded by the unchanged field and "
+"communication stages."
+msgstr ""
+
+#: ../../benchmark.rst:323
+msgid "Current CPU and GPU three-point multipole runtime phases and host memory"
+msgstr ""
+
+#: ../../benchmark.rst:327
+msgid ""
+"Current grouped benchmark using ``24 x 4`` at ``J=8`` and ``12 x 8`` at "
+"``J=9``.  Left: multipole-loop wall time split into field/MPI work and "
+"the backend-selected contraction.  Right: Slurm ``MaxRSS`` host memory; "
+"GPU device memory is not included."
+msgstr ""
+
+#: ../../benchmark.rst:332
+msgid ""
+"The CPU and GPU products agree to relative :math:`L_2` differences of "
+"``9.5e-15--2.2e-14``.  Across the five configurations, GPU contraction is"
+" ``4.1--4.7x`` faster and complete task time is ``1.8--1.9x`` faster.  "
+"The smaller end-to-end ratio is expected because only the contraction is "
+"offloaded. At fixed ``J``, host memory depends only weakly on ``lmax`` "
+"because multipole windows are generated and processed sequentially.  The "
+"GPU jobs use ``5.6--9.1%`` less host memory in these measurements, but "
+"this comparison does not include device memory and is not a total CPU-"
+"plus-GPU footprint.  Increasing ``J`` has the much larger memory effect: "
+"it multiplies the three-dimensional coefficient count by eight.  Using "
+"fewer MPI ranks at ``J=9`` limits the observed host-memory increase to "
+"approximately ``3.4--3.5x``."
+msgstr ""
+
+#: ../../benchmark.rst:345
+msgid "Reproducing the Checks"
+msgstr ""
+
+#: ../../benchmark.rst:347
+msgid ""
+"The public ``examples/notebooks`` directory contains the user-facing "
+"workflows. For maintainers, the current grouped outputs are analysed by "
+"five deliberately small notebooks:"
+msgstr ""
+
+#: ../../benchmark.rst:351
+msgid "``tests/notebooks/docs_2pcf_results.ipynb``;"
+msgstr ""
+
+#: ../../benchmark.rst:352
+msgid "``tests/notebooks/docs_3pcf_results.ipynb``;"
+msgstr ""
+
+#: ../../benchmark.rst:353
+msgid "``tests/notebooks/docs_3pcf_multipole_results.ipynb``;"
+msgstr ""
+
+#: ../../benchmark.rst:354
+msgid "``tests/notebooks/docs_kun_monopole_results.ipynb``;"
+msgstr ""
+
+#: ../../benchmark.rst:355
+msgid ""
+"``tests/notebooks/paper_figures_performance.ipynb`` for the current "
+"timing and Slurm-memory table used above."
+msgstr ""
+
+#: ../../benchmark.rst:358
+msgid ""
+"Once the grouped jobs have produced their outputs, these notebooks read "
+"the saved products rather than rerunning expensive estimators.  The "
+"corresponding scripts and grouped Slurm recipes live under "
+"``tests/scripts`` and ``tests/slurm``.  Raw logs and estimator products "
+"are treated as transient test artifacts and are intentionally not "
+"distributed with the repository.  Treat absolute times as hardware-"
+"specific; convergence patterns, stage-level scaling, and same-node "
+"CPU/GPU ratios are the more portable diagnostics."
+msgstr ""

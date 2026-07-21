@@ -1,0 +1,309 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../param/io/io.rst:2
+msgid "Input and output"
+msgstr ""
+
+#: ../../param/io/io.rst:4
+#, python-brace-format
+msgid ""
+"PyHermes has two I/O layers. Particle readers turn catalogue files into a"
+" common ``{\"pos\": (N, 3), ...}`` structure. Task-specific data classes "
+"read and write reusable MRA fields and statistical products."
+msgstr ""
+
+#: ../../param/io/io.rst:9
+msgid "Particle input"
+msgstr ""
+
+#: ../../param/io/io.rst:11
+msgid "``SFCProjection.fin`` selects a reader:"
+msgstr ""
+
+#: ../../param/io/io.rst:22
+msgid ""
+"``catalog_weight_key`` selects completeness or selection weights. "
+"``field_value_key`` selects a per-particle mark or physical quantity. "
+"Both must resolve to one-dimensional arrays with one entry per particle. "
+"``null`` means unit values."
+msgstr ""
+
+#: ../../param/io/io.rst:28
+msgid "Supported formats"
+msgstr ""
+
+#: ../../param/io/io.rst:30
+msgid "Built-in particle readers"
+msgstr ""
+
+#: ../../param/io/io.rst:34
+msgid "``format``"
+msgstr ""
+
+#: ../../param/io/io.rst:35
+msgid "Reader"
+msgstr ""
+
+#: ../../param/io/io.rst:36
+msgid "``bin``"
+msgstr ""
+
+#: ../../param/io/io.rst:37
+msgid "Raw binary table with configurable dtype and column selectors."
+msgstr ""
+
+#: ../../param/io/io.rst:38
+msgid "``npz``"
+msgstr ""
+
+#: ../../param/io/io.rst:39
+msgid "NumPy archive with a position key and optional field-key mapping."
+msgstr ""
+
+#: ../../param/io/io.rst:40
+msgid "``gadget``"
+msgstr ""
+
+#: ../../param/io/io.rst:41
+msgid "Legacy Gadget-format snapshot, including split files."
+msgstr ""
+
+#: ../../param/io/io.rst:42
+msgid "``gadget_hdf5``"
+msgstr ""
+
+#: ../../param/io/io.rst:43
+msgid "Single or split Gadget HDF5 snapshot with explicit unit scales."
+msgstr ""
+
+#: ../../param/io/io.rst:44
+msgid "``gadget-fof``"
+msgstr ""
+
+#: ../../param/io/io.rst:45
+msgid "Legacy Gadget FoF catalogue without SUBFIND."
+msgstr ""
+
+#: ../../param/io/io.rst:46
+msgid "``fof``"
+msgstr ""
+
+#: ../../param/io/io.rst:47
+msgid "Quijote/Pylians-style ``group_tab`` halo catalogue."
+msgstr ""
+
+#: ../../param/io/io.rst:49
+msgid ""
+"The suffix can infer ``bin``, ``npz``, ``gadget``, or ``fof`` when "
+"``format`` is omitted. Directory and HDF5 base paths should set it "
+"explicitly."
+msgstr ""
+
+#: ../../param/io/io.rst:53
+msgid "Raw binary tables"
+msgstr ""
+
+#: ../../param/io/io.rst:72
+msgid ""
+"A scalar selector returns one column; a list selector returns multiple "
+"columns. Only scalar fields can be selected as catalogue weights or "
+"projected field values."
+msgstr ""
+
+#: ../../param/io/io.rst:77
+msgid "NPZ archives"
+msgstr ""
+
+#: ../../param/io/io.rst:92
+msgid ""
+"When ``fields`` is omitted, every array except ``pos_key`` is exposed "
+"under its original name."
+msgstr ""
+
+#: ../../param/io/io.rst:96
+msgid "Gadget snapshots"
+msgstr ""
+
+#: ../../param/io/io.rst:98
+msgid ""
+"The HDF5 reader resolves either one file or a base path such as "
+"``snap_004`` with siblings ``snap_004.0.hdf5``, ``snap_004.1.hdf5``, and "
+"so on."
+msgstr ""
+
+#: ../../param/io/io.rst:114
+#, python-brace-format
+msgid ""
+"For Quijote coordinates stored in :math:`\\mathrm{kpc}/h`, "
+"``position_scale=1e-3`` converts to :math:`\\mathrm{Mpc}/h`. Velocity and"
+" mass are not loaded unless requested, which avoids large unused arrays. "
+"``h5py`` is required; compressed snapshots may also require "
+"``hdf5plugin``."
+msgstr ""
+
+#: ../../param/io/io.rst:120
+msgid "Quijote FoF catalogues"
+msgstr ""
+
+#: ../../param/io/io.rst:138
+#, python-brace-format
+msgid ""
+"The reader exposes ``pos``, ``mass``, ``vel``, component velocities, "
+"``npart``, and ``group_offset`` before optional selection. It converts "
+"Quijote positions to :math:`\\mathrm{Mpc}/h`, masses to "
+":math:`M_\\odot/h`, and applies the reader's redshift velocity "
+"convention."
+msgstr ""
+
+#: ../../param/io/io.rst:144
+msgid "In-memory input"
+msgstr ""
+
+#: ../../param/io/io.rst:146
+msgid "File input can be replaced by arrays:"
+msgstr ""
+
+#: ../../param/io/io.rst:157
+msgid ""
+"Positions must have shape ``(N, 3)``. Scalar weights or field values are "
+"broadcast; arrays must be finite and have shape ``(N,)``."
+msgstr ""
+
+#: ../../param/io/io.rst:161
+msgid "Saved data classes"
+msgstr ""
+
+#: ../../param/io/io.rst:163
+msgid "Task output objects"
+msgstr ""
+
+#: ../../param/io/io.rst:167
+msgid "Task"
+msgstr ""
+
+#: ../../param/io/io.rst:168
+msgid "Reader class"
+msgstr ""
+
+#: ../../param/io/io.rst:169
+msgid "Main arrays"
+msgstr ""
+
+#: ../../param/io/io.rst:170
+msgid "``SFCProjection``"
+msgstr ""
+
+#: ../../param/io/io.rst:171
+msgid "``SFCField``"
+msgstr ""
+
+#: ../../param/io/io.rst:172
+msgid "``epsilon`` and ``sfc_info``."
+msgstr ""
+
+#: ../../param/io/io.rst:173
+msgid "``Counting``"
+msgstr ""
+
+#: ../../param/io/io.rst:174
+msgid "``CountingData``"
+msgstr ""
+
+#: ../../param/io/io.rst:175
+msgid "sampled positions and ``nx`` values."
+msgstr ""
+
+#: ../../param/io/io.rst:176
+msgid "``Corr_2PCF``"
+msgstr ""
+
+#: ../../param/io/io.rst:177
+msgid "``Corr2PCFData``"
+msgstr ""
+
+#: ../../param/io/io.rst:178
+msgid "sampling coordinates, count products, and ``xi``."
+msgstr ""
+
+#: ../../param/io/io.rst:179
+msgid "``Corr_3PCF``"
+msgstr ""
+
+#: ../../param/io/io.rst:180
+msgid "``Corr3PCFData``"
+msgstr ""
+
+#: ../../param/io/io.rst:181
+msgid "angles, side geometry, triplet products, ``zeta``, and ``Q``."
+msgstr ""
+
+#: ../../param/io/io.rst:182
+msgid "``Corr_3PCF_Multipole``"
+msgstr ""
+
+#: ../../param/io/io.rst:183
+msgid "``Corr3PCFMultipoleData``"
+msgstr ""
+
+#: ../../param/io/io.rst:184
+msgid "samples, radial windows, ``l``, count multipoles, and ``zeta_l``."
+msgstr ""
+
+#: ../../param/io/io.rst:186
+msgid "Read products through those classes:"
+msgstr ""
+
+#: ../../param/io/io.rst:198
+msgid ""
+"The current files contain NumPy-framed, pickle-serialized Python "
+"metadata. They are trusted local products, not a safe interchange format "
+"for untrusted files. Treat the data-class interface as public and the "
+"internal dictionary layout as an implementation detail."
+msgstr ""
+
+#: ../../param/io/io.rst:204
+msgid "Particle companions"
+msgstr ""
+
+#: ../../param/io/io.rst:206
+msgid ""
+"``save_particle_data: true`` writes positions, catalogue weights, and "
+"field values to ``particle_data_path`` as NPZ. When the path is empty, it"
+" is derived from ``fout_path``. This companion is required when a later "
+"particle-centred task cannot recover the original catalogue from ``fin``."
+" Derived fields made by arithmetic or convolution do not preserve a "
+"unique particle catalogue; pass explicit centre arrays when using them as"
+" a particle-centred first vertex."
+msgstr ""
+
+#: ../../param/io/io.rst:214
+msgid "Output policy"
+msgstr ""
+
+#: ../../param/io/io.rst:216
+msgid ""
+"Only rank 0 writes task products. Parent directories are created as "
+"needed. Existing files are protected unless ``overwrite=True`` is passed "
+"to ``run``. Store large generated products outside the tracked "
+"``examples/`` source files; the repository's scripts and notebooks use "
+"``examples/output/`` for this purpose."
+msgstr ""

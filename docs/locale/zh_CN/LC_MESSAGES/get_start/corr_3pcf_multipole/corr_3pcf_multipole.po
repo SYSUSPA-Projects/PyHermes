@@ -1,0 +1,340 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) 2026, PyHermes Team
+# This file is distributed under the same license as the PyHermes package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PyHermes \n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-07-21 03:06+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: zh_CN\n"
+"Language-Team: zh_CN <LL@li.org>\n"
+"Plural-Forms: nplurals=1; plural=0;\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:2
+msgid "3PCF multipoles"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:4
+msgid ""
+"``Corr_3PCF_Multipole`` measures rotationally invariant Legendre "
+"multipoles of the three-point correlation function. It replaces explicit "
+"orientation sampling by multipole-filtered fields, then contracts those "
+"fields into :math:`\\zeta_\\ell`. The estimator uses the same "
+"``SFCField`` and ``WindowFunc`` infrastructure as the rest of PyHermes; "
+"only the radial and angular window roles change."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:12
+msgid "From shell windows to radial profiles"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:14
+msgid ""
+"For an infinitesimally thin shell of radius :math:`R`, the Fourier-space "
+"harmonic window has the form"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:17
+msgid ""
+"\\widehat W_R^{\\ell m}(\\mathbf{k})\n"
+"=4\\pi i^\\ell j_\\ell(2\\pi kR)Y_\\ell^m(\\widehat{\\mathbf{k}}),"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:22
+msgid ""
+"where PyHermes uses Fourier phases :math:`e^{2\\pi "
+"i\\mathbf{k}\\cdot\\mathbf{x}}`. For a general normalized isotropic "
+"radial profile :math:`w_R(r)`, the spherical Bessel factor is replaced by"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:26
+msgid ""
+"U_\\ell(k)=4\\pi\\int_0^\\infty r^2 w_R(r)\n"
+"j_\\ell(2\\pi kr)\\,dr,\n"
+"\\qquad\n"
+"\\widehat W_R^{\\ell m}\\propto "
+"U_\\ell(k)Y_\\ell^m(\\widehat{\\mathbf{k}})."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:33
+msgid ""
+"This ``radial profile x spherical harmonic`` factorisation lets the same "
+"multipole task use thin shells, finite-width shells, Gaussian shells, or "
+"other isotropic binning profiles without changing the angular "
+"contraction."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:37
+msgid "Radial profiles available to the multipole task"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:41
+msgid "Type"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:42
+msgid "Length arguments"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:43
+msgid "Numerical path"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:44
+msgid "``shell``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:45
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:52
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:56
+msgid "``R``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:46
+msgid "Analytic :math:`j_\\ell(2\\pi kR)` for every :math:`\\ell`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:47
+msgid "``thick_shell``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:48
+msgid "``R``, ``delta_R``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:49
+msgid ""
+"Exact monopole transfer; higher orders from its analytic real-space "
+"profile and a one-dimensional Hankel table."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:51
+msgid "``sphere``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:53
+msgid ""
+"Exact monopole transfer; higher orders from the top-hat real-space "
+"profile."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:55
+msgid "``gaussian``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:57
+msgid ""
+"Exact monopole transfer; higher orders from the Gaussian real-space "
+"profile."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:59
+msgid "``gaussian_shell``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:60
+msgid "``R_shell``, ``R_smooth``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:61
+msgid ""
+"Exact monopole transfer and a general inverse-Hankel route for higher "
+"orders."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:63
+msgid "``custom_real``, ``custom_kspace``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:64
+msgid "User-defined profile arguments"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:65
+msgid ""
+"Tabulated real-space Hankel or inverse-Hankel route; see "
+":doc:`../../windows`."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:68
+msgid ""
+"The task records radial-profile diagnostics and can warn when the "
+"tabulated profile does not reproduce its monopole transfer within the "
+"configured tolerance."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:73
+msgid "A fixed triangle"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:75
+msgid ""
+"Radii are not top-level task parameters. They are sampled values mapped "
+"into the two edge windows:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:112
+msgid ""
+"``mapping`` assigns each sampled name to a ``len_args`` key. A target can"
+" also be written explicitly as ``len_args.R`` or "
+"``other_args.some_name``. Fixed values remain in the template, so only "
+"parameters that actually vary need to appear in ``sampling``."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:118
+msgid "Scanning radial configurations"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:120
+#, python-brace-format
+msgid ""
+"``sampling.mode: grid`` forms the Cartesian product of all sampled "
+"arrays. ``paired`` zips arrays of the same length and broadcasts scalar "
+"entries. For example, this scans :math:`r_{13}` while holding "
+":math:`r_{12}` and both shell widths fixed:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:151
+msgid ""
+"The result has one row per expanded sample and one column per multipole "
+"order. The original sampled values are stored in ``sample_params`` so "
+"rows remain self-describing."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:155
+msgid "3PCF monopole for thin and finite-width radial shells"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:160
+msgid ""
+"A broader radial bin averages neighbouring triangle configurations and "
+"suppresses small-scale fluctuations without changing the task structure."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:164
+msgid "Parallel execution"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:166
+msgid "The task separates two kinds of parallel work:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:168
+msgid "``serial``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:169
+msgid ""
+"One rank evaluates all samples and multipole modes. Use this for a small "
+"local check."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:172
+msgid "``pair_mpi``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:173
+msgid ""
+"MPI-rank pairs share the :math:`(\\ell,m)` convolution work for one "
+"sample. It requires an even number of ranks and is well suited to one or "
+"a few configurations with many multipoles."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:177
+msgid "``sample_mpi``"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:178
+msgid ""
+"Samples are assigned to ranks by static round robin. It is the natural "
+"mode for a long monopole or radial-window scan. The current "
+"implementation uses ``sample_mpi.ranks_per_sample: 1``; choose "
+"approximately one rank per simultaneous sample, then use ``threads`` for "
+"the local FFT and kernel work."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:183
+msgid ""
+"In ``sample_mpi``, rank 0 reads each file-backed ``SFCField`` once and "
+"broadcasts it. This avoids every rank independently stressing shared "
+"storage."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:187
+msgid "CPU and GPU backends"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:189
+msgid "``summation_backend`` controls the final contraction and grid sum:"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:191
+msgid "``cpu`` uses the multithreaded CPU kernel."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:192
+msgid ""
+"``gpu`` transfers the filtered fields to the selected CUDA device and "
+"uses ``gpu_threads_per_block`` for the final contraction."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:195
+#, python-brace-format
+msgid ""
+"The preceding FFT convolution stage remains CPU/MPI work in both cases. "
+"Thus a GPU changes the contraction backend, not the estimator, radial "
+"windows, or input fields. At high :math:`\\ell_{\\max}` the GPU path is "
+"usually most useful; for a short monopole scan, sample-level CPU "
+"parallelism may be simpler and competitive."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:201
+msgid ""
+"The current CPU/GPU timing, numerical-agreement, and host-memory "
+"comparison is kept in one place on :doc:`../../benchmark`.  The saved "
+"multipoles agree to relative :math:`L_2` differences below ``2.3e-14``; "
+"only the contraction backend changes."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:207
+msgid "Products and output"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:209
+msgid ""
+"Available products are ``ddd_l``, ``rrr_l``, ``delta_ddd_l``, and "
+"``zeta_l``. Requesting ``zeta_l`` expands the connected-data and random "
+"dependencies automatically. A fully uniform random field uses an analytic"
+" monopole-only ``rrr_l`` shortcut."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:223
+msgid ""
+"``zeta_condition`` records the conditioning of the random-multipole "
+"solve. Inspect unusually large values before interpreting a noisy high-"
+"order result."
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:226
+msgid "3PCF multipoles for smoothing and triangle configurations"
+msgstr ""
+
+#: ../../get_start/corr_3pcf_multipole/corr_3pcf_multipole.rst:231
+#, python-brace-format
+msgid ""
+"Current ``J=8``, ``lmax=20`` grouped results.  Left: fixed "
+":math:`(r_{12},r_{13})=(20,40)\\,h^{-1}\\mathrm{Mpc}` with top-hat and "
+"Gaussian vertex smoothing at matched radii.  Right: fixed top-hat "
+":math:`R=5\\,h^{-1}\\mathrm{Mpc}` with six triangle side-length pairs. "
+"Multipoles compactly expose how smoothing and triangle geometry "
+"redistribute angular information."
+msgstr ""

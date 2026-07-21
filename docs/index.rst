@@ -69,3 +69,4 @@ and YAML files are production-shaped starting points.
 
    param/param
    benchmark
+   citing

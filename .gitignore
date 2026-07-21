@@ -17,6 +17,8 @@ examples/logs/*.log
 .pytest_cache/
 build/
 dist/
+docs/_build/
+**/*.mo
 .DS_Store
 .vscode/
 tmp/
