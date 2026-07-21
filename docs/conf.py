@@ -69,10 +69,7 @@ exclude_patterns = ['_build']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
-# html_theme = 'alabaster'
-html_theme = 'sphinx_rtd_theme'
-# Some other themes, see:
-# https://nbsphinx.readthedocs.io/en/0.9.5/usage.html#3rd-Party-Themes
+html_theme = 'sphinx_clarity_theme'
 
 html_static_path = ['_static']
 html_css_files = ['style.css']

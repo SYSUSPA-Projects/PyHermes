@@ -142,6 +142,9 @@ Build the documentation
 Install the documentation dependencies and build with warnings treated as
 errors:
 
+The Clarity documentation theme requires Python 3.11 or later. PyHermes itself
+continues to support Python 3.10 and later.
+
 .. code-block:: bash
 
    pip install -e ".[docs]"

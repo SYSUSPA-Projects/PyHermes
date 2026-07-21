@@ -6,13 +6,6 @@
   margin: 1.25rem 0 1.75rem;
 }
 
-.wy-side-nav-search img.logo {
-  max-width: 150px;
-  border-radius: 12px;
-  background: #fff;
-  padding: 6px;
-}
-
 .benchmark-figure {
   border-radius: 14px;
   box-shadow: 0 14px 35px rgba(31, 36, 48, 0.10);
