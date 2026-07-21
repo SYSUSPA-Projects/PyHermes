@@ -4,14 +4,15 @@ Installation
 PyPI installation
 -----------------
 
-The default installation does not require MPI or CUDA:
+For notebooks, development, and other single-process work, install from PyPI:
 
 .. code-block:: bash
 
-   pip install pyhermes-cosmo
+   python -m pip install pyhermes-cosmo
 
 The distribution name is ``pyhermes-cosmo`` while the Python import name is
-``pyhermes``.
+``pyhermes``. Pip installs the regular Python dependencies automatically. MPI
+and CUDA are optional and are not needed for this default installation.
 
 Verify the installation
 -----------------------
@@ -31,9 +32,10 @@ The core package should import without MPI or CUDA. A minimal object check is:
 MPI support
 -----------
 
-MPI is optional for local notebook work and required for distributed runs.
-When ``mpi4py`` is unavailable, PyHermes uses a single-process compatibility
-layer automatically.
+MPI is optional for local work and required only for distributed runs. When
+``mpi4py`` is unavailable, PyHermes uses its single-process compatibility
+layer automatically, so users do not need to install an MPI implementation
+just to import or use the package locally.
 
 For a ready-to-use MPICH environment on Linux or macOS:
 
@@ -41,8 +43,13 @@ For a ready-to-use MPICH environment on Linux or macOS:
 
    conda create -n pyhermes -c conda-forge python=3.12 mpi4py mpich pip
    conda activate pyhermes
-   pip install pyhermes-cosmo
+   python -m pip install pyhermes-cosmo
    mpiexec -n 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
+
+This deliberately combines the two package managers: conda-forge supplies a
+matched MPI runtime and ``mpi4py`` build, while pip installs PyHermes and its
+remaining Python dependencies. A separate PyHermes conda package is not
+required for this setup.
 
 Users of an existing cluster MPI should load that implementation first and
 then install the optional Python binding:
@@ -50,7 +57,7 @@ then install the optional Python binding:
 .. code-block:: bash
 
    module load openmpi
-   pip install "pyhermes-cosmo[mpi]"
+   python -m pip install "pyhermes-cosmo[mpi]"
 
 Use one consistent MPI stack. Mixing a system ``mpirun`` with an ``mpi4py``
 wheel linked against a different implementation is a common source of startup

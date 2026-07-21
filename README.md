@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/_static/pyhermes_logo.png" alt="PyHermes logo" width="220">
+  <img src="https://pyhermes.astroslacker.com/_static/pyhermes_logo.png" alt="PyHermes logo" width="220">
 </p>
 
 # PyHermes
@@ -17,11 +17,11 @@ counting for every configuration.
 
 - **Documentation:** [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
 - **Source:** [SYSUSPA-Projects/PyHermes](https://github.com/SYSUSPA-Projects/PyHermes)
-- **Tutorials:** [`examples/notebooks/`](examples/notebooks)
-- **Runnable configurations:** [`examples/configs/`](examples/configs) and
-  [`examples/scripts/`](examples/scripts)
+- **Tutorials:** [`examples/notebooks/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks)
+- **Runnable configurations:** [`examples/configs/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/configs) and
+  [`examples/scripts/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/scripts)
 
-![Hermes field-window workflow](docs/_static/paper/PyHermes-Workflow.png)
+![Hermes field-window workflow](https://pyhermes.astroslacker.com/_static/paper/PyHermes-Workflow.png)
 
 ## What It Covers
 
@@ -37,11 +37,15 @@ counting for every configuration.
 
 ## Installation
 
-Install the serial, single-process package from PyPI:
+For notebooks, development, and other single-process work, install PyHermes
+from PyPI:
 
 ```bash
-pip install pyhermes-cosmo
+python -m pip install pyhermes-cosmo
 ```
+
+This installs PyHermes and its regular Python dependencies automatically. MPI
+and CUDA are optional, so neither is required for the default installation.
 
 The Python import name remains unchanged:
 
@@ -54,14 +58,18 @@ For a ready-to-use MPICH environment on Linux or macOS:
 ```bash
 conda create -n pyhermes -c conda-forge python=3.12 mpi4py mpich pip
 conda activate pyhermes
-pip install pyhermes-cosmo
+python -m pip install pyhermes-cosmo
 mpiexec -n 2 python -c "from mpi4py import MPI; print(MPI.COMM_WORLD.rank)"
 ```
 
+Here conda provides a mutually compatible MPI runtime and Python binding, while
+pip installs PyHermes and the remaining Python dependencies. PyHermes does not
+yet require a separate conda package for this workflow.
+
 Without `mpi4py`, PyHermes automatically uses its single-process MPI fallback.
-MPI and CUDA remain optional. See the
+Users of an existing cluster MPI should follow the
 [installation guide](https://pyhermes.astroslacker.com/install.html) for
-distributed and GPU setup.
+the matching `mpi4py` and GPU setup.
 
 ## Smallest Workflow
 
@@ -100,15 +108,17 @@ build the required window families and normalizations around the same objects.
 
 ## Start With The Notebooks
 
-The recommended route through [`examples/notebooks/`](examples/notebooks) is:
+The recommended route through
+[`examples/notebooks/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks)
+is:
 
-1. [`quick_start.ipynb`](examples/notebooks/quick_start.ipynb)
-2. [`sfc_projection.ipynb`](examples/notebooks/sfc_projection.ipynb)
-3. [`window.ipynb`](examples/notebooks/window.ipynb)
-4. [`counting.ipynb`](examples/notebooks/counting.ipynb)
-5. [`corr2pcf.ipynb`](examples/notebooks/corr2pcf.ipynb)
-6. [`corr3pcf.ipynb`](examples/notebooks/corr3pcf.ipynb)
-7. [`weighted_fields.ipynb`](examples/notebooks/weighted_fields.ipynb)
+1. [`quick_start.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/quick_start.ipynb)
+2. [`sfc_projection.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/sfc_projection.ipynb)
+3. [`window.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/window.ipynb)
+4. [`counting.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/counting.ipynb)
+5. [`corr2pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr2pcf.ipynb)
+6. [`corr3pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr3pcf.ipynb)
+7. [`weighted_fields.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/weighted_fields.ipynb)
 
 Generated catalogues and estimator products are intentionally not committed.
 The notebooks state which lightweight cells run locally and which script/YAML
