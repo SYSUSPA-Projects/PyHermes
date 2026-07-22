@@ -1,0 +1,40 @@
+# Metadata for the compact NPZ catalogue used by the public Quick Start.
+source:
+  simulation: Quijote fiducial realization 8000
+  catalogue: FoF groups
+  snapshot: 4
+  redshift: 0.0
+  box_size_mpc_h: 1000.0
+
+download:
+  url: https://pyhermes.astroslacker.com/downloads/quijote_halos_8000_snap004.npz
+  sha256: b2b4b8c2fb91fa857e21b43d943cc32a2c423ee7cf5d7f13dede608264b08ef6
+  size_bytes: 8963043
+
+format: npz
+particle_count: 406728
+arrays:
+  pos:
+    shape: [406728, 3]
+    dtype: float32
+    units: Mpc/h
+  vel_x:
+    shape: [406728]
+    dtype: float32
+    units: km/s
+  vel_y:
+    shape: [406728]
+    dtype: float32
+    units: km/s
+  vel_z:
+    shape: [406728]
+    dtype: float32
+    units: km/s
+  mass:
+    shape: [406728]
+    dtype: float32
+    units: Msun/h
+  npart:
+    shape: [406728]
+    dtype: float32
+    units: particle_count

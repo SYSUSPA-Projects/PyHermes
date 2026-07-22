@@ -1,10 +1,12 @@
 from pathlib import Path
+from urllib.parse import urlparse
 
 import numpy as np
 
 from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
+from .resources import is_remote_url, resolve_data_path
 
 
 # Shared reader utilities.
@@ -35,7 +37,10 @@ def _validate_reader_output(data, reader_name):
 
 def _infer_format_from_path(path):
     """Infer a reader format from the final file suffix."""
-    suffix = Path(path).suffix.lower().lstrip(".")
+    path_value = str(path)
+    if is_remote_url(path_value):
+        path_value = urlparse(path_value).path
+    suffix = Path(path_value).suffix.lower().lstrip(".")
     suffix_to_format = {
         "bin": "bin",
         "npz": "npz",
@@ -83,7 +88,7 @@ def read_npz(path, pos_key="pos", fields=None, **kwargs):
         if pos_key not in npz_data:
             raise ValueError(f"NPZ file '{path}' does not contain pos_key='{pos_key}'.")
         data["pos"] = npz_data[pos_key]
-        if fields is None:
+        if not fields:
             for key in npz_data.files:
                 if key != pos_key:
                     data[key] = npz_data[key]
@@ -550,8 +555,8 @@ FORMAT_READERS = {
 }
 
 
-def read_particle_data(path, data_format=None, **reader_params):
-    """Dispatch a local particle catalog path to one of the registered readers."""
+def read_particle_data(path, data_format=None, download=None, **reader_params):
+    """Resolve and dispatch a local or HTTP(S) particle catalogue."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     data_format = reader_params.pop("f_format", data_format)
@@ -570,8 +575,11 @@ def read_particle_data(path, data_format=None, **reader_params):
         logger.error(f"Unsupported input particle format: {data_format}")
         logger.error(f"Supported formats: '{supported_formats}'")
         func_util.safe_exit(1)
+    if download is not None and not isinstance(download, dict):
+        raise TypeError("download must be a mapping of resolve_data_path options.")
+    local_path = resolve_data_path(path, **(download or {}))
     logger.info(f"Selected input particle format: {data_format}")
-    return FORMAT_READERS[data_format](path, **reader_params)
+    return FORMAT_READERS[data_format](local_path, **reader_params)
 
 
 # Per-particle scalar selection used by SFCProjection and SFCField.

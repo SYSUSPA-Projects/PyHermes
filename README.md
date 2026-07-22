@@ -73,15 +73,24 @@ the matching `mpi4py` and GPU setup.
 
 ## Smallest Workflow
 
-The tracked examples use paths relative to `examples/`:
+The tracked Quick Start configurations use paths relative to `examples/`:
 
 ```bash
 cd examples
-python scripts/prepare_sfc_fields.py
+python scripts/run_sfc_projection.py configs/param_sfc_projection.yaml
+python scripts/run_2pcf.py configs/param_2pcf.yaml
 ```
 
-The optional dark-matter snapshot builder accepts the local Gadget HDF5
-snapshot prefix explicitly; no cluster-specific path is embedded in the code:
+The first command downloads and caches a compact Quijote halo catalogue from
+the URL in the YAML, verifies its SHA256 digest, and writes the base
+`SFCField`. The second command consumes that exact field and writes an
+isotropic `Corr2PCFData` result. The matching `quick_start.ipynb` executes the
+same configs and plotting code rather than maintaining a parallel example.
+
+Advanced notebooks that require J=9, redshift-space fields, or an explicit
+sampled random field use `scripts/prepare_sfc_fields.py`. The optional
+dark-matter snapshot builder accepts the local Gadget HDF5 snapshot prefix
+explicitly; no cluster-specific path is embedded in the code:
 
 ```bash
 python scripts/build_quijote_dm_sfc_field.py /path/to/snapdir_004/snap_004
@@ -93,7 +102,7 @@ from pyhermes.io import WindowFunc
 from pyhermes.param.parambase import read_param
 
 params = read_param("./configs/param_sfc_projection.yaml")
-field = SFCProjection(params).run(save_result=False)
+field = SFCProjection(params).run()
 
 gaussian = WindowFunc(
     {"type": "gaussian", "len_args": {"R": 10.0}},

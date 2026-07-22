@@ -452,6 +452,7 @@ class SFCField(HermesData):
         particle_data = read_particle_data(
             fin["path"],
             fin.get("format", None),
+            download=fin.get("download", {}),
             **fin.get("reader_params", {}),
         )
         try:

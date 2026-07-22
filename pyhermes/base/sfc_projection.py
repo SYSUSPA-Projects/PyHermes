@@ -100,6 +100,7 @@ class SFCProjection(TaskBase):
             self.fin = merged_fin
         self.weight_normalization = normalize_weight_normalization(getattr(self, "weight_normalization", self.task_params.get("weight_normalization", "catalog")))
         self.fin.setdefault("reader_params", {})
+        self.fin.setdefault("download", {})
         self.fin.setdefault("catalog_weight_key", None)
         self.fin.setdefault("field_value_key", None)
         self.task_params = {
@@ -146,6 +147,7 @@ class SFCProjection(TaskBase):
             p_dict_all = read_particle_data(
                 self.fin["path"],
                 input_format,
+                download=self.fin.get("download", {}),
                 **self.fin.get("reader_params", {}),
             )
             p_pos, self.particle_count = p_dict_all['pos'], p_dict_all['size']

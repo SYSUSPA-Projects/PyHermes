@@ -48,7 +48,9 @@ SFCProjection
 ``particle_pos``, ``catalog_weight``, and ``field_value`` default to ``null``;
 file input then comes from ``fin``. The default reader is a three-column
 ``float32`` raw binary table. ``fout_path`` and ``particle_data_path`` are empty
-until supplied by the user.
+until supplied by the user. ``fin.download`` defaults to an empty explicit
+cache path and checksum, a 60-second request timeout, and the platform cache
+directory when a URL is supplied without further options.
 
 Counting
 --------

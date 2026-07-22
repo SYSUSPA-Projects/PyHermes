@@ -8,16 +8,20 @@ scaling-function basis and returns an ``SFCField``.
 Minimal YAML
 ------------
 
-The public example uses a Quijote FoF catalogue:
+The public example uses a single-file Quijote halo catalogue. A fresh run
+downloads and caches it automatically:
 
 .. code-block:: yaml
 
    SFCProjection:
       fin:
-         path: ./data/quijote_halos/8000
-         format: fof
-         reader_params:
-            snapnum: 4
+         path: https://pyhermes.astroslacker.com/downloads/quijote_halos_8000_snap004.npz
+         format: npz
+         download:
+            cache_path: ./data/quijote_halos_8000_snap004.npz
+            sha256: b2b4b8c2fb91fa857e21b43d943cc32a2c423ee7cf5d7f13dede608264b08ef6
+         catalog_weight_key: null
+         field_value_key: null
       box_size: 1000
       J: 8
       wavelet_mode: db2
@@ -26,7 +30,7 @@ The public example uses a Quijote FoF catalogue:
       weight_normalization: catalog
       threads: 8
       save_particle_data: true
-      particle_data_path: ./data/quijote_halos/8000/groups_004/group_tab_004.pos.npz
+      particle_data_path: ./output/quijote8000_snap004_particles.npz
       fout_path: ./output/quijote8000_snap004_sfc.pkl
 
 Run it from ``examples/``:
@@ -198,7 +202,8 @@ power of two. ``threads`` applies within every rank.
 Public tutorial
 ---------------
 
-``examples/notebooks/sfc_projection.ipynb`` includes reader inspection,
-in-memory input, real- and redshift-space positions, matching random fields,
-and reconstructed-density visualisation. ``examples/scripts/prepare_sfc_fields.py``
-prepares the fields reused by the later tutorials.
+``examples/notebooks/sfc_projection.ipynb`` begins after the Quick Start and
+expands into reader inspection, in-memory input, real- and redshift-space
+positions, matching random fields, and reconstructed-density visualisation.
+Its FoF-directory and J=9 examples require the advanced data bundle prepared by
+``examples/scripts/prepare_sfc_fields.py``; the base J=8 field does not.

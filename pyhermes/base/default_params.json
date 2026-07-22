@@ -4,6 +4,12 @@
 		"fin": {
 			"path": "",
 			"format": "bin",
+			"download": {
+				"cache_path": "",
+				"cache_dir": "",
+				"sha256": "",
+				"timeout": 60
+			},
 			"reader_params": {
 				"dtype": "float32",
 				"ncols": 3,

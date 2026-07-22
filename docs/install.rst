@@ -113,16 +113,25 @@ CPU-only systems should set:
 Example data
 ------------
 
-The repository does not commit the Quijote catalogue or generated products.
-Prepare the public example inputs from the repository root with:
+The repository does not commit catalogues or generated products. The Quick
+Start configuration points directly to a compact public NPZ catalogue;
+``SFCProjection`` downloads, verifies, and caches it automatically. No data
+preparation command is required before the first field and 2PCF run.
+
+Install the plotting extra before running the notebooks:
+
+.. code-block:: bash
+
+   python -m pip install "pyhermes-cosmo[plot]"
+
+The later notebooks reuse the field written to ``examples/output/``. The
+advanced projection notebook additionally explores the original FoF directory,
+J=9, redshift-space fields, and an explicit sampled random field. Prepare that
+larger bundle only when those sections are needed:
 
 .. code-block:: bash
 
    python examples/scripts/prepare_sfc_fields.py
-
-Alternatively, execute the download and preparation cells in
-``examples/notebooks/sfc_projection.ipynb``. Later notebooks reuse the fields
-written to ``examples/output/``.
 
 The public halo catalogue is sufficient for the tutorials. If you also have a
 local Quijote Gadget HDF5 dark-matter snapshot, build the optional DM field by

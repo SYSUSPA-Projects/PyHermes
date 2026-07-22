@@ -28,6 +28,7 @@ DATA_DIR = EXAMPLES_DIR / "data"
 OUTPUT_DIR = EXAMPLES_DIR / "output"
 CATALOG_DIR = DATA_DIR / "quijote_halos"
 CATALOG_REL = "./data/quijote_halos/8000"
+QUICK_START_CATALOG = DATA_DIR / "quijote_halos_8000_snap004.npz"
 ARCHIVE_PATH = DATA_DIR / "quijote_halos.tar.gz"
 DOWNLOAD_URL = (
     "https://pyhermes.astroslacker.com/downloads/quijote_halos.tar.gz"
@@ -60,6 +61,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-download",
         action="store_true",
         help="Do not download or extract the Quijote halo catalog.",
+    )
+    parser.add_argument(
+        "--catalog-only",
+        action="store_true",
+        help="Stop after producing the BIN and public Quick Start NPZ catalogues.",
     )
     return parser.parse_args()
 
@@ -225,6 +231,29 @@ def build_binary_table(fof_data: dict, overwrite: bool) -> None:
     print(f"Wrote {bin_path.relative_to(EXAMPLES_DIR)} with shape {table.shape}.")
 
 
+def build_quick_start_catalog(fof_data: dict, overwrite: bool) -> None:
+    """Build the single-file catalogue served to first-time users."""
+    print_step("Packing the Quick Start NPZ catalogue")
+    if QUICK_START_CATALOG.exists() and not overwrite:
+        digest = hashlib.sha256(QUICK_START_CATALOG.read_bytes()).hexdigest()
+        print(f"NPZ catalogue already exists: {QUICK_START_CATALOG.relative_to(EXAMPLES_DIR)}")
+        print(f"SHA256: {digest}")
+        return
+
+    np.savez_compressed(
+        QUICK_START_CATALOG,
+        pos=np.ascontiguousarray(fof_data["pos"], dtype=np.float32),
+        vel_x=np.ascontiguousarray(fof_data["vx"], dtype=np.float32),
+        vel_y=np.ascontiguousarray(fof_data["vy"], dtype=np.float32),
+        vel_z=np.ascontiguousarray(fof_data["vz"], dtype=np.float32),
+        mass=np.ascontiguousarray(fof_data["mass"], dtype=np.float32),
+        npart=np.ascontiguousarray(fof_data["npart"], dtype=np.float32),
+    )
+    digest = hashlib.sha256(QUICK_START_CATALOG.read_bytes()).hexdigest()
+    print(f"Wrote {QUICK_START_CATALOG.relative_to(EXAMPLES_DIR)}")
+    print(f"SHA256: {digest}")
+
+
 def run_if_needed(label: str, output_path: Path, overwrite: bool, build_task) -> None:
     print_step(label)
     if output_path.exists() and not overwrite:
@@ -340,6 +369,11 @@ def main() -> None:
     ensure_catalog(skip_download=args.skip_download, overwrite=args.overwrite)
     fof_data = read_fof_catalog()
     build_binary_table(fof_data, overwrite=args.overwrite)
+    build_quick_start_catalog(fof_data, overwrite=args.overwrite)
+    if args.catalog_only:
+        print_step("Done")
+        print(f"Upload-ready catalogue: {QUICK_START_CATALOG}")
+        return
 
     run_if_needed(
         "Building real-space SFCField",

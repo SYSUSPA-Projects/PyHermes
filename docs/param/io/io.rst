@@ -24,6 +24,40 @@ Particle input
 resolve to one-dimensional arrays with one entry per particle. ``null`` means
 unit values.
 
+Remote files and caching
+------------------------
+
+``fin.path`` may be a local path or an HTTP(S) URL. Remote inputs are resolved
+to a local file before the format-specific reader runs:
+
+.. code-block:: yaml
+
+   fin:
+      path: "https://data.example.org/haloes.npz"
+      format: "npz"
+      download:
+         cache_path: "./data/haloes.npz"
+         sha256: "0123456789abcdef..."
+         timeout: 60
+
+``cache_path`` gives one exact destination. Alternatively, ``cache_dir`` puts
+the file in that directory under a deterministic URL-derived name. With
+neither option, PyHermes uses ``$PYHERMES_CACHE_DIR``, then
+``$XDG_CACHE_HOME/pyhermes``, and finally ``~/.cache/pyhermes``.
+
+An existing cache file is reused after optional SHA256 verification. New data
+are downloaded to a unique partial file and atomically renamed only after a
+successful transfer and checksum. Under MPI, ``SFCProjection`` performs this
+work only on rank 0 before distributing particle slabs. Remote input currently
+targets single files such as NPZ or BIN; directory catalogues and split Gadget
+snapshots should remain on local or shared storage.
+
+The tracked
+``examples/data/quijote_halos_8000_snap004_schema.yaml`` records the source,
+arrays, units, object count, byte size, URL, and checksum of the Quick Start
+catalogue. The data stay outside Git; their scientific and binary contract
+does not.
+
 Supported formats
 -----------------
 
@@ -46,8 +80,9 @@ Supported formats
    * - ``fof``
      - Quijote/Pylians-style ``group_tab`` halo catalogue.
 
-The suffix can infer ``bin``, ``npz``, ``gadget``, or ``fof`` when ``format``
-is omitted. Directory and HDF5 base paths should set it explicitly.
+The local or URL-path suffix can infer ``bin``, ``npz``, ``gadget``, or ``fof``
+when ``format`` is omitted. Directory and HDF5 base paths should set it
+explicitly.
 
 Raw binary tables
 -----------------

@@ -12,8 +12,8 @@ They are not a dump of internal tests.
      - Main objects
      - Scientific focus
    * - ``quick_start.ipynb``
-     - ``SFCProjection``, ``WindowFunc``
-     - Smallest end-to-end field and 2PCF calculation
+     - ``SFCProjection``, ``Corr_2PCF``
+     - URL catalogue, saved base field, isotropic 2PCF, and result plot
    * - ``sfc_projection.ipynb``
      - ``SFCProjection``, ``SFCField``
      - Readers, field resolution, weights, and field reconstruction
