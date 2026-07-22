@@ -20,7 +20,6 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 import numpy as np
-import yaml
 
 
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
@@ -65,7 +64,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--catalog-only",
         action="store_true",
-        help="Stop after producing the BIN and public Quick Start NPZ catalogues.",
+        help="Stop after producing the public Quick Start NPZ catalogue.",
     )
     return parser.parse_args()
 
@@ -80,11 +79,15 @@ def print_step(message: str) -> None:
     print(f"\n== {message} ==")
 
 
-def remove_macos_junk(root: Path) -> None:
+def clean_extracted_catalog(root: Path) -> None:
     if not root.exists():
         return
     for path in root.rglob("*"):
-        if path.name == ".DS_Store" or path.name.startswith("._"):
+        if (
+            path.name == ".DS_Store"
+            or path.name.startswith("._")
+            or path.name == "quijote_halo_bin_schema.yaml"
+        ):
             path.unlink(missing_ok=True)
     macosx_dir = root / "__MACOSX"
     if macosx_dir.exists():
@@ -140,6 +143,7 @@ def should_skip_member(member: tarfile.TarInfo) -> bool:
         or "__MACOSX" in parts
         or member_path.name == ".DS_Store"
         or member_path.name.startswith("._")
+        or member_path.name == "quijote_halo_bin_schema.yaml"
         or not (member.isfile() or member.isdir())
     )
 
@@ -147,7 +151,7 @@ def should_skip_member(member: tarfile.TarInfo) -> bool:
 def extract_archive(overwrite: bool) -> None:
     if CATALOG_DIR.exists() and not overwrite:
         print(f"Catalog already exists: {CATALOG_DIR.relative_to(EXAMPLES_DIR)}")
-        remove_macos_junk(CATALOG_DIR)
+        clean_extracted_catalog(CATALOG_DIR)
         return
 
     if not ARCHIVE_PATH.exists():
@@ -162,7 +166,7 @@ def extract_archive(overwrite: bool) -> None:
             if should_skip_member(member):
                 continue
             archive.extract(member, DATA_DIR)
-    remove_macos_junk(DATA_DIR)
+    clean_extracted_catalog(DATA_DIR)
 
 
 def ensure_catalog(skip_download: bool, overwrite: bool) -> None:
@@ -192,43 +196,6 @@ def read_fof_catalog() -> dict:
         },
     }
     return read_particle_data(CATALOG_REL, data_format="fof", **reader_params)
-
-
-def build_binary_table(fof_data: dict, overwrite: bool) -> None:
-    print_step("Packing the documented raw binary halo table")
-    schema_path = CATALOG_DIR / "quijote_halo_bin_schema.yaml"
-    bin_path = CATALOG_DIR / "8000/groups_004/group_tab_004.bin"
-    if bin_path.exists() and not overwrite:
-        print(f"Binary table already exists: {bin_path.relative_to(EXAMPLES_DIR)}")
-        return
-
-    schema = yaml.safe_load(schema_path.read_text())
-    columns = schema["columns"]
-    column_arrays = {
-        "x": fof_data["pos"][:, 0],
-        "y": fof_data["pos"][:, 1],
-        "z": fof_data["pos"][:, 2],
-        "vx": fof_data["vx"],
-        "vy": fof_data["vy"],
-        "vz": fof_data["vz"],
-        "mass": fof_data["mass"],
-        "npart": fof_data["npart"],
-    }
-    missing = [name for name in columns if name not in column_arrays]
-    if missing:
-        raise KeyError(f"Cannot build the binary table; missing schema columns: {missing}")
-
-    table = np.column_stack(
-        [np.asarray(column_arrays[name], dtype=np.float32) for name in columns]
-    ).astype(np.float32, copy=False)
-    if table.shape[1] != schema["ncols"]:
-        raise ValueError(
-            f"Schema expects {schema['ncols']} columns, but packed table has shape {table.shape}."
-        )
-
-    bin_path.parent.mkdir(parents=True, exist_ok=True)
-    table.tofile(bin_path)
-    print(f"Wrote {bin_path.relative_to(EXAMPLES_DIR)} with shape {table.shape}.")
 
 
 def build_quick_start_catalog(fof_data: dict, overwrite: bool) -> None:
@@ -368,7 +335,6 @@ def main() -> None:
 
     ensure_catalog(skip_download=args.skip_download, overwrite=args.overwrite)
     fof_data = read_fof_catalog()
-    build_binary_table(fof_data, overwrite=args.overwrite)
     build_quick_start_catalog(fof_data, overwrite=args.overwrite)
     if args.catalog_only:
         print_step("Done")

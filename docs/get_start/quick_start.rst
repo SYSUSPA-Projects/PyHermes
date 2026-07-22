@@ -130,13 +130,15 @@ Where next?
 The generated ``output/quijote8000_snap004_sfc.pkl`` is the common starting
 field for the next tutorials:
 
-1. :doc:`sfc_projection/sfc_projection` explains readers, weights,
-   normalisation, resolution, and field metadata.
-2. :doc:`window/window` introduces the ``SFCField @ WindowFunc`` language.
-3. :doc:`counting/counting` samples the same field for one-point statistics.
-4. :doc:`corr_2pcf/corr_2pcf` extends this run to smoothing, alternate bins,
+1. :doc:`particle_io` explains URL caching, catalogue conversion, and the
+   common particle-reader contract.
+2. :doc:`sfc_projection/sfc_projection` explains weights, normalisation,
+   resolution, redshift-space coordinates, and field metadata.
+3. :doc:`window/window` introduces the ``SFCField @ WindowFunc`` language.
+4. :doc:`counting/counting` samples the same field for one-point statistics.
+5. :doc:`corr_2pcf/corr_2pcf` extends this run to smoothing, alternate bins,
    cross-correlations, and redshift-space anisotropy.
-5. :doc:`corr_3pcf/corr_3pcf` and
+6. :doc:`corr_3pcf/corr_3pcf` and
    :doc:`corr_3pcf_multipole/corr_3pcf_multipole` reuse the field for
    three-point statistics.
 

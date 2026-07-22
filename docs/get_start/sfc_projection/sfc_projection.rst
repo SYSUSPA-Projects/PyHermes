@@ -203,7 +203,13 @@ Public tutorial
 ---------------
 
 ``examples/notebooks/sfc_projection.ipynb`` begins after the Quick Start and
-expands into reader inspection, in-memory input, real- and redshift-space
-positions, matching random fields, and reconstructed-density visualisation.
-Its FoF-directory and J=9 examples require the advanced data bundle prepared by
-``examples/scripts/prepare_sfc_fields.py``; the base J=8 field does not.
+keeps the projection layer in view: configuration-driven and in-memory input,
+number and mass fields, a shared-plane J=7/J=8 comparison, redshift-space
+coordinates, and the compact companion particle dataset. It runs entirely
+from the public catalogue used by the Quick Start.
+
+Catalogue formats and conversion are covered separately in
+``examples/notebooks/particle_io.ipynb`` and :doc:`../particle_io`. Larger
+precomputed J=9, weighted, redshift-space, and random products can still be
+prepared with ``examples/scripts/prepare_sfc_fields.py`` when an advanced
+example needs them; they are not prerequisites for this notebook.

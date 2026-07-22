@@ -25,9 +25,10 @@ The shortest route through the documentation is:
 
 1. :doc:`intro` for the algorithm and its scope.
 2. :doc:`install` and :doc:`get_start/quick_start` for a first run.
-3. :doc:`get_start/sfc_projection/sfc_projection` and
+3. :doc:`get_start/particle_io` when adapting your own catalogue.
+4. :doc:`get_start/sfc_projection/sfc_projection` and
    :doc:`get_start/window/window` for the two reusable core objects.
-4. Choose a task guide: Counting, 2PCF, standard 3PCF, 3PCF multipoles, or
+5. Choose a task guide: Counting, 2PCF, standard 3PCF, 3PCF multipoles, or
    weighted and derived fields.
 
 The public `examples directory
@@ -42,6 +43,7 @@ and YAML files are production-shaped starting points.
    intro
    install
    get_start/quick_start
+   get_start/particle_io
    get_start/get_start
 
 .. toctree::

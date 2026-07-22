@@ -14,9 +14,12 @@ They are not a dump of internal tests.
    * - ``quick_start.ipynb``
      - ``SFCProjection``, ``Corr_2PCF``
      - URL catalogue, saved base field, isotropic 2PCF, and result plot
+   * - ``particle_io.ipynb``
+     - ``read_particle_data``
+     - URL caching, NPZ conversion, raw BIN layouts, and native readers
    * - ``sfc_projection.ipynb``
      - ``SFCProjection``, ``SFCField``
-     - Readers, field resolution, weights, and field reconstruction
+     - Field values, normalisation, resolution, redshift space, and metadata
    * - ``window.ipynb``
      - ``SFCField``, ``WindowFunc``
      - Field algebra, kernels, custom windows, and composition caveats

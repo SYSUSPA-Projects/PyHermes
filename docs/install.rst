@@ -124,10 +124,11 @@ Install the plotting extra before running the notebooks:
 
    python -m pip install "pyhermes-cosmo[plot]"
 
-The later notebooks reuse the field written to ``examples/output/``. The
-advanced projection notebook additionally explores the original FoF directory,
-J=9, redshift-space fields, and an explicit sampled random field. Prepare that
-larger bundle only when those sections are needed:
+The later notebooks reuse the field written to ``examples/output/``.
+``particle_io.ipynb`` explains how to adapt NPZ, BIN, and native simulation
+catalogues, while ``sfc_projection.ipynb`` runs entirely from the public Quick
+Start catalogue. Prepare the larger J=9, weighted, redshift-space, and random
+bundle only when an advanced example needs those products:
 
 .. code-block:: bash
 

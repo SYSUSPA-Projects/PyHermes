@@ -87,8 +87,10 @@ the URL in the YAML, verifies its SHA256 digest, and writes the base
 isotropic `Corr2PCFData` result. The matching `quick_start.ipynb` executes the
 same configs and plotting code rather than maintaining a parallel example.
 
-Advanced notebooks that require J=9, redshift-space fields, or an explicit
-sampled random field use `scripts/prepare_sfc_fields.py`. The optional
+The dedicated `particle_io.ipynb` shows how URL caching, NPZ conversion, raw
+BIN layouts, and native simulation readers feed the same projection API.
+Advanced examples that require J=9, weighted or redshift-space fields, or an
+explicit sampled random field use `scripts/prepare_sfc_fields.py`. The optional
 dark-matter snapshot builder accepts the local Gadget HDF5 snapshot prefix
 explicitly; no cluster-specific path is embedded in the code:
 
@@ -122,12 +124,13 @@ The recommended route through
 is:
 
 1. [`quick_start.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/quick_start.ipynb)
-2. [`sfc_projection.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/sfc_projection.ipynb)
-3. [`window.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/window.ipynb)
-4. [`counting.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/counting.ipynb)
-5. [`corr2pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr2pcf.ipynb)
-6. [`corr3pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr3pcf.ipynb)
-7. [`weighted_fields.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/weighted_fields.ipynb)
+2. [`particle_io.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/particle_io.ipynb)
+3. [`sfc_projection.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/sfc_projection.ipynb)
+4. [`window.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/window.ipynb)
+5. [`counting.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/counting.ipynb)
+6. [`corr2pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr2pcf.ipynb)
+7. [`corr3pcf.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/corr3pcf.ipynb)
+8. [`weighted_fields.ipynb`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/examples/notebooks/weighted_fields.ipynb)
 
 Generated catalogues and estimator products are intentionally not committed.
 The notebooks state which lightweight cells run locally and which script/YAML
