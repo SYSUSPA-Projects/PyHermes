@@ -1,9 +1,9 @@
 import os
-import pickle
 import datetime
 
 from pyhermes.param.logbase import setup_logger 
 from pyhermes.utils.func_util import get_fname_info
+from .pickle_compat import pickle_dump_compatible, pickle_load_compatible
 
 def timenow():
     return datetime.datetime.now().strftime('%Y%m%d%H%M')
@@ -65,14 +65,14 @@ def write_tristan_plk(f_out, data):
     if not os.path.exists(_dir):
         os.makedirs(_dir)
     with open(f_out, 'wb') as f:
-        pickle.dump(data, f)
+        pickle_dump_compatible(data, f)
 
 def load_tristan_plk(f_in):
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f'Reading pickle data from ---> {f_in} <---')
     with open(f_in, 'rb') as f:
-        data = pickle.load(f)
+        data = pickle_load_compatible(f)
     return data
 
 def load_whatever(f_in):

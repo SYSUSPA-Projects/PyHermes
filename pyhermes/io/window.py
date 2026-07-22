@@ -1,10 +1,10 @@
 import os
-import pickle
 import copy
 
 import numpy as np
 
 from .sfc_field import SFCField
+from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import (
     build_complex_window_rfft_kernel,
@@ -482,9 +482,7 @@ class WindowFunc(SFCField):
     def _load_single(self, f_in):
         with open(f_in, 'rb') as f:
             # Read the entire .npy file as bytes
-            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-            # Convert the bytes back into the original dataset using pickle
-            dataset = pickle.loads(serialized_data.tobytes())
+            dataset = read_numpy_pickle(f)
             # Check if the 'data' key is present in the dataset
             if 'window_kernal' not in dataset:
                 self.logger.error("Failed to load the dataset. The file is missing the 'window_kernal' key.")
@@ -510,6 +508,5 @@ class WindowFunc(SFCField):
         }
         # Save the dataset to the specified file
         #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
-        _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
-            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+            write_numpy_pickle(f, dataset)

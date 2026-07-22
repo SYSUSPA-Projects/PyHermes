@@ -1,8 +1,8 @@
 import os
-import pickle
 import numpy as np
 
 from .base import HermesData
+from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from pyhermes.utils import func_util
 
 
@@ -92,9 +92,7 @@ class Corr2PCFData(HermesData):
     def _load_corr2pcf(self, f_in):
         with open(f_in, 'rb') as f:
             # Read the entire .npy file as bytes
-            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-            # Convert the bytes back into the original dataset using pickle
-            dataset = pickle.loads(serialized_data.tobytes())
+            dataset = read_numpy_pickle(f)
             if 'sampling_names' in dataset:
                 sampling_names = tuple(dataset['sampling_names'])
             elif 'sampling' in dataset:
@@ -160,6 +158,5 @@ class Corr2PCFData(HermesData):
             dataset[name] = values
         # Save the dataset to the specified file
         #  ↓ Use Pickle with protocol 4 or higher to handle saving files larger than 4 GiB
-        _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
-            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+            write_numpy_pickle(f, dataset)

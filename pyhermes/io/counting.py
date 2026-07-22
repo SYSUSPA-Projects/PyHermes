@@ -1,9 +1,9 @@
 import os
-import pickle
 
 import numpy as np
 
 from .base import HermesData
+from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from pyhermes.utils import func_util
 
 
@@ -32,8 +32,7 @@ class CountingData(HermesData):
 
     def _load_counting(self, f_in):
         with open(f_in, 'rb') as f:
-            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-            dataset = pickle.loads(serialized_data.tobytes())
+            dataset = read_numpy_pickle(f)
             if 'nx' not in dataset:
                 self.logger.error("Failed to load the dataset. The file is missing the 'nx' key.")
                 func_util.safe_exit(1)
@@ -60,6 +59,5 @@ class CountingData(HermesData):
             'counting_info': self.counting_info,
             'nx': self.nx  # Include the actual data
         }
-        _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, 'wb') as f:
-            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+            write_numpy_pickle(f, dataset)

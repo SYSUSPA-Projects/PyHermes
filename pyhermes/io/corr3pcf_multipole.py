@@ -1,9 +1,9 @@
 import os
-import pickle
 
 import numpy as np
 
 from .base import HermesData
+from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from pyhermes.utils import func_util
 
 
@@ -42,8 +42,7 @@ class Corr3PCFMultipoleData(HermesData):
 
     def _load_corr3pcf_multipole(self, f_in):
         with open(f_in, "rb") as f:
-            serialized_data = np.lib.format.read_array(f, allow_pickle=True)
-            dataset = pickle.loads(serialized_data.tobytes())
+            dataset = read_numpy_pickle(f)
             for key in ["l", "sample_params", "binning_window12", "binning_window13"]:
                 if key not in dataset:
                     self.logger.error(f"Failed to load the dataset. The file is missing the '{key}' key.")
@@ -91,6 +90,5 @@ class Corr3PCFMultipoleData(HermesData):
             "zeta_l": self.zeta_l,
             "zeta_condition": self.zeta_condition,
         }
-        _serialized_data = pickle.dumps(dataset, protocol=4)
         with open(f_out, "wb") as f:
-            np.lib.format.write_array(f, np.frombuffer(_serialized_data, dtype=np.uint8))
+            write_numpy_pickle(f, dataset)

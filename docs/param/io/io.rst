@@ -235,6 +235,12 @@ They are trusted local products, not a safe interchange format for untrusted
 files. Treat the data-class interface as public and the internal dictionary
 layout as an implementation detail.
 
+PyHermes converts path-like metadata to strings when writing new products.
+The loader also translates the private ``pathlib._local`` path classes emitted
+by Python 3.13, so trusted products can move between Python 3.12 and 3.13
+without requiring users to rewrite ``task.fin``. This targeted compatibility
+does not make arbitrary pickle objects portable or safe to load.
+
 Particle companions
 -------------------
 
