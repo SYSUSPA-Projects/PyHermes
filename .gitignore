@@ -5,7 +5,6 @@ examples/output/**
 !examples/output/.gitkeep
 examples/data/**
 !examples/data/.gitkeep
-!examples/data/*.yaml
 examples/figs/**
 !examples/figs/.gitkeep
 examples/logs/*.log

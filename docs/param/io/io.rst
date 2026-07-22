@@ -52,11 +52,11 @@ work only on rank 0 before distributing particle slabs. Remote input currently
 targets single files such as NPZ or BIN; directory catalogues and split Gadget
 snapshots should remain on local or shared storage.
 
-The tracked
-``examples/data/quijote_halos_8000_snap004_schema.yaml`` records the source,
-arrays, units, object count, byte size, URL, and checksum of the Quick Start
-catalogue. The data stay outside Git; their scientific and binary contract
-does not.
+``examples/notebooks/particle_io.ipynb`` reconstructs the public NPZ from the
+original Quijote FoF catalogue and displays its array names, shapes, dtypes,
+and units beside the conversion code. The data stay outside Git, while
+``examples/configs/param_sfc_projection.yaml`` records the stable URL and
+checksum used by the Quick Start.
 
 Supported formats
 -----------------

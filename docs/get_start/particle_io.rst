@@ -7,9 +7,10 @@ particle reader returns the same small contract: ``pos`` with shape ``(N, 3)``,
 has this form, the same arrays can be passed to ``SFCProjection`` regardless of
 the original file format.
 
-The executable companion is ``examples/notebooks/particle_io.ipynb``. It uses
-small subsets for the files it writes, so the complete notebook is suitable
-for a local first run.
+The executable companion is ``examples/notebooks/particle_io.ipynb``. It
+downloads the compact Quijote FoF example, reads the original catalogue, and
+converts all 406,728 haloes to equivalent NPZ and BIN files. The complete
+notebook remains suitable for a local first run.
 
 Read a URL-backed NPZ catalogue
 -------------------------------
@@ -64,9 +65,10 @@ component a descriptive key:
    )
 
 When ``fields`` is omitted, all arrays other than the position key are
-exposed. The tracked
-``examples/data/quijote_halos_8000_snap004_schema.yaml`` documents the source,
-units, arrays, byte size, URL, and checksum of the public Quick Start file.
+exposed. The conversion cells in ``particle_io.ipynb`` define the public
+catalogue contract directly: array names, dtypes, shapes, and physical units
+are shown beside the code that creates them. The Quick Start YAML records the
+stable download URL and checksum.
 
 Describe a raw BIN table where it is used
 -----------------------------------------
