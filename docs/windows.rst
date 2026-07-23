@@ -363,7 +363,10 @@ cycle-frequencies ``ki``, ``kj``, and ``kk`` followed by the values from
 
 Define removable singularities and the zero mode explicitly. Put every
 physical length in ``len_args`` so it receives the same grid rescaling as a
-built-in window.
+built-in window. If ``type`` is also supplied, the explicit ``func`` takes
+precedence even when that name matches a built-in window. In that case the
+type is retained as metadata, while built-in argument defaults and validation
+are not applied.
 
 Window arithmetic and its projection caveat
 -------------------------------------------

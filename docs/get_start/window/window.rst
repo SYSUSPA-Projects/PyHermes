@@ -139,6 +139,9 @@ Custom ordinary kernels use the same interface:
 
 ``ki``, ``kj``, and ``kk`` are cycle frequencies in grid coordinates.
 Physical lengths belong in ``len_args`` and are rescaled automatically.
+If both ``type`` and ``func`` are supplied, the callable is authoritative:
+``type`` remains a descriptive name, but it does not activate same-named
+built-in argument defaults or validation.
 
 Use the task layer when appropriate
 -----------------------------------

@@ -85,11 +85,15 @@ class WindowFunc(SFCField):
         # There is NO DEFAULT window!!!
         # Missing `type` or `func` will raise an error in set_window_function.
         self.window_params = dict(win_params)
-        has_custom_func = "func" in win_params
+        # An explicit callable is authoritative even when `type` names a built-in window.
+        custom_func = win_params.get("func")
+        has_custom_func = custom_func is not None
+        if has_custom_func and not callable(custom_func):
+            raise TypeError("Custom window parameter 'func' must be callable.")
         self.has_custom_func = has_custom_func
         if has_custom_func:
             self.type = win_params.get('type', None) or "custom"
-            self.func = win_params["func"]
+            self.func = custom_func
         elif win_params.get("type") in COMPLEX_FULL_FFT_WINDOW_TYPES:
             self.type = win_params["type"]
             self.func = None
@@ -106,7 +110,8 @@ class WindowFunc(SFCField):
         self.input_params["len_args"] = copy.deepcopy(self.len_args)
         self.window_params["len_args"] = copy.deepcopy(self.len_args)
         self.rescale_len_args = {k: v * self.L / self.box_size for k, v in self.len_args.items()}
-        self.los_args = normalize_los_args(win_params.get('los_args', {}), self.type)
+        los_window_type = None if has_custom_func else self.type
+        self.los_args = normalize_los_args(win_params.get('los_args', {}), los_window_type)
         self.other_args = win_params.get('other_args', {})
         self.rescale_other_args = self._rescale_other_args(self.other_args)
         self.input_params["los_args"] = self.los_args
@@ -124,7 +129,7 @@ class WindowFunc(SFCField):
         return copy.deepcopy(other_args)
 
     def _validate_builtin_arguments(self):
-        if self.type != "thick_shell":
+        if self.has_custom_func or self.type != "thick_shell":
             return
         try:
             radius = float(self.rescale_len_args["R"])
@@ -144,10 +149,12 @@ class WindowFunc(SFCField):
 
     def _los_is_axis_aligned(self):
         los_args = dict(self.los_args)
-        if self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not all(
-            key in los_args for key in LOS_ARG_KEYS
-        ):
-            return not self.has_custom_func
+        has_complete_los = all(key in los_args for key in LOS_ARG_KEYS)
+        if self.has_custom_func:
+            if not has_complete_los:
+                return False
+        elif self.type not in ANISOTROPIC_AUTO_WINDOW_TYPES and not has_complete_los:
+            return True
         nx = float(los_args.get("nx", 0.0))
         ny = float(los_args.get("ny", 0.0))
         nz = float(los_args.get("nz", 1.0))
@@ -172,14 +179,29 @@ class WindowFunc(SFCField):
     def _requires_complex_rfft_kernel(self):
         if self.kernel_mode == "complex_rfft":
             return True
-        return self.kernel_mode in ("auto", "full_rfft") and self.type in COMPLEX_RFFT_WINDOW_TYPES
+        return (
+            not self.has_custom_func
+            and self.kernel_mode in ("auto", "full_rfft")
+            and self.type in COMPLEX_RFFT_WINDOW_TYPES
+        )
 
     def _requires_complex_full_fft_kernel(self):
         if self.kernel_mode == "complex_full_fft":
             return True
-        return self.kernel_mode == "auto" and self.type in COMPLEX_FULL_FFT_WINDOW_TYPES
+        return (
+            not self.has_custom_func
+            and self.kernel_mode == "auto"
+            and self.type in COMPLEX_FULL_FFT_WINDOW_TYPES
+        )
 
     def _build_complex_full_fft_kernel(self):
+        if self.has_custom_func:
+            if self.rank == 0:
+                self.logger.error(
+                    "Custom window functions do not support kernel_mode='complex_full_fft'. "
+                    "Use a real or complex RFFT kernel mode."
+                )
+            func_util.safe_exit(1)
         if self.type not in {"legendre_multipole", "radial_multipole"}:
             if self.rank == 0:
                 self.logger.error(f"Unsupported complex full-FFT window type: {self.type}")
@@ -240,7 +262,11 @@ class WindowFunc(SFCField):
         )
 
     def _apply_zero_mode_convention(self):
-        if self.type in ZERO_MODE_ZERO_WINDOW_TYPES and self.w_kernel is not None:
+        if (
+            not self.has_custom_func
+            and self.type in ZERO_MODE_ZERO_WINDOW_TYPES
+            and self.w_kernel is not None
+        ):
             self.w_kernel[0, 0, 0] = 0.0
 
     def _build_kernel(self):
@@ -248,14 +274,22 @@ class WindowFunc(SFCField):
             if self.rank == 0:
                 self.logger.error("Composite WindowFunc already stores a materialized w_kernel and cannot rebuild it.")
             func_util.safe_exit(1)
-        if self.type in COMPLEX_RFFT_WINDOW_TYPES and self.kernel_mode == "octant":
+        if (
+            not self.has_custom_func
+            and self.type in COMPLEX_RFFT_WINDOW_TYPES
+            and self.kernel_mode == "octant"
+        ):
             if self.rank == 0:
                 self.logger.error(
                     f"Window type '{self.type}' is complex and directional; "
                     "use kernel_mode='complex_rfft' or kernel_mode='auto'."
                 )
             func_util.safe_exit(1)
-        if self.type in COMPLEX_FULL_FFT_WINDOW_TYPES and self.kernel_mode not in ("auto", "complex_full_fft"):
+        if (
+            not self.has_custom_func
+            and self.type in COMPLEX_FULL_FFT_WINDOW_TYPES
+            and self.kernel_mode not in ("auto", "complex_full_fft")
+        ):
             if self.rank == 0:
                 self.logger.error(
                     f"Window type '{self.type}' requires kernel_mode='complex_full_fft' or kernel_mode='auto'."

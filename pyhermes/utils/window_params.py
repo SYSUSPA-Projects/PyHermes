@@ -74,14 +74,14 @@ def normalize_los_args(los_args, window_type=None):
 
 
 def default_kernel_mode(window_type, has_custom_func=False):
+    if has_custom_func:
+        return "full_rfft"
     if window_type in COMPLEX_FULL_FFT_WINDOW_TYPES:
         return "complex_full_fft"
     if window_type in COMPLEX_RFFT_WINDOW_TYPES:
         return "complex_rfft"
     if window_type in ANISOTROPIC_AUTO_WINDOW_TYPES:
         return "auto"
-    if has_custom_func:
-        return "full_rfft"
     return "octant"
 
 
@@ -129,6 +129,8 @@ def apply_builtin_binning_window_defaults(binning_window):
         return params
     window_type = str(window_type).strip().lower()
     params["type"] = window_type
+    if params.get("func") is not None:
+        return params
     if window_type == "shell":
         params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R",))
         params.setdefault("los_args", {})
@@ -171,14 +173,18 @@ def normalize_binning_window_template(binning_window):
     normalized = apply_builtin_binning_window_defaults(binning_window)
     if not normalized.get("type"):
         normalized["type"] = "custom" if normalized.get("func") is not None else "shell"
+    has_custom_func = normalized.get("func") is not None
+    if has_custom_func and not callable(normalized["func"]):
+        raise TypeError("Custom binning-window parameter 'func' must be callable.")
     normalized["len_args"] = normalize_len_args(normalized.get("len_args", {}))
-    normalized["los_args"] = normalize_los_args(normalized.get("los_args", {}), normalized.get("type"))
+    los_window_type = None if has_custom_func else normalized.get("type")
+    normalized["los_args"] = normalize_los_args(normalized.get("los_args", {}), los_window_type)
     normalized.setdefault("other_args", {})
     kernel_mode = normalized.get("kernel_mode")
     if not kernel_mode:
         kernel_mode = default_kernel_mode(
             normalized.get("type"),
-            has_custom_func=normalized.get("func") is not None,
+            has_custom_func=has_custom_func,
         )
     normalized["kernel_mode"] = normalize_kernel_mode(kernel_mode)
     return normalized

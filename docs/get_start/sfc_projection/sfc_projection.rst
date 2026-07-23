@@ -204,12 +204,14 @@ Public tutorial
 
 ``examples/notebooks/sfc_projection.ipynb`` begins after the Quick Start and
 keeps the projection layer in view: configuration-driven and in-memory input,
-number and mass fields, a shared-plane J=7/J=8 comparison, redshift-space
-coordinates, and the compact companion particle dataset. It runs entirely
-from the public catalogue used by the Quick Start.
+number and mass fields, reconstructed J=7/J=8/J=9 fields compared with direct
+halo binning, redshift-space coordinates, a matching random field, and compact
+companion particle datasets. It runs entirely from the public catalogue used
+by the Quick Start and writes the reusable products needed by the later
+example notebooks.
 
 Catalogue formats and conversion are covered separately in
-``examples/notebooks/particle_io.ipynb`` and :doc:`../particle_io`. Larger
-precomputed J=9, weighted, redshift-space, and random products can still be
-prepared with ``examples/scripts/prepare_sfc_fields.py`` when an advanced
-example needs them; they are not prerequisites for this notebook.
+``examples/notebooks/particle_io.ipynb`` and :doc:`../particle_io`. The
+``examples/scripts/prepare_sfc_fields.py`` helper produces the same field set
+for non-interactive or batch workflows, so it does not need to be run after
+the notebook.
