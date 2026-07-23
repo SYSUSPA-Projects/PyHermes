@@ -150,12 +150,14 @@ Executable tutorials
 --------------------
 
 The tracked notebooks in ``examples/notebooks/`` are part of the public user
-interface. They are intentionally ordered from field construction to advanced
-statistics:
+interface. They share one foundation and then branch by scientific goal:
 
-``quick_start.ipynb`` -> ``sfc_projection.ipynb`` -> ``window.ipynb`` ->
-``counting.ipynb`` -> ``corr2pcf.ipynb`` -> ``corr3pcf.ipynb`` ->
-``weighted_fields.ipynb``.
+``quick_start.ipynb`` -> [``particle_io.ipynb`` when adapting input data] ->
+``sfc_projection.ipynb`` -> ``window.ipynb``.
+
+From there, use ``physical_fields.ipynb`` for differential operators and
+derived fields, ``counting.ipynb`` for one-point distributions, or
+``corr2pcf.ipynb`` -> ``corr3pcf.ipynb`` for correlation statistics.
 
 See :doc:`get_start/get_start` for the full map and
 :doc:`get_start/quick_start` for the first runnable workflow.

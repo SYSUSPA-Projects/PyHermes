@@ -23,6 +23,9 @@ They are not a dump of internal tests.
    * - ``window.ipynb``
      - ``SFCField``, ``WindowFunc``
      - Field algebra, kernels, custom windows, and composition caveats
+   * - ``physical_fields.ipynb``
+     - weighted ``SFCField`` objects, operator windows
+     - Velocity derivatives, momentum density, potential, and acceleration
    * - ``counting.ipynb``
      - ``Counting``, ``CountingData``
      - One-point samples, PDFs, and smoothing response
@@ -32,9 +35,6 @@ They are not a dump of internal tests.
    * - ``corr3pcf.ipynb``
      - ``Corr_3PCF``, ``Corr_3PCF_Multipole``
      - Monte Carlo 3PCF, multipoles, and consistency checks
-   * - ``weighted_fields.ipynb``
-     - weighted ``SFCField`` objects, operator windows
-     - Velocity derivatives, potential, and acceleration
 
 Each tutorial names the script and YAML file that generate any heavy saved
 product it reads. Start with the notebook to understand a workflow; move to the

@@ -1,16 +1,19 @@
-Weighted, marked, and derived fields
-====================================
+Physical fields from field--window operations
+=============================================
 
 The field--window language is not limited to tracer counts. Catalogue weights
 and particle-carried values change *what field is represented*; windows change
 *what operation is applied to that field*. The same ``SFCProjection`` and
-``WindowFunc`` objects can therefore construct marked density fields,
-velocity and momentum fields, differential operators, the Newtonian potential,
-and acceleration.
+``WindowFunc`` objects can therefore construct velocity and momentum fields,
+differential operators, the Newtonian potential, acceleration, and marked
+density fields.
 
-The executable companion is ``examples/notebooks/weighted_fields.ipynb``. It
-keeps the field construction compact and spends most of its length on slice
-selection and publication-quality visualisation.
+The executable companion is ``examples/notebooks/physical_fields.ipynb``.
+It follows :doc:`../sfc_projection/sfc_projection` and
+:doc:`../window/window`: projection defines the physical field, while windows
+apply smoothing and differential operators. The notebook keeps these
+calculations compact and spends most of its length on slice selection and
+publication-quality visualisation.
 
 Catalogue weight versus field value
 -----------------------------------

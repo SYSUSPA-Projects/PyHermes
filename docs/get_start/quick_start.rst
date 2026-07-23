@@ -127,21 +127,38 @@ output names to reconcile.
 Where next?
 -----------
 
-The generated ``output/quijote8000_snap004_sfc.pkl`` is the common starting
-field for the next tutorials:
+The Quick Start is the shortest complete workflow. The next three notebooks
+explain its reusable layers:
 
-1. :doc:`particle_io` explains URL caching, catalogue conversion, and the
-   common particle-reader contract.
-2. :doc:`sfc_projection/sfc_projection` explains weights, normalisation,
-   resolution, redshift-space coordinates, and field metadata.
-3. :doc:`window/window` introduces the ``SFCField @ WindowFunc`` language.
-4. :doc:`counting/counting` samples the same field for one-point statistics.
-5. :doc:`corr_2pcf/corr_2pcf` extends this run to smoothing, alternate bins,
-   cross-correlations, and redshift-space anisotropy.
-6. :doc:`corr_3pcf/corr_3pcf` and
-   :doc:`corr_3pcf_multipole/corr_3pcf_multipole` reuse the field for
-   three-point statistics.
+1. :doc:`particle_io` is the optional input-data branch. Read it when adapting
+   a catalogue of your own or converting FoF, NPZ, or raw BIN data.
+2. :doc:`sfc_projection/sfc_projection` develops the catalogue-to-``SFCField``
+   step: weights, normalisation, resolution, redshift space, and reusable
+   products.
+3. :doc:`window/window` develops the ``SFCField @ WindowFunc`` language:
+   smoothing, custom kernels, and field algebra.
 
-Examples that require J=9, redshift-space catalogues, a dense sampled random
-field, or a dark-matter snapshot are identified as advanced data products in
-their own tutorials. They are not prerequisites for this first run.
+After that common foundation, choose the scientific branch that matches the
+question:
+
+* :doc:`physical_fields/physical_fields` applies differential and
+  inverse-Laplacian windows to velocity, momentum, potential, and
+  acceleration fields.
+* :doc:`counting/counting` samples fields for one-point distributions.
+* :doc:`corr_2pcf/corr_2pcf` extends the first 2PCF to smoothing, alternative
+  bins, cross-correlations, and redshift-space anisotropy.
+* :doc:`corr_3pcf/corr_3pcf` and
+  :doc:`corr_3pcf_multipole/corr_3pcf_multipole` continue the statistics path
+  to angular and multipole three-point measurements.
+
+For a first top-to-bottom reading, the recommended linear order is
+``quick_start`` -> ``particle_io`` -> ``sfc_projection`` -> ``window`` ->
+``physical_fields`` -> ``counting`` -> ``corr2pcf`` -> ``corr3pcf``.
+``particle_io`` may be skipped when the public example catalogue is enough;
+the application notebooks after ``window`` are independent branches rather
+than strict prerequisites for one another.
+
+The projection tutorial generates its own J=9, mass-weighted,
+redshift-space, and sampled-random fields. A dense dark-matter snapshot is the
+only advanced external product used by ``physical_fields.ipynb``; that
+notebook identifies the script and Slurm job that build it.
