@@ -222,6 +222,11 @@ catalogue-weighted mean, project the marked catalogue, and pass that
 ``SFCField`` to the unchanged ``Corr_2PCF`` task. No marked-pair estimator is
 needed: the mark changes the field, not the binning operation.
 
+This is a direct extension of the same projection pattern rather than a cell
+in ``physical_fields.ipynb``. The companion notebook concentrates on velocity,
+momentum, potential, and acceleration; continue with
+:doc:`../corr_2pcf/corr_2pcf` when applying a projected mark to the 2PCF.
+
 .. figure:: ../../_static/paper/Mark_2pcf.png
    :width: 90%
    :align: center

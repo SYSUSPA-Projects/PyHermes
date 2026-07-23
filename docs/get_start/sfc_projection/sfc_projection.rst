@@ -28,7 +28,7 @@ downloads and caches it automatically:
       wavelet_level: 10
       phi_resolution: 1024
       weight_normalization: catalog
-      threads: 8
+      threads: 2
       save_particle_data: true
       particle_data_path: ./output/quijote8000_snap004_particles.npz
       fout_path: ./output/quijote8000_snap004_sfc.pkl

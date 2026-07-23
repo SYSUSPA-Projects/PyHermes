@@ -101,10 +101,9 @@ the two edge windows:
       sampling:
          r12: 20.0
          r13: 40.0
-      l_min: 0
       l_max: 14
+      gpu_device_id: 0
       execution_mode: "pair_mpi"
-      summation_backend: "gpu"
       products: "zeta_l"
       threads: 4
       fout_path: "./output/quijote8000_snap004_3pcf_multipole_lmax14.pkl"
@@ -112,7 +111,9 @@ the two edge windows:
 ``mapping`` assigns each sampled name to a ``len_args`` key. A target can also
 be written explicitly as ``len_args.R`` or ``other_args.some_name``. Fixed
 values remain in the template, so only parameters that actually vary need to
-appear in ``sampling``.
+appear in ``sampling``. This block matches the tracked
+``param_3pcf_multipole_lmax14.yaml``: ``l_min: 0`` and
+``summation_backend: "gpu"`` are inherited from the task defaults.
 
 Scanning radial configurations
 ------------------------------

@@ -87,12 +87,14 @@ the URL in the YAML, verifies its SHA256 digest, and writes the base
 isotropic `Corr2PCFData` result. The matching `quick_start.ipynb` executes the
 same configs and plotting code rather than maintaining a parallel example.
 
-The dedicated `particle_io.ipynb` shows how URL caching, NPZ conversion, raw
-BIN layouts, and native simulation readers feed the same projection API.
-Advanced examples that require J=9, weighted or redshift-space fields, or an
-explicit sampled random field use `scripts/prepare_sfc_fields.py`. The optional
-dark-matter snapshot builder accepts the local Gadget HDF5 snapshot prefix
-explicitly; no cluster-specific path is embedded in the code:
+The dedicated `particle_io.ipynb` downloads the original FoF catalogue and
+shows how NPZ conversion, raw BIN layouts, and native simulation readers feed
+the same projection API. `sfc_projection.ipynb` then builds the J=9, weighted,
+redshift-space, and explicit sampled-random fields used by later examples;
+`scripts/prepare_sfc_fields.py` provides the equivalent non-interactive batch
+entry point. The optional dark-matter snapshot builder accepts the local
+Gadget HDF5 snapshot prefix explicitly; no cluster-specific path is embedded
+in the code:
 
 ```bash
 python scripts/build_quijote_dm_sfc_field.py /path/to/snapdir_004/snap_004

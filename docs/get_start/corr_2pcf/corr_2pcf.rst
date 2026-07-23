@@ -19,7 +19,7 @@ The smallest configuration uses thin spherical shells:
       sampling:
          s: {min: 0.0, max: 150.0, n: 31}
       products: [dd, dr, rd, xi]
-      threads: 8
+      threads: 2
       fout_path: ./output/quijote8000_snap004_2pcf.pkl
 
 ``random: uniform`` uses the analytic constant reference density. Supply an
@@ -66,9 +66,13 @@ it to the :math:`(s_\perp,s_\parallel)` plane:
 
 .. code-block:: python
 
+   from pyhermes.io import Corr2PCFData
    from pyhermes.utils.plot import plot_corr2pcf_2d
 
-   plot_corr2pcf_2d(corr.s, corr.mu, corr.xi)
+   corr_smu = Corr2PCFData(
+       data_path="./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
+   )
+   plot_corr2pcf_2d(corr_smu)
 
 .. figure:: ../../_static/paper/corr2pcf_ring_gaussian_ring_smu.png
    :width: 92%

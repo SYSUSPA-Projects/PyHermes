@@ -10,8 +10,8 @@ Recommended order
 
 1. ``quick_start.ipynb`` downloads the example catalogue, saves the base
    ``SFCField``, runs the same YAML-driven 2PCF as this guide, and plots it.
-2. ``particle_io.ipynb`` explains URL caching, NPZ conversion, explicit raw
-   BIN layouts, and native simulation readers.
+2. ``particle_io.ipynb`` downloads the original FoF catalogue, then explains
+   NPZ conversion, explicit raw BIN layouts, and native simulation readers.
 3. ``sfc_projection.ipynb`` explains weights, normalisation, resolution,
    redshift-space coordinates, and reusable ``SFCField`` products.
 4. ``window.ipynb`` introduces field arithmetic, built-in kernels, custom

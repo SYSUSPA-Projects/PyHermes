@@ -13,7 +13,7 @@ Minimal YAML
 
    Counting:
       sfc_field: ./output/quijote8000_snap004_sfc.pkl
-      random_count: 1000000
+      random_count: 10000000
       seed: 42
       weight_normalization: catalog
       window:

@@ -16,7 +16,7 @@ They are not a dump of internal tests.
      - URL catalogue, saved base field, isotropic 2PCF, and result plot
    * - ``particle_io.ipynb``
      - ``read_particle_data``
-     - URL caching, NPZ conversion, raw BIN layouts, and native readers
+     - FoF input, NPZ conversion, raw BIN layouts, and native readers
    * - ``sfc_projection.ipynb``
      - ``SFCProjection``, ``SFCField``
      - Field values, normalisation, resolution, redshift space, and metadata
