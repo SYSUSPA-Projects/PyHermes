@@ -7,8 +7,8 @@ resulting counting data product.
 
 import sys
 
-from pyhermes.theory.counting import Counting
 from pyhermes.param.parambase import read_param
+from pyhermes.theory.counting import Counting
 
 counting_config = "./configs/param_counting.yaml"
 if len(sys.argv) > 1:

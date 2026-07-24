@@ -7,9 +7,8 @@ inputs using the streamed CPU-convolution + CUDA-summation pipeline.
 
 import sys
 
-from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
 from pyhermes.param.parambase import read_param
-
+from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
 
 corr3pcf_multipole_config = "./configs/param_3pcf_multipole.yaml"
 if len(sys.argv) > 1:

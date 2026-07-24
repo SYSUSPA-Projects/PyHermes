@@ -4,7 +4,6 @@ import warnings
 
 import numpy as np
 
-
 _LOS_AXIS = {
     "x": np.array([1.0, 0.0, 0.0], dtype=np.float64),
     "y": np.array([0.0, 1.0, 0.0], dtype=np.float64),

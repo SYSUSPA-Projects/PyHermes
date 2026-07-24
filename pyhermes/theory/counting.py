@@ -1,14 +1,18 @@
-import time
 import pickle
+import time
 
 import numpy as np
 
-from pyhermes.io import CountingData, SFCField, WindowFunc, normalize_task_weight_normalization
+from pyhermes.io import (
+    CountingData,
+    SFCField,
+    WindowFunc,
+    normalize_task_weight_normalization,
+)
+from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
-from pyhermes.pipeline import TaskBase
-
 
 
 class Counting(TaskBase):

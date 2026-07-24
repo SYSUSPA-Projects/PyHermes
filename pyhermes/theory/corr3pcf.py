@@ -1,9 +1,16 @@
-import time
-import pickle
 import copy
+import pickle
+import time
+
 import numpy as np
 
-from pyhermes.io import WindowFunc, SFCField, Corr3PCFData, normalize_task_weight_normalization
+from pyhermes.io import (
+    Corr3PCFData,
+    SFCField,
+    WindowFunc,
+    normalize_task_weight_normalization,
+)
+from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.corr3pcf_kernels import (
     estimate_triplet_product_box_random_centers,
@@ -13,10 +20,8 @@ from pyhermes.utils.corr3pcf_kernels import (
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
-from pyhermes.pipeline import TaskBase
 
 from .corr2pcf import compute_pair_product_at_sample
-
 
 ### Product dependency metadata ###
 

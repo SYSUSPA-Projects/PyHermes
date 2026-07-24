@@ -21,7 +21,6 @@ from rich.progress import (
 
 from pyhermes.param.logbase import setup_logger
 
-
 _REMOTE_SCHEMES = {"http", "https"}
 _DOWNLOAD_CHUNK_SIZE = 1024 * 1024
 

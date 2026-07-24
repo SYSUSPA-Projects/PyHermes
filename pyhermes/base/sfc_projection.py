@@ -1,18 +1,18 @@
-import time
 import copy
 import os
+import time
 
 import numpy as np
 
 from pyhermes.io import SFCField, normalize_weight_normalization
 from pyhermes.io.readers import read_particle_data, resolve_particle_value
+from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.wavelet_grid import (
     project_scaling_grid_numba,
     project_scaling_slab_numba,
     sample_scaling_function,
 )
-from pyhermes.pipeline import TaskBase
 
 
 def _partition_particles_by_x_slab(p_pos, p_wei, scale_factor, J, size):

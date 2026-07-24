@@ -1,10 +1,11 @@
 import os
+
 import numpy as np
+
+from pyhermes.utils import func_util
 
 from .base import HermesData
 from .pickle_compat import read_numpy_pickle, write_numpy_pickle
-from pyhermes.utils import func_util
-
 
 COORDINATE_NAMES = ("s", "mu", "rp", "pi")
 

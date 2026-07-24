@@ -1,9 +1,11 @@
-import os
 import datetime
+import os
 
-from pyhermes.param.logbase import setup_logger 
+from pyhermes.param.logbase import setup_logger
 from pyhermes.utils.func_util import get_fname_info
+
 from .pickle_compat import pickle_dump_compatible, pickle_load_compatible
+
 
 def timenow():
     return datetime.datetime.now().strftime('%Y%m%d%H%M')

@@ -1,6 +1,5 @@
-import os
 import inspect
-
+import os
 
 
 def get_fname_info():

@@ -16,7 +16,6 @@ from pyhermes.io.window import WindowFunc
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum
 from pyhermes.utils.window_params import serialize_window_params
 
-
 MULTIPOLE_FIELD_CACHE_SCHEMA_VERSION = 2
 
 

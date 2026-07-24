@@ -6,7 +6,6 @@ from pathlib import Path
 
 from pyhermes.base.sfc_projection import SFCProjection
 
-
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = EXAMPLES_DIR / "output/quijote_fiducial_8000_snap004_dm_sfc_J8.pkl"
 DEFAULT_THREADS = int(os.environ.get("SLURM_CPUS_PER_TASK", "8"))

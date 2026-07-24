@@ -1,11 +1,10 @@
 import pickle
 
-from pyhermes.utils import func_util
-from pyhermes.utils.runtime import configure
-from pyhermes.utils.mpi_util import MPI
 from pyhermes.param.logbase import configure_mpi_logging, setup_logger
 from pyhermes.param.parambase import ParamBase
-
+from pyhermes.utils import func_util
+from pyhermes.utils.mpi_util import MPI
+from pyhermes.utils.runtime import configure
 
 
 class TaskBase(object):

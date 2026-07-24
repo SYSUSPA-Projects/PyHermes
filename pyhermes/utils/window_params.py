@@ -2,7 +2,6 @@ import copy
 
 import numpy as np
 
-
 ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell"}
 COMPLEX_RFFT_WINDOW_TYPES = {"directional_derivative"}
 COMPLEX_FULL_FFT_WINDOW_TYPES = {"legendre_multipole", "radial_multipole"}

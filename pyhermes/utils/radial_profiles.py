@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
 import hashlib
 import math
+from collections import OrderedDict
 
 import numpy as np
 from numpy.polynomial.legendre import leggauss
 from scipy.special import spherical_jn
-
 
 BUILTIN_RADIAL_PROFILE_TYPES = {
     "shell",

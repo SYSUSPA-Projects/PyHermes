@@ -10,7 +10,6 @@ import sys
 from pyhermes.param.parambase import read_param
 from pyhermes.theory.corr3pcf import Corr_3PCF
 
-
 corr3pcf_config = "./configs/param_3pcf.yaml"
 if len(sys.argv) > 1:
     corr3pcf_config = sys.argv[1]

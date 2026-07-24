@@ -4,7 +4,6 @@ import sys
 
 from termcolor import colored
 
-
 _RANK_ENV_KEYS = ("OMPI_COMM_WORLD_RANK", "PMI_RANK", "PMIX_RANK", "SLURM_PROCID")
 _SIZE_ENV_KEYS = ("OMPI_COMM_WORLD_SIZE", "PMI_SIZE", "PMIX_SIZE", "SLURM_NTASKS")
 _VALID_MPI_LOG_MODES = {"root", "all"}

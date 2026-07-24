@@ -1,10 +1,8 @@
-import os
 import copy
+import os
 
 import numpy as np
 
-from .sfc_field import SFCField
-from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import (
     build_complex_window_rfft_kernel,
@@ -20,11 +18,13 @@ from pyhermes.utils.window_params import (
     COMPLEX_RFFT_WINDOW_TYPES,
     LOS_ARG_KEYS,
     default_kernel_mode,
-    normalize_los_args,
     normalize_kernel_mode,
+    normalize_los_args,
     serialize_window_params,
 )
 
+from .pickle_compat import read_numpy_pickle, write_numpy_pickle
+from .sfc_field import SFCField
 
 ZERO_MODE_ZERO_WINDOW_TYPES = {"inverse_laplacian"}
 
@@ -219,7 +219,9 @@ class WindowFunc(SFCField):
                 if self.rank == 0:
                     self.logger.error(f"radial_multipole missing required other_args key: {exc}")
                 func_util.safe_exit(1)
-            from pyhermes.utils.radial_multipole_windows import calculate_radial_multipole_window_array
+            from pyhermes.utils.radial_multipole_windows import (
+                calculate_radial_multipole_window_array,
+            )
 
             try:
                 self.w_kernel = calculate_radial_multipole_window_array(

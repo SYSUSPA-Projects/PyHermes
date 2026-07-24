@@ -50,6 +50,7 @@ def test_fake_mpi_buffer_collectives():
 
 def test_package_data_is_installed():
     from pathlib import Path
+
     import pyhermes.base
     import pyhermes.theory
     import pyhermes.utils

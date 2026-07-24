@@ -1,15 +1,19 @@
-import time
-import pickle
 import copy
 import hashlib
 import json
 import os
+import pickle
+import time
 
 import numpy as np
 
-from pyhermes.io import WindowFunc
-from pyhermes.io import SFCField, normalize_task_weight_normalization
-from pyhermes.io import Corr2PCFData
+from pyhermes.io import (
+    Corr2PCFData,
+    SFCField,
+    WindowFunc,
+    normalize_task_weight_normalization,
+)
+from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.window_params import (
@@ -18,8 +22,6 @@ from pyhermes.utils.window_params import (
     normalize_binning_window_template,
     serialize_window_params,
 )
-from pyhermes.pipeline import TaskBase
-
 
 # Product and runtime configuration.
 PRODUCT_NAMES = ("dd", "dr", "rd", "delta_dd", "rr", "xi")

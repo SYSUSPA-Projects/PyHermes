@@ -1,18 +1,17 @@
+import argparse
+import copy
+import importlib
+import inspect
 import os
 import sys
-import inspect
-import argparse
-import importlib
-import copy
 
-import yaml
 import json5
+import yaml
 
 import pyhermes
+from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.param.logbase import setup_logger 
-
 
 REPLACE_KEYS = {
     "Corr_2PCF.binning_window",

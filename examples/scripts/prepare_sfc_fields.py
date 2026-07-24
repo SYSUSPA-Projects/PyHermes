@@ -17,7 +17,6 @@ from pathlib import Path
 
 import numpy as np
 
-
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = EXAMPLES_DIR / "data"
 OUTPUT_DIR = EXAMPLES_DIR / "output"
@@ -177,7 +176,10 @@ def main() -> None:
     args = parse_args()
     configure_serial_mpi_environment()
     from pyhermes.utils.mpi_util import MPI
-    from pyhermes.utils.redshift_space import hubble_at_redshift, redshift_space_positions
+    from pyhermes.utils.redshift_space import (
+        hubble_at_redshift,
+        redshift_space_positions,
+    )
 
     if MPI.COMM_WORLD.Get_size() != 1:
         raise RuntimeError("prepare_sfc_fields.py is a serial helper; run it without mpirun.")

@@ -1,9 +1,9 @@
+from pyhermes.param.logbase import setup_logger
 from pyhermes.utils import func_util
-from pyhermes.utils.runtime import configure
 from pyhermes.utils.mpi_util import MPI
-from pyhermes.param.logbase import setup_logger 
-from pyhermes.io import check_fout
+from pyhermes.utils.runtime import configure
 
+from .funcs import check_fout
 
 
 class HermesData(object):

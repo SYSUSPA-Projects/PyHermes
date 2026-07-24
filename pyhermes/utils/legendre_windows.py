@@ -8,7 +8,11 @@ from pyhermes.utils.legendre_fast import (
     calculate_fast_legendre_window_array_with_lm,
     has_fast_window_function,
 )
-from pyhermes.utils.special_functions import _phase_from_kR, spherical_harmonic_numba, spherical_jn_numba
+from pyhermes.utils.special_functions import (
+    _phase_from_kR,
+    spherical_harmonic_numba,
+    spherical_jn_numba,
+)
 
 
 def window_function_legendre_reference(ki, kj, kk, R, l, m):

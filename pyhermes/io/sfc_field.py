@@ -1,14 +1,21 @@
-import os
 import copy
+import os
 
 import numpy as np
+
+from pyhermes.utils import func_util
+from pyhermes.utils.convolution import (
+    specialized_convolution_3d,
+    specialized_convolution_3d_complex,
+)
+from pyhermes.utils.wavelet_grid import (
+    interpolate_grid_at_pos_numba,
+    scaling_stencil_at_pos_numba,
+)
 
 from .base import HermesData
 from .pickle_compat import read_numpy_pickle, write_numpy_pickle
 from .readers import read_particle_data, resolve_particle_value
-from pyhermes.utils import func_util
-from pyhermes.utils.convolution import specialized_convolution_3d, specialized_convolution_3d_complex
-from pyhermes.utils.wavelet_grid import interpolate_grid_at_pos_numba, scaling_stencil_at_pos_numba
 
 
 def normalize_weight_normalization(weight_normalization):

@@ -5,17 +5,21 @@ import pickle
 import time
 
 import numpy as np
-from pyhermes.utils.mpi_util import MPI
 
-from pyhermes.io import WindowFunc, SFCField, Corr3PCFMultipoleData, normalize_task_weight_normalization
+from pyhermes.io import (
+    Corr3PCFMultipoleData,
+    SFCField,
+    WindowFunc,
+    normalize_task_weight_normalization,
+)
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.radial_multipole_windows import validate_radial_multipole_profile
 from pyhermes.utils.radial_profiles import diagnose_radial_multipole_table
 from pyhermes.utils.special_functions import solve_multipoles_from_ratio
 from pyhermes.utils.window_params import serialize_window_params
-
 
 PRODUCT_RULES = {
     "allowed": {"ddd_l", "rrr_l", "delta_ddd_l", "zeta_l"},

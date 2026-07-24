@@ -24,6 +24,7 @@ from pyhermes.utils import func_util
 from pyhermes.utils.func_util import get_fname_info
 from pyhermes.utils.special_functions import jn_numba
 
+
 # Isotropic windows.
 @njit
 def window_function_sphere_numba(ki, kj, kk, R):

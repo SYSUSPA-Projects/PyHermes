@@ -4,7 +4,6 @@ import numpy as np
 
 from pyhermes.param.logbase import setup_logger
 
-
 _FAKE_SUM = object()
 _FAKE_MAX = object()
 _FAKE_UNDEFINED = object()

@@ -21,7 +21,6 @@ from pyhermes.io import SFCField
 from pyhermes.theory.corr3pcf import Corr_3PCF
 from pyhermes.utils.mpi_util import MPI
 
-
 DATA_PATH = "./output/quijote8000_snap004_sfc.pkl"
 RANDOM_PATH = "./output/random_sfc.pkl"
 OUTPUT_PATH = "./output/quijote8000_snap004_3pcf_pcenter_with_random.pkl"

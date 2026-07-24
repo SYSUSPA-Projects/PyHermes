@@ -8,13 +8,12 @@ path classes when older Python versions read an existing file.
 
 from __future__ import annotations
 
-from io import BytesIO
 import os
-from pathlib import PurePath, PurePosixPath, PureWindowsPath
 import pickle
+from io import BytesIO
+from pathlib import PurePath, PurePosixPath, PureWindowsPath
 
 import numpy as np
-
 
 _PATHLIB_COMPAT_CLASSES = {
     "Path": PurePath,

@@ -5,9 +5,14 @@ import math
 import numpy as np
 from numba import njit, prange
 
-from pyhermes.utils.radial_profiles import build_radial_multipole_table, validate_radial_profile_request
-from pyhermes.utils.special_functions import spherical_harmonic_numba, spherical_jn_numba
-
+from pyhermes.utils.radial_profiles import (
+    build_radial_multipole_table,
+    validate_radial_profile_request,
+)
+from pyhermes.utils.special_functions import (
+    spherical_harmonic_numba,
+    spherical_jn_numba,
+)
 
 RADIAL_PROFILE_CODES = {
     "shell": 0,
