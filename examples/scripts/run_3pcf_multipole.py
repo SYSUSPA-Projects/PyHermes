@@ -10,7 +10,7 @@ import sys
 from pyhermes.param.parambase import read_param
 from pyhermes.theory.corr3pcf_multipole import Corr_3PCF_Multipole
 
-corr3pcf_multipole_config = "./configs/param_3pcf_multipole.yaml"
+corr3pcf_multipole_config = "./configs/param_3pcf_multipole_lmax14.yaml"
 if len(sys.argv) > 1:
     corr3pcf_multipole_config = sys.argv[1]
 
