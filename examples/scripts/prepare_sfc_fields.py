@@ -60,11 +60,12 @@ def fof_input(fields=None) -> dict:
     from pyhermes.param.parambase import read_param
 
     params = read_param(config_path="./configs/param_sfc_projection.yaml")
-    source = params["SFCProjection"]["fin"]
-    reader_params = source["reader_params"]
+    source = dict(params["SFCProjection"]["fin"])
+    reader_params = dict(source.get("reader_params") or {})
     reader_params["redshift"] = 0.0
     if fields is not None:
         reader_params["fields"] = fields
+    source["reader_params"] = reader_params
     return source
 
 
