@@ -81,16 +81,19 @@ python scripts/run_sfc_projection.py configs/param_sfc_projection.yaml
 python scripts/run_2pcf.py configs/param_2pcf.yaml
 ```
 
-The first command downloads and caches a compact Quijote halo catalogue from
-the URL in the YAML, verifies its SHA256 digest, and writes the base
-`SFCField`. The second command consumes that exact field and writes an
-isotropic `Corr2PCFData` result. The matching `quick_start.ipynb` executes the
-same configs and plotting code rather than maintaining a parallel example.
+The first command downloads and caches the original single-file Quijote
+`group_tab` catalogue from the URL in the YAML, verifies its SHA256 digest,
+and writes the base `SFCField`. The second command consumes that exact field
+and writes an isotropic `Corr2PCFData` result. The matching
+`quick_start.ipynb` executes the same configs and plotting code rather than
+maintaining a parallel example.
 
-The dedicated `particle_io.ipynb` downloads the original FoF catalogue and
-shows how NPZ conversion, raw BIN layouts, and native simulation readers feed
-the same projection API. `sfc_projection.ipynb` then builds the J=9, weighted,
-redshift-space, and explicit sampled-random fields used by later examples;
+The dedicated `particle_io.ipynb` reuses that catalogue and shows how the
+native FoF reader, an NPZ conversion, and a raw BIN layout all feed the same
+projection API. The converted NPZ and BIN files are local teaching products,
+not additional public downloads.
+`sfc_projection.ipynb` then builds the J=9, weighted, redshift-space, and
+explicit sampled-random fields used by later examples;
 `scripts/prepare_sfc_fields.py` provides the equivalent non-interactive batch
 entry point. The optional dark-matter snapshot builder accepts the local
 Gadget HDF5 snapshot prefix explicitly; no cluster-specific path is embedded

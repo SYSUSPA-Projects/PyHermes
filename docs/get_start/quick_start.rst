@@ -2,10 +2,11 @@ Quick start
 ===========
 
 This is the canonical first PyHermes calculation. Starting with no local
-catalogue, it downloads one compact Quijote halo file, constructs a reusable
-``SFCField``, measures an isotropic 2PCF, saves both products, and plots the
-result. The matching notebook is ``examples/notebooks/quick_start.ipynb``;
-it reads the same YAML files and writes the same outputs shown here.
+catalogue, it downloads one original Quijote FoF ``group_tab`` file,
+constructs a reusable ``SFCField``, measures an isotropic 2PCF, saves both
+products, and plots the result. The matching notebook is
+``examples/notebooks/quick_start.ipynb``; it reads the same YAML files and
+writes the same outputs shown here.
 
 Run from ``examples/``
 ----------------------
@@ -34,11 +35,11 @@ cache policy:
 
    SFCProjection:
       fin:
-         path: https://pyhermes.astroslacker.com/downloads/quijote_halos_8000_snap004.npz
-         format: npz
+         path: https://pyhermes.astroslacker.com/downloads/group_tab_004.0
+         format: fof
          download:
-            cache_path: ./data/quijote_halos_8000_snap004.npz
-            sha256: b2b4b8c2fb91fa857e21b43d943cc32a2c423ee7cf5d7f13dede608264b08ef6
+            cache_path: ./data/quijote_halos/8000/groups_004/group_tab_004.0
+            sha256: 4a1c6ca4f6747a70e9e552685226ecf5d678c6c97551e2caa7cc3883502eac85
          catalog_weight_key: null
          field_value_key: null
       box_size: 1000.0
@@ -58,10 +59,12 @@ Run the standard driver:
 
    python scripts/run_sfc_projection.py configs/param_sfc_projection.yaml
 
-On the first run PyHermes downloads about 9 MB, verifies its SHA256 digest,
-and caches it at ``data/quijote_halos_8000_snap004.npz``. Later runs use that
-file directly. ``SFCProjection`` writes the reusable field and a compact
-particle companion for particle-centred tasks.
+On the first run PyHermes downloads about 33 MB, verifies its SHA256 digest,
+and caches it at
+``data/quijote_halos/8000/groups_004/group_tab_004.0``. Later runs use that
+file directly. The file header reports ``Nfiles = 1``, so no additional FoF
+pieces are required. ``SFCProjection`` writes the reusable field and a
+compact particle companion for particle-centred tasks.
 
 Measure the 2PCF
 ----------------
@@ -130,8 +133,9 @@ Where next?
 The Quick Start is the shortest complete workflow. The next three notebooks
 explain its reusable layers:
 
-1. :doc:`particle_io` is the optional input-data branch. Read it when adapting
-   a catalogue of your own or converting FoF, NPZ, or raw BIN data.
+1. :doc:`particle_io` is the optional input-data branch. It starts from the
+   same FoF catalogue and shows how equivalent NPZ and raw BIN catalogues can
+   be constructed and read.
 2. :doc:`sfc_projection/sfc_projection` develops the catalogue-to-``SFCField``
    step: weights, normalisation, resolution, redshift space, and reusable
    products.

@@ -12,12 +12,8 @@ the repository root or from examples/.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import os
-import shutil
-import tarfile
 from pathlib import Path
-from urllib.request import Request, urlopen
 
 import numpy as np
 
@@ -25,14 +21,6 @@ import numpy as np
 EXAMPLES_DIR = Path(__file__).resolve().parents[1]
 DATA_DIR = EXAMPLES_DIR / "data"
 OUTPUT_DIR = EXAMPLES_DIR / "output"
-CATALOG_DIR = DATA_DIR / "quijote_halos"
-CATALOG_REL = "./data/quijote_halos/8000"
-QUICK_START_CATALOG = DATA_DIR / "quijote_halos_8000_snap004.npz"
-ARCHIVE_PATH = DATA_DIR / "quijote_halos.tar.gz"
-DOWNLOAD_URL = (
-    "https://pyhermes.astroslacker.com/downloads/quijote_halos.tar.gz"
-)
-ARCHIVE_SHA256 = "c88c798fd7aec44b73b1909040f03738c7c223bfa5805f7f7f778b49bfe88b20"
 
 
 def parse_args() -> argparse.Namespace:
@@ -56,16 +44,6 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Rebuild files even when the target output already exists.",
     )
-    parser.add_argument(
-        "--skip-download",
-        action="store_true",
-        help="Do not download or extract the Quijote halo catalog.",
-    )
-    parser.add_argument(
-        "--catalog-only",
-        action="store_true",
-        help="Stop after producing the public Quick Start NPZ catalogue.",
-    )
     return parser.parse_args()
 
 
@@ -79,146 +57,37 @@ def print_step(message: str) -> None:
     print(f"\n== {message} ==")
 
 
-def clean_extracted_catalog(root: Path) -> None:
-    if not root.exists():
-        return
-    for path in root.rglob("*"):
-        if (
-            path.name == ".DS_Store"
-            or path.name.startswith("._")
-            or path.name == "quijote_halo_bin_schema.yaml"
-        ):
-            path.unlink(missing_ok=True)
-    macosx_dir = root / "__MACOSX"
-    if macosx_dir.exists():
-        shutil.rmtree(macosx_dir)
+def fof_input(fields=None) -> dict:
+    from pyhermes.param.parambase import read_param
 
-
-def verify_archive(path: Path) -> None:
-    digest = hashlib.sha256()
-    with path.open("rb") as file_obj:
-        for chunk in iter(lambda: file_obj.read(1024 * 1024), b""):
-            digest.update(chunk)
-    actual = digest.hexdigest()
-    if actual != ARCHIVE_SHA256:
-        raise RuntimeError(
-            f"SHA256 mismatch for {path}: expected {ARCHIVE_SHA256}, got {actual}. "
-            "Delete the file or rerun with --overwrite."
-        )
-
-
-def download_archive(overwrite: bool) -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    if ARCHIVE_PATH.exists() and not overwrite:
-        verify_archive(ARCHIVE_PATH)
-        print(f"Archive already exists: {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
-        return
-
-    print(f"Downloading {DOWNLOAD_URL}")
-    request = Request(
-        DOWNLOAD_URL,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://pyhermes.astroslacker.com/",
-        },
-    )
-    partial_path = ARCHIVE_PATH.with_name(f"{ARCHIVE_PATH.name}.part")
-    partial_path.unlink(missing_ok=True)
-    try:
-        with urlopen(request) as response, partial_path.open("wb") as file_obj:
-            shutil.copyfileobj(response, file_obj)
-        verify_archive(partial_path)
-        partial_path.replace(ARCHIVE_PATH)
-    finally:
-        partial_path.unlink(missing_ok=True)
-    print(f"Saved archive to {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
-
-
-def should_skip_member(member: tarfile.TarInfo) -> bool:
-    member_path = Path(member.name)
-    parts = member_path.parts
-    return (
-        member.name.startswith("/")
-        or ".." in parts
-        or "__MACOSX" in parts
-        or member_path.name == ".DS_Store"
-        or member_path.name.startswith("._")
-        or member_path.name == "quijote_halo_bin_schema.yaml"
-        or not (member.isfile() or member.isdir())
-    )
-
-
-def extract_archive(overwrite: bool) -> None:
-    if CATALOG_DIR.exists() and not overwrite:
-        print(f"Catalog already exists: {CATALOG_DIR.relative_to(EXAMPLES_DIR)}")
-        clean_extracted_catalog(CATALOG_DIR)
-        return
-
-    if not ARCHIVE_PATH.exists():
-        raise FileNotFoundError(
-            f"Missing {ARCHIVE_PATH}. Run without --skip-download or place the archive manually."
-        )
-
-    verify_archive(ARCHIVE_PATH)
-    print(f"Extracting {ARCHIVE_PATH.relative_to(EXAMPLES_DIR)}")
-    with tarfile.open(ARCHIVE_PATH, "r:gz") as archive:
-        for member in archive.getmembers():
-            if should_skip_member(member):
-                continue
-            archive.extract(member, DATA_DIR)
-    clean_extracted_catalog(DATA_DIR)
-
-
-def ensure_catalog(skip_download: bool, overwrite: bool) -> None:
-    print_step("Preparing the example halo catalog")
-    if not skip_download:
-        download_archive(overwrite=overwrite)
-        extract_archive(overwrite=overwrite)
-    elif not CATALOG_DIR.exists():
-        raise FileNotFoundError(
-            f"Missing {CATALOG_DIR}. Run without --skip-download to download the catalog."
-        )
+    params = read_param(config_path="./configs/param_sfc_projection.yaml")
+    source = params["SFCProjection"]["fin"]
+    reader_params = source["reader_params"]
+    reader_params["redshift"] = 0.0
+    if fields is not None:
+        reader_params["fields"] = fields
+    return source
 
 
 def read_fof_catalog() -> dict:
     from pyhermes.io import read_particle_data
 
-    reader_params = {
-        "snapnum": 4,
-        "redshift": 0.0,
-        "fields": {
+    source = fof_input(
+        fields={
             "vel": "vel",
             "vx": "vel_x",
             "vy": "vel_y",
             "vz": "vel_z",
             "mass": "mass",
             "npart": "npart",
-        },
-    }
-    return read_particle_data(CATALOG_REL, data_format="fof", **reader_params)
-
-
-def build_quick_start_catalog(fof_data: dict, overwrite: bool) -> None:
-    """Build the single-file catalogue served to first-time users."""
-    print_step("Packing the Quick Start NPZ catalogue")
-    if QUICK_START_CATALOG.exists() and not overwrite:
-        digest = hashlib.sha256(QUICK_START_CATALOG.read_bytes()).hexdigest()
-        print(f"NPZ catalogue already exists: {QUICK_START_CATALOG.relative_to(EXAMPLES_DIR)}")
-        print(f"SHA256: {digest}")
-        return
-
-    np.savez_compressed(
-        QUICK_START_CATALOG,
-        pos=np.ascontiguousarray(fof_data["pos"], dtype=np.float32),
-        vel_x=np.ascontiguousarray(fof_data["vx"], dtype=np.float32),
-        vel_y=np.ascontiguousarray(fof_data["vy"], dtype=np.float32),
-        vel_z=np.ascontiguousarray(fof_data["vz"], dtype=np.float32),
-        mass=np.ascontiguousarray(fof_data["mass"], dtype=np.float32),
-        npart=np.ascontiguousarray(fof_data["npart"], dtype=np.float32),
+        }
     )
-    digest = hashlib.sha256(QUICK_START_CATALOG.read_bytes()).hexdigest()
-    print(f"Wrote {QUICK_START_CATALOG.relative_to(EXAMPLES_DIR)}")
-    print(f"SHA256: {digest}")
+    return read_particle_data(
+        source["path"],
+        data_format=source["format"],
+        download=source["download"],
+        **source["reader_params"],
+    )
 
 
 def run_if_needed(label: str, output_path: Path, overwrite: bool, build_task) -> None:
@@ -257,26 +126,15 @@ def build_standard_field(threads: int):
 
 def build_j9_field(threads: int):
     task = base_sfc_task(threads, "./output/quijote8000_snap004_sfc_J9.pkl")
-    task.fin = {
-        "path": CATALOG_REL,
-        "format": "fof",
-        "reader_params": {"snapnum": 4},
-    }
+    task.fin = fof_input()
     task.J = 9
     return task
 
 
 def build_mass_weighted_field(threads: int):
     task = base_sfc_task(threads, "./output/quijote8000_snap004_sfc_massweight.pkl")
-    task.fin = {
-        "path": CATALOG_REL,
-        "format": "fof",
-        "reader_params": {
-            "snapnum": 4,
-            "fields": {"mass": "mass"},
-        },
-        "field_value_key": "mass",
-    }
+    task.fin = fof_input(fields={"mass": "mass"})
+    task.fin["field_value_key"] = "mass"
     return task
 
 
@@ -333,13 +191,8 @@ def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Working directory: {EXAMPLES_DIR}")
 
-    ensure_catalog(skip_download=args.skip_download, overwrite=args.overwrite)
+    print_step("Loading the public FoF catalogue")
     fof_data = read_fof_catalog()
-    build_quick_start_catalog(fof_data, overwrite=args.overwrite)
-    if args.catalog_only:
-        print_step("Done")
-        print(f"Upload-ready catalogue: {QUICK_START_CATALOG}")
-        return
 
     run_if_needed(
         "Building real-space SFCField",

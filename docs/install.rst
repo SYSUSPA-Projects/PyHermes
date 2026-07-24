@@ -114,9 +114,10 @@ Example data
 ------------
 
 The repository does not commit catalogues or generated products. The Quick
-Start configuration points directly to a compact public NPZ catalogue;
-``SFCProjection`` downloads, verifies, and caches it automatically. No data
-preparation command is required before the first field and 2PCF run.
+Start configuration points directly to the public single-file Quijote
+``group_tab`` catalogue; ``SFCProjection`` downloads, verifies, and caches it
+automatically. No data preparation command is required before the first field
+and 2PCF run.
 
 Install the plotting extra before running the notebooks:
 
@@ -125,10 +126,11 @@ Install the plotting extra before running the notebooks:
    python -m pip install "pyhermes-cosmo[plot]"
 
 The later notebooks reuse the field written to ``examples/output/``.
-``particle_io.ipynb`` explains how to adapt NPZ, BIN, and native simulation
-catalogues, while ``sfc_projection.ipynb`` runs entirely from the public Quick
-Start catalogue. Prepare the larger J=9, weighted, redshift-space, and random
-bundle only when an advanced example needs those products:
+``particle_io.ipynb`` explains how the native FoF catalogue can be converted
+to and read back from NPZ and BIN, while ``sfc_projection.ipynb`` runs
+entirely from the public Quick Start catalogue. Prepare the larger J=9,
+weighted, redshift-space, and random bundle only when an advanced example
+needs those products:
 
 .. code-block:: bash
 

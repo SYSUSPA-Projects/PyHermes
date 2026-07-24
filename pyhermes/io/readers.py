@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -40,6 +41,8 @@ def _infer_format_from_path(path):
     path_value = str(path)
     if is_remote_url(path_value):
         path_value = urlparse(path_value).path
+    if re.fullmatch(r"group_tab_\d+\.\d+", Path(path_value).name):
+        return "fof"
     suffix = Path(path_value).suffix.lower().lstrip(".")
     suffix_to_format = {
         "bin": "bin",
@@ -455,6 +458,19 @@ def _fof_tab_path(path, snapnum, file_index, prefix="/groups_"):
     return Path(path) / group_dir / f"group_tab_{snap_ext}.{file_index}"
 
 
+def _fof_direct_split_path(first_file, file_index):
+    """Return a sibling split path for a direct group_tab file input."""
+    if file_index == 0:
+        return Path(first_file)
+    base_name, separator, split_index = Path(first_file).name.rpartition(".")
+    if not separator or not split_index.isdigit():
+        raise ValueError(
+            "A direct FoF file declares multiple splits, but its filename does "
+            f"not end in a numeric split index: {first_file}"
+        )
+    return Path(first_file).with_name(f"{base_name}.{file_index}")
+
+
 def _read_fof_tab_file(filename, swap=False, sfr=False):
     """Read one Quijote/Pylians-style FoF group_tab file."""
     vec3 = np.dtype((np.float32, 3))
@@ -490,13 +506,22 @@ def _read_fof_tab_file(filename, swap=False, sfr=False):
     return header, part
 
 
-def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
-    """Read a Quijote/Pylians-style FoF group_tab catalog without readfof."""
+def _read_fof_catalog(path, snapnum=None, redshift=0.0, **kwargs):
+    """Read a Quijote/Pylians-style FoF group_tab file or catalog directory."""
     swap = bool(kwargs.get("swap", False))
     sfr = bool(kwargs.get("SFR", False))
     prefix = kwargs.get("prefix", "/groups_")
 
-    first_file = _fof_tab_path(path, snapnum, 0, prefix=prefix)
+    source_path = Path(path)
+    direct_file = source_path.is_file()
+    if direct_file:
+        first_file = source_path
+    else:
+        if snapnum is None:
+            if not source_path.exists():
+                raise FileNotFoundError(f"FoF input path not found: {source_path}")
+            raise ValueError("snapnum is required when the FoF input path is a catalog directory.")
+        first_file = _fof_tab_path(source_path, snapnum, 0, prefix=prefix)
     if not first_file.exists():
         raise FileNotFoundError(f"FoF group_tab file not found: {first_file}")
 
@@ -506,7 +531,10 @@ def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
     parts = [part0]
 
     for file_index in range(1, num_files):
-        filename = _fof_tab_path(path, snapnum, file_index, prefix=prefix)
+        if direct_file:
+            filename = _fof_direct_split_path(first_file, file_index)
+        else:
+            filename = _fof_tab_path(source_path, snapnum, file_index, prefix=prefix)
         if not filename.exists():
             raise FileNotFoundError(f"FoF group_tab file not found: {filename}")
         header, part = _read_fof_tab_file(filename, swap=swap, sfr=sfr)
@@ -534,8 +562,8 @@ def _read_fof_catalog(path, snapnum, redshift=0.0, **kwargs):
     )
 
 
-def read_fof(path, snapnum, redshift=0.0, fields=None, **kwargs):
-    """Read a Quijote/Pylians-style FoF group_tab catalog directory."""
+def read_fof(path, snapnum=None, redshift=0.0, fields=None, **kwargs):
+    """Read a Quijote/Pylians-style group_tab file or catalog directory."""
     _mod_name, _func_name = get_fname_info()
     logger = setup_logger(_mod_name, _func_name)
     logger.info(f"Reading Quijote FoF halo data from ---> {path} <---")

@@ -48,13 +48,15 @@ neither option, PyHermes uses ``$PYHERMES_CACHE_DIR``, then
 An existing cache file is reused after optional SHA256 verification. New data
 are downloaded to a unique partial file and atomically renamed only after a
 successful transfer and checksum. Under MPI, ``SFCProjection`` performs this
-work only on rank 0 before distributing particle slabs. Remote input currently
-targets single files such as NPZ or BIN; directory catalogues and split Gadget
-snapshots should remain on local or shared storage.
+work only on rank 0 before distributing particle slabs. Remote input targets
+single files such as NPZ, BIN, or a complete ``group_tab`` file. Directory
+catalogues and split datasets should remain on local or shared storage.
 
-``examples/notebooks/particle_io.ipynb`` reconstructs the public NPZ from the
-original Quijote FoF catalogue and displays its array names, shapes, dtypes,
-and units beside the conversion code. The data stay outside Git, while
+``examples/notebooks/particle_io.ipynb`` starts from the public Quijote FoF
+file, constructs local NPZ and BIN equivalents, and displays their array
+names, shapes, dtypes, and units beside the conversion code. These converted
+files demonstrate supported catalogue formats; the FoF file is the only
+distributed source catalogue. The data stay outside Git, while
 ``examples/configs/param_sfc_projection.yaml`` records the stable URL and
 checksum used by the Quick Start.
 
@@ -78,11 +80,12 @@ Supported formats
    * - ``gadget-fof``
      - Legacy Gadget FoF catalogue without SUBFIND.
    * - ``fof``
-     - Quijote/Pylians-style ``group_tab`` halo catalogue.
+     - Quijote/Pylians-style ``group_tab`` halo file or catalogue directory.
 
-The local or URL-path suffix can infer ``bin``, ``npz``, ``gadget``, or ``fof``
-when ``format`` is omitted. Directory and HDF5 base paths should set it
-explicitly.
+A recognized local or URL-path suffix can infer ``bin``, ``npz``, or
+``gadget`` when ``format`` is omitted. The ``group_tab_###.#`` filename
+pattern similarly infers ``fof``. Directory and HDF5 base paths should set the
+format explicitly.
 
 Raw binary tables
 -----------------
@@ -157,10 +160,12 @@ Quijote FoF catalogues
 .. code-block:: yaml
 
    fin:
-      path: "./data/quijote_halos/8000"
+      path: "https://pyhermes.astroslacker.com/downloads/group_tab_004.0"
       format: "fof"
+      download:
+         cache_path: "./data/quijote_halos/8000/groups_004/group_tab_004.0"
+         sha256: "4a1c6ca4f6747a70e9e552685226ecf5d678c6c97551e2caa7cc3883502eac85"
       reader_params:
-         snapnum: 4
          redshift: 0.0
          fields:
             mass: "mass"
@@ -173,7 +178,11 @@ Quijote FoF catalogues
 The reader exposes ``pos``, ``mass``, ``vel``, component velocities, ``npart``,
 and ``group_offset`` before optional selection. It converts Quijote positions
 to :math:`\mathrm{Mpc}/h`, masses to :math:`M_\odot/h`, and applies the reader's
-redshift velocity convention.
+redshift velocity convention. A direct file whose header declares multiple
+pieces discovers ``.1``, ``.2``, and later siblings beside the supplied
+``.0`` file. Alternatively, pass the catalogue root as ``path`` and set
+``reader_params.snapnum``; this preserves the existing
+``groups_004/group_tab_004.0`` directory convention.
 
 In-memory input
 ---------------

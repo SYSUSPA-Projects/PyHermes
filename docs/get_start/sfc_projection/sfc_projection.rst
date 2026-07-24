@@ -15,11 +15,11 @@ downloads and caches it automatically:
 
    SFCProjection:
       fin:
-         path: https://pyhermes.astroslacker.com/downloads/quijote_halos_8000_snap004.npz
-         format: npz
+         path: https://pyhermes.astroslacker.com/downloads/group_tab_004.0
+         format: fof
          download:
-            cache_path: ./data/quijote_halos_8000_snap004.npz
-            sha256: b2b4b8c2fb91fa857e21b43d943cc32a2c423ee7cf5d7f13dede608264b08ef6
+            cache_path: ./data/quijote_halos/8000/groups_004/group_tab_004.0
+            sha256: 4a1c6ca4f6747a70e9e552685226ecf5d678c6c97551e2caa7cc3883502eac85
          catalog_weight_key: null
          field_value_key: null
       box_size: 1000
