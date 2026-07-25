@@ -6,6 +6,9 @@ continuous result at uniformly sampled box positions. The returned values can
 be used for count-in-cell PDFs, moments, environmental marks, and filtered-field
 diagnostics.
 
+The :doc:`complete Counting notebook </notebooks/counting>` compares the task
+and low-level interfaces and visualises the resulting one-point PDFs.
+
 Minimal YAML
 ------------
 
@@ -118,5 +121,5 @@ returned array is trimmed to the requested size.
 Public tutorial
 ---------------
 
-``examples/notebooks/counting.ipynb`` compares task and low-level interfaces,
+The :doc:`rendered notebook </notebooks/counting>` compares task and low-level interfaces,
 constructs one-point PDFs, and contrasts low-pass and high-pass responses.

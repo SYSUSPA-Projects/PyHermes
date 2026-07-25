@@ -5,8 +5,8 @@ This is the canonical first PyHermes calculation. Starting with no local
 catalogue, it downloads one original Quijote FoF ``group_tab`` file,
 constructs a reusable ``SFCField``, measures an isotropic 2PCF, saves both
 products, and plots the result. The matching notebook is
-``examples/notebooks/quick_start.ipynb``; it reads the same YAML files and
-writes the same outputs shown here.
+:doc:`available directly in the documentation </notebooks/quick_start>`; it
+reads the same YAML files and writes the same outputs shown here.
 
 Run from ``examples/``
 ----------------------
@@ -164,5 +164,6 @@ than strict prerequisites for one another.
 
 The projection tutorial generates its own J=9, mass-weighted,
 redshift-space, and sampled-random fields. A dense dark-matter snapshot is the
-only advanced external product used by ``physical_fields.ipynb``; that
-notebook identifies the script and Slurm job that build it.
+only advanced external product used by
+:doc:`physical_fields.ipynb </notebooks/physical_fields>`; that notebook
+identifies the script and Slurm job that build it.

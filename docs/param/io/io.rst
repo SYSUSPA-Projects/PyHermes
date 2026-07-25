@@ -52,11 +52,12 @@ work only on rank 0 before distributing particle slabs. Remote input targets
 single files such as NPZ, BIN, or a complete ``group_tab`` file. Directory
 catalogues and split datasets should remain on local or shared storage.
 
-``examples/notebooks/particle_io.ipynb`` starts from the public Quijote FoF
-file, constructs local NPZ and BIN equivalents, and displays their array
-names, shapes, dtypes, and units beside the conversion code. These converted
-files demonstrate supported catalogue formats; the FoF file is the only
-distributed source catalogue. The data stay outside Git, while
+:doc:`The Particle I/O notebook </notebooks/particle_io>` starts from the
+public Quijote FoF file, constructs local NPZ and BIN equivalents, and
+displays their array names, shapes, dtypes, and units beside the conversion
+code. These converted files demonstrate supported catalogue formats; the FoF
+file is the only distributed source catalogue. The data stay outside Git,
+while
 ``examples/configs/param_sfc_projection.yaml`` records the stable URL and
 checksum used by the Quick Start.
 

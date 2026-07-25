@@ -126,11 +126,12 @@ Install the plotting extra before running the notebooks:
    python -m pip install "pyhermes-cosmo[plot]"
 
 The later notebooks reuse the field written to ``examples/output/``.
-``particle_io.ipynb`` explains how the native FoF catalogue can be converted
-to and read back from NPZ and BIN, while ``sfc_projection.ipynb`` runs
-entirely from the public Quick Start catalogue. Prepare the larger J=9,
-weighted, redshift-space, and random bundle only when an advanced example
-needs those products:
+:doc:`particle_io.ipynb <notebooks/particle_io>` explains how the native FoF
+catalogue can be converted to and read back from NPZ and BIN, while
+:doc:`sfc_projection.ipynb <notebooks/sfc_projection>` runs entirely from the
+public Quick Start catalogue. Prepare the larger J=9, weighted,
+redshift-space, and random bundle only when an advanced example needs those
+products:
 
 .. code-block:: bash
 

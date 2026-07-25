@@ -5,6 +5,10 @@ Two-point correlation functions
 sampled family of separation-binning windows. The same estimator handles
 isotropic, anisotropic, auto-, and cross-correlations.
 
+The :doc:`complete 2PCF notebook </notebooks/corr2pcf>` connects the task
+interface to low-level field--window operations and includes isotropic and
+redshift-space visualisations.
+
 Isotropic 2PCF
 --------------
 
@@ -216,6 +220,7 @@ can persist expensive kernels across repeated runs; set an explicit
 Public tutorial
 ---------------
 
-``examples/notebooks/corr2pcf.ipynb`` contains high- and low-level isotropic
-reconstruction, anisotropic window composition, saved RSD results, and custom
-ring tests. ``examples/scripts/run_2pcf.py`` is the production entry point.
+The :doc:`rendered 2PCF notebook </notebooks/corr2pcf>` contains high- and
+low-level isotropic reconstruction, anisotropic window composition, saved RSD
+results, and custom ring tests. ``examples/scripts/run_2pcf.py`` is the
+production entry point.

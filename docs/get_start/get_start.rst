@@ -5,27 +5,39 @@ The public ``examples/`` directory is the executable half of the
 documentation. It is tracked by Git and is intended to remain readable,
 compact, and useful outside the development test suite.
 
+:doc:`Open the rendered notebook gallery </notebooks/index>` to read the
+complete code and saved outputs without leaving the documentation site.
+
 Recommended order
 -----------------
 
-1. ``quick_start.ipynb`` downloads the example catalogue, saves the base
-   ``SFCField``, runs the same YAML-driven 2PCF as this guide, and plots it.
-2. ``particle_io.ipynb`` downloads the original FoF catalogue, then explains
-   NPZ conversion, explicit raw BIN layouts, and native simulation readers.
-3. ``sfc_projection.ipynb`` explains weights, normalisation, resolution,
-   redshift-space coordinates, and reusable ``SFCField`` products.
-4. ``window.ipynb`` introduces field arithmetic, built-in kernels, custom
-   windows, and projected-kernel composition.
-5. ``physical_fields.ipynb`` applies those two core objects to velocity
-   derivatives, momentum density, potential, and acceleration.
-6. ``counting.ipynb`` samples smoothed fields and constructs one-point PDFs.
-7. ``corr2pcf.ipynb`` covers isotropic and anisotropic 2PCFs.
-8. ``corr3pcf.ipynb`` covers standard 3PCFs and multipoles.
+1. :doc:`quick_start.ipynb </notebooks/quick_start>` downloads the example
+   catalogue, saves the base ``SFCField``, runs the same YAML-driven 2PCF as
+   this guide, and plots it.
+2. :doc:`particle_io.ipynb </notebooks/particle_io>` downloads the original
+   FoF catalogue, then explains NPZ conversion, explicit raw BIN layouts, and
+   native simulation readers.
+3. :doc:`sfc_projection.ipynb </notebooks/sfc_projection>` explains weights,
+   normalisation, resolution, redshift-space coordinates, and reusable
+   ``SFCField`` products.
+4. :doc:`window.ipynb </notebooks/window>` introduces field arithmetic,
+   built-in kernels, custom windows, and projected-kernel composition.
+5. :doc:`physical_fields.ipynb </notebooks/physical_fields>` applies those two
+   core objects to velocity derivatives, momentum density, potential, and
+   acceleration.
+6. :doc:`counting.ipynb </notebooks/counting>` samples smoothed fields and
+   constructs one-point PDFs.
+7. :doc:`corr2pcf.ipynb </notebooks/corr2pcf>` covers isotropic and anisotropic
+   2PCFs.
+8. :doc:`corr3pcf.ipynb </notebooks/corr3pcf>` covers standard 3PCFs and
+   multipoles.
 
-The first four notebooks form the common foundation. After ``window.ipynb``,
-the path branches naturally: use ``physical_fields.ipynb`` for physical
-operators, ``counting.ipynb`` for one-point distributions, or
-``corr2pcf.ipynb`` followed by ``corr3pcf.ipynb`` for correlation statistics.
+The first four notebooks form the common foundation. After
+:doc:`window.ipynb </notebooks/window>`, the path branches naturally: use
+:doc:`physical_fields.ipynb </notebooks/physical_fields>` for physical
+operators, :doc:`counting.ipynb </notebooks/counting>` for one-point
+distributions, or :doc:`corr2pcf.ipynb </notebooks/corr2pcf>` followed by
+:doc:`corr3pcf.ipynb </notebooks/corr3pcf>` for correlation statistics.
 
 Three representations of one workflow
 -------------------------------------

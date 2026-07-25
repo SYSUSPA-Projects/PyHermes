@@ -8,6 +8,11 @@ sampling by multipole-filtered fields, then contracts those fields into
 ``WindowFunc`` infrastructure as the rest of PyHermes; only the radial and
 angular window roles change.
 
+The multipole sections of the
+:doc:`complete 3PCF notebook </notebooks/corr3pcf>` load saved runs, compare
+resolutions and :math:`\ell_{\max}`, and visualise split triangle
+configurations.
+
 From shell windows to radial profiles
 -------------------------------------
 

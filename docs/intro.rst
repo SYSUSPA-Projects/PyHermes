@@ -150,14 +150,20 @@ Executable tutorials
 --------------------
 
 The tracked notebooks in ``examples/notebooks/`` are part of the public user
-interface. They share one foundation and then branch by scientific goal:
+interface and are :doc:`rendered in this site <notebooks/index>`. They share
+one foundation and then branch by scientific goal:
 
-``quick_start.ipynb`` -> [``particle_io.ipynb`` when adapting input data] ->
-``sfc_projection.ipynb`` -> ``window.ipynb``.
+:doc:`quick_start.ipynb <notebooks/quick_start>` ->
+[:doc:`particle_io.ipynb <notebooks/particle_io>` when adapting input data] ->
+:doc:`sfc_projection.ipynb <notebooks/sfc_projection>` ->
+:doc:`window.ipynb <notebooks/window>`.
 
-From there, use ``physical_fields.ipynb`` for differential operators and
-derived fields, ``counting.ipynb`` for one-point distributions, or
-``corr2pcf.ipynb`` -> ``corr3pcf.ipynb`` for correlation statistics.
+From there, use :doc:`physical_fields.ipynb <notebooks/physical_fields>` for
+differential operators and derived fields,
+:doc:`counting.ipynb <notebooks/counting>` for one-point distributions, or
+:doc:`corr2pcf.ipynb <notebooks/corr2pcf>` ->
+:doc:`corr3pcf.ipynb <notebooks/corr3pcf>` for correlation statistics.
 
-See :doc:`get_start/get_start` for the full map and
+See :doc:`get_start/get_start` for the full map,
+:doc:`notebooks/index` for the rendered notebooks, and
 :doc:`get_start/quick_start` for the first runnable workflow.

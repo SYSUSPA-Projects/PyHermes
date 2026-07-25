@@ -43,6 +43,9 @@ The public `examples directory
 executable companion to this guide. Its notebooks are tutorials; its scripts
 and YAML files are production-shaped starting points.
 
+The :doc:`notebook gallery <notebooks/index>` renders those same tracked
+notebooks directly in this site, including their saved figures and outputs.
+
 .. toctree::
    :maxdepth: 2
    :caption: Start here
@@ -71,6 +74,12 @@ and YAML files are production-shaped starting points.
    get_start/corr_2pcf/corr_2pcf
    get_start/corr_3pcf/corr_3pcf
    get_start/corr_3pcf_multipole/corr_3pcf_multipole
+
+.. toctree::
+   :maxdepth: 1
+   :caption: Notebook tutorials
+
+   notebooks/index
 
 .. toctree::
    :maxdepth: 2

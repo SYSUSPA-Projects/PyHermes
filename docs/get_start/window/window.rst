@@ -5,6 +5,10 @@ Field and window operations
 compatible with that representation. Their small algebra is the low-level
 language from which PyHermes tasks are assembled.
 
+The :doc:`complete window notebook </notebooks/window>` demonstrates the same
+operations interactively, including built-in kernels, custom windows, and
+window composition.
+
 Load a field
 ------------
 
@@ -155,6 +159,7 @@ metadata. Low-level and high-level paths use the same field/window machinery.
 Public tutorial
 ---------------
 
-``examples/notebooks/window.ipynb`` demonstrates field arithmetic, ordinary
-windows, custom kernels, projected-kernel composition, smoothing versus
-binning roles, and Fourier-space sketches of the built-in library.
+The :doc:`rendered window notebook </notebooks/window>` demonstrates field
+arithmetic, ordinary windows, custom kernels, projected-kernel composition,
+smoothing versus binning roles, and Fourier-space sketches of the built-in
+library.

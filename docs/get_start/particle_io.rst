@@ -7,10 +7,10 @@ particle reader returns the same small contract: ``pos`` with shape ``(N, 3)``,
 has this form, the same arrays can be passed to ``SFCProjection`` regardless of
 the original file format.
 
-The executable companion is ``examples/notebooks/particle_io.ipynb``. It
-downloads the original single-file Quijote ``group_tab`` catalogue, reads it
-directly, and converts all 406,728 haloes to equivalent NPZ and BIN files. The
-complete notebook remains suitable for a local first run.
+The :doc:`executable Particle I/O notebook </notebooks/particle_io>` downloads
+the original single-file Quijote ``group_tab`` catalogue, reads it directly,
+and converts all 406,728 haloes to equivalent NPZ and BIN files. The complete
+notebook remains suitable for a local first run.
 
 Read a group_tab file directly
 ------------------------------
@@ -100,7 +100,8 @@ component a descriptive key:
    )
 
 When ``fields`` is omitted, all arrays other than the position key are
-exposed. The conversion cells in ``particle_io.ipynb`` make the local format
+exposed. The conversion cells in
+:doc:`particle_io.ipynb </notebooks/particle_io>` make the local format
 contract explicit: array names, dtypes, shapes, and physical units are shown
 beside the code that creates them.
 

@@ -8,10 +8,10 @@ set of primary vertices, and averages over random rotations. This is the
 direct-angular counterpart of the harmonic estimator described in
 :doc:`../corr_3pcf_multipole/corr_3pcf_multipole`.
 
-The public tutorial is ``examples/notebooks/corr3pcf.ipynb``. Its standard
-3PCF sections compare the two centre strategies and show how the saved
-count-level products assemble into :math:`\zeta` and the reduced statistic
-:math:`Q`.
+The :doc:`complete 3PCF notebook </notebooks/corr3pcf>` compares the two
+standard-3PCF centre strategies and shows how the saved count-level products
+assemble into :math:`\zeta` and the reduced statistic :math:`Q`. Its later
+sections introduce the multipole estimator.
 
 Triangle convention
 -------------------

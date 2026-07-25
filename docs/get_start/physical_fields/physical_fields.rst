@@ -8,8 +8,8 @@ and particle-carried values change *what field is represented*; windows change
 differential operators, the Newtonian potential, acceleration, and marked
 density fields.
 
-The executable companion is ``examples/notebooks/physical_fields.ipynb``.
-It follows :doc:`../sfc_projection/sfc_projection` and
+The :doc:`executable Physical Fields notebook </notebooks/physical_fields>`
+follows :doc:`../sfc_projection/sfc_projection` and
 :doc:`../window/window`: projection defines the physical field, while windows
 apply smoothing and differential operators. The notebook keeps these
 calculations compact and spends most of its length on slice selection and
@@ -223,8 +223,9 @@ catalogue-weighted mean, project the marked catalogue, and pass that
 needed: the mark changes the field, not the binning operation.
 
 This is a direct extension of the same projection pattern rather than a cell
-in ``physical_fields.ipynb``. The companion notebook concentrates on velocity,
-momentum, potential, and acceleration; continue with
+in :doc:`physical_fields.ipynb </notebooks/physical_fields>`. The companion
+notebook concentrates on velocity, momentum, potential, and acceleration;
+continue with
 :doc:`../corr_2pcf/corr_2pcf` when applying a projected mark to the 2PCF.
 
 .. figure:: ../../_static/paper/Mark_2pcf.png

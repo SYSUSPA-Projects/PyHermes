@@ -50,6 +50,9 @@ mpi = ["mpi4py>=4"]
 plot = ["matplotlib>=3.7"]
 camb = ["camb>=1.5"]
 docs = [
+  "nbsphinx>=0.9",
+  "nbsphinx-link>=1.4",
+  "pypandoc-binary>=1.15",
   "sphinx>=8",
   "pydata-sphinx-theme>=0.20,<0.21",
   "sphinx-copybutton>=0.5",

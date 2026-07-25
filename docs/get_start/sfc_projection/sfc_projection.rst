@@ -5,6 +5,10 @@ Build an SFCField
 projects particle positions and optional per-particle amplitudes onto the
 scaling-function basis and returns an ``SFCField``.
 
+The :doc:`complete SFC projection notebook </notebooks/sfc_projection>`
+extends the Quick Start with number and mass fields, resolution comparisons,
+redshift-space coordinates, random fields, and reusable outputs.
+
 Minimal YAML
 ------------
 
@@ -202,16 +206,17 @@ power of two. ``threads`` applies within every rank.
 Public tutorial
 ---------------
 
-``examples/notebooks/sfc_projection.ipynb`` begins after the Quick Start and
-keeps the projection layer in view: configuration-driven and in-memory input,
-number and mass fields, reconstructed J=7/J=8/J=9 fields compared with direct
-halo binning, redshift-space coordinates, a matching random field, and compact
-companion particle datasets. It runs entirely from the public catalogue used
-by the Quick Start and writes the reusable products needed by the later
-example notebooks.
+The :doc:`rendered notebook </notebooks/sfc_projection>` begins after the
+Quick Start and keeps the projection layer in view: configuration-driven and
+in-memory input, number and mass fields, reconstructed J=7/J=8/J=9 fields
+compared with direct halo binning, redshift-space coordinates, a matching
+random field, and compact companion particle datasets. It runs entirely from
+the public catalogue used by the Quick Start and writes the reusable products
+needed by the later example notebooks.
 
 Catalogue formats and conversion are covered separately in
-``examples/notebooks/particle_io.ipynb`` and :doc:`../particle_io`. The
+:doc:`the Particle I/O notebook </notebooks/particle_io>` and
+:doc:`../particle_io`. The
 ``examples/scripts/prepare_sfc_fields.py`` helper produces the same field set
 for non-interactive or batch workflows, so it does not need to be run after
 the notebook.
