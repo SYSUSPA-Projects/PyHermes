@@ -50,6 +50,7 @@ mpi = ["mpi4py>=4"]
 plot = ["matplotlib>=3.7"]
 camb = ["camb>=1.5"]
 docs = [
+  "ipython-pygments-lexers>=1.1",
   "nbsphinx>=0.9",
   "nbsphinx-link>=1.4",
   "pypandoc-binary>=1.15",
