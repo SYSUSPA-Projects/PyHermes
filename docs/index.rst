@@ -12,6 +12,13 @@ anisotropic 2PCFs, standard and multipole 3PCFs, marked and weighted
 statistics, and derived physical fields such as velocity divergence,
 Newtonian potential, and acceleration.
 
+**Project links:** `GitHub repository
+<https://github.com/SYSUSPA-Projects/PyHermes>`_ |
+`Issue tracker <https://github.com/SYSUSPA-Projects/PyHermes/issues>`_ |
+`PyPI package <https://pypi.org/project/pyhermes-cosmo/>`_ |
+`Tutorial notebooks
+<https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks>`_
+
 .. figure:: _static/paper/PyHermes-Workflow.png
    :width: 96%
    :align: center
