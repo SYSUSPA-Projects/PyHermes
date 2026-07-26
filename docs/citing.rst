@@ -17,7 +17,7 @@ can be used:
      author  = {Long-Long Feng and Tengpeng Xu and Tian-Cheng Luan and collaborators},
      title   = {PyHermes: High-performance multiresolution cosmic statistics in Python},
      year    = {2026},
-     version = {1.1.0rc4},
+     version = {1.1.0},
      url     = {https://github.com/SYSUSPA-Projects/PyHermes}
    }
 
