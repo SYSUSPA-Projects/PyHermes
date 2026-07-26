@@ -4,16 +4,24 @@
 
 # PyHermes
 
-**PyHermes** is the Python implementation of **Hermes** (HypER-speed
-MultirEsolution cosmic Statistics), an in situ framework for measuring cosmic
-statistics with reusable multiresolution fields and window operators.
+[![CI](https://github.com/SYSUSPA-Projects/PyHermes/actions/workflows/ci.yml/badge.svg)](https://github.com/SYSUSPA-Projects/PyHermes/actions/workflows/ci.yml)
+[![Documentation](https://img.shields.io/badge/docs-pyhermes.astroslacker.com-0b7285)](https://pyhermes.astroslacker.com)
+[![PyPI](https://img.shields.io/pypi/v/pyhermes-cosmo)](https://pypi.org/project/pyhermes-cosmo/)
+[![Python](https://img.shields.io/pypi/pyversions/pyhermes-cosmo)](https://pypi.org/project/pyhermes-cosmo/)
+[![License](https://img.shields.io/github/license/SYSUSPA-Projects/PyHermes)](LICENSE)
 
-A catalogue is projected once into an `SFCField`. Smoothing, geometric binning,
-multipole decomposition, differentiation, and inverse-Laplacian operations are
-then expressed through `WindowFunc` objects. The same field can therefore feed
-counting, 2PCF, conventional 3PCF, 3PCF multipoles, marked statistics, and
-derived physical-field calculations without returning to particle-level tuple
-counting for every configuration.
+**PyHermes** is the high-performance Python implementation of **Hermes**
+(HypER-speed MultirEsolution cosmic Statistics), an in situ framework that
+turns particle catalogues into reusable multiresolution fields for cosmic
+statistics and physical-field analysis.
+
+A catalogue is projected once into a scaling-function-coefficient field
+(`SFCField`). Smoothing, geometric binning, multipole decomposition,
+differentiation, and inverse-Laplacian operations are then expressed through
+`WindowFunc` objects. The same field can therefore feed Counting, isotropic
+and anisotropic 2PCFs, standard and multipole 3PCFs, marked statistics, and
+derived physical fields without returning to particle-level tuple counting
+for every configuration.
 
 - **Documentation:** [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
 - **Source:** [SYSUSPA-Projects/PyHermes](https://github.com/SYSUSPA-Projects/PyHermes)
