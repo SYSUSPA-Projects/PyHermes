@@ -169,13 +169,25 @@ sphinx-build -W -b html docs docs/_build/html
 
 ## Citing PyHermes
 
-If PyHermes contributes to a publication, please cite the software and, once
-available, the accompanying Hermes/PyHermes paper. Citation metadata is
-provided in [`CITATION.cff`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/CITATION.cff),
-with BibTeX examples in the
-[citation guide](https://pyhermes.astroslacker.com/citing.html).
+If PyHermes contributes to your work, please cite the software version and the
+four papers that describe its scientific foundation and implementation:
 
-The current citation author list is Long-Long Feng, Tengpeng Xu, Tian-Cheng
-Luan and collaborators. The manuscript entry remains clearly
-marked as a placeholder until its final title, journal, and identifier are
-available.
+1. **Hermes/PyHermes:** Long-long Feng, Tengpeng Xu, Tian-Cheng Luan et al.,
+   *Hermes -- Towards an Optimal High-Performance Algorithm for Cosmic
+   Statistics of Large Data Sets* (2026; submitted to arXiv, identifier
+   pending).
+2. **MRACS foundation:** [Feng (2007), *The Beylkin-Cramer Summation Rule and a
+   New Fast Algorithm of Cosmic Statistics for Large Data
+   Sets*](https://doi.org/10.1086/511024).
+3. **In-situ correlation functions:** [Yue et al. (2024), *Pair counting
+   without binning -- a new approach to correlation functions in clustering
+   statistics*](https://doi.org/10.1093/mnras/stae2513).
+4. **Isotropic 3PCF multipoles:** [Ju et al. (2026), *An optimal in situ
+   multipole algorithm for the isotropic three-point correlation
+   function*](https://doi.org/10.1093/mnras/staf2275).
+
+Machine-readable metadata is provided in
+[`CITATION.cff`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/CITATION.cff);
+complete BibTeX entries are available in the
+[citation guide](https://pyhermes.astroslacker.com/citing.html). The Hermes
+entry will be updated as soon as its permanent arXiv identifier is assigned.

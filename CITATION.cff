@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 message: >-
-  If you use PyHermes, please cite this software release and the accompanying
-  paper once its final citation is available.
+  If you use PyHermes, please cite this software release, the accompanying
+  Hermes paper, and the three method papers listed under references.
 title: PyHermes
 type: software
 authors:
@@ -17,3 +17,97 @@ date-released: 2026-07-26
 repository-code: https://github.com/SYSUSPA-Projects/PyHermes
 url: https://pyhermes.astroslacker.com
 license: MIT
+preferred-citation:
+  type: article
+  title: >-
+    Hermes - Towards an Optimal High-Performance Algorithm for Cosmic
+    Statistics of Large Data Sets
+  authors:
+    - given-names: Long-long
+      family-names: Feng
+    - given-names: Tengpeng
+      family-names: Xu
+    - given-names: Tian-Cheng
+      family-names: Luan
+    - given-names: Jiawei
+      family-names: Li
+    - given-names: Xin
+      family-names: Sun
+    - given-names: Wenjie
+      family-names: Ju
+    - given-names: Zhuoyang
+      family-names: Li
+    - given-names: Shiyu
+      family-names: Yue
+    - given-names: Weishan
+      family-names: Zhu
+    - given-names: Yan-Chuan
+      family-names: Cai
+  year: 2026
+  notes: Submitted to arXiv; identifier pending
+references:
+  - type: article
+    title: >-
+      The Beylkin-Cramer Summation Rule and a New Fast Algorithm of Cosmic
+      Statistics for Large Data Sets
+    authors:
+      - given-names: Long-Long
+        family-names: Feng
+    journal: The Astrophysical Journal
+    volume: "658"
+    issue: "1"
+    start: "25"
+    end: "35"
+    year: 2007
+    doi: 10.1086/511024
+  - type: article
+    title: >-
+      Pair counting without binning - a new approach to correlation functions
+      in clustering statistics
+    authors:
+      - given-names: Shiyu
+        family-names: Yue
+      - given-names: Longlong
+        family-names: Feng
+      - given-names: Wenjie
+        family-names: Ju
+      - given-names: Jun
+        family-names: Pan
+      - given-names: Zhiqi
+        family-names: Huang
+      - given-names: Feng
+        family-names: Fang
+      - given-names: Zhuoyang
+        family-names: Li
+      - given-names: Yan-Chuan
+        family-names: Cai
+      - given-names: Weishan
+        family-names: Zhu
+    journal: Monthly Notices of the Royal Astronomical Society
+    volume: "535"
+    issue: "4"
+    start: "3500"
+    end: "3516"
+    year: 2024
+    doi: 10.1093/mnras/stae2513
+  - type: article
+    title: >-
+      An optimal in situ multipole algorithm for the isotropic three-point
+      correlation function
+    authors:
+      - given-names: Wenjie
+        family-names: Ju
+      - given-names: Longlong
+        family-names: Feng
+      - given-names: Zhiqi
+        family-names: Huang
+      - given-names: Xin
+        family-names: Sun
+      - given-names: Weishan
+        family-names: Zhu
+    journal: Monthly Notices of the Royal Astronomical Society
+    volume: "546"
+    issue: "1"
+    start: staf2275
+    year: 2026
+    doi: 10.1093/mnras/staf2275
