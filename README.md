@@ -29,7 +29,7 @@ for every configuration.
 - **Runnable configurations:** [`examples/configs/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/configs) and
   [`examples/scripts/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/scripts)
 
-![Hermes field-window workflow](https://pyhermes.astroslacker.com/_static/paper/PyHermes-Workflow.png)
+![Hermes field-window workflow](docs/_static/paper/PyHermes-Workflow.png)
 
 ## What It Covers
 
