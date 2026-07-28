@@ -69,6 +69,7 @@ dev = [
 [project.urls]
 Homepage = "https://pyhermes.astroslacker.com"
 Documentation = "https://pyhermes.astroslacker.com"
+Paper = "https://arxiv.org/abs/2607.23494"
 Repository = "https://github.com/SYSUSPA-Projects/PyHermes"
 Issues = "https://github.com/SYSUSPA-Projects/PyHermes/issues"
 

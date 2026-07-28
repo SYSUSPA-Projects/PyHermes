@@ -16,6 +16,7 @@ Newtonian potential, and acceleration.
 <https://github.com/SYSUSPA-Projects/PyHermes>`_ |
 `Issue tracker <https://github.com/SYSUSPA-Projects/PyHermes/issues>`_ |
 `PyPI package <https://pypi.org/project/pyhermes-cosmo/>`_ |
+`Hermes paper <https://arxiv.org/abs/2607.23494>`_ |
 `Tutorial notebooks
 <https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks>`_
 

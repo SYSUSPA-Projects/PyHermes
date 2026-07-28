@@ -44,7 +44,8 @@ preferred-citation:
     - given-names: Yan-Chuan
       family-names: Cai
   year: 2026
-  notes: Submitted to arXiv; identifier pending
+  doi: 10.48550/arXiv.2607.23494
+  url: https://arxiv.org/abs/2607.23494
 references:
   - type: article
     title: >-

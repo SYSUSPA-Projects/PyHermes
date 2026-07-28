@@ -26,24 +26,24 @@ Please include the version of PyHermes used in the analysis:
 Required papers
 ---------------
 
-The Hermes/PyHermes manuscript has been submitted to arXiv. Its permanent
-identifier will be inserted in the following entry as soon as it is assigned:
-
-.. important::
-
-   The author list and title below follow the submitted manuscript. The arXiv
-   identifier and public URL are intentionally marked as pending.
+The accompanying `Hermes/PyHermes paper
+<https://arxiv.org/abs/2607.23494>`_ is available as
+``arXiv:2607.23494 [astro-ph.CO]``. The first entry below follows the BibTeX
+record supplied by arXiv.
 
 .. code-block:: bibtex
 
-   @article{Feng2026Hermes,
-     author  = {Long-long Feng and Tengpeng Xu and Tian-Cheng Luan and Jiawei Li
-                and Xin Sun and Wenjie Ju and Zhuoyang Li and Shiyu Yue
-                and Weishan Zhu and Yan-Chuan Cai},
-     title   = {Hermes -- Towards an Optimal High-Performance Algorithm for
-                Cosmic Statistics of Large Data Sets},
-     year    = {2026},
-     note    = {Submitted to arXiv; identifier pending}
+   @misc{feng2026hermesoptimalhighperformance,
+     title         = {Hermes - Towards an Optimal High-Performance Algorithm
+                      for Cosmic Statistics of Large Data Sets},
+     author        = {Long-long Feng and Tengpeng Xu and Tian-Cheng Luan
+                      and Jiawei Li and Xin Sun and Wenjie Ju and Zhuoyang Li
+                      and Shiyu Yue and Weishan Zhu and Yan-Chuan Cai},
+     year          = {2026},
+     eprint        = {2607.23494},
+     archivePrefix = {arXiv},
+     primaryClass  = {astro-ph.CO},
+     url           = {https://arxiv.org/abs/2607.23494}
    }
 
    @article{Feng2007,

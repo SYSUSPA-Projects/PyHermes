@@ -25,6 +25,7 @@ for every configuration.
 
 - **Documentation:** [pyhermes.astroslacker.com](https://pyhermes.astroslacker.com)
 - **Source:** [SYSUSPA-Projects/PyHermes](https://github.com/SYSUSPA-Projects/PyHermes)
+- **Paper:** [arXiv:2607.23494](https://arxiv.org/abs/2607.23494)
 - **Tutorials:** [`examples/notebooks/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks)
 - **Runnable configurations:** [`examples/configs/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/configs) and
   [`examples/scripts/`](https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/scripts)
@@ -172,10 +173,10 @@ sphinx-build -W -b html docs docs/_build/html
 If PyHermes contributes to your work, please cite the software version and the
 four papers that describe its scientific foundation and implementation:
 
-1. **Hermes/PyHermes:** Long-long Feng, Tengpeng Xu, Tian-Cheng Luan et al.,
-   *Hermes -- Towards an Optimal High-Performance Algorithm for Cosmic
-   Statistics of Large Data Sets* (2026; submitted to arXiv, identifier
-   pending).
+1. **Hermes/PyHermes:** [Long-long Feng, Tengpeng Xu, Tian-Cheng Luan et al.
+   (2026), *Hermes - Towards an Optimal High-Performance Algorithm for Cosmic
+   Statistics of Large Data Sets*, arXiv:2607.23494
+   [astro-ph.CO]](https://arxiv.org/abs/2607.23494).
 2. **MRACS foundation:** [Feng (2007), *The Beylkin-Cramer Summation Rule and a
    New Fast Algorithm of Cosmic Statistics for Large Data
    Sets*](https://doi.org/10.1086/511024).
@@ -189,5 +190,4 @@ four papers that describe its scientific foundation and implementation:
 Machine-readable metadata is provided in
 [`CITATION.cff`](https://github.com/SYSUSPA-Projects/PyHermes/blob/main/CITATION.cff);
 complete BibTeX entries are available in the
-[citation guide](https://pyhermes.astroslacker.com/citing.html). The Hermes
-entry will be updated as soon as its permanent arXiv identifier is assigned.
+[citation guide](https://pyhermes.astroslacker.com/citing.html).
