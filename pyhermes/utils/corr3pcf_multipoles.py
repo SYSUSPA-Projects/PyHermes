@@ -459,7 +459,8 @@ def _stream_convolution_fields(
                 conv_context["source_fft"] = None
             if conv_context.get("source_fft") is None:
                 conv_context["source_fft"] = fftn(field.epsilon, workers=threads)
-            product = conv_context["source_fft"] * window.as_array()
+            product = np.empty_like(conv_context["source_fft"])
+            np.multiply(conv_context["source_fft"], window.as_array(), out=product)
             cached = ifftn(product, workers=threads, overwrite_x=True)
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)

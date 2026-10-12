@@ -36,9 +36,10 @@ def _field(complex_source=False):
     return field
 
 
-@pytest.mark.parametrize("complex_source", [False, True])
-def test_fft_snapshot_matches_generic_convolution_across_modes(monkeypatch, complex_source):
-    field = _field(complex_source)
+@pytest.mark.parametrize("dtype", [np.float32, np.float64, np.complex64, np.complex128])
+def test_fft_snapshot_matches_generic_convolution_across_modes(monkeypatch, dtype):
+    field = _field(np.issubdtype(dtype, np.complexfloating))
+    field.epsilon = field.epsilon.astype(dtype)
     before = field.epsilon.copy()
     original_fft = multipoles.fftn
     calls = []
