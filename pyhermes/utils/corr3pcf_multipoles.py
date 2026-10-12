@@ -20,13 +20,29 @@ MULTIPOLE_FIELD_CACHE_SCHEMA_VERSION = 2
 
 
 def cal_gamma(phi_array, phi_support, phi_resolution):
-    """Compute scaling-function triple-overlap weights for GPU summation."""
-    gamma = np.zeros((phi_support, phi_support))
-    for l1 in range(phi_support):
-        for l2 in range(phi_support):
-            rolled_phi1 = np.roll(phi_array, l1 * phi_resolution)
-            rolled_phi2 = np.roll(phi_array, l2 * phi_resolution)
-            gamma[l1, l2] = np.sum(phi_array * rolled_phi1 * rolled_phi2) / phi_resolution
+    """Integrate all signed triple overlaps, with zero outside basis support.
+
+    Entry [ia, ib] uses a=ia-(s-1), b=ib-(s-1) and integrates
+    phi(t)*phi(t+a)*phi(t+b), matching coefficient indices l-a, l-b.
+    Periodic wrapping belongs to the grid coefficients, not this local basis.
+    """
+    phi = np.asarray(phi_array, dtype=np.float64)
+    if phi.ndim != 1 or phi.size != phi_support * phi_resolution:
+        raise ValueError("phi_array must contain support*resolution samples.")
+    offsets = range(1 - phi_support, phi_support)
+    shifted = []
+    for offset in offsets:
+        value = np.zeros_like(phi)
+        step = offset * phi_resolution
+        if step >= 0:
+            value[:phi.size-step] = phi[step:]
+        else:
+            value[-step:] = phi[:phi.size+step]
+        shifted.append(value)
+    gamma = np.empty((len(shifted), len(shifted)), dtype=np.float64)
+    for ia, left in enumerate(shifted):
+        for ib, right in enumerate(shifted):
+            gamma[ia, ib] = np.sum(phi * left * right) / phi_resolution
     return gamma
 
 
@@ -36,21 +52,21 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, phi_support)
     lx, ly, lz = cuda.grid(3)
     if lx < L and ly < L and lz < L:
         sum_over_l1 = 0.0 + 0.0j
-        for l1x in range(phi_support):
-            index_l1x = (lx - l1x) % L
-            for l1y in range(phi_support):
-                index_l1y = (ly - l1y) % L
-                for l1z in range(phi_support):
-                    index_l1z = (lz - l1z) % L
+        for l1x in range(2 * phi_support - 1):
+            index_l1x = (lx - l1x + phi_support - 1) % L
+            for l1y in range(2 * phi_support - 1):
+                index_l1y = (ly - l1y + phi_support - 1) % L
+                for l1z in range(2 * phi_support - 1):
+                    index_l1z = (lz - l1z + phi_support - 1) % L
                     sum_over_l2 = 0.0 + 0.0j
-                    for l2x in range(phi_support):
-                        index_l2x = (lx - l2x) % L
+                    for l2x in range(2 * phi_support - 1):
+                        index_l2x = (lx - l2x + phi_support - 1) % L
                         res_y = 0.0 + 0.0j
-                        for l2y in range(phi_support):
-                            index_l2y = (ly - l2y) % L
+                        for l2y in range(2 * phi_support - 1):
+                            index_l2y = (ly - l2y + phi_support - 1) % L
                             res_z = 0.0 + 0.0j
-                            for l2z in range(phi_support):
-                                index_l2z = (lz - l2z) % L
+                            for l2z in range(2 * phi_support - 1):
+                                index_l2z = (lz - l2z + phi_support - 1) % L
                                 res_z += Gamma[l1z, l2z] * data_R2[index_l2x, index_l2y, index_l2z]
                             res_y += Gamma[l1y, l2y] * res_z
                         sum_over_l2 += Gamma[l1x, l2x] * res_y
@@ -58,11 +74,77 @@ def compute_3d_result_gpu(data, data_R1, data_R2, Gamma, result, L, phi_support)
         result[lx, ly, lz] = data[lx, ly, lz] * sum_over_l1
 
 
+@cuda.jit
+def _gamma_filter_axis_gpu(source, gamma, row, target, axis, L, origin):
+    idx = cuda.grid(1)
+    if idx < L * L * L:
+        x = idx // (L * L)
+        y = (idx // L) % L
+        z = idx % L
+        value = 0.0 + 0.0j
+        for ib in range(gamma.shape[1]):
+            weight = gamma[row, ib]
+            if weight != 0.0:
+                offset = ib - origin
+                if axis == 0:
+                    value += weight * source[(x - offset) % L, y, z]
+                else:
+                    value += weight * source[x, (y - offset) % L, z]
+        target[x, y, z] = value
+
+
+@cuda.jit
+def _gamma_contract_z_gpu(center, first, filtered_xy, gamma, ax, ay,
+                          result, L, origin, overwrite):
+    idx = cuda.grid(1)
+    if idx < L * L * L:
+        x = idx // (L * L)
+        y = (idx // L) % L
+        z = idx % L
+        fx = (x - ax) % L
+        fy = (y - ay) % L
+        value = 0.0 + 0.0j
+        for ia in range(gamma.shape[0]):
+            fz = (z - ia + origin) % L
+            second = 0.0 + 0.0j
+            for ib in range(gamma.shape[1]):
+                second += gamma[ia, ib] * filtered_xy[x, y, (z - ib + origin) % L]
+            value += first[fx, fy, fz] * second
+        weighted = center[x, y, z] * value
+        if overwrite:
+            result[x, y, z] = weighted
+        else:
+            result[x, y, z] += weighted
+
+
+def _launch_separable_gpu(context, first, second):
+    """Complete signed stencil, reassociated exactly as the CPU path.
+
+    Independent output cells avoid atomics. The default CUDA stream orders
+    filtering and accumulation; two device work arrays are reused per m.
+    A flattened grid makes adjacent threads access contiguous z coefficients.
+    """
+    gamma = context["gamma_gpu"]
+    length = context["L"]
+    origin = context["phi_support"] - 1
+    blocks = context["separable_blocks_per_grid"]
+    threads = context["separable_threads_per_block"]
+    for ia in range(gamma.shape[0]):
+        _gamma_filter_axis_gpu[blocks, threads](second, gamma, ia,
+            context["work_x_gpu"], 0, length, origin)
+        for ja in range(gamma.shape[0]):
+            _gamma_filter_axis_gpu[blocks, threads](context["work_x_gpu"], gamma, ja,
+                context["work_xy_gpu"], 1, length, origin)
+            _gamma_contract_z_gpu[blocks, threads](context["data_gpu"], first,
+                context["work_xy_gpu"], gamma, ia-origin, ja-origin,
+                context["result_gpu"], length, origin, ia == 0 and ja == 0)
+
+
 REDUCE_THREADS = 256
 
 
 def normalize_gpu_threads_per_block(gpu_threads_per_block):
-    """Validate and normalize the 3D CUDA block shape for the product kernel."""
+    """Validate the legacy CUDA triple; its product sets the production 1D block size."""
     if gpu_threads_per_block is None:
         gpu_threads_per_block = (8, 8, 8)
     if isinstance(gpu_threads_per_block, str):
@@ -131,43 +213,72 @@ def reduce_complex_sum_kernel(data, partial_real, partial_imag, n):
         partial_imag[cuda.blockIdx.x] = shared_imag[0]
 
 
-@numba.njit(parallel=True)
-def compute_3d_summand_cpu(data, data_R1, data_R2, Gamma, L, phi_support):
-    """CPU-parallel version of the SFC triple-product summand."""
-    n_result = L * L * L
-    plane_size = L * L
+"""Exact separable evaluation of the signed Gamma contraction.
+
+For each first-arm x/y offset, filter the second arm along x then y;
+reuse those two arrays when contracting all z-offset pairs. This is an
+algebraic reassociation of the complete tensor stencil, without truncation.
+"""
+
+@numba.njit(parallel=True, cache=True)
+def _gamma_filter_axis_cpu(source, weights, target, axis, L, origin):
+    for idx in numba.prange(L * L * L):
+        x = idx // (L * L)
+        y = (idx // L) % L
+        z = idx % L
+        value = 0.0 + 0.0j
+        for ib in range(len(weights)):
+            weight = weights[ib]
+            if weight != 0.0:
+                offset = ib - origin
+                if axis == 0:
+                    value += weight * source[(x - offset) % L, y, z]
+                else:
+                    value += weight * source[x, (y - offset) % L, z]
+        target[x, y, z] = value
+
+
+@numba.njit(parallel=True, cache=True)
+def _gamma_contract_z_cpu(center, first, filtered_xy, gamma, ax, ay, L, origin):
     total_real = 0.0
     total_imag = 0.0
-    for idx in numba.prange(n_result):
-        lx = idx // plane_size
-        rem = idx - lx * plane_size
-        ly = rem // L
-        lz = rem - ly * L
-
-        sum_over_l1 = 0.0 + 0.0j
-        for l1x in range(phi_support):
-            index_l1x = (lx - l1x) % L
-            for l1y in range(phi_support):
-                index_l1y = (ly - l1y) % L
-                for l1z in range(phi_support):
-                    index_l1z = (lz - l1z) % L
-                    sum_over_l2 = 0.0 + 0.0j
-                    for l2x in range(phi_support):
-                        index_l2x = (lx - l2x) % L
-                        gamma_x = Gamma[l1x, l2x]
-                        for l2y in range(phi_support):
-                            index_l2y = (ly - l2y) % L
-                            gamma_xy = gamma_x * Gamma[l1y, l2y]
-                            for l2z in range(phi_support):
-                                index_l2z = (lz - l2z) % L
-                                weight = gamma_xy * Gamma[l1z, l2z]
-                                sum_over_l2 += weight * data_R2[index_l2x, index_l2y, index_l2z]
-                    sum_over_l1 += data_R1[index_l1x, index_l1y, index_l1z] * sum_over_l2
-
-        value = data[lx, ly, lz] * sum_over_l1
-        total_real += value.real
-        total_imag += value.imag
+    for idx in numba.prange(L * L * L):
+        x = idx // (L * L)
+        y = (idx // L) % L
+        z = idx % L
+        fx = (x - ax) % L
+        fy = (y - ay) % L
+        value = 0.0 + 0.0j
+        for ia in range(gamma.shape[0]):
+            fz = (z - ia + origin) % L
+            second = 0.0 + 0.0j
+            for ib in range(gamma.shape[1]):
+                weight = gamma[ia, ib]
+                second += weight * filtered_xy[x, y, (z - ib + origin) % L]
+            value += first[fx, fy, fz] * second
+        weighted = center[x, y, z] * value
+        total_real += weighted.real
+        total_imag += weighted.imag
     return total_real + 1j * total_imag
+
+
+def _compute_3d_separable_cpu(data, data_R1, data_R2, Gamma, L, phi_support, work_x, work_xy):
+    origin = phi_support - 1
+    total = 0.0 + 0.0j
+    for ia in range(Gamma.shape[0]):
+        _gamma_filter_axis_cpu(data_R2, Gamma[ia], work_x, 0, L, origin)
+        for ja in range(Gamma.shape[0]):
+            _gamma_filter_axis_cpu(work_x, Gamma[ja], work_xy, 1, L, origin)
+            total += _gamma_contract_z_cpu(data, data_R1, work_xy, Gamma,
+                                          ia-origin, ja-origin, L, origin)
+    return total
+
+
+def compute_3d_summand_cpu(data, data_R1, data_R2, Gamma, L, phi_support):
+    """Evaluate the complete stencil; pipeline contexts reuse the work arrays."""
+    work_x = np.empty(data_R2.shape, dtype=np.complex128)
+    work_xy = np.empty_like(work_x)
+    return _compute_3d_separable_cpu(data, data_R1, data_R2, Gamma, L, phi_support, work_x, work_xy)
 
 
 def combine_multipole_m_terms(m_values, l):
@@ -344,6 +455,11 @@ def _prepare_multipole_gpu_context(field1, gpu_device_id=0, gpu_threads_per_bloc
     partial_imag_gpu = cuda.device_array(reduce_blocks, dtype=np.float64)
     return {
         "backend": "gpu",
+        "gpu_algorithm": "exact_separable_signed",
+        "work_x_gpu": cuda.device_array(field1.epsilon.shape, dtype=np.complex128),
+        "work_xy_gpu": cuda.device_array(field1.epsilon.shape, dtype=np.complex128),
+        "separable_threads_per_block": int(np.prod(threads_per_block)),
+        "separable_blocks_per_grid": (n_result + int(np.prod(threads_per_block)) - 1) // int(np.prod(threads_per_block)),
         "gamma_gpu": gamma_gpu,
         "data_gpu": data_gpu,
         "result_gpu": result_gpu,
@@ -370,6 +486,8 @@ def _prepare_multipole_cpu_context(field1):
         "n_result": field1.epsilon.size,
         "L": field1.L,
         "phi_support": field1.phi_support,
+        "work_x": np.empty(data.shape, dtype=np.complex128),
+        "work_xy": np.empty(data.shape, dtype=np.complex128),
     }
 
 
@@ -395,13 +513,15 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context):
     backend = sum_context.get("backend", "gpu")
     if backend == "cpu":
         t_kernel_start = time.perf_counter()
-        raw_sum = compute_3d_summand_cpu(
+        raw_sum = _compute_3d_separable_cpu(
             sum_context["data"],
             np.ascontiguousarray(field_r1_m, dtype=np.complex128),
             np.ascontiguousarray(field_r2_m, dtype=np.complex128),
             sum_context["gamma"],
             sum_context["L"],
             sum_context["phi_support"],
+            sum_context["work_x"],
+            sum_context["work_xy"],
         )
         kernel_elapsed = time.perf_counter() - t_kernel_start
         value = (4.0 * np.pi) * raw_sum / sum_context["n_result"]
@@ -418,15 +538,7 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context):
     h2d_elapsed = time.perf_counter() - t_h2d_start
 
     t_kernel_start = time.perf_counter()
-    compute_3d_result_gpu[sum_context["blocks_per_grid"], sum_context["threads_per_block"]](
-        sum_context["data_gpu"],
-        data_r1_gpu,
-        data_r2_gpu,
-        sum_context["gamma_gpu"],
-        sum_context["result_gpu"],
-        sum_context["L"],
-        sum_context["phi_support"],
-    )
+    _launch_separable_gpu(sum_context, data_r1_gpu, data_r2_gpu)
     cuda.synchronize()
     kernel_elapsed = time.perf_counter() - t_kernel_start
 

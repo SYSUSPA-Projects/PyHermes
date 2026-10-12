@@ -59,6 +59,28 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 | MPI helpers | `utils/mpi_util.py` |
 | Task parameters and YAML loading | `param/parambase.py`, `base/default_params.json`, `theory/default_params.json` |
 
+## Multipole contraction and CUDA layout
+
+The three-point contraction uses the full signed triple-overlap table. Basis
+samples are zero outside their compact support; coefficient grids are periodic.
+CPU and GPU implementations reuse intermediate arrays in an exact separable
+reassociation of the same contraction. This does not remove finite-grid projection
+or window errors.
+
+For compatibility, `gpu_threads_per_block` remains a three-integer setting. The
+production separable CUDA kernels use its **product** as the size of a flattened
+one-dimensional block: the default `[8, 8, 8]` means 512 threads per block, not a
+three-dimensional production launch. The retained dense reference kernel uses
+the original three-dimensional shape. The product must not exceed 1024.
+
+The separable GPU context reuses two complex128 work grids in addition to the
+existing device arrays. Their combined size is `32 * (2**J)**3` bytes, or 512 MiB
+at J=8. Convolution and MPI field exchange still run on the CPU; selecting the
+GPU backend accelerates the final contraction and does not move the whole
+pipeline to the device. CPU/GPU numerical agreement and independent physical
+integrals are covered by `tests/test_corr3pcf_gamma.py`; CUDA tests require a real
+device or an explicitly enabled simulator.
+
 ## Directory Details
 
 ### `base/`
