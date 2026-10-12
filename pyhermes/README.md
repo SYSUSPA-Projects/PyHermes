@@ -81,6 +81,23 @@ pipeline to the device. CPU/GPU numerical agreement and independent physical
 integrals are covered by `tests/test_corr3pcf_gamma.py`; CUDA tests require a real
 device or an explicitly enabled simulator.
 
+### Experimental exact Gamma and convolution optimization
+
+The `codex/3pcf-gamma-experiments` branch precomputes periodic coefficient
+indices and evaluates CPU Gamma rows using every exactly nonzero signed
+coefficient. It applies no tolerance, rank truncation, or change to the
+three-field integral. CPU work arrays and stencil indices are reused within
+each summation context; the existing GPU contraction is unchanged.
+
+Multipole convolution contexts lazily retain a source FFT across modes.
+Each context belongs to one product invocation and one immutable coefficient
+array; do not mutate those coefficients in place until the context is discarded.
+Replacing the source array invalidates its spectrum. Disk-cached convolved
+fields do not require building a source FFT. A retained complex128 spectrum
+adds 256 MiB per source context at J=8 (two in serial mode, one per active
+convolution rank in pair-MPI mode). Numerical agreement and whole-pipeline
+runtime/memory measurements determine whether this tradeoff is useful.
+
 ### Experimental particle-centred multipoles
 
 `Corr_3PCF_Multipole` also accepts `summation_method="particle"` with

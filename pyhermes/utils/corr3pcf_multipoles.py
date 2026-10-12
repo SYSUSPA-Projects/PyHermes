@@ -11,6 +11,7 @@ from pathlib import Path
 import numba
 import numpy as np
 from numba import cuda
+from scipy.fft import fftn, ifftn
 
 from pyhermes.io.window import WindowFunc
 from pyhermes.utils.corr3pcf_particle import compute_particle_summand
@@ -228,57 +229,79 @@ reuse those two arrays when contracting all z-offset pairs. This is an
 algebraic reassociation of the complete tensor stencil, without truncation.
 """
 
-@numba.njit(parallel=True, cache=True)
-def _gamma_filter_axis_cpu(source, weights, target, axis, L, origin):
-    for idx in numba.prange(L * L * L):
-        x = idx // (L * L)
-        y = (idx // L) % L
-        z = idx % L
-        value = 0.0 + 0.0j
-        for ib in range(len(weights)):
-            weight = weights[ib]
-            if weight != 0.0:
-                offset = ib - origin
-                if axis == 0:
-                    value += weight * source[(x - offset) % L, y, z]
-                else:
-                    value += weight * source[x, (y - offset) % L, z]
-        target[x, y, z] = value
+def _prepare_gamma_stencil(gamma, L):
+    """Index periodic shifts once; retain every exactly nonzero signed weight."""
+    width = gamma.shape[0]
+    origin = (width - 1) // 2
+    shifts = np.ascontiguousarray(
+        (np.arange(L)[None, :] - np.arange(width)[:, None] + origin) % L,
+        dtype=np.intp,
+    )
+    columns = np.zeros(gamma.shape, dtype=np.intp)
+    weights = np.zeros_like(gamma)
+    counts = np.empty(width, dtype=np.intp)
+    for row in range(width):
+        nonzero = np.flatnonzero(gamma[row] != 0.0)
+        counts[row] = len(nonzero)
+        columns[row, :len(nonzero)] = nonzero
+        weights[row, :len(nonzero)] = gamma[row, nonzero]
+    return shifts, columns, weights, counts
 
 
 @numba.njit(parallel=True, cache=True)
-def _gamma_contract_z_cpu(center, first, filtered_xy, gamma, ax, ay, L, origin):
+def _gamma_filter_axis_cpu(source, weights, target, axis, shifts):
+    L = source.shape[0]
+    for row in numba.prange(L * L):
+        x = row // L
+        y = row % L
+        for z in range(L):
+            value = 0.0 + 0.0j
+            for ib in range(len(weights)):
+                weight = weights[ib]
+                if weight != 0.0:
+                    if axis == 0:
+                        value += weight * source[shifts[ib, x], y, z]
+                    else:
+                        value += weight * source[x, shifts[ib, y], z]
+            target[x, y, z] = value
+
+
+@numba.njit(parallel=True, cache=True)
+def _gamma_contract_z_cpu(center, first, filtered_xy, shifts, columns, weights, counts, ax, ay):
+    L = center.shape[0]
     total_real = 0.0
     total_imag = 0.0
-    for idx in numba.prange(L * L * L):
-        x = idx // (L * L)
-        y = (idx // L) % L
-        z = idx % L
-        fx = (x - ax) % L
-        fy = (y - ay) % L
-        value = 0.0 + 0.0j
-        for ia in range(gamma.shape[0]):
-            fz = (z - ia + origin) % L
-            second = 0.0 + 0.0j
-            for ib in range(gamma.shape[1]):
-                weight = gamma[ia, ib]
-                second += weight * filtered_xy[x, y, (z - ib + origin) % L]
-            value += first[fx, fy, fz] * second
-        weighted = center[x, y, z] * value
-        total_real += weighted.real
-        total_imag += weighted.imag
+    for row in numba.prange(L * L):
+        x = row // L
+        y = row % L
+        fx = shifts[ax, x]
+        fy = shifts[ay, y]
+        for z in range(L):
+            value = 0.0 + 0.0j
+            for ia in range(len(counts)):
+                second = 0.0 + 0.0j
+                for entry in range(counts[ia]):
+                    ib = columns[ia, entry]
+                    second += weights[ia, entry] * filtered_xy[x, y, shifts[ib, z]]
+                value += first[fx, fy, shifts[ia, z]] * second
+            weighted = center[x, y, z] * value
+            total_real += weighted.real
+            total_imag += weighted.imag
     return total_real + 1j * total_imag
 
 
-def _compute_3d_separable_cpu(data, data_R1, data_R2, Gamma, L, phi_support, work_x, work_xy):
-    origin = phi_support - 1
+def _compute_3d_separable_cpu(data, data_R1, data_R2, Gamma, L, phi_support, work_x, work_xy,
+                              stencil=None):
+    if stencil is None:
+        stencil = _prepare_gamma_stencil(Gamma, L)
+    shifts, columns, weights, counts = stencil
     total = 0.0 + 0.0j
     for ia in range(Gamma.shape[0]):
-        _gamma_filter_axis_cpu(data_R2, Gamma[ia], work_x, 0, L, origin)
+        _gamma_filter_axis_cpu(data_R2, Gamma[ia], work_x, 0, shifts)
         for ja in range(Gamma.shape[0]):
-            _gamma_filter_axis_cpu(work_x, Gamma[ja], work_xy, 1, L, origin)
-            total += _gamma_contract_z_cpu(data, data_R1, work_xy, Gamma,
-                                          ia-origin, ja-origin, L, origin)
+            _gamma_filter_axis_cpu(work_x, Gamma[ja], work_xy, 1, shifts)
+            total += _gamma_contract_z_cpu(data, data_R1, work_xy, shifts,
+                                          columns, weights, counts, ia, ja)
     return total
 
 
@@ -376,10 +399,14 @@ def _prepare_legendre_convolution_context(field):
 
     Legendre multipole windows currently use only the base Fourier band,
     equivalent to ``bandwidth=1`` in the real-window builder. Support for
-    higher-band Legendre window construction may be added later.
+    higher-band Legendre window construction may be added later. The source
+    FFT is prepared lazily and belongs to this product invocation only;
+    coefficients must not be mutated in place while a context is in use.
     """
     return {
         "phi_fourier_power": fourier_power_spectrum(field.phi_array, 0, 1, field.L, field.phi_resolution),
+        "source_array": field.epsilon,
+        "source_fft": None,
     }
 
 
@@ -424,7 +451,16 @@ def _stream_convolution_fields(
                 phi_array=field.phi_array,
                 phi_fourier_power=phi_fourier_power,
             )
-            cached = (field @ window).epsilon
+            # Each multipole changes the window, not the source coefficients.
+            # The product owns its storage so neither the FFT snapshot nor the
+            # window kernel is overwritten by the inverse transform.
+            if conv_context.get("source_array") is not field.epsilon:
+                conv_context["source_array"] = field.epsilon
+                conv_context["source_fft"] = None
+            if conv_context.get("source_fft") is None:
+                conv_context["source_fft"] = fftn(field.epsilon, workers=threads)
+            product = conv_context["source_fft"] * window.as_array()
+            cached = ifftn(product, workers=threads, overwrite_x=True)
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 temp_path = cache_path.with_name(
@@ -490,6 +526,7 @@ def _prepare_multipole_cpu_context(field1):
     return {
         "backend": "cpu",
         "gamma": gamma,
+        "gamma_stencil": _prepare_gamma_stencil(gamma, field1.L),
         "data": data,
         "n_result": field1.epsilon.size,
         "L": field1.L,
@@ -549,6 +586,7 @@ def compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context):
             sum_context["phi_support"],
             sum_context["work_x"],
             sum_context["work_xy"],
+            stencil=sum_context["gamma_stencil"],
         )
         kernel_elapsed = time.perf_counter() - t_kernel_start
         value = (4.0 * np.pi) * raw_sum / sum_context["n_result"]
