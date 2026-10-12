@@ -122,6 +122,7 @@
 		"fout_path": ""
 	},
 	"Corr_3PCF_Multipole": {
+		"summation_method": "gamma",
 		"sfc_field": "",
 		"sfc_field1": "",
 		"sfc_field2": "",

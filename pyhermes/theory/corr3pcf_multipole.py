@@ -15,6 +15,7 @@ from pyhermes.io import (
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import corr3pcf_multipoles as multipole_util
 from pyhermes.utils import func_util
+from pyhermes.utils.corr3pcf_particle import prepare_particle_catalog
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.radial_multipole_windows import validate_radial_multipole_profile
 from pyhermes.utils.radial_profiles import diagnose_radial_multipole_table
@@ -107,6 +108,11 @@ class Corr_3PCF_Multipole(TaskBase):
         self.summation_backend = multipole_util.normalize_summation_backend(
             self.task_params.get("summation_backend", "gpu")
         )
+        self.summation_method = multipole_util.normalize_summation_method(
+            self.task_params.get("summation_method", "gamma")
+        )
+        if self.summation_method == "particle" and self.summation_backend != "cpu":
+            raise ValueError("Particle summation currently requires summation_backend='cpu'.")
         self.execution_mode = str(self.task_params["execution_mode"]).strip().lower()
         if self.execution_mode not in {"serial", "pair_mpi", "sample_mpi"}:
             raise ValueError("Corr_3PCF_Multipole execution_mode must be 'serial', 'pair_mpi', or 'sample_mpi'.")
@@ -143,6 +149,8 @@ class Corr_3PCF_Multipole(TaskBase):
         self.radial_profile_diagnostics = []
         self._last_product_profile = None
         self._role_layout_logged = False
+        self._particle_sum_sources = {}
+        self._active_particle_sum_spec = None
         self.fout_path = self.task_params["fout_path"]
 
     def _fallback_random(self, value):
@@ -342,6 +350,7 @@ class Corr_3PCF_Multipole(TaskBase):
         self.task_params["weight_normalization"] = self.weight_normalization
         self.task_params["gpu_threads_per_block"] = list(self.gpu_threads_per_block)
         self.task_params["summation_backend"] = self.summation_backend
+        self.task_params["summation_method"] = self.summation_method
         self.task_params["zeta_condition_warning"] = self.zeta_condition_warning
         self.task_params["radial_profile_diagnostics"] = self.radial_profile_diagnostics_enabled
         self.task_params["radial_profile_diagnostic_tolerance"] = self.radial_profile_diagnostic_tolerance
@@ -446,6 +455,7 @@ class Corr_3PCF_Multipole(TaskBase):
             "gpu_device_id": self.gpu_device_id,
             "gpu_threads_per_block": list(self.gpu_threads_per_block),
             "summation_backend": self.summation_backend,
+            "summation_method": self.summation_method,
             "execution_mode": self.execution_mode,
             "sample_mpi": serialize_window_params(self.sample_mpi),
             "cache_multipole_fields": self.cache_multipole_fields,
@@ -806,6 +816,12 @@ class Corr_3PCF_Multipole(TaskBase):
             window2 if window2 is not None else self._fallback_window(self.window2),
             window3 if window3 is not None else self._fallback_window(self.window3),
         ]
+        if self.summation_method == "particle" and window_inputs[0] is not None:
+            raise ValueError(
+                "Particle multipoles currently require an unfiltered vertex 1. "
+                "Use window2/window3 for endpoint filters and omit window/window1."
+            )
+        self._particle_sum_sources = {}
 
         prepare_on_this_rank = self.rank == 0 or self.execution_mode == "sample_mpi"
         if prepare_on_this_rank:
@@ -885,6 +901,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 for i, base_sfc, source_desc, win in data_vertices:
                     base_sfc = self._field_in_task_normalization(base_sfc)
                     normalized_data_fields[i] = base_sfc
+                    if self.summation_method == "particle" and i == 1:
+                        self._particle_sum_sources["data"] = prepare_particle_catalog(base_sfc)
                     self.rho_vertices[i - 1] = self._field_mean_density(base_sfc)
                     window_obj, window_desc = self._resolve_window(i, base_sfc, win)
                     if window_obj is not None:
@@ -910,11 +928,15 @@ class Corr_3PCF_Multipole(TaskBase):
                             reference_field, vertex_rho, window_obj, i
                         )
                         setattr(self, f"random{i}", uniform_random)
+                        if self.summation_method == "particle" and i == 1:
+                            self._particle_sum_sources["random"] = float(uniform_random)
                         self.logger.info(
                             f"Random vertex {i} ready | source={source_desc} | window={uniform_desc} | rho={vertex_rho:.6g}"
                         )
                         continue
                     base_random = self._field_in_task_normalization(base_random)
+                    if self.summation_method == "particle" and i == 1:
+                        self._particle_sum_sources["random"] = prepare_particle_catalog(base_random)
                     window_obj, window_desc = self._resolve_window(i, base_random, win)
                     if window_obj is not None:
                         final_random = base_random @ window_obj
@@ -940,6 +962,38 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.corr3pcf_multipole_data.corr3pcf_multipole_info = snapshot
                 self.corr3pcf_multipole_data.task_params = snapshot
         self._fields_prepared = True
+
+    def _particle_sum_spec(self, product_name):
+        """Describe the unprojected centre measure, including random subtraction."""
+        if self.summation_method != "particle":
+            return None
+        sources = {
+            "ddd_l": [("data", 1.0)],
+            "delta_ddd_l": [("data", 1.0), ("random", -1.0)],
+            "rrr_l": [("random", 1.0)],
+        }[product_name]
+        components = []
+        uniform = 0.0
+        for name, factor in sources:
+            source = self._particle_sum_sources[name]
+            if isinstance(source, dict):
+                components.append((source, factor))
+            else:
+                uniform += factor * source
+        return {
+            "grid_size": int(self.reference_sfc.L),
+            "components": components, "uniform_density": uniform,
+        }
+
+    def _broadcast_particle_sum_spec(self, comm, spec, n_pairs):
+        """Only first-arm ranks need centre stencils for local CPU summation."""
+        rank = comm.Get_rank()
+        subcomm = comm.Split(0 if rank < n_pairs else MPI.UNDEFINED, rank)
+        if subcomm == MPI.COMM_NULL:
+            return None
+        local = subcomm.bcast(spec, root=0)
+        subcomm.Free()
+        return local
 
     def _store_product(self, product_name, l_arr, values):
         self._store_sampling_metadata()
@@ -1019,6 +1073,8 @@ class Corr_3PCF_Multipole(TaskBase):
             threads=self.threads,
             progress_callback=log_l_progress,
             m_progress_callback=log_m_progress if self.verbose_m_progress else None,
+            summation_method=self.summation_method,
+            particle_sum_spec=self._particle_sum_spec(product_name),
         )
         self._last_product_profile = {
             "conv": timing_info["conv_elapsed_sec"],
@@ -1088,6 +1144,8 @@ class Corr_3PCF_Multipole(TaskBase):
                 summation_backend=self.summation_backend,
                 gpu_device_id=self.gpu_device_id,
                 gpu_threads_per_block=self.gpu_threads_per_block,
+                summation_method=self.summation_method,
+                particle_sum_spec=self._active_particle_sum_spec,
             )
             if rank == 0 or (self.summation_backend == "cpu" and is_r1_rank)
             else None
@@ -1419,6 +1477,8 @@ class Corr_3PCF_Multipole(TaskBase):
             threads=self.threads,
             progress_callback=progress_callback,
             m_progress_callback=log_m_progress if self.verbose_m_progress else None,
+            summation_method=self.summation_method,
+            particle_sum_spec=self._particle_sum_spec(product_name),
         )
         return l_arr, multipole_l, timing_info
 
@@ -1524,6 +1584,10 @@ class Corr_3PCF_Multipole(TaskBase):
                 self.logger.error("execution_mode='pair_mpi' requires an even number of MPI ranks.")
                 func_util.safe_exit(1)
             n_pairs = size // 2
+            if self.summation_method == "particle":
+                self._active_particle_sum_spec = self._broadcast_particle_sum_spec(
+                    comm, self._particle_sum_spec(product_name) if rank == 0 else None, n_pairs
+                )
             field1_ranks = set(range(n_pairs)) if self.summation_backend == "cpu" else {0}
             if rank == 0:
                 self.logger.info(

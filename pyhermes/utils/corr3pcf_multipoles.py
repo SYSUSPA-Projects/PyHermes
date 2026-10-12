@@ -13,10 +13,18 @@ import numpy as np
 from numba import cuda
 
 from pyhermes.io.window import WindowFunc
+from pyhermes.utils.corr3pcf_particle import compute_particle_summand
 from pyhermes.utils.wavelet_grid import fourier_power_spectrum
 from pyhermes.utils.window_params import serialize_window_params
 
 MULTIPOLE_FIELD_CACHE_SCHEMA_VERSION = 2
+
+
+def normalize_summation_method(value):
+    method = str(value).strip().lower()
+    if method not in {"gamma", "particle"}:
+        raise ValueError("summation_method must be 'gamma' or 'particle'.")
+    return method
 
 
 def cal_gamma(phi_array, phi_support, phi_resolution):
@@ -496,9 +504,21 @@ def _prepare_multipole_sum_context(
     summation_backend="gpu",
     gpu_device_id=0,
     gpu_threads_per_block=(8, 8, 8),
+    summation_method="gamma",
+    particle_sum_spec=None,
 ):
     """Allocate reusable state for the selected multipole summation backend."""
     backend = normalize_summation_backend(summation_backend)
+    method = normalize_summation_method(summation_method)
+    if method == "particle":
+        if backend != "cpu":
+            raise ValueError("Particle summation currently requires summation_backend='cpu'.")
+        if particle_sum_spec is None or particle_sum_spec["grid_size"] != field1.L:
+            raise ValueError("Particle summation requires centre measures matching the coefficient grid.")
+        return {
+            "backend": "cpu", "method": "particle", "particle_sum_spec": particle_sum_spec,
+            "n_result": field1.L**3,
+        }
     if backend == "gpu":
         return _prepare_multipole_gpu_context(
             field1,
@@ -511,6 +531,13 @@ def _prepare_multipole_sum_context(
 def compute_multipole_m_summand(field_r1_m, field_r2_m, sum_context):
     """Compute one complex m summand and return timing diagnostics."""
     backend = sum_context.get("backend", "gpu")
+    if sum_context.get("method") == "particle":
+        start = time.perf_counter()
+        raw_sum = compute_particle_summand(field_r1_m, field_r2_m, sum_context["particle_sum_spec"])
+        return (4.0 * np.pi) * raw_sum / sum_context["n_result"], {
+            "h2d_elapsed_sec": 0.0, "kernel_elapsed_sec": time.perf_counter() - start,
+            "reduce_elapsed_sec": 0.0, "d2h_elapsed_sec": 0.0,
+        }
     if backend == "cpu":
         t_kernel_start = time.perf_counter()
         raw_sum = _compute_3d_separable_cpu(
@@ -581,6 +608,8 @@ def calc_DDD_multipole(
     threads=1,
     progress_callback=None,
     m_progress_callback=None,
+    summation_method="gamma",
+    particle_sum_spec=None,
 ):
     """Compute DDD Legendre multipoles over l_min..l_max for three fields."""
     if l_min < 0:
@@ -594,6 +623,8 @@ def calc_DDD_multipole(
         summation_backend=summation_backend,
         gpu_device_id=gpu_device_id,
         gpu_threads_per_block=gpu_threads_per_block,
+        summation_method=summation_method,
+        particle_sum_spec=particle_sum_spec,
     )
     conv_context_r1 = _prepare_legendre_convolution_context(deltaD2)
     conv_context_r2 = _prepare_legendre_convolution_context(deltaD3)

@@ -81,6 +81,39 @@ pipeline to the device. CPU/GPU numerical agreement and independent physical
 integrals are covered by `tests/test_corr3pcf_gamma.py`; CUDA tests require a real
 device or an explicitly enabled simulator.
 
+### Experimental particle-centred multipoles
+
+`Corr_3PCF_Multipole` also accepts `summation_method="particle"` with
+`summation_backend="cpu"`. The default method remains `"gamma"`. The particle
+method reconstructs each harmonic arm separately at catalogue positions,
+multiplies the two values, then sums with the centre's effective projection
+weights. It supports the existing serial, pair-MPI and sample-MPI layouts.
+Centre stencils are prepared once and reused across harmonic modes and radii;
+the particle context does not allocate Gamma contraction work grids.
+
+This first version requires an unfiltered centre: omit `window` and `window1`,
+and set endpoint smoothing with `window2`/`window3`. The central catalogue must
+be retrievable through `SFCField.get_particle_data()` (a saved particle dataset
+or a valid original input path). A derived centre field cannot replace that
+catalogue. CUDA particle summation and an adjoint centre-window convolution are
+not implemented. Invalid combinations raise errors rather than silently
+changing methods or ignoring a requested window.
+
+For `delta_ddd_l` and `zeta_l`, data-minus-random subtraction is retained. A
+uniform random centre contributes the orthonormal two-field integral; an
+explicit random catalogue uses its own particle stencils. Raw, catalogue,
+field and unit normalization follow the existing task rules, including marks.
+The result metadata records `summation_method`.
+
+Particle and Gamma methods share a continuum target, but need not agree at
+fixed J: particle readout evaluates `A_j(x_i) B_j(x_i)`, whereas the Gamma
+centre contraction corresponds to `P_j(A_j B_j)(x_i)`. Validate convergence and
+independent reference errors; do not treat disagreement at fixed J as an
+automatic regression. FFT/window costs remain, and no production speedup is
+claimed for this experimental option. Independent periodized-basis readout,
+complex phases, random subtraction, normalization and task integration are
+covered by `tests/test_corr3pcf_particle.py`.
+
 ## Directory Details
 
 ### `base/`
