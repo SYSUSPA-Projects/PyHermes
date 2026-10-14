@@ -461,7 +461,13 @@ def _stream_convolution_fields(
                 conv_context["source_fft"] = fftn(field.epsilon, workers=threads)
             product = np.empty_like(conv_context["source_fft"])
             np.multiply(conv_context["source_fft"], window.as_array(), out=product)
-            cached = ifftn(product, workers=threads, overwrite_x=True)
+            # PocketFFT may use a different single-precision algorithm in place.
+            # Match ordinary convolution for complex64; retain the established
+            # in-place complex128 production path and its memory footprint.
+            cached = ifftn(
+                product, workers=threads,
+                overwrite_x=product.dtype == np.dtype(np.complex128),
+            )
             if cache_path is not None:
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 temp_path = cache_path.with_name(

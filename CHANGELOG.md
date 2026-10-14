@@ -22,6 +22,9 @@
 - Reuse a source FFT within a multipole convolution context, preserving
   source precision. Replacing the coefficient array invalidates its spectrum;
   a context assumes its source array is immutable until discarded.
+- Use the ordinary inverse-FFT path for single-precision spectra so it matches
+  generic convolution across SciPy versions; double-precision production
+  retains its existing in-place path. Regression tolerances remain unchanged.
 - Retained spectra increase memory. Document existing three-repeat timings
   and their allocation and memory boundaries.
 
