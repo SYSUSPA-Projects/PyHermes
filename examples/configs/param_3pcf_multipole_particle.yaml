@@ -1,0 +1,29 @@
+# Requires the saved SFC field and its particle companion. No window/window1.
+Corr_3PCF_Multipole:
+   sfc_field: "./output/quijote8000_snap004_sfc.pkl"
+   random: "uniform"
+   weight_normalization: "catalog"
+   summation_method: "particle"
+   summation_backend: "cpu"
+   execution_mode: "serial"
+   threads: 4
+   l_min: 0
+   l_max: 7
+   window2:
+      type: "sphere"
+      len_args: {R: 5.0}
+   window3:
+      type: "sphere"
+      len_args: {R: 5.0}
+   binning_window12:
+      type: "shell"
+      mapping: {R: "r12"}
+   binning_window13:
+      type: "shell"
+      mapping: {R: "r13"}
+   sampling:
+      mode: "paired"
+      r12: [20.0]
+      r13: [40.0]
+   products: "zeta_l"
+   fout_path: "./output/quijote8000_snap004_particle_multipoles.pkl"

@@ -189,7 +189,11 @@ Connection to multipoles
    Direct angular estimates and the 3PCF multipole representation describe the
    same rotationally averaged signal. Residual differences arise from finite
    angular sampling, random rotations, centre sampling, and multipole
-   truncation.
+   truncation. These are the corrected Gamma multipoles; the two centre
+   labels describe direct-angular Monte Carlo estimates, not the new particle
+   multipole method. The right panel retains the original 20-angle trapezoid
+   projection, whose high-order quadrature bias is a diagnostic limitation,
+   not an independent absolute-accuracy estimate.
 
 Use this task when the angular curve itself is the desired product. Use
 ``Corr_3PCF_Multipole`` when many angular configurations, high angular order,

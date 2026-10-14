@@ -44,6 +44,42 @@ for every configuration.
 - weighted fields, velocity derivatives, Poisson potential, acceleration, and
   density-dependent marks.
 
+### Three-point multipoles in 1.2
+
+`Corr_3PCF_Multipole` offers two summation methods through the same task and
+result interface:
+
+| Calculation | `summation_method` | `summation_backend` |
+| --- | --- | --- |
+| Grid CPU | `gamma` | `cpu` |
+| Grid CPU + GPU | `gamma` | `gpu` |
+| Particle CPU (experimental) | `particle` | `cpu` |
+
+Defaults remain `gamma` and `gpu`; explicitly select `cpu` without CUDA.
+All paths construct harmonic arms using CPU FFTs. Particle summation reads
+those arms at catalogue positions, requires retrievable particle data, and
+supports an **unfiltered first vertex** only. Use `window2`/`window3` for
+endpoint smoothing and omit `window`/`window1`. Particle and Gamma summation
+have different finite-resolution discretizations.
+
+Start with the CPU-only synthetic example, which needs no download:
+
+```bash
+python examples/scripts/demo_3pcf_particle.py --output-dir ./examples/output/particle_demo
+```
+
+For a saved field and its particle companion, use
+[`param_3pcf_multipole_particle.yaml`](examples/configs/param_3pcf_multipole_particle.yaml)
+with the normal multipole driver. The
+[multipole guide](https://pyhermes.astroslacker.com/get_start/corr_3pcf_multipole/corr_3pcf_multipole.html)
+explains serial/MPI execution, weights, windows, and saved results.
+
+Version 1.2 fixes Gamma triple overlaps and reuses CPU workspaces and source
+FFTs. **Recompute affected Gamma multipole measurements made with 1.1;
+existing catalogue projections can be reused.** Source FFT reuse trades
+memory for computation; speedups depend on workload and CPU placement.
+See [CHANGELOG.md](CHANGELOG.md) for the correction and migration notes.
+
 ## Installation
 
 For notebooks, development, and other single-process work, install PyHermes

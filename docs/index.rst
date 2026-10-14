@@ -88,4 +88,5 @@ notebooks directly in this site, including their saved figures and outputs.
 
    param/param
    benchmark
+   release_notes
    citing

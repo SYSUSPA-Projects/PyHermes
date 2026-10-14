@@ -104,6 +104,7 @@ must be supplied. The execution defaults are:
    l_max: 4
    products: "zeta_l"
    execution_mode: "serial"
+   summation_method: "gamma"
    summation_backend: "gpu"
    gpu_device_id: 0
    gpu_threads_per_block: [8, 8, 8]
@@ -121,6 +122,11 @@ must be supplied. The execution defaults are:
 
 The default GPU backend requires a usable CUDA device. Set
 ``summation_backend: cpu`` explicitly on CPU-only systems.
+
+``summation_method: particle`` additionally requires the CPU backend, an
+unfiltered first vertex, and a retrievable particle catalogue. The methods
+are different finite-J discretizations. See the
+:doc:`multipole guide <../../get_start/corr_3pcf_multipole/corr_3pcf_multipole>`.
 
 Resolution and memory
 ---------------------

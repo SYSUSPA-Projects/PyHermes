@@ -8,10 +8,10 @@ This page separates two questions that are easy to mix together:
 * **Performance:** once the estimator is fixed, which part of the workflow sets
   the runtime and memory footprint?
 
-The validation figures, timing table, and CPU/GPU memory comparison are all
-generated from the current grouped jobs under ``tests/``.  They therefore form
-one internally consistent benchmark set rather than mixing results from
-different runs.
+The current three-point multipole performance section uses corrected
+three-repeat measurements bundled as numeric JSON. The two-point and
+direct-angular reference sections retain their earlier measurements. Older
+unrecomputed multipole and Kun figures below are explicitly historical.
 
 Reference Data
 --------------
@@ -81,6 +81,13 @@ difference settle rapidly as ``n_rot`` increases.
 3PCF Multipoles
 ~~~~~~~~~~~~~~~
 
+.. warning::
+
+   The next two convergence plots predate the 1.2 Gamma correction and are
+   retained as historical analysis examples, not validation of 1.2. Corrected
+   paper consistency and smoothing figures are in the multipole task guide.
+
+
 Multipole measurements have two separate convergence controls.  ``lmax``
 truncates the angular expansion, while ``J`` controls the MRA field resolution.
 The left panel below verifies that increasing ``lmax`` appends higher orders
@@ -102,6 +109,14 @@ path and the numerical thick- and Gaussian-shell paths.
 
 An Ensemble-Level Check
 ~~~~~~~~~~~~~~~~~~~~~~~
+
+.. warning::
+
+   These historical Kun figures predate the Gamma correction. Recompute
+   affected multipoles before interpreting amplitudes; they are not current
+   validation. The documentation does not distribute collaborator catalogues
+   or their new production labels.
+
 
 The Kun scan provides a larger application test: ``r12 = 20 h^-1 Mpc`` is held
 fixed while ``r13`` varies.  The 129 mocks used here span different cosmological
@@ -128,10 +143,9 @@ Performance Model
 -----------------
 
 The catalogue is projected once onto
-:math:`N_{\mathrm{MRA}}=2^{3J}` coefficients.  Subsequent measurements operate
-on fields and windows, so their leading cost depends on field resolution and
-the number of requested window evaluations, rather than directly on the
-original catalogue size.
+:math:`N_{\mathrm{MRA}}=2^{3J}` coefficients.  Gamma measurements operate on fields and windows, so their leading cost
+depends on resolution and window evaluations. Particle summation additionally
+scales with the number of centre particles and the readout stencil size.
 
 For ``N_w`` window applications on a matching FFT grid,
 
@@ -202,163 +216,88 @@ total).  GPU measurements used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
 CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the final
 contraction.
 
-The multipole table reports the same five configurations on both backends.
-``Convolution + MPI`` is the multipole-loop residual after subtracting the final
-contraction; the two contributions are kept together because their critical
-paths overlap.  ``Task total`` additionally includes input, setup, and output
-overhead.
+Corrected multipole measurements (1.2)
+--------------------------------------
 
-.. list-table:: Current 3PCF-multipole CPU/GPU benchmark
+These archived measurements use J=8, lmax=7, thin shells at (20,40),
+endpoint sphere R5, and an unfiltered first vertex. Each method/layout has
+three samples; no slow sample is removed. Values below are medians with
+minimum/maximum ranges. Kernel-level speedups are not substituted for total
+wall time.
+
+.. list-table:: PyHermes on 32 physical CPU cores
    :header-rows: 1
-   :widths: 5 8 8 9 11 13 12 12 10
 
-   * - ``J``
-     - ``lmax``
-     - :math:`N_m`
-     - Backend
-     - Parallel
-     - Convolution + MPI [s]
-     - Sum [s]
-     - Task total [s]
-     - MaxRSS [GiB]
-   * - 8
-     - 7
-     - 36
-     - CPU
-     - ``24 x 4``
-     - 23.5
-     - 34.4
-     - 62.8
-     - 19.2
-   * - 8
-     - 7
-     - 36
-     - GPU
-     - ``24 x 4``
-     - 21.9
-     - 8.3
-     - 35.3
-     - 17.4
-   * - 8
-     - 14
-     - 120
-     - CPU
-     - ``24 x 4``
-     - 86.0
-     - 113.0
-     - 204.0
-     - 19.1
-   * - 8
-     - 14
-     - 120
-     - GPU
-     - ``24 x 4``
-     - 80.3
-     - 26.7
-     - 112.2
-     - 18.0
-   * - 8
-     - 20
-     - 231
-     - CPU
-     - ``24 x 4``
-     - 180.6
-     - 238.7
-     - 424.3
-     - 19.4
-   * - 8
-     - 20
-     - 231
-     - GPU
-     - ``24 x 4``
-     - 178.5
-     - 51.1
-     - 234.6
-     - 17.8
-   * - 9
-     - 7
-     - 36
-     - CPU
-     - ``12 x 8``
-     - 152.0
-     - 274.7
-     - 445.2
-     - 66.9
-   * - 9
-     - 7
-     - 36
-     - GPU
-     - ``12 x 8``
-     - 156.5
-     - 62.1
-     - 234.3
-     - 61.5
-   * - 9
-     - 14
-     - 120
-     - CPU
-     - ``12 x 8``
-     - 613.0
-     - 903.6
-     - 1528.4
-     - 65.9
-   * - 9
-     - 14
-     - 120
-     - GPU
-     - ``12 x 8``
-     - 616.2
-     - 206.0
-     - 833.9
-     - 61.5
+   * - Layout
+     - Method
+     - Total [s] (min--max)
+     - Host RSS [GiB] (min--max)
+   * - ``4x8``
+     - grid CPU
+     - 137.151 (136.273--137.222)
+     - 6.144 (6.126--6.199)
+   * - ``4x8``
+     - grid CPU + GPU
+     - 82.204 (80.089--85.062)
+     - 5.143 (4.990--5.182)
+   * - ``4x8``
+     - particle CPU
+     - 73.955 (72.053--75.441)
+     - 5.226 (5.104--5.283)
+   * - ``8x4``
+     - grid CPU
+     - 138.250 (137.756--143.143)
+     - 10.955 (10.949--10.964)
+   * - ``8x4``
+     - grid CPU + GPU
+     - 82.438 (82.243--82.524)
+     - 8.708 (8.597--9.122)
+   * - ``8x4``
+     - particle CPU
+     - 76.719 (75.787--77.550)
+     - 9.262 (9.167--9.317)
 
-CPU and GPU Multipole Backends
-------------------------------
-
-The backend switch applies to the final multipole-field contraction.  FFT
-window convolutions and MPI communication remain CPU-side for both backends.
-Consequently, the GPU strongly accelerates the contraction stage, while the
-end-to-end gain is bounded by the unchanged field and communication stages.
-
-.. figure:: _static/results/docs_3pcf_multipole_cpu_gpu_runtime_memory.png
-   :alt: Current CPU and GPU three-point multipole runtime phases and host memory
+.. figure:: _static/results/threepcf_v1_2_runtime_memory.png
+   :alt: Three-repeat corrected grid and particle CPU runtime and process-tree RSS
    :width: 100%
 
-   Current grouped benchmark using ``24 x 4`` at ``J=8`` and ``12 x 8`` at
-   ``J=9``.  Left: multipole-loop wall time split into field/MPI work and the
-   backend-selected contraction.  Right: Slurm ``MaxRSS`` host memory; GPU
-   device memory is not included.
+   Bars: median; black dots: all three runs; whiskers: min/max.
+   The two layouts each use 32 physical cores. Host memory excludes GPU memory.
 
-The CPU and GPU products agree to relative :math:`L_2` differences of
-``9.5e-15--2.2e-14``.  Across the five configurations, GPU contraction is
-``4.1--4.7x`` faster and complete task time is ``1.8--1.9x`` faster.  The
-smaller end-to-end ratio is expected because only the contraction is offloaded.
-At fixed ``J``, host memory depends only weakly on ``lmax`` because multipole
-windows are generated and processed sequentially.  The GPU jobs use
-``5.6--9.1%`` less host memory in these measurements, but this comparison does
-not include device memory and is not a total CPU-plus-GPU footprint.  Increasing
-``J`` has the much larger memory effect: it multiplies the three-dimensional
-coefficient count by eight.  Using fewer MPI ranks at ``J=9`` limits the
-observed host-memory increase to approximately ``3.4--3.5x``.
+Total time is the sum of fresh preparation and measurement process wall times,
+including initialization and output, and excludes queue time. Host RSS is a
+0.5-second sampled process-tree sum; shared pages may be counted more than
+once. It is not the Slurm MaxRSS used for the older 2PCF/direct-3PCF table.
+GPU device samples reach 4.00--4.25 GiB and are reported separately.
+
+One RTX4090 is an additional resource. Some CPU methods ran within batches
+that retained a GPU allocation. Layouts and repeats received different CPU
+IDs, NUMA ratios, and run times; differences cannot all be attributed to the
+rank/thread split. Convolved-field caching was disabled; Numba disk compilation
+could be reused, and OS caches were not cleared. GPU initialization and
+compilation are included. These are hardware-specific observations, not a
+global optimum or an equal-cost/equal-accuracy comparison.
+
+CPU and GPU Gamma results pass allclose at rtol=1e-8, atol=1e-11. Independent
+periodized-basis integrals test the corrected overlap separately. Particle
+summation is a different finite-J discretization, so its coefficient agreement
+is not an absolute-accuracy measure.
+
+All 18 numeric samples and result/source hashes are available in
+:download:`the archived benchmark JSON <_static/results/threepcf_v1_2_benchmark.json>`.
+Replot it without scientific measurements using
+``python examples/scripts/plot_3pcf_benchmark.py --data PATH_TO_JSON --output figure.png``.
 
 Reproducing the Checks
 ----------------------
 
-The public ``examples/notebooks`` directory contains the user-facing workflows.
-For maintainers, the current grouped outputs are analysed by five deliberately
-small notebooks:
+Run the public CPU-only synthetic particle example to exercise projection,
+particle companions, the task interface, and saved output. The test suite adds
+independent Gamma/particle integrals and source-FFT reuse checks; the MPI CI
+worker compares serial, pair MPI, and sample MPI on a small synthetic field.
+CUDA checks require a real device or an explicitly labelled simulator.
 
-* ``tests/notebooks/docs_2pcf_results.ipynb``;
-* ``tests/notebooks/docs_3pcf_results.ipynb``;
-* ``tests/notebooks/docs_3pcf_multipole_results.ipynb``;
-* ``tests/notebooks/docs_kun_monopole_results.ipynb``;
-* ``tests/notebooks/paper_figures_performance.ipynb`` for the current timing
-  and Slurm-memory table used above.
-
-Once the grouped jobs have produced their outputs, these notebooks read the
-saved products rather than rerunning expensive estimators.  The corresponding
-scripts and grouped Slurm recipes live under ``tests/scripts`` and
-``tests/slurm``.  Raw logs and estimator products are treated as transient test
-artifacts and are intentionally not distributed with the repository.  Treat
-absolute times as hardware-specific; convergence patterns, stage-level scaling,
-and same-node CPU/GPU ratios are the more portable diagnostics.
+The benchmark JSON above is sufficient to replot the published timing/RSS
+figure without access to a private filesystem. Full raw production logs and
+large catalogue fields remain local. Do not sum overlapping profile phases
+or infer absolute accuracy from backend agreement.

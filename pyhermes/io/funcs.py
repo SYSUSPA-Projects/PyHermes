@@ -22,6 +22,7 @@ def check_fout(instance, fout_path, overwrite=False):
         'CountingData': 'pkl',
         'Corr2PCFData': 'pkl',
         'Corr3PCFData': 'pkl',
+        'Corr3PCFMultipoleData': 'pkl',
     }
     isFolder = False
     if fout_path.endswith('/') or fout_path.endswith('\\'):

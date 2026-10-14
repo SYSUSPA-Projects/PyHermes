@@ -13,6 +13,91 @@ The multipole sections of the
 resolutions and :math:`\ell_{\max}`, and visualise split triangle
 configurations.
 
+Summation method and backend
+-----------------------------
+
+The task accepts two methods through the same input and result interface:
+
+.. list-table:: Available combinations
+   :header-rows: 1
+
+   * - Calculation
+     - ``summation_method``
+     - ``summation_backend``
+   * - Grid CPU
+     - ``gamma``
+     - ``cpu``
+   * - Grid CPU + GPU
+     - ``gamma``
+     - ``gpu``
+   * - Particle CPU (experimental)
+     - ``particle``
+     - ``cpu``
+
+Defaults remain ``gamma`` and ``gpu`` for compatibility. Set both method and
+backend explicitly when choosing particle summation. CPU FFTs construct the
+harmonic arms in all combinations; only Gamma contraction can use CUDA.
+
+.. important::
+
+   Version 1.2 corrects the Gamma triple-overlap table. Recompute affected
+   Gamma measurements from 1.1; the original SFC catalogue projections can be
+   reused. CPU/GPU agreement in the old implementation did not establish that
+   the common overlap table was correct. See :doc:`../../release_notes`.
+
+Particle input and a runnable example
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Particle summation reconstructs each harmonic arm at the first vertex's
+catalogue positions and sums their product with its effective projection
+weights. It requires a ``catalog_field`` with a retrievable particle catalogue.
+During ``SFCProjection``, use ``save_particle_data: true`` and optionally
+``particle_data_path`` to retain the companion ``pos``, ``catalog_weight``,
+and ``field_value`` arrays. Keep that file accessible when moving the SFC
+field; its path is stored in the metadata. An accessible original reader input
+can also supply the catalogue. A derived field cannot replace the centre.
+
+The first vertex must be unfiltered: omit ``window`` and ``window1``.
+``window2`` and ``window3`` support endpoint smoothing as usual. A three-vertex
+smoothing request therefore requires the Gamma method. Particle CUDA is not
+implemented. Unsupported combinations raise an error.
+
+The CPU-only synthetic example needs no external data:
+
+.. code-block:: bash
+
+   python examples/scripts/demo_3pcf_particle.py --output-dir ./examples/output/particle_demo
+
+It projects 512 synthetic points at low resolution, saves the particle
+companion and SFC field, computes three multipoles, and writes both the native
+PKL and a numeric NPZ. It demonstrates the interface, not cosmological accuracy.
+
+For the public Quijote field prepared by the Quick Start, run:
+
+.. code-block:: bash
+
+   cd examples
+   python scripts/run_3pcf_multipole.py configs/param_3pcf_multipole_particle.yaml
+
+The configuration uses ``summation_method: particle``, ``summation_backend:
+cpu``, ``execution_mode: serial``, :math:`\ell=0,\ldots,7`, thin shells at
+:math:`(20,40)\,h^{-1}\mathrm{Mpc}`, and endpoint sphere smoothing at
+:math:`R=5\,h^{-1}\mathrm{Mpc}`. The driver also accepts explicit method,
+backend, execution-mode, and thread overrides. Existing files are not silently
+overwritten; ``--overwrite`` opts into replacement.
+
+Particle subtraction preserves the normal product rules. Uniform random
+centres use a two-field orthonormal integral, and explicit random catalogues
+use their own particle readout. Catalogue weights, marks, and normalization
+follow the saved field and task settings; do not normalize the returned
+``zeta_l`` again.
+
+At finite J, the methods differ: particle summation evaluates
+:math:`A_J(\mathbf{x}_i)B_J(\mathbf{x}_i)`, while the Gamma centre integral
+corresponds to :math:`P_J[A_JB_J](\mathbf{x}_i)`. They share a continuum target
+but need not agree coefficient by coefficient at fixed J. Check convergence
+and independent references rather than assuming either is exact.
+
 From shell windows to radial profiles
 -------------------------------------
 
@@ -204,10 +289,16 @@ input fields. At high :math:`\ell_{\max}` the GPU path is usually most useful;
 for a short monopole scan, sample-level CPU parallelism may be simpler and
 competitive.
 
-The current CPU/GPU timing, numerical-agreement, and host-memory comparison is
-kept in one place on :doc:`../../benchmark`.  The saved multipoles agree to
-relative :math:`L_2` differences below ``2.3e-14``; only the contraction
-backend changes.
+Corrected CPU/GPU agreement and the three-repeat runtime/host-memory
+comparison are documented on :doc:`../../benchmark`. The production CUDA
+contraction uses a flattened one-dimensional block: ``[8,8,8]`` sets its
+product to 512 threads, not a three-dimensional launch.
+
+Gamma CPU contexts reuse exactly nonzero signed overlap rows and work arrays.
+Convolution contexts retain a source FFT across modes, so a source coefficient
+array must remain immutable until its context is discarded. A complex128
+spectrum costs 256 MiB at J=8, or 2 GiB at J=9, per source context. This
+optimization applies to both Gamma and particle harmonic arms.
 
 Products and output
 -------------------
@@ -225,6 +316,22 @@ automatically. A fully uniform random field uses an analytic monopole-only
    print(data.sample_params)  # sampled names -> one-dimensional arrays
    print(data.l)              # [l_min, ..., l_max]
    print(data.zeta_l.shape)   # (n_samples, n_l)
+
+Saved ``zeta_l`` contains the coefficients of
+:math:`\zeta(\mu)=\sum_\ell\zeta_\ell P_\ell(\mu)`; do not multiply them by
+``2*ell+1`` when reconstructing the angular curve:
+
+.. code-block:: python
+
+   import numpy as np
+   from numpy.polynomial.legendre import legval
+
+   mu = np.linspace(-1.0, 1.0, 201)
+   zeta_mu = legval(mu, data.zeta_l[0])  # for l_min=0
+
+The J value belongs to the input projection; it is not a multipole task radius
+or resolution parameter. Metadata records the method, backend, input basis,
+windows, and sampling. ``zeta_l`` has shape ``(n_samples, n_l)``.
 
 ``zeta_condition`` records the conditioning of the random-multipole solve.
 Inspect unusually large values before interpreting a noisy high-order result.

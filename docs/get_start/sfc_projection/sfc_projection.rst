@@ -187,8 +187,9 @@ units for catalogue fields and grid units for derived fields.
 Particle data for particle-centred tasks
 ----------------------------------------
 
-``Corr_3PCF(center="particle")`` needs the primary particle positions and
-weights. ``save_particle_data: true`` writes a companion NPZ containing
+``Corr_3PCF(center="particle")`` and
+``Corr_3PCF_Multipole(summation_method="particle")`` need the primary particle
+positions and weights. ``save_particle_data: true`` writes a companion NPZ containing
 ``pos``, ``catalog_weight``, and ``field_value``. The SFC metadata stores its
 path so ``get_particle_data()`` can recover the catalogue later.
 

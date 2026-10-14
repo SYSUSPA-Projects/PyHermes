@@ -47,11 +47,14 @@ Multipole CPU and GPU work
 --------------------------
 
 The 3PCF multipole convolution is CPU/MPI work for both backends.
-``summation_backend`` changes the final filtered-field contraction only:
+For ``summation_method: gamma``, ``summation_backend`` changes only the final
+filtered-field contraction. ``summation_method: particle`` uses CPU particle
+readout and the same harmonic-arm convolution infrastructure:
 
 .. code-block:: yaml
 
    execution_mode: "pair_mpi"
+   summation_method: "gamma"  # or "particle" with CPU only
    summation_backend: "gpu"   # or "cpu"
    gpu_device_id: 0
    gpu_threads_per_block: [8, 8, 8]
@@ -60,6 +63,25 @@ For ``sample_mpi`` on a CPU node, use approximately one rank per concurrently
 active sample and assign several threads to each rank. On a single-GPU node,
 many simultaneous GPU ranks usually contend for the same device; ``pair_mpi``
 or a smaller number of sample ranks is often easier to tune.
+
+For a particle pair-MPI run from ``examples/``:
+
+.. code-block:: bash
+
+   mpirun -np 4 --map-by ppr:4:node:pe=8 --bind-to core \
+       python scripts/run_3pcf_multipole.py configs/param_3pcf_multipole_particle.yaml \
+       --execution-mode pair_mpi --threads 8
+
+For long radius scans, use ``--execution-mode sample_mpi``. Pair MPI requires
+an even number of ranks; sample MPI supports one rank per sample. Request the
+matching physical CPU budget from the scheduler before choosing placement.
+Particle stencils are retained per active summation rank. File-backed SFC
+broadcasts do not remove the need to keep companion particle files accessible.
+
+The Gamma CUDA kernels use a one-dimensional block whose thread count is the
+product of ``gpu_threads_per_block``. Convolution source FFTs are retained
+within a context; budget 256 MiB per complex128 spectrum at J=8 (2 GiB at J=9).
+CPU FFT caches and process replication can outweigh contraction memory savings.
 
 Memory planning
 ---------------
@@ -103,9 +125,10 @@ Slurm template
    export OMP_NUM_THREADS=${SLURM_CPUS_PER_TASK}
    export NUMBA_NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
-   srun --cpu-bind=cores python tests/scripts/run_3pcf_multipole.py \
-       --config tests/configs/param_3pcf_multipole_lmax7.yaml \
-       --summation-backend cpu
+   cd examples
+   srun --cpu-bind=cores python scripts/run_3pcf_multipole.py \
+       configs/param_3pcf_multipole_particle.yaml \
+       --execution-mode pair_mpi --threads "$SLURM_CPUS_PER_TASK"
 
 Scheduler syntax and MPI integration vary by site. If ``mpirun`` reports that a
 rank spans CPU packages, adjust the scheduler's task placement or mapper rather

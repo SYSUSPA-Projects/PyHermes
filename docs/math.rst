@@ -209,8 +209,12 @@ The angular dependence of the 3PCF can be expanded as
 .. math::
 
    \zeta(r_{12},r_{13},\mu)
-   = \sum_{\ell}(2\ell+1)\,
+   = \sum_{\ell}
    \zeta_\ell(r_{12},r_{13})P_\ell(\mu).
+
+This convention matches the saved ``zeta_l`` array. Its coefficients already
+include the angular projection factor :math:`(2\ell+1)/2`; do not apply an
+additional :math:`2\ell+1` when reconstructing a curve.
 
 For a thin shell, the Fourier-space multipole window has the form
 
@@ -229,6 +233,29 @@ The two radial supports are supplied by ``binning_window12`` and
 General radial profiles use :math:`U_\ell(k)Y_\ell^m` kernels, with numerical
 spherical-Hankel tabulation when no direct analytic higher-order response is
 available.
+
+Gamma and particle centre integrals
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The grid method integrates three reconstructed scaling-function expansions.
+For support s its local overlap table covers the complete displacement range
+:math:`a,b=1-s,\ldots,s-1`:
+
+.. math::
+
+   \Gamma_{ab}=\int \phi(t)\phi(t+a)\phi(t+b)\,dt.
+
+The tabulated basis is zero outside compact support; coefficient indices wrap
+periodically. Both signs of displacement and all nonzero signed weights are
+retained. Separable reassociation and stencil reuse do not truncate this
+integral, but finite-J projection and sampled basis errors still matter.
+
+Particle summation instead forms
+:math:`\sum_i w_i A_J(\mathbf{x}_i)B_J(\mathbf{x}_i)` using the centre's
+effective projection weights. These two discretizations share a continuum
+target but need not agree at fixed J. The current particle implementation
+requires an unfiltered first vertex. See the task guide for random subtraction
+and input requirements.
 
 Weighted and derived physical fields
 ------------------------------------

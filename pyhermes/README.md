@@ -81,10 +81,10 @@ pipeline to the device. CPU/GPU numerical agreement and independent physical
 integrals are covered by `tests/test_corr3pcf_gamma.py`; CUDA tests require a real
 device or an explicitly enabled simulator.
 
-### Experimental exact Gamma and convolution optimization
+### Exact Gamma and convolution optimization
 
-The `codex/3pcf-gamma-experiments` branch precomputes periodic coefficient
-indices and evaluates CPU Gamma rows using every exactly nonzero signed
+The CPU implementation precomputes periodic coefficient indices and evaluates
+Gamma rows using every exactly nonzero signed
 coefficient. It applies no tolerance, rank truncation, or change to the
 three-field integral. CPU work arrays and stencil indices are reused within
 each summation context; the existing GPU contraction is unchanged.
@@ -126,8 +126,9 @@ Particle and Gamma methods share a continuum target, but need not agree at
 fixed J: particle readout evaluates `A_j(x_i) B_j(x_i)`, whereas the Gamma
 centre contraction corresponds to `P_j(A_j B_j)(x_i)`. Validate convergence and
 independent reference errors; do not treat disagreement at fixed J as an
-automatic regression. FFT/window costs remain, and no production speedup is
-claimed for this experimental option. Independent periodized-basis readout,
+automatic regression. FFT/window costs remain; documented production timings
+are workload-specific. See the user multipole guide and the synthetic example
+`examples/scripts/demo_3pcf_particle.py` for runnable configurations. Independent periodized-basis readout,
 complex phases, random subtraction, normalization and task integration are
 covered by `tests/test_corr3pcf_particle.py`.
 

@@ -21,3 +21,10 @@ available in the `GitHub examples directory
    counting
    corr2pcf
    corr3pcf
+
+.. note::
+
+   Saved three-point multipole outputs in the older ``corr3pcf`` notebook
+   predate the 1.2 Gamma correction. Use the corrected task-guide figures and
+   :doc:`../benchmark` for current validation. Standard direct-angular 3PCF
+   outputs are not affected by the Gamma correction.

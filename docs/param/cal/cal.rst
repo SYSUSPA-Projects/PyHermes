@@ -122,3 +122,14 @@ binning profiles.
 
 Radial-profile parameters and custom-profile interfaces are documented in
 :doc:`../../get_start/corr_3pcf_multipole/corr_3pcf_multipole`.
+
+Multipole summation selection
+-----------------------------
+
+``summation_method`` selects the discretization; ``summation_backend`` selects
+its implementation. Use ``gamma/cpu`` for grid CPU, ``gamma/gpu`` for grid
+CPU+GPU, or ``particle/cpu`` for the experimental catalogue-centred option.
+The default remains ``gamma/gpu``. Particle summation rejects ``window`` or
+``window1`` and needs a retrievable centre catalogue. The usual products,
+sampling, endpoint windows, and result shape remain unchanged. See
+:doc:`../../get_start/corr_3pcf_multipole/corr_3pcf_multipole`.

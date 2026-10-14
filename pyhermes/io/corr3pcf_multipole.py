@@ -32,6 +32,7 @@ class Corr3PCFMultipoleData(HermesData):
     def format_corr3pcf_multipole_params(self):
         for key, value in self.corr3pcf_multipole_info.items():
             setattr(self, key, value)
+        self.task_params = dict(self.corr3pcf_multipole_info)
 
     def load_corr3pcf_multipole(self, f_in, single=True):
         self.load(f_in, read_3pcf_multipole=True, single=single)
@@ -65,7 +66,7 @@ class Corr3PCFMultipoleData(HermesData):
 
     def _save_corr3pcf_multipole(self, f_out):
         _dir = os.path.dirname(f_out)
-        if not os.path.exists(_dir):
+        if _dir and not os.path.exists(_dir):
             os.makedirs(_dir)
         if not self.corr3pcf_multipole_info:
             self.logger.error('The dictionary "corr3pcf_multipole_info" is empty.')

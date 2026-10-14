@@ -60,7 +60,8 @@ The current release provides:
 - ``Corr_3PCF_Multipole`` for 3PCF multipoles and radial scans;
 - catalogue weights, physical field values, and marked fields;
 - smoothing, binning, high-pass, differential, and inverse-Laplacian windows;
-- CPU and GPU backends for the final 3PCF-multipole contraction.
+- CPU and GPU backends for the final Gamma 3PCF-multipole contraction;
+- experimental CPU particle summation for an unfiltered catalogue centre.
 
 The examples in the paper use periodic simulation boxes. Explicit random
 fields can represent non-uniform reference catalogues, but a complete survey
