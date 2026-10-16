@@ -58,6 +58,10 @@
 		"threads": 1,
 		"products": "xi",
 		"memory_strategy": "speed",
+		"pair_reduction": "convolution",
+		"spectral_window": "materialized",
+		"spectral_fft": "per_rank",
+		"reuse_input_fields": false,
 		"binning_window_cache": false,
 		"binning_window_cache_dir": "",
 		"fout_path": ""
