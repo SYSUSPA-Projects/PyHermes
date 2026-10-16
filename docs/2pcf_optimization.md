@@ -57,3 +57,31 @@ pass, including asymmetric powers, alias bandwidths 1/2, all products with
 cross/nonuniform random fields, fallback, cache refresh, and more ranks than bins.
 
 Measured phase-2 results: [window optimization, 2026-10-16](2pcf_window_optimization_results_20261016.md).
+
+
+## Batched boundaries and shared spectral preparation (phase 3)
+
+Experimental `spectral_window="shell_edges_batch"` computes up to eight assigned
+ball radii in one grid traversal. It reuses reflected-power lookups and each
+original alias's coordinates and scaling product across radii. It retains the
+alias sum, DC/Nyquist multiplicities and ball normalization unchanged. Scratch
+space is O(L * batch_size); no 3D array per radius is made. Empty edge ranks do
+no traversal. Batches, metadata and scalar collectives remain in the main loop.
+
+Experimental `spectral_fft="shared"` computes each distinct real input FFT and
+pair power only on rank zero, then broadcasts real powers. The precondition is
+replicated input fields, already guaranteed by Corr_2PCF's field broadcasts.
+Local field identity keys are not transmitted. Shape/pair counts are checked
+collectively. This is not zero-copy shared memory: a real power array remains on
+each rank, and its broadcast cost must be included in setup/total timing.
+The default `spectral_fft="per_rank"` remains unchanged. Complex/unsupported
+window fallback and the memory strategy retain existing behavior.
+
+All power/basis/scalar caches remain scoped to one run. A shared FFT may move
+rank waiting from the main loop into setup: compare the complete call and the
+FFT-inclusive compute interval, not only the main loop. Both paths are independent
+opt-in candidates; adoption depends on controlled same-allocation measurements.
+
+Pre-production checks: 54 local tests and seven real-MPI tests per rank on four
+ranks, including asymmetric powers, alias bandwidths 1/2, 0/1/4/8 radii, bounded
+chunks, all products/cross/nonuniform fields, cache refresh and global FFT counts.

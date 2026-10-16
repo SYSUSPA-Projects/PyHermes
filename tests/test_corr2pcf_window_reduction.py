@@ -33,7 +33,7 @@ def test_transposed_fold_preserves_every_alias_and_boundary(bandwidth, zero_dc):
     np.testing.assert_allclose(actual, expected, rtol=2e-13, atol=2e-13)
 
 
-@pytest.mark.parametrize('mode', ['fused', 'shell_edges'])
+@pytest.mark.parametrize('mode', ['fused', 'shell_edges', 'shell_edges_batch'])
 @pytest.mark.parametrize('nonuniform', [False, True])
 def test_all_products_cross_fields_match_materialized(mode, nonuniform):
     a, b = field(), field(2)
@@ -48,7 +48,7 @@ def test_all_products_cross_fields_match_materialized(mode, nonuniform):
         np.testing.assert_allclose(getattr(outputs[0], name), getattr(outputs[1], name), rtol=1e-8, atol=1e-11)
     metrics = current.runtime_metrics['per_rank'][0]
     assert current._window_evaluator is None and current._window_basis_cache == {}
-    if mode == 'shell_edges':
+    if mode.startswith('shell_edges'):
         assert metrics['shell_edges_active']
         assert metrics['shell_edge_count'] == 4 * (5 if nonuniform else 2)
     else:
@@ -62,7 +62,7 @@ def explicit_edges(sample, template):
     return dict(template, len_args={'R_in': edges[index], 'R_out': edges[index+1]})
 
 
-@pytest.mark.parametrize('path', ['fused', 'shell_edges'])
+@pytest.mark.parametrize('path', ['fused', 'shell_edges', 'shell_edges_batch'])
 def test_explicit_shared_edges_match_legacy_and_count_unique_edges(path):
     a = field()
     options = dict(binning_window=dict(type='binned_shell', len_args=['R_in', 'R_out'],
@@ -73,7 +73,7 @@ def test_explicit_shared_edges_match_legacy_and_count_unique_edges(path):
         current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
         outputs.append(current.run(save_result=False).xi.copy())
     np.testing.assert_allclose(*outputs, rtol=1e-8, atol=1e-11)
-    if path == 'shell_edges':
+    if path.startswith('shell_edges'):
         metrics = current.runtime_metrics['per_rank'][0]
         assert metrics['shell_edge_count'] == 4
         assert metrics['shell_result_count'] == 3
@@ -135,3 +135,59 @@ def test_second_run_refreshes_scalar_cache():
     old=task()
     old.prepare_input_fields(sfc_field1=a, sfc_field2=a)
     np.testing.assert_allclose(values[-1], old.run(save_result=False).xi, rtol=1e-8, atol=1e-11)
+
+
+@pytest.mark.parametrize('bandwidth', [1,2])
+@pytest.mark.parametrize('count', [0,1,4,8])
+def test_batch_balls_match_independent_materialized_kernels(bandwidth,count):
+    from pyhermes.utils.corr2pcf_window_reduction import octant_ball_integrals_batch
+    rng=np.random.default_rng(913)
+    L=8
+    power=rng.normal(size=(L,L,L//2+1))
+    phi=rng.uniform(.1,2.,bandwidth*L+1)
+    radii=np.linspace(0.,13.,count)
+    actual=octant_ball_integrals_batch(power,bandwidth,phi,radii)
+    expected=[]
+    for radius in radii:
+        octant=calculate_real_window_octant_array_numba(L,bandwidth,phi,window_function_sphere_numba,radius)
+        kernel=fold_octant_window_to_rfft_kernel(octant)
+        expected.append(_half_spectrum_inner_product(power,kernel,L))
+    np.testing.assert_allclose(actual,expected,rtol=2e-12,atol=2e-12)
+
+
+@pytest.mark.parametrize('nonuniform',[False,True])
+def test_shared_fft_all_products_match_and_preserve_inputs(nonuniform):
+    a,b=field(),field(2)
+    random1,random2=(field(3),field(4)) if nonuniform else ('uniform','uniform')
+    products=['dd','dr','rd','delta_dd','rr','xi']
+    before=a.epsilon.copy(),b.epsilon.copy()
+    values=[]
+    for fft in ['per_rank','shared']:
+        current=task('spectral',True,spectral_window='shell_edges_batch',spectral_fft=fft,products=products)
+        current.prepare_input_fields(sfc_field1=a,sfc_field2=b,random1=random1,random2=random2)
+        result=current.run(save_result=False)
+        values.append({name:getattr(result,name).copy() for name in products})
+    for name in products:np.testing.assert_allclose(values[0][name],values[1][name],rtol=1e-8,atol=1e-11)
+    np.testing.assert_array_equal(a.epsilon,before[0]);np.testing.assert_array_equal(b.epsilon,before[1])
+    assert current.runtime_metrics['per_rank'][0]['shared_power_count']==(5 if nonuniform else 2)
+
+
+def test_batch_bounds_scratch_and_refreshes_caches():
+    a=field()
+    current=task('spectral',True,spectral_window='shell_edges_batch',spectral_fft='shared',
+                 sampling={'s':list(np.arange(2.,42.,4.))})
+    results=[]
+    for amount in [0.,.0001]:
+        a.epsilon += amount*np.cos(2*np.pi*np.indices(a.epsilon.shape)[0]/8)
+        current.prepare_input_fields(sfc_field1=a,sfc_field2=a,random1='uniform',random2='uniform')
+        results.append(current.run(save_result=False).xi.copy())
+        metrics=current.runtime_metrics['per_rank'][0]
+        assert metrics['shell_edge_count']==11
+        assert metrics['shell_edge_sweeps']==2 and metrics['shell_edge_max_batch']==8
+        assert current._window_evaluator is None and current._window_basis_cache=={}
+    assert not np.allclose(*results,rtol=1e-10,atol=1e-12)
+
+
+def test_invalid_fft_option_rejected():
+    with pytest.raises(ValueError,match='spectral_fft'):
+        task('spectral',True,spectral_fft='invalid')._sync_runtime_options()

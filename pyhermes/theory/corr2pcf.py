@@ -411,8 +411,12 @@ class Corr_2PCF(TaskBase):
         if self.pair_reduction not in ("convolution", "spectral"):
             raise ValueError("Corr_2PCF pair_reduction must be 'convolution' or 'spectral'.")
         self.spectral_window = str(self.spectral_window).strip().lower()
-        if self.spectral_window not in ('materialized', 'fused', 'shell_edges'):
-            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, or shell_edges.")
+        if self.spectral_window not in ('materialized', 'fused', 'shell_edges', 'shell_edges_batch'):
+            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, shell_edges, or shell_edges_batch.")
+        self.spectral_fft = str(self.spectral_fft).strip().lower()
+        if self.spectral_fft not in ('per_rank', 'shared'):
+            raise ValueError("Corr_2PCF spectral_fft must be per_rank or shared.")
+        self.task_params['spectral_fft'] = self.spectral_fft
         self.task_params['spectral_window'] = self.spectral_window
         self.task_params['pair_reduction'] = self.pair_reduction
         self.task_params['reuse_input_fields'] = self.reuse_input_fields
@@ -468,6 +472,7 @@ class Corr_2PCF(TaskBase):
         self.pair_reduction = self.task_params.get("pair_reduction", "convolution")
         self.reuse_input_fields = parse_bool(self.task_params.get("reuse_input_fields", False))
         self.spectral_window = self.task_params.get("spectral_window", "materialized")
+        self.spectral_fft = self.task_params.get("spectral_fft", "per_rank")
         self.fout_path = self.task_params['fout_path']
 
     def _resolve_sampling(self):
@@ -516,6 +521,7 @@ class Corr_2PCF(TaskBase):
         params['binning_window_cache'] = self.binning_window_cache
         params['binning_window_cache_dir'] = self.binning_window_cache_dir
         params['weight_normalization'] = self.weight_normalization
+        params['spectral_fft'] = self.spectral_fft
         params['spectral_window'] = self.spectral_window
         params['pair_reduction'] = self.pair_reduction
         params['reuse_input_fields'] = self.reuse_input_fields
@@ -1225,11 +1231,15 @@ class Corr_2PCF(TaskBase):
             compute_started = time.perf_counter()
             if self.pair_reduction == 'spectral':
                 self._spectral_reducer = SpectralPairReducer(threads=self.threads)
-                self._spectral_reducer.prepare(self._product_field_pairs(
-                    expanded_products, _local_sfc1, _local_sfc2, _local_random1,
-                    _local_random2, _local_delta1, _local_delta2))
+                pairs = self._product_field_pairs(expanded_products, _local_sfc1,
+                    _local_sfc2, _local_random1, _local_random2, _local_delta1, _local_delta2)
+                if self.spectral_fft == 'shared':
+                    self._spectral_reducer.prepare_shared(pairs,comm)
+                else:
+                    self._spectral_reducer.prepare(pairs)
                 if self.spectral_window != 'materialized':
-                    self._window_evaluator = ScalarWindowEvaluator(self._spectral_reducer)
+                    self._window_evaluator = ScalarWindowEvaluator(self._spectral_reducer,
+                        batch_edges=self.spectral_window == 'shell_edges_batch')
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -1254,7 +1264,7 @@ class Corr_2PCF(TaskBase):
                 result_shape = None
             # Scatter to all ranks
             task_sub_arr = comm.scatter(task_sub_arrs, root=0)
-            if self._window_evaluator is not None and self.spectral_window == 'shell_edges' and not self.binning_window_cache:
+            if self._window_evaluator is not None and self.spectral_window in ('shell_edges','shell_edges_batch') and not self.binning_window_cache:
                 # These collectives and all edge work remain INSIDE the main-loop timer.
                 all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
                 reference = self._reference_pair_field(_local_sfc1, _local_sfc2, _local_random1,
@@ -1394,7 +1404,7 @@ class Corr_2PCF(TaskBase):
                     main_loop_seconds=time_end-time_start,
                     compute_including_spectral_setup_seconds=time_end-compute_started,
                     pair_reduction=self.pair_reduction, reuse_input_fields=self.reuse_input_fields,
-                    spectral_window=self.spectral_window)
+                    spectral_window=self.spectral_window, spectral_fft=self.spectral_fft)
                 self.corr2pcf_data.corr2pcf_info['runtime_metrics'] = self.runtime_metrics
                 self._pending_input_seconds = 0.0
                 self.logger.info(f"2PCF compute including spectral setup: {time_end - compute_started:.4f} sec")

@@ -53,6 +53,66 @@ def octant_pair_integral(power, bandwidth, phi, function, zero_dc, *args):
     return np.sum(partials) / (cells * cells)
 
 
+
+@njit(parallel=True, cache=True)
+def octant_ball_integrals_batch(power, bandwidth, phi, radii):
+    """Accumulate several balls in one traversal; preserve each original alias.
+
+    Only per-alias coordinates/scaling products and the transposed-fold power
+    weight are reused across radii. There is no factorization across aliases.
+    Working memory is O(L * nradii), not a grid for every radius.
+    """
+    L = power.shape[0]
+    count = len(radii)
+    result = np.zeros(count, dtype=np.float64)
+    if count == 0:
+        return result
+    partials = np.zeros((L + 1, count), dtype=np.float64)
+    inv_L = 1.0 / L
+    for i in prange(L + 1):
+        x, reflected_x = i % L, (L-i) % L
+        accumulated = np.zeros(count, dtype=np.float64)
+        terms = np.empty(count, dtype=np.float64)
+        for j in range(L + 1):
+            y, reflected_y = j % L, (L-j) % L
+            for k in range(L + 1):
+                z = min(k, L-k)
+                weight = power[x, y, z]
+                if 0 < i < L:
+                    weight += power[reflected_x, y, z]
+                if 0 < j < L:
+                    weight += power[x, reflected_y, z]
+                    if 0 < i < L:
+                        weight += power[reflected_x, reflected_y, z]
+                if 0 < k < L:
+                    weight *= 2.0
+                for edge in range(count):
+                    terms[edge] = 0.0
+                for ii in range(bandwidth):
+                    for jj in range(bandwidth):
+                        for kk in range(bandwidth):
+                            a, b, c = ii*L+i, jj*L+j, kk*L+k
+                            ka, kb, kc = a*inv_L, b*inv_L, c*inv_L
+                            frequency = np.sqrt(ka**2 + kb**2 + kc**2)
+                            q_base = 2*np.pi*frequency
+                            alias_scaling = phi[a]*phi[b]*phi[c]
+                            for edge in range(count):
+                                q = q_base*radii[edge]
+                                window = 1.0 if q == 0.0 else 3*(np.sin(q)-q*np.cos(q))/q**3
+                                terms[edge] += alias_scaling*window
+                for edge in range(count):
+                    accumulated[edge] += weight*terms[edge]
+        for edge in range(count):
+            partials[i, edge] = accumulated[edge]
+    cells = float(L*L*L)
+    for edge in range(count):
+        total = 0.0
+        for i in range(L+1):
+            total += partials[i, edge]
+        result[edge] = total/(cells*cells)
+    return result
+
+
 def supports_octant(window):
     return (getattr(window, 'w_kernel', None) is None
             and not getattr(window, 'is_composite_window', False)
@@ -81,12 +141,14 @@ def shell_bounds(window):
 class ScalarWindowEvaluator:
     """Single-run cache of scalar ball integrals, never full window/results across runs."""
 
-    def __init__(self, reducer):
+    def __init__(self, reducer, batch_edges=False):
         self.reducer = reducer
+        self.batch_edges = batch_edges
         self.shell_values = {}
         self.metrics = dict(window_fused_seconds=0., window_fused_count=0,
                             shell_edge_compute_seconds=0., shell_edge_collective_seconds=0.,
                             shell_edge_count=0, shell_result_count=0,
+                            shell_edge_sweeps=0, shell_edge_max_batch=0,
                             shell_edges_active=False)
 
     def prepare_shell_edges(self, windows, comm):
@@ -110,12 +172,25 @@ class ScalarWindowEvaluator:
         self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-started
         local = []
         started = time.perf_counter()
-        for index in range(comm.Get_rank(), len(radii), comm.Get_size()):
-            radius = radii[index]
-            values = [float(octant_pair_integral(power, reference.bandwidth,
-                            reference.phi_fourier_power, window_function_sphere_numba, False, radius))
-                      for _, power in powers]
-            local.append((radius, values))
+        local_radii = np.asarray(radii[comm.Get_rank()::comm.Get_size()], dtype=np.float64)
+        if self.batch_edges:
+            # Bound scratch size for serial runs or unusually many edges.
+            for begin in range(0, len(local_radii), 8):
+                block = local_radii[begin:begin+8]
+                values = [octant_ball_integrals_batch(power, reference.bandwidth,
+                               reference.phi_fourier_power, block) for _, power in powers]
+                self.metrics['shell_edge_sweeps'] += len(powers)
+                self.metrics['shell_edge_max_batch'] = max(self.metrics['shell_edge_max_batch'],len(block))
+                for offset, radius in enumerate(block):
+                    local.append((float(radius), [float(value[offset]) for value in values]))
+        else:
+            for radius in local_radii:
+                values = [float(octant_pair_integral(power, reference.bandwidth,
+                                reference.phi_fourier_power, window_function_sphere_numba, False, radius))
+                          for _, power in powers]
+                local.append((float(radius), values))
+                self.metrics['shell_edge_sweeps'] += len(powers)
+                self.metrics['shell_edge_max_batch'] = 1
         self.metrics['shell_edge_compute_seconds'] = time.perf_counter()-started
         self.metrics['shell_edge_count'] = len(local)*len(powers)
         started = time.perf_counter()

@@ -81,6 +81,37 @@ class SpectralPairReducer:
         # The real pair powers are sufficient; do not retain complex FFT copies.
         spectra.clear()
 
+    def prepare_shared(self, pairs, comm):
+        """Compute once at root, then broadcast powers for replicated MPI fields.
+
+        Corr_2PCF has already broadcast all fields; callers must uphold this
+        replication precondition. Local identity keys are never transmitted.
+        """
+        keys, descriptors = [], []
+        for first, second in pairs:
+            if not self._real_field(first) or not self._real_field(second):
+                continue
+            if first.epsilon.shape != second.epsilon.shape:
+                continue
+            key = self._pair_key(first, second)
+            if key not in keys:
+                keys.append(key)
+                descriptors.append(first.epsilon.shape)
+                for field in (first, second):
+                    self.fields[id(field)] = field
+        all_descriptors = comm.allgather(descriptors)
+        if any(other != descriptors for other in all_descriptors):
+            raise ValueError('Shared spectral preparation requires matching replicated field pairs.')
+        if comm.Get_rank() == 0:
+            self.prepare(pairs)
+        started = time.perf_counter()
+        for key, shape in zip(keys, descriptors):
+            if comm.Get_rank() != 0:
+                self.powers[key] = np.empty((*shape[:2],shape[2]//2+1),dtype=np.float64)
+            comm.Bcast(self.powers[key],root=0)
+        self.metrics['shared_power_broadcast_seconds'] = time.perf_counter()-started
+        self.metrics['shared_power_count'] = len(keys)
+
     def reduce(self, first, second, kernel):
         key = self._pair_key(first, second)
         power = self.powers.get(key)
