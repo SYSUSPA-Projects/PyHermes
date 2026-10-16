@@ -55,3 +55,5 @@ convolution/folding helpers, and opt-in defaults remain unchanged.
 Before production: 39 local numerical checks and four real-MPI tests per rank
 pass, including asymmetric powers, alias bandwidths 1/2, all products with
 cross/nonuniform random fields, fallback, cache refresh, and more ranks than bins.
+
+Measured phase-2 results: [window optimization, 2026-10-16](2pcf_window_optimization_results_20261016.md).
