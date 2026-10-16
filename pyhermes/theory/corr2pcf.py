@@ -17,6 +17,7 @@ from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.corr2pcf_spectral import SpectralPairReducer
+from pyhermes.utils.corr2pcf_window_reduction import ScalarWindowEvaluator
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
     default_binning_window,
@@ -395,6 +396,8 @@ class Corr_2PCF(TaskBase):
         self._pending_input_seconds = 0.0
         self.runtime_metrics = {}
         self._spectral_reducer = None
+        self._window_evaluator = None
+        self._window_basis_cache = {}
 
     # Parameter formatting and validation.
     def _sync_runtime_options(self, log_runtime=True):
@@ -407,6 +410,10 @@ class Corr_2PCF(TaskBase):
         self.pair_reduction = str(self.pair_reduction).strip().lower()
         if self.pair_reduction not in ("convolution", "spectral"):
             raise ValueError("Corr_2PCF pair_reduction must be 'convolution' or 'spectral'.")
+        self.spectral_window = str(self.spectral_window).strip().lower()
+        if self.spectral_window not in ('materialized', 'fused', 'shell_edges'):
+            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, or shell_edges.")
+        self.task_params['spectral_window'] = self.spectral_window
         self.task_params['pair_reduction'] = self.pair_reduction
         self.task_params['reuse_input_fields'] = self.reuse_input_fields
         self.task_params['threads'] = self.threads
@@ -460,6 +467,7 @@ class Corr_2PCF(TaskBase):
         self.binning_window_cache_dir = self.task_params.get("binning_window_cache_dir", "")
         self.pair_reduction = self.task_params.get("pair_reduction", "convolution")
         self.reuse_input_fields = parse_bool(self.task_params.get("reuse_input_fields", False))
+        self.spectral_window = self.task_params.get("spectral_window", "materialized")
         self.fout_path = self.task_params['fout_path']
 
     def _resolve_sampling(self):
@@ -508,6 +516,7 @@ class Corr_2PCF(TaskBase):
         params['binning_window_cache'] = self.binning_window_cache
         params['binning_window_cache_dir'] = self.binning_window_cache_dir
         params['weight_normalization'] = self.weight_normalization
+        params['spectral_window'] = self.spectral_window
         params['pair_reduction'] = self.pair_reduction
         params['reuse_input_fields'] = self.reuse_input_fields
         params['fout_path'] = self.fout_path
@@ -662,7 +671,17 @@ class Corr_2PCF(TaskBase):
 
     def _build_binning_window_for_sample(self, sample, reference_field):
         binning_window_params = build_binning_window_params_for_sample(sample, self.binning_window)
-        binning_window_obj = WindowFunc(binning_window_params, reference_field.sfc_info, threads=self.threads)
+        started = time.perf_counter()
+        basis_key = tuple(reference_field.sfc_info[k] for k in SFCField._REQUIRED_ARGV)
+        reuse_basis = self.pair_reduction == 'spectral' and self.spectral_window != 'materialized'
+        basis = self._window_basis_cache.get(basis_key, {}) if reuse_basis else {}
+        binning_window_obj = WindowFunc(binning_window_params, reference_field.sfc_info,
+                                        threads=self.threads, **basis)
+        if reuse_basis and basis_key not in self._window_basis_cache:
+            self._window_basis_cache[basis_key] = dict(phi_array=binning_window_obj.phi_array,
+                                           phi_fourier_power=binning_window_obj.phi_fourier_power)
+        if hasattr(self, '_run_phase_times'):
+            self._run_phase_times['window_metadata_basis_seconds'] += time.perf_counter()-started
         if self.binning_window_cache:
             cache_path = self._binning_window_cache_path(binning_window_params, reference_field)
             if os.path.exists(cache_path):
@@ -723,10 +742,16 @@ class Corr_2PCF(TaskBase):
             if binning_window_obj is None:
                 started = time.perf_counter()
                 binning_window_obj = self._build_binning_window_for_sample(sample, reference_field)
-                binning_window_obj.as_array()
                 self._run_phase_times['window_seconds'] += time.perf_counter() - started
+            if self._window_evaluator is not None and not self.binning_window_cache:
+                value = self._window_evaluator.reduce(a, b, binning_window_obj)
+                if value is not None:
+                    return value
+            started = time.perf_counter()
+            kernel = binning_window_obj.as_array()
+            self._run_phase_times['window_seconds'] += time.perf_counter()-started
             if self._spectral_reducer is not None:
-                value = self._spectral_reducer.reduce(a, b, binning_window_obj.as_array())
+                value = self._spectral_reducer.reduce(a, b, kernel)
                 if value is not None:
                     return value
             started = time.perf_counter()
@@ -1178,8 +1203,10 @@ class Corr_2PCF(TaskBase):
                 self.prepare_input_fields(sync_runtime=False)
             expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
-            self._run_phase_times = dict(window_seconds=0.0, convolution_and_sum_seconds=0.0, convolution_count=0)
+            self._run_phase_times = dict(window_seconds=0.0, window_metadata_basis_seconds=0.0, convolution_and_sum_seconds=0.0, convolution_count=0)
             self._spectral_reducer = None
+            self._window_evaluator = None
+            self._window_basis_cache = {}
             started = time.perf_counter()
             _local_sfc1, _local_sfc2, _local_random1, _local_random2 = self._broadcast_prepared_fields([
                 (self.sfc_field1, needs_data), (self.sfc_field2, needs_data),
@@ -1201,6 +1228,8 @@ class Corr_2PCF(TaskBase):
                 self._spectral_reducer.prepare(self._product_field_pairs(
                     expanded_products, _local_sfc1, _local_sfc2, _local_random1,
                     _local_random2, _local_delta1, _local_delta2))
+                if self.spectral_window != 'materialized':
+                    self._window_evaluator = ScalarWindowEvaluator(self._spectral_reducer)
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -1225,6 +1254,17 @@ class Corr_2PCF(TaskBase):
                 result_shape = None
             # Scatter to all ranks
             task_sub_arr = comm.scatter(task_sub_arrs, root=0)
+            if self._window_evaluator is not None and self.spectral_window == 'shell_edges' and not self.binning_window_cache:
+                # These collectives and all edge work remain INSIDE the main-loop timer.
+                all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
+                reference = self._reference_pair_field(_local_sfc1, _local_sfc2, _local_random1,
+                                                       _local_random2, _local_delta1, _local_delta2)
+                windows = []
+                if reference is not None:
+                    for row in all_tasks:
+                        _, sample = task_to_sample(row, self.sampling_names)
+                        windows.append(self._build_binning_window_for_sample(sample, reference))
+                self._window_evaluator.prepare_shell_edges(windows, comm)
             # Local process status
             local_completed = 0
             local_report_interval = max(1, len(task_sub_arr) // 10)
@@ -1310,10 +1350,14 @@ class Corr_2PCF(TaskBase):
             local_metrics = dict(self._run_phase_times)
             if self._spectral_reducer is not None:
                 local_metrics.update(self._spectral_reducer.metrics)
+            if self._window_evaluator is not None:
+                local_metrics.update(self._window_evaluator.metrics)
             local_metrics['legacy_forward_fft_count'] = local_metrics['convolution_count']
             local_metrics['legacy_inverse_fft_count'] = local_metrics['convolution_count']
             gathered_metrics = comm.gather(local_metrics, root=0)
             self._spectral_reducer = None
+            self._window_evaluator = None
+            self._window_basis_cache = {}
             if rank == 0:
                 gathered_by_product = {
                     "dd": gathered_dd,
@@ -1349,7 +1393,8 @@ class Corr_2PCF(TaskBase):
                     pre_2pcf_setup_seconds=time_start-time_run_1,
                     main_loop_seconds=time_end-time_start,
                     compute_including_spectral_setup_seconds=time_end-compute_started,
-                    pair_reduction=self.pair_reduction, reuse_input_fields=self.reuse_input_fields)
+                    pair_reduction=self.pair_reduction, reuse_input_fields=self.reuse_input_fields,
+                    spectral_window=self.spectral_window)
                 self.corr2pcf_data.corr2pcf_info['runtime_metrics'] = self.runtime_metrics
                 self._pending_input_seconds = 0.0
                 self.logger.info(f"2PCF compute including spectral setup: {time_end - compute_started:.4f} sec")

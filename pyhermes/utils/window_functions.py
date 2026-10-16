@@ -43,6 +43,14 @@ def window_function_sphere_numba(ki, kj, kk, R):
 
 
 @njit
+def window_function_binned_shell_numba(ki, kj, kk, R_in, R_out):
+    """Volume-normalized shell with explicit shared radial-bin edges."""
+    inner, outer = R_in**3, R_out**3
+    return (outer * window_function_sphere_numba(ki, kj, kk, R_out)
+            - inner * window_function_sphere_numba(ki, kj, kk, R_in)) / (outer-inner)
+
+
+@njit
 def window_function_gauss_numba(ki, kj, kk, R):
     """
     Gaussian window in k-space.
@@ -440,6 +448,7 @@ def window_function_inverse_laplacian_numba(ki, kj, kk):
 
 WINDOW_TYPE_DICT = {
     "sphere": window_function_sphere_numba,
+    "binned_shell": window_function_binned_shell_numba,
     "gaussian": window_function_gauss_numba,
     "shell": window_function_shell_numba,
     "thick_shell": window_function_thick_shell_numba,

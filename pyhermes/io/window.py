@@ -129,6 +129,10 @@ class WindowFunc(SFCField):
         return copy.deepcopy(other_args)
 
     def _validate_builtin_arguments(self):
+        if not self.has_custom_func and self.type == "binned_shell":
+            inner, outer = (float(self.rescale_len_args[k]) for k in ("R_in", "R_out"))
+            if not (np.isfinite(inner) and np.isfinite(outer) and 0 <= inner < outer):
+                raise ValueError("binned_shell requires finite 0 <= R_in < R_out.")
         if self.has_custom_func or self.type != "thick_shell":
             return
         try:

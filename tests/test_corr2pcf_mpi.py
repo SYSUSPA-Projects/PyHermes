@@ -32,11 +32,11 @@ def test_multi_rank_products_and_global_fft_counts(nonuniform):
     second = field(702) if nonuniform else first
     random1, random2 = (field(703), field(704)) if nonuniform else ('uniform', 'uniform')
     results = []
-    for method, reuse in [('convolution', False), ('convolution', True), ('spectral', False), ('spectral', True)]:
+    for method, reuse, window_mode in [('convolution', False, 'materialized'), ('convolution', True, 'materialized'), ('spectral', False, 'materialized'), ('spectral', True, 'materialized'), ('spectral', True, 'fused'), ('spectral', True, 'shell_edges')]:
         params = dict(threads=1, random='uniform', sampling={'s': [4., 8., 12.]},
                       binning_window=dict(type='thick_shell', len_args={'R': None, 'delta_R': 4.},
                                           mapping='s_to_R', kernel_mode='octant'),
-                      pair_reduction=method, reuse_input_fields=reuse,
+                      pair_reduction=method, reuse_input_fields=reuse, spectral_window=window_mode,
                       products=['dd', 'dr', 'rd', 'delta_dd', 'rr', 'xi'])
         current = Corr_2PCF({'Corr_2PCF': params})
         current.prepare_input_fields(sfc_field1=first, sfc_field2=second, random1=random1, random2=random2)
@@ -59,3 +59,32 @@ def test_multi_rank_products_and_global_fft_counts(nonuniform):
                 error = repr(exc)
         error = COMM.bcast(error, root=0)
         assert error is None, error
+
+
+@pytest.mark.parametrize('path', ['fused', 'shell_edges'])
+def test_window_reduction_more_ranks_than_bins(path):
+    from test_corr2pcf_window_reduction import explicit_edges
+    first, second = field(750), field(751)
+    saved = None
+    for mode in ['materialized', path]:
+        params = dict(threads=1, random='uniform', sampling={'s': [0.]},
+            binning_window=dict(type='binned_shell', len_args=['R_in', 'R_out'], mapping=explicit_edges, kernel_mode='octant'),
+            pair_reduction='spectral', spectral_window=mode, reuse_input_fields=True,
+            products=['dd', 'delta_dd', 'rr', 'xi'])
+        current=Corr_2PCF({'Corr_2PCF': params})
+        current.prepare_input_fields(sfc_field1=first, sfc_field2=second)
+        output=current.run(save_result=False)
+        error=None
+        if COMM.Get_rank()==0:
+            try:
+                if saved is None:
+                    saved=output.xi.copy()
+                else:
+                    np.testing.assert_allclose(saved, output.xi, rtol=1e-8, atol=1e-11)
+                    rows=current.runtime_metrics['per_rank']
+                    if path=='shell_edges':
+                        assert sum(row['shell_edge_count'] for row in rows)==4  # two edges x two powers
+                        assert sum(row['shell_result_count'] for row in rows)==2
+            except (AssertionError, ValueError) as exc:
+                error=repr(exc)
+        assert COMM.bcast(error, root=0) is None
