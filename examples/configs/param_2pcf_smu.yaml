@@ -1,4 +1,9 @@
+# Opt-in exact spectral strategies; numerical window/sampling definitions unchanged.
 Corr_2PCF:
+   pair_reduction: "spectral"
+   reuse_input_fields: true
+   spectral_window: "auto"
+   spectral_fft: "shared"
    sfc_field: "./output/quijote8000_snap004_rsd_sfc.pkl"
    random: "uniform"
    binning_window: "ring"
@@ -13,4 +18,4 @@ Corr_2PCF:
          n: 51
    threads: 8
    products: "xi"
-   fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
+   fout_path: "./output/quijote8000_snap004_rsd_2pcf_smu_optimized_20261017.pkl"
