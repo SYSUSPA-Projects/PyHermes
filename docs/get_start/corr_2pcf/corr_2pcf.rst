@@ -46,6 +46,45 @@ Run and load:
    print(corr.sampling_names)  # ('s',)
    print(corr.s, corr.xi)
 
+Optional spectral path for finite spherical shells
+--------------------------------------------------
+
+For built-in ``thick_shell`` or ``binned_shell`` windows, enable the validated
+spectral path explicitly. For example, these options can be added to the task
+configuration:
+
+.. code-block:: yaml
+
+   Corr_2PCF:
+      memory_strategy: speed
+      pair_reduction: spectral
+      reuse_input_fields: true
+      spectral_window: shell_edges_radial
+      spectral_fft: shared
+      binning_window:
+         type: thick_shell
+         len_args: {R: null, delta_R: 5.0}
+         mapping: s_to_R
+
+The task prepares the real input spectra once, groups the original weighted
+frequency terms by their exact integer squared norm, and evaluates shared ball
+boundaries for the finite shells. Every alias keeps its own scaling weight and
+folding multiplicity; there is no interpolation or frequency cutoff. Summation
+order changes can produce floating-point differences.
+
+``shared`` computes spectra on MPI rank zero and broadcasts real pair powers.
+The input fields are replicated by the task before this step. All caches last
+for one ``run()`` only, and caller-owned fields must not be mutated concurrently.
+The radial path has a conservative 256 MiB per-rank temporary-memory guard;
+larger requests use the batch-edge fallback. Custom callbacks and unsupported
+windows retain their existing calculation paths, and the ``memory`` strategy
+retains its original execution path.
+
+The defaults continue to use convolution and independent input preparation.
+The main-loop timer includes radial grouping, MPI reductions and all shell
+boundary work. Initial spectra and power broadcasts are in setup, so compare
+complete projection-to-result time when assessing application performance.
+
 Redshift-space anisotropy
 -------------------------
 

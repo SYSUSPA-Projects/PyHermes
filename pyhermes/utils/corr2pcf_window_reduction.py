@@ -10,8 +10,8 @@ import numpy as np
 from numba import get_num_threads, njit, prange
 
 from pyhermes.utils.convolution import _ordered_window_args
-from pyhermes.utils.window_functions import window_function_sphere_numba
 from pyhermes.utils.mpi_util import MPI
+from pyhermes.utils.window_functions import window_function_sphere_numba
 
 
 @njit(parallel=True, cache=True)
