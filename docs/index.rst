@@ -73,6 +73,7 @@ notebooks directly in this site, including their saved figures and outputs.
    get_start/physical_fields/physical_fields
    get_start/counting/counting
    get_start/corr_2pcf/corr_2pcf
+   get_start/corr_2pcf/optimization
    get_start/corr_3pcf/corr_3pcf
    get_start/corr_3pcf_multipole/corr_3pcf_multipole
 

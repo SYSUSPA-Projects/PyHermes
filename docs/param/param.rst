@@ -86,3 +86,11 @@ Where to begin
 The most reliable templates are the tracked files in ``examples/configs/``.
 Read them beside the matching notebook and task guide; use this section when a
 field needs a precise definition.
+
+Optional 2PCF performance settings
+----------------------------------
+
+The :doc:`spectral 2PCF guide </get_start/corr_2pcf/optimization>` lists
+``pair_reduction``, ``reuse_input_fields``, ``spectral_window`` and
+``spectral_fft`` with their defaults and fallback behavior. The defaults keep
+convolution; the finite-shell radial path requires explicit configuration.

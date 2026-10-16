@@ -73,6 +73,10 @@ Unit-integral smoothing and binning windows satisfy
      - Finite spherical bin
      - ``R``, ``delta_R``
      - Volume-weighted difference of two ``sphere`` responses
+   * - ``binned_shell``
+     - Finite spherical bin with explicit edges
+     - ``R_in``, ``R_out``
+     - Volume-weighted difference of two ``sphere`` responses
    * - ``gaussian_shell``
      - Smooth radial shell
      - ``R_shell``, ``R_smooth``
@@ -115,6 +119,20 @@ support is :math:`|z|\leq H`.
        D.sfc_info,
        threads=8,
    )
+
+``binned_shell`` specifies the same finite-volume average by explicit edges,
+requiring finite :math:`0\leq R_{\rm in}<R_{\rm out}`:
+
+.. math::
+
+   \widehat W_{\rm bin}(k)=
+   \frac{R_{\rm out}^3\widehat W_{\rm sphere}(k;R_{\rm out})
+         -R_{\rm in}^3\widehat W_{\rm sphere}(k;R_{\rm in})}
+        {R_{\rm out}^3-R_{\rm in}^3}.
+
+Both built-in finite-shell forms support the optional
+:doc:`spectral 2PCF path <get_start/corr_2pcf/optimization>`, which retains
+this window definition and every alias-specific scaling weight.
 
 .. figure:: _static/paper/corr2pcf_binning_window_shell_gaussian_shell_comparison.png
    :width: 72%

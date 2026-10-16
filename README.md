@@ -44,6 +44,35 @@ for every configuration.
 - weighted fields, velocity derivatives, Poisson potential, acceleration, and
   density-dependent marks.
 
+### Optional spectral 2PCF computation
+
+The current source tree includes an opt-in spectral path for finite spherical
+bins. Add these settings to an existing `Corr_2PCF` task using the built-in
+`thick_shell` or `binned_shell` window, keeping its bin edges and sampling:
+
+```python
+fast_options = dict(
+    memory_strategy="speed",
+    pair_reduction="spectral",
+    reuse_input_fields=True,
+    spectral_window="shell_edges_radial",
+    spectral_fft="shared",
+)
+```
+
+Parseval's identity evaluates the required field products directly in Fourier
+space, avoiding inverse FFTs and full convolution-result arrays. Prepared inputs,
+source spectra, and adjacent shell boundaries are reused within one run. Exact
+integer radial classes reduce repeated spherical-window evaluation while
+retaining every alias's scaling weight and folding multiplicity.
+
+The default remains the convolution path. Caches do not reuse production results
+between runs; custom or unsupported windows retain their existing fallbacks.
+See the [2PCF spectral guide](docs/get_start/corr_2pcf/optimization.rst) for
+parameters, equations, memory limits, and total-time versus main-loop timing,
+and the [controlled measurement report](docs/2pcf_radial_optimization_results_20261016.md)
+for numerical checks and workload-specific performance.
+
 ### Three-point multipoles in 1.2
 
 `Corr_3PCF_Multipole` offers two summation methods through the same task and

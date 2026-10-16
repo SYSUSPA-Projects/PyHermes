@@ -85,6 +85,9 @@ The main-loop timer includes radial grouping, MPI reductions and all shell
 boundary work. Initial spectra and power broadcasts are in setup, so compare
 complete projection-to-result time when assessing application performance.
 
+See :doc:`optimization` for the Parseval derivation, complete option table,
+shared-edge and radial algorithms, numerical checks and controlled timings.
+
 Redshift-space anisotropy
 -------------------------
 

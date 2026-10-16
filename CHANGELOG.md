@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Optional 2PCF spectral computation
+
+- Add Parseval-based real-power reduction, compatible input preparation reuse,
+  fused folded-window evaluation and shared finite-shell boundaries.
+- Add batched boundary evaluation, root-computed MPI spectra and exact integer
+  radial grouping. Preserve all alias-specific scaling weights and folding
+  multiplicities; no interpolation or frequency cutoff is introduced.
+- Keep existing convolution defaults and unsupported-window fallbacks. Document
+  configuration, memory guards, numerical validation and total/main-loop timing.
+- Add independent numerical checks and real 2PCF MPI checks to CI.
+
 ## 1.2.0
 
 ### Numerical correction

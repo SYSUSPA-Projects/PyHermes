@@ -1,4 +1,15 @@
-# Experimental 2PCF optimization
+# 2PCF spectral optimization
+
+The validated implementation is integrated into local main and remains opt-in.
+The [current user guide](get_start/corr_2pcf/optimization.rst) explains Parseval
+reduction, exact radial classes, options, fallbacks, and measured timing.
+For built-in finite spherical shells, the final tested configuration is
+`pair_reduction="spectral"`, `reuse_input_fields=True`,
+`spectral_window="shell_edges_radial"`, `spectral_fft="shared"`,
+with `memory_strategy="speed"`.
+
+The sections below retain the successive experimental stages and their
+measurement conditions; intermediate J-dependent recommendations are historical.
 
 The defaults retain the convolution implementation. To opt into the two independent experiments:
 
