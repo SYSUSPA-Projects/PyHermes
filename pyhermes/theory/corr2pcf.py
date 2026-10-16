@@ -411,8 +411,8 @@ class Corr_2PCF(TaskBase):
         if self.pair_reduction not in ("convolution", "spectral"):
             raise ValueError("Corr_2PCF pair_reduction must be 'convolution' or 'spectral'.")
         self.spectral_window = str(self.spectral_window).strip().lower()
-        if self.spectral_window not in ('materialized', 'fused', 'shell_edges', 'shell_edges_batch'):
-            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, shell_edges, or shell_edges_batch.")
+        if self.spectral_window not in ('materialized', 'fused', 'shell_edges', 'shell_edges_batch', 'shell_edges_radial'):
+            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, shell_edges, shell_edges_batch, or shell_edges_radial.")
         self.spectral_fft = str(self.spectral_fft).strip().lower()
         if self.spectral_fft not in ('per_rank', 'shared'):
             raise ValueError("Corr_2PCF spectral_fft must be per_rank or shared.")
@@ -1239,7 +1239,8 @@ class Corr_2PCF(TaskBase):
                     self._spectral_reducer.prepare(pairs)
                 if self.spectral_window != 'materialized':
                     self._window_evaluator = ScalarWindowEvaluator(self._spectral_reducer,
-                        batch_edges=self.spectral_window == 'shell_edges_batch')
+                        batch_edges=self.spectral_window == 'shell_edges_batch',
+                        radial_edges=self.spectral_window == 'shell_edges_radial')
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -1264,7 +1265,7 @@ class Corr_2PCF(TaskBase):
                 result_shape = None
             # Scatter to all ranks
             task_sub_arr = comm.scatter(task_sub_arrs, root=0)
-            if self._window_evaluator is not None and self.spectral_window in ('shell_edges','shell_edges_batch') and not self.binning_window_cache:
+            if self._window_evaluator is not None and self.spectral_window in ('shell_edges','shell_edges_batch','shell_edges_radial') and not self.binning_window_cache:
                 # These collectives and all edge work remain INSIDE the main-loop timer.
                 all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
                 reference = self._reference_pair_field(_local_sfc1, _local_sfc2, _local_random1,

@@ -32,7 +32,7 @@ def test_multi_rank_products_and_global_fft_counts(nonuniform):
     second = field(702) if nonuniform else first
     random1, random2 = (field(703), field(704)) if nonuniform else ('uniform', 'uniform')
     results = []
-    for method, reuse, window_mode, fft_mode in [('convolution', False, 'materialized', 'per_rank'), ('convolution', True, 'materialized', 'per_rank'), ('spectral', False, 'materialized', 'per_rank'), ('spectral', True, 'materialized', 'per_rank'), ('spectral', True, 'fused', 'per_rank'), ('spectral', True, 'shell_edges', 'per_rank'), ('spectral', True, 'shell_edges_batch', 'per_rank'), ('spectral', True, 'shell_edges_batch', 'shared')]:
+    for method, reuse, window_mode, fft_mode in [('convolution', False, 'materialized', 'per_rank'), ('convolution', True, 'materialized', 'per_rank'), ('spectral', False, 'materialized', 'per_rank'), ('spectral', True, 'materialized', 'per_rank'), ('spectral', True, 'fused', 'per_rank'), ('spectral', True, 'shell_edges', 'per_rank'), ('spectral', True, 'shell_edges_batch', 'per_rank'), ('spectral', True, 'shell_edges_batch', 'shared'), ('spectral', True, 'shell_edges_radial', 'per_rank'), ('spectral', True, 'shell_edges_radial', 'shared')]:
         params = dict(threads=1, random='uniform', sampling={'s': [4., 8., 12.]},
                       binning_window=dict(type='thick_shell', len_args={'R': None, 'delta_R': 4.},
                                           mapping='s_to_R', kernel_mode='octant'),
@@ -61,7 +61,7 @@ def test_multi_rank_products_and_global_fft_counts(nonuniform):
         assert error is None, error
 
 
-@pytest.mark.parametrize('path', ['fused', 'shell_edges', 'shell_edges_batch'])
+@pytest.mark.parametrize('path', ['fused', 'shell_edges', 'shell_edges_batch', 'shell_edges_radial'])
 def test_window_reduction_more_ranks_than_bins(path):
     from test_corr2pcf_window_reduction import explicit_edges
     first, second = field(750), field(751)

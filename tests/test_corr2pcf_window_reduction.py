@@ -33,7 +33,7 @@ def test_transposed_fold_preserves_every_alias_and_boundary(bandwidth, zero_dc):
     np.testing.assert_allclose(actual, expected, rtol=2e-13, atol=2e-13)
 
 
-@pytest.mark.parametrize('mode', ['fused', 'shell_edges', 'shell_edges_batch'])
+@pytest.mark.parametrize('mode', ['fused', 'shell_edges', 'shell_edges_batch', 'shell_edges_radial'])
 @pytest.mark.parametrize('nonuniform', [False, True])
 def test_all_products_cross_fields_match_materialized(mode, nonuniform):
     a, b = field(), field(2)
@@ -62,7 +62,7 @@ def explicit_edges(sample, template):
     return dict(template, len_args={'R_in': edges[index], 'R_out': edges[index+1]})
 
 
-@pytest.mark.parametrize('path', ['fused', 'shell_edges', 'shell_edges_batch'])
+@pytest.mark.parametrize('path', ['fused', 'shell_edges', 'shell_edges_batch', 'shell_edges_radial'])
 def test_explicit_shared_edges_match_legacy_and_count_unique_edges(path):
     a = field()
     options = dict(binning_window=dict(type='binned_shell', len_args=['R_in', 'R_out'],
@@ -91,11 +91,12 @@ def test_fused_builtin_windows_preserve_zero_mode(kind, extra):
     np.testing.assert_allclose(*outputs, rtol=1e-10, atol=1e-11)
 
 
-def test_custom_callable_is_not_assumed_to_be_a_shell():
+@pytest.mark.parametrize('path', ['shell_edges', 'shell_edges_radial'])
+def test_custom_callable_is_not_assumed_to_be_a_shell(path):
     a = field()
     window = dict(type='binned_shell', func=window_function_sphere_numba,
                   len_args={'R': 3.}, mapping='s_to_R', kernel_mode='octant')
-    current = task('spectral', True, spectral_window='shell_edges', binning_window=window)
+    current = task('spectral', True, spectral_window=path, binning_window=window)
     current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
     current.run(save_result=False)
     metric = current.runtime_metrics['per_rank'][0]
@@ -105,7 +106,7 @@ def test_custom_callable_is_not_assumed_to_be_a_shell():
 
 def test_directional_and_disk_cache_fall_back(tmp_path):
     a = field()
-    for path, cache in [('fused', False), ('shell_edges', True)]:
+    for path, cache in [('fused', False), ('shell_edges', True), ('shell_edges_radial', False), ('shell_edges_radial', True)]:
         window = dict(type='directional_derivative', len_args={'R': 0., 'H': 0.}, mapping='s_to_R', kernel_mode='complex_rfft')
         results=[]
         for mode in ['materialized', path]:
@@ -123,10 +124,11 @@ def test_invalid_shell_edges_rejected():
         WindowFunc(dict(type='binned_shell', len_args={'R_in': 4., 'R_out': 2.}), a.sfc_info)
 
 
-def test_second_run_refreshes_scalar_cache():
+@pytest.mark.parametrize('path', ['shell_edges', 'shell_edges_radial'])
+def test_second_run_refreshes_scalar_cache(path):
     a = field()
     values=[]
-    current=task('spectral', True, spectral_window='shell_edges')
+    current=task('spectral', True, spectral_window=path)
     for amount in [0., .0002]:
         a.epsilon += amount*np.cos(2*np.pi*np.indices(a.epsilon.shape)[0]/8)
         current.prepare_input_fields(sfc_field1=a, sfc_field2=a, random1='uniform', random2='uniform')
@@ -191,3 +193,50 @@ def test_batch_bounds_scratch_and_refreshes_caches():
 def test_invalid_fft_option_rejected():
     with pytest.raises(ValueError,match='spectral_fft'):
         task('spectral',True,spectral_fft='invalid')._sync_runtime_options()
+
+
+@pytest.mark.parametrize('bandwidth', [1, 2])
+@pytest.mark.parametrize('mode', ['random', 'dc', 'nyquist', 'mirror'])
+def test_radial_classes_preserve_aliases_and_planes(bandwidth, mode):
+    from pyhermes.utils.corr2pcf_window_reduction import octant_radial_power, radial_ball_integrals
+    L = 8
+    rng = np.random.default_rng(1189)
+    power = np.zeros((L, L, L//2+1))
+    if mode == 'random':
+        power[:] = rng.normal(size=power.shape)
+    elif mode == 'dc':
+        power[0, 0, 0] = 3.
+    elif mode == 'nyquist':
+        power[L//2, L//2, L//2] = -2.
+    else:
+        power[1, 2, 0], power[L-1, 2, L//2] = 7., -3.
+    phi = rng.uniform(.1, 2., bandwidth*L+1)
+    original = power.copy()
+    # Include ranks with no i plane; their contribution must be zero.
+    distributed = sum(octant_radial_power(power, bandwidth, phi, rank, 12) for rank in range(12))
+    whole = octant_radial_power(power, bandwidth, phi)
+    np.testing.assert_allclose(distributed, whole, rtol=2e-13, atol=2e-13)
+    norms = np.flatnonzero(distributed)
+    radii = np.array([0., .3, 2., 13.])
+    actual = radial_ball_integrals(norms, distributed[norms], L, radii)
+    expected = []
+    for radius in radii:
+        octant = calculate_real_window_octant_array_numba(L, bandwidth, phi, window_function_sphere_numba, radius)
+        expected.append(_half_spectrum_inner_product(power, fold_octant_window_to_rfft_kernel(octant), L))
+    np.testing.assert_allclose(actual, expected, rtol=2e-12, atol=2e-12)
+    np.testing.assert_array_equal(power, original)
+
+
+def test_radial_scratch_guard_falls_back_without_changing_result(monkeypatch):
+    import pyhermes.utils.corr2pcf_window_reduction as module
+    monkeypatch.setattr(module, 'RADIAL_SCRATCH_LIMIT_BYTES', 0)
+    a = field()
+    results = []
+    for path in ['materialized', 'shell_edges_radial']:
+        current = task('spectral', True, spectral_window=path)
+        current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
+        results.append(current.run(save_result=False).xi.copy())
+    np.testing.assert_allclose(*results, rtol=1e-8, atol=1e-11)
+    row = current.runtime_metrics['per_rank'][0]
+    assert row['shell_edges_active'] and not row['radial_edges_active']
+    assert 'scratch' in row['radial_edges_fallback']

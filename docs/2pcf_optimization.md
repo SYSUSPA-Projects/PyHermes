@@ -87,3 +87,36 @@ ranks, including asymmetric powers, alias bandwidths 1/2, 0/1/4/8 radii, bounded
 chunks, all products/cross/nonuniform fields, cache refresh and global FFT counts.
 
 Measured phase-3 results: [batch/shared spectral measurements](2pcf_batch_optimization_results_20261016.md). J9 benefits in both layouts; J7/J8 retain the phase-2 recommendation.
+
+
+### Exact integer radial classes (experimental)
+
+`spectral_window="shell_edges_radial"` is opt-in and applies only to the same
+built-in finite spherical shells as `shell_edges`. It groups original octant
+terms by the **integer** `a*a+b*b+c*c`, without floating-point tolerances,
+interpolation, radial binning or frequency cutoffs. For each pair power:
+
+```
+H[m] = sum_{a*a+b*b+c*c=m} transposed_fold_power * phi[a]*phi[b]*phi[c]
+C_ball(R) = sum_m H[m] * W_ball(sqrt(m)/L, R) / Ncells**2
+```
+
+Each original alias has its own scaling weight before grouping. This is a
+reordering of the original sum, not extraction of a common scaling factor from
+aliases; all mirror-plane/DC/Nyquist multiplicities remain. Summation order and
+radial norm evaluation differ in floating point, so equivalence is checked to
+stated tolerances rather than bit equality. Signed cross-power is supported.
+
+MPI ranks partition the original i planes and SUM their histograms, then
+partition the unique shell boundaries. Numba parallel work items own private
+histograms: O(threads * (bandwidth*L)**2) scratch, without a 3D window. A
+conservative 256 MiB per-rank scratch guard falls back collectively to batch
+edges. Histograms and scalar caches are rebuilt per run; no full-resolution
+result is retained across samples. Histogram construction, compaction, MPI
+histogram reduction, ball evaluation and edge gathering all stay **inside** the
+existing main-loop timer and total timer. Source FFT/power distribution remains
+in total setup as before. Custom callbacks, directional/complex kernels and
+disk-cached windows retain existing fallbacks. Defaults are unchanged.
+
+Performance requires controlled measurement including projection, setup,
+communication and RSS; no universal speedup is inferred from kernel-only probes.

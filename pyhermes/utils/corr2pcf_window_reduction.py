@@ -7,10 +7,11 @@ out of an alias sum and no full three-dimensional window is allocated.
 import time
 
 import numpy as np
-from numba import njit, prange
+from numba import get_num_threads, njit, prange
 
 from pyhermes.utils.convolution import _ordered_window_args
 from pyhermes.utils.window_functions import window_function_sphere_numba
+from pyhermes.utils.mpi_util import MPI
 
 
 @njit(parallel=True, cache=True)
@@ -113,6 +114,80 @@ def octant_ball_integrals_batch(power, bandwidth, phi, radii):
     return result
 
 
+
+# A conservative per-rank scratch bound, including thread-private bins, MPI
+# buffers, compact indices/weights and evaluation scratch. No persistent cache.
+RADIAL_SCRATCH_LIMIT_BYTES = 256 * 1024**2
+
+
+def radial_scratch_bytes(L, bandwidth, threads):
+    return (3 * (int(L) * int(bandwidth))**2 + 1) * 8 * (int(threads) + 6)
+
+
+@njit(parallel=True, cache=True)
+def _octant_radial_power(power, bandwidth, phi, rank, size, threads):
+    """Group the original weighted alias terms by exact integer squared norm.
+
+    Each term retains phi[a]*phi[b]*phi[c] BEFORE grouping. The MPI ranks
+    partition i planes and Numba threads own disjoint histogram rows. Neither
+    folding multiplicities nor any alias is removed. Signed cross-power works.
+    """
+    L = power.shape[0]
+    bins = 3 * (bandwidth * L)**2 + 1
+    rows = np.zeros((threads, bins), dtype=np.float64)
+    for thread in prange(threads):
+        for plane in range(thread, (L + size - rank) // size, threads):
+            i = rank + plane * size
+            x, reflected_x = i % L, (L-i) % L
+            for j in range(L + 1):
+                y, reflected_y = j % L, (L-j) % L
+                for k in range(L + 1):
+                    z = min(k, L-k)
+                    weight = power[x, y, z]
+                    if 0 < i < L:
+                        weight += power[reflected_x, y, z]
+                    if 0 < j < L:
+                        weight += power[x, reflected_y, z]
+                        if 0 < i < L:
+                            weight += power[reflected_x, reflected_y, z]
+                    if 0 < k < L:
+                        weight *= 2.0
+                    for ii in range(bandwidth):
+                        for jj in range(bandwidth):
+                            for kk in range(bandwidth):
+                                a, b, c = ii*L+i, jj*L+j, kk*L+k
+                                squared_norm = a*a + b*b + c*c
+                                rows[thread, squared_norm] += weight*phi[a]*phi[b]*phi[c]
+    result = np.zeros(bins, dtype=np.float64)
+    for squared_norm in prange(bins):
+        value = 0.0
+        for thread in range(rows.shape[0]):
+            value += rows[thread, squared_norm]
+        result[squared_norm] = value
+    return result
+
+
+def octant_radial_power(power, bandwidth, phi, rank=0, size=1):
+    # Explicit thread count keeps the compiled kernel disk-cacheable. Each
+    # parallel work item owns its histogram even if the runtime reschedules it.
+    return _octant_radial_power(power, bandwidth, phi, rank, size, get_num_threads())
+
+
+@njit(parallel=True, cache=True)
+def radial_ball_integrals(squared_norms, weights, L, radii):
+    """Exact radial classes, without interpolation, cutoffs or fastmath."""
+    result = np.zeros(len(radii), dtype=np.float64)
+    cells = float(L*L*L)
+    for edge in prange(len(radii)):
+        value = 0.0
+        for index in range(len(squared_norms)):
+            q = (2*np.pi/L)*np.sqrt(float(squared_norms[index]))*radii[edge]
+            window = 1.0 if q == 0.0 else 3*(np.sin(q)-q*np.cos(q))/q**3
+            value += weights[index]*window
+        result[edge] = value/(cells*cells)
+    return result
+
+
 def supports_octant(window):
     return (getattr(window, 'w_kernel', None) is None
             and not getattr(window, 'is_composite_window', False)
@@ -141,15 +216,18 @@ def shell_bounds(window):
 class ScalarWindowEvaluator:
     """Single-run cache of scalar ball integrals, never full window/results across runs."""
 
-    def __init__(self, reducer, batch_edges=False):
+    def __init__(self, reducer, batch_edges=False, radial_edges=False):
         self.reducer = reducer
         self.batch_edges = batch_edges
+        self.radial_edges = radial_edges
         self.shell_values = {}
         self.metrics = dict(window_fused_seconds=0., window_fused_count=0,
                             shell_edge_compute_seconds=0., shell_edge_collective_seconds=0.,
                             shell_edge_count=0, shell_result_count=0,
                             shell_edge_sweeps=0, shell_edge_max_batch=0,
-                            shell_edges_active=False)
+                            shell_edges_active=False, radial_edges_active=False,
+                            radial_group_seconds=0., radial_evaluate_seconds=0.,
+                            radial_group_count=0, radial_occupied_bins=0, radial_scratch_bound_bytes=0)
 
     def prepare_shell_edges(self, windows, comm):
         started = time.perf_counter()
@@ -173,7 +251,39 @@ class ScalarWindowEvaluator:
         local = []
         started = time.perf_counter()
         local_radii = np.asarray(radii[comm.Get_rank()::comm.Get_size()], dtype=np.float64)
-        if self.batch_edges:
+        radial = self.radial_edges
+        if radial:
+            scratch = radial_scratch_bytes(reference.L, reference.bandwidth, get_num_threads())
+            radial = all(comm.allgather(scratch <= RADIAL_SCRATCH_LIMIT_BYTES))
+            self.metrics['radial_scratch_bound_bytes'] = scratch
+            if not radial:
+                self.metrics['radial_edges_fallback'] = 'scratch bound exceeded; use batch edges'
+        if radial:
+            for key, power in powers:
+                stamp = time.perf_counter()
+                histogram = octant_radial_power(power, reference.bandwidth,
+                    reference.phi_fourier_power, comm.Get_rank(), comm.Get_size())
+                self.metrics['radial_group_seconds'] += time.perf_counter()-stamp
+                self.metrics['radial_group_count'] += 1
+                self.metrics['shell_edge_sweeps'] += 1
+                stamp = time.perf_counter()
+                global_histogram = np.empty_like(histogram)
+                comm.Allreduce(histogram, global_histogram, op=MPI.SUM)
+                self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-stamp
+                stamp = time.perf_counter()
+                squared_norms = np.flatnonzero(global_histogram).astype(np.int64)
+                weights = global_histogram[squared_norms]
+                self.metrics['radial_occupied_bins'] += len(squared_norms)
+                values = radial_ball_integrals(squared_norms, weights, reference.L, local_radii)
+                self.metrics['radial_evaluate_seconds'] += time.perf_counter()-stamp
+                for radius, value in zip(local_radii, values):
+                    self.shell_values[key, float(radius)] = float(value)
+                del histogram, global_histogram, squared_norms, weights
+            local = [(float(radius), [self.shell_values[key, float(radius)] for key, _ in powers])
+                     for radius in local_radii]
+            self.metrics['shell_edge_max_batch'] = len(local_radii)
+            self.metrics['radial_edges_active'] = True
+        elif self.batch_edges or self.radial_edges:
             # Bound scratch size for serial runs or unusually many edges.
             for begin in range(0, len(local_radii), 8):
                 block = local_radii[begin:begin+8]
@@ -191,7 +301,9 @@ class ScalarWindowEvaluator:
                 local.append((float(radius), values))
                 self.metrics['shell_edge_sweeps'] += len(powers)
                 self.metrics['shell_edge_max_batch'] = 1
-        self.metrics['shell_edge_compute_seconds'] = time.perf_counter()-started
+        self.metrics['shell_edge_compute_seconds'] = (
+            self.metrics['radial_group_seconds'] + self.metrics['radial_evaluate_seconds']
+            if radial else time.perf_counter()-started)
         self.metrics['shell_edge_count'] = len(local)*len(powers)
         started = time.perf_counter()
         gathered = comm.allgather(local)
