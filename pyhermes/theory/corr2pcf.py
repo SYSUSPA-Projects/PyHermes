@@ -19,6 +19,7 @@ from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.corr2pcf_spectral import SpectralPairReducer
 from pyhermes.utils.corr2pcf_strategies import AutoWindowEvaluator
 from pyhermes.utils.corr2pcf_window_reduction import ScalarWindowEvaluator
+from pyhermes.utils.mpi_progress import TaskProgress
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
     default_binning_window,
@@ -989,7 +990,7 @@ class Corr_2PCF(TaskBase):
                 print("")
                 self.logger.info(f"The time for task: {time_run_2 - time_run_1:.4f} sec")
         except Exception as e:
-            self.logger.error(f"Error in process {self.rank}: {str(e)}")
+            self.logger.exception(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
         return self.corr2pcf_data
 
@@ -1257,11 +1258,9 @@ class Corr_2PCF(TaskBase):
                 tasks, result_shape = make_sampling_tasks(self.sampling_names, self.sampling_arrays)
                 task_sub_arrs = np.array_split(tasks, size)
                 # Global process status
-                arr_complete = np.zeros(size, dtype=int)
                 total_tasks = len(tasks)
                 report_interval = max(1, total_tasks // 10)
                 next_report_threshold = report_interval
-                requests = [None] + [comm.irecv(source=r, tag=r) for r in range(1, size)]
                 count_all = False
                 self.logger.info(describe_task_distribution(total_tasks, size))
                 self.logger.info("Progress:   0.00%")
@@ -1303,7 +1302,7 @@ class Corr_2PCF(TaskBase):
                     self._window_evaluator.prepare_auto(windows, comm)
             # Local process status
             local_completed = 0
-            local_report_interval = max(1, len(task_sub_arr) // 10)
+            progress_tracker = TaskProgress(comm, len(task_sub_arr))
             # Init local 2pcf results
             local_xi = []
             local_dd = []
@@ -1332,21 +1331,8 @@ class Corr_2PCF(TaskBase):
                 local_xi.append(values["xi"])
                 local_tasks.append(index_tuple)
                 local_completed += 1
-                if local_completed % local_report_interval == 0:
-                    if rank == 0:
-                        arr_complete[0] = local_completed
-                    else:
-                        comm.isend(local_completed, dest=0, tag=rank)
+                global_completed = progress_tracker.update(local_completed)
                 if rank == 0:
-                    for r, req in enumerate(requests[1:], start=1):
-                        status = req.test()
-                        # Check whether the data is received
-                        if status[0]: 
-                            # Renew the completed task num
-                            arr_complete[r] = status[1] 
-                            # Reset the request flag
-                            requests[r] = comm.irecv(source=r, tag=r) 
-                    global_completed = np.sum(arr_complete)
                     # Show status
                     if global_completed >= next_report_threshold:
                         progress = (global_completed / total_tasks) * 100
@@ -1355,26 +1341,7 @@ class Corr_2PCF(TaskBase):
                         next_report_threshold += report_interval
                         if global_completed == total_tasks:
                             count_all = True
-            comm.Barrier()
-            if rank == 0:
-                arr_complete[0] = local_completed
-                for r, req in enumerate(requests[1:], start=1):
-                    status = req.test()
-                    if status[0]:
-                        arr_complete[r] = status[1]
-                    else:
-                        if hasattr(req, "cancel"):
-                            req.cancel()
-                        elif hasattr(req, "Cancel"):
-                            req.Cancel()
-                        if hasattr(req, "wait"):
-                            req.wait()
-                        elif hasattr(req, "Wait"):
-                            req.Wait()
-                if hasattr(comm, "Iprobe"):
-                    for source in range(1, size):
-                        while comm.Iprobe(source=source, tag=source):
-                            arr_complete[source] = comm.recv(source=source, tag=source)
+            progress_tracker.finish()
             # Gathering to rank0
             gathered_xi = comm.gather(local_xi, root=0)
             gathered_dd = comm.gather(local_dd, root=0)
@@ -1444,7 +1411,7 @@ class Corr_2PCF(TaskBase):
                     else:
                         self.logger.warning("No output path provided. The 2PCF result will not be saved.")
         except Exception as e:
-            self.logger.error(f"Error in process {self.rank}: {str(e)}")
+            self.logger.exception(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
         if self.rank == 0:
             time_run_2 = time.perf_counter()

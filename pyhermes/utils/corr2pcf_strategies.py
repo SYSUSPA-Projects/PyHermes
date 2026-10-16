@@ -15,7 +15,9 @@ FACTOR_CACHE_BYTES = 16 * 1024**2
 FACTOR_SCRATCH_LIMIT_BYTES = 64 * 1024**2
 
 
-@njit(parallel=True, cache=True)
+# Dynamic dispatcher arguments cannot safely persist weak references in Numba
+# cache indices. Specializations are reused in-process; warmup is explicit.
+@njit(parallel=True)
 def radial_function_integral(norms, weights, L, function, args):
     partials = np.zeros(len(norms), dtype=np.float64)
     for index in prange(len(norms)):
@@ -25,7 +27,7 @@ def radial_function_integral(norms, weights, L, function, args):
     return np.sum(partials) / (cells * cells)
 
 
-@njit(parallel=True, cache=True)
+@njit(parallel=True)
 def transverse_table(L, bandwidth, scale, function):
     count = bandwidth * L + 1
     values = np.empty((count, count), dtype=np.float64)
@@ -37,7 +39,7 @@ def transverse_table(L, bandwidth, scale, function):
     return values
 
 
-@njit(cache=True)
+@njit
 def longitudinal_table(L, bandwidth, scale, function):
     values = np.empty(bandwidth * L + 1, dtype=np.float64)
     inv_L = 1.0 / L

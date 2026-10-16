@@ -33,7 +33,9 @@ def octant_fold_weight(power, i, j, k):
     return weight
 
 
-@njit(parallel=True, cache=True)
+# A dynamic function argument must not persist mortal dispatcher weakrefs in
+# Numba disk-cache indices. Compilation is reused within each process.
+@njit(parallel=True)
 def octant_pair_integral(power, bandwidth, phi, function, zero_dc, *args):
     L = power.shape[0]
     partials = np.zeros(L + 1, dtype=np.float64)

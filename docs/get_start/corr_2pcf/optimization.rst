@@ -64,7 +64,10 @@ Separable factor tables use at most 16 MiB of persistent LRU cache per rank and
 at most 64 MiB for the table pair currently being evaluated. Oversized tables
 fall back to fused reduction. These limits exclude input fields, pair powers,
 Numba compilation/runtime memory and the rest of the task. Caches last only
-for one run. Planning, table construction and all associated collectives count
+for one run. Kernels taking dynamic window-function arguments compile once per
+process instead of persisting dispatcher weak references in disk-cache indices;
+other eligible kernels retain disk caches. Record startup/prewarm time separately.
+Planning, table construction and all associated collectives count
 inside the reported main loop, including work for the first sample.
 
 An explicit custom callable remains authoritative even if ``type`` names a
