@@ -47,8 +47,9 @@ def main():
     from pyhermes.utils import convolution
     assert Path(pyhermes.__file__).resolve().is_relative_to((root / case['source']).resolve())
     comm = MPI.COMM_WORLD
-    assert comm.rank == rank and comm.size == 8
-    numba.set_num_threads(4)
+    assert comm.rank == rank and comm.size == case.get('ranks', 8)
+    threads = case.get('threads', 4)
+    numba.set_num_threads(threads)
     counters = {}
     active = False
 
@@ -93,7 +94,7 @@ def main():
         comm.Barrier()
         started = time.perf_counter()
         projection = SFCProjection({'SFCProjection': dict(box_size=1000., J=resolution,
-            wavelet_mode='db2', wavelet_level=10, phi_resolution=1024, threads=4,
+            wavelet_mode='db2', wavelet_level=10, phi_resolution=1024, threads=threads,
             weight_normalization='catalog', save_particle_data=False, fout_path='')})
         if rank == 0:
             projection.particle_pos = np.asarray(positions, dtype=np.float32)
@@ -102,7 +103,7 @@ def main():
         projected = time.perf_counter()
         active = measured
         options = dict(random='uniform', binning_window=WINDOW,
-            sampling=dict(s=CENTRES.tolist()), products=['xi'], threads=4,
+            sampling=dict(s=CENTRES.tolist()), products=['xi'], threads=threads,
             weight_normalization='catalog', binning_window_cache=False,
             memory_strategy='speed', fout_path='')
         if case['source'] == 'candidate':
@@ -156,7 +157,7 @@ def main():
     if rank == 0:
         save(folder / 'measurement_started.json', dict(started=time.time(), warmup_seconds=warmup_seconds))
     comm.Barrier()
-    vector, field, phases, metrics = calculation(positions, 5 if case['gate'] else 8, measured=True)
+    vector, field, phases, metrics = calculation(positions, 5 if case['gate'] else case.get('J', 8), measured=True)
     if rank == 0:
         save(folder / 'measurement_ended.json', dict(ended=time.time()))
     record = dict(rank=rank, counters=counters, affinity=sorted(os.sched_getaffinity(0)),
@@ -166,7 +167,7 @@ def main():
     if rank == 0:
         assert vector.shape == (31,) and np.all(np.isfinite(vector))
         if not case['gate']:
-            with np.load(root / 'reference_J8.npz') as data:
+            with np.load(root / ('reference_J'+str(case.get('J', 8))+'.npz')) as data:
                 np.testing.assert_allclose(vector, data['xi'], rtol=1e-8, atol=1e-11)
         np.savez(folder / 'measurement.npz', xi=vector, s=CENTRES)
         field_sha = hashlib.sha256(memoryview(np.ascontiguousarray(field.epsilon)).cast('B')).hexdigest()
