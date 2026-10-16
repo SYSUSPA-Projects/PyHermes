@@ -29,3 +29,19 @@ The current CPU/GPU Gamma contraction retains signed overlap coefficients and se
 Input provenance is a scientific prerequisite for result reuse. The current local example fields have different hashes from the prior performance-test fields. The historical full-ring example output is byte-identical to the reference validated with the old benchmark field, so its roughly 3.25e-7 difference from the new example calculation must be separated from same-input implementation equivalence. Exact current-input CPU multipoles are therefore refreshed rather than populated with coefficients from a different field.
 
 A sensible next implementation sequence is to profile the existing 3PCF phase logs, make the small product-local contrast cache change if worthwhile, then introduce one shared local pair-reduction helper if pair postprocessing is material. Vertex sharing follows only with ownership/lifetime tests. Broader work should continue to reuse the common window metadata, contraction helpers and source/input audit machinery rather than adding a new public flag or a dedicated reduction kernel for every window. No further production matrix is submitted merely for this review.
+
+## Benchmark observation overhead
+
+The example refresh records parent RSS sampling work separately. For the first
+J=8 multipole example it spent 222.277 seconds in observations during a
+455.978-second task, with 2318 samples. The configured 0.1-second sleep therefore
+gave a mean cadence of about 0.197 seconds, including observation work. This
+is concurrent parent wall time, not a measured CPU cost or a subtractable
+component of scientific wall time. No completed result is rerun or adjusted
+to conceal this cost. The example timings describe the observed execution.
+
+A future benchmark-harness improvement could track the small launcher/worker
+process tree directly rather than repeatedly scanning host process metadata.
+It needs its own overhead and RSS-coverage check. The completed frozen
+experiment remains unchanged. This is separate from the scientific estimator
+optimizations and from whole-job Slurm batch-step MaxRSS.

@@ -289,3 +289,13 @@ batches. It separates main-loop, FFT-inclusive compute and preprojected-field
 task totals, retains all three samples, and reports independent ring batch RSS.
 Its task totals contain no catalogue projection and should not replace the
 earlier projection-inclusive Fig. 13 timing values.
+
+Verified example refresh
+------------------------
+
+The affected 2PCF and CPU Gamma multipole examples have new versioned outputs
+and executed notebook plots. The report separates preprojected-field task
+time from main-loop time, records input provenance and RSS observer overhead,
+and explains the historical angular-comparison boundary:
+
+:download:`Example measurements and verification (2026-10-17) <../../examples_refresh_results_20261017.md>`

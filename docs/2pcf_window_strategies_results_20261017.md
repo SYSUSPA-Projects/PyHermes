@@ -53,7 +53,7 @@ Ring layout comparison in job 127025 (three processes/layout, same 32 cores):
 |4x8|7.418561|7.511775|7.843683|2.686–2.698|
 |2x16|8.450196|8.515610|8.801880|1.361–1.377|
 
-8×4 is fastest among these tested layouts. A separate final-source job 127035 contains just one full ring case plus small-J warmup/gate: main 6.590892s, task 6.997884s. Its Slurm batch-step MaxRSS is 4.367439 GiB (4579592 KiB). This single resource/calibration run is not pooled with the three-repeat timing cohort. Process-tree RSS is sampled at 0.1s and sums launcher/descendants; shared pages may repeat. Slurm batch-step MaxRSS is a separate measurement and includes startup/warmup. No mixed-workload batch RSS is presented as one case's RSS.
+8×4 is fastest among these tested layouts. A separate final-source job 127035 contains just one full ring case plus small-J warmup/gate: main 6.590892s, task 6.997884s. Its Slurm batch-step MaxRSS is 4.367439 GiB (4579592 KiB). This single resource/calibration run is not pooled with the three-repeat timing cohort. Process-tree RSS polling uses a nominal 0.1s sleep between observations and sums launcher/descendants; the actual cadence also includes sampling work, whose elapsed time is retained in each raw timing record; shared pages may repeat. Slurm batch-step MaxRSS is a separate measurement and includes startup/warmup. Observer work runs concurrently and its wall time cannot be subtracted from the scientific task wall time to obtain an unobserved runtime. No mixed-workload batch RSS is presented as one case's RSS.
 
 ## Validity and boundaries
 

@@ -112,6 +112,9 @@ FFTs. **Recompute affected Gamma multipole measurements made with 1.1;
 existing catalogue projections can be reused.** Source FFT reuse trades
 memory for computation; speedups depend on workload and CPU placement.
 See [CHANGELOG.md](CHANGELOG.md) for the correction and migration notes.
+The [verified example refresh](docs/examples_refresh_results_20261017.md)
+records the new 2PCF and corrected CPU multipole outputs, observed timings,
+input provenance and executed notebook plots. Historical results are retained.
 
 ## Installation
 
