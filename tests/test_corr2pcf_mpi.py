@@ -202,7 +202,7 @@ def test_empty_edge_rank_and_batch_sweep_counts(fft_mode):
     "kind",
     ["shell", "gaussian_shell", "thick_shell", "ring", "inverse_laplacian", "cubic"],
 )
-@pytest.mark.parametrize("count", [1, 12])
+@pytest.mark.parametrize("count", [1, 40])
 def test_automatic_window_strategy_real_mpi(kind, count):
     from test_corr2pcf_strategies import fixed_window
 
@@ -267,6 +267,8 @@ def test_automatic_window_strategy_real_mpi(kind, count):
                             values[name], saved[name], rtol=1e-8, atol=1e-11
                         )
                     rows = current.runtime_metrics["per_rank"]
+                    if kind in ("ring", "cubic") and count >= 4 * COMM.Get_size():
+                        assert any(row["factor_batch_count"] > 0 for row in rows)
                     assert sum(row["forward_fft_count"] for row in rows) == 6
                     assert sum(row["legacy_inverse_fft_count"] for row in rows) == 0
                     if (

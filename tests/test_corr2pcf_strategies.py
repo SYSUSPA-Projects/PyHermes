@@ -142,7 +142,9 @@ def test_axial_pipeline_all_products_and_tilt_fallback(kind):
     )
     sampling = {"s": [4.0, 8.0, 12.0], "mu": [0.0, 0.5, 1.0]}
     metrics = compare_pipeline(window, sampling, True)
-    assert metrics["window_strategy_counts"]["separable_axial"] > 0
+    assert any(
+        k.startswith("separable_axial") for k in metrics["window_strategy_counts"]
+    )
     window = dict(window, los_args={"nx": 1.0, "ny": 2.0, "nz": 3.0})
     metrics = compare_pipeline(window, sampling, True)
     assert metrics["window_strategy_counts"] == {"materialized": 45}
@@ -224,4 +226,81 @@ def test_cartesian_pipeline_all_products():
         ),
         nonuniform=True,
     )
-    assert metrics["window_strategy_counts"]["separable_cartesian"] == 20
+    assert (
+        sum(
+            v
+            for k, v in metrics["window_strategy_counts"].items()
+            if k.startswith("separable_cartesian")
+        )
+        == 20
+    )
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+@pytest.mark.parametrize("bandwidth", [1, 2])
+def test_batched_factor_reduction_matches_independent_folds(axis, bandwidth):
+    L = 8
+    rng = np.random.default_rng(817)
+    power = rng.normal(size=(L, L, L // 2 + 1))
+    phi = rng.uniform(0.1, 2.0, bandwidth * L + 1)
+    windows = ["ring", "disk", "cylshell", "cylinder"]
+    transverse = []
+    longitudinal = []
+    expected = []
+    for kind in windows:
+        structure = BUILTIN_STRUCTURES[kind]
+        transverse.append(
+            strategies.transverse_table(L, bandwidth, 1.7, structure.transverse)
+        )
+        longitudinal.append(
+            strategies.longitudinal_table(L, bandwidth, 0.9, structure.longitudinal)
+        )
+        los = [0.0, 0.0, 0.0]
+        los[axis] = 1.0
+        kernel = fold_octant_window_to_rfft_kernel(
+            calculate_real_window_octant_array_numba(
+                L, bandwidth, phi, WINDOW_TYPE_DICT[kind], 1.7, 0.9, *los
+            )
+        )
+        expected.append(_half_spectrum_inner_product(power, kernel, L))
+    actual = strategies.octant_factor_integrals_batch(
+        power, bandwidth, phi, np.stack(transverse), np.stack(longitudinal), axis
+    )
+    np.testing.assert_allclose(actual, expected, rtol=3e-12, atol=2e-13)
+
+
+def test_uniform_only_analytic_product_needs_no_window_plan():
+    a = field()
+    values = []
+    for mode in ["materialized", "auto"]:
+        current = task(
+            "spectral", True, spectral_window=mode, products=["rr"], sfc_field=a
+        )
+        current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
+        values.append(current.run(save_result=False).rr)
+    np.testing.assert_array_equal(*values)
+
+
+def test_factor_batches_bound_scratch_and_rebuild_between_runs():
+    a = field()
+    before = a.epsilon.copy()
+    values = []
+    for offset in [0.0, 0.0001]:
+        a.epsilon[:] = before + offset * np.cos(
+            2 * np.pi * np.indices(a.epsilon.shape)[0] / 8
+        )
+        current = task(
+            "spectral",
+            True,
+            spectral_window="auto",
+            binning_window="ring",
+            sampling={"s": list(np.linspace(4.0, 24.0, 17)), "mu": [0.0, 0.5, 1.0]},
+        )
+        current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
+        values.append(current.run(save_result=False).xi.copy())
+        metrics = current.runtime_metrics["per_rank"][0]
+        assert (
+            metrics["factor_batch_max_size"] <= 8 and metrics["factor_batch_count"] > 0
+        )
+        assert current._window_evaluator is None
+    assert not np.allclose(values[0], values[1], rtol=1e-10, atol=1e-12)

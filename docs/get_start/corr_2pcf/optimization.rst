@@ -53,6 +53,15 @@ strategy by mathematical structure instead of selecting a backend per window:
 - Other real octant windows use generic fused scalar reduction; unsupported,
   complex, disk-cached and composite windows retain their existing paths.
 
+When a rank owns at least four compatible separable samples, automatic planning
+reduces small batches of at most eight queries in one traversal. Only the
+fold/power reads and each alias's scaling product are shared across queries;
+each window still receives its original alias terms. There is no scaling
+factorization across aliases. Original factor tables plus stacked batch arrays
+must fit the same scratch guard. Small/mixed/oversized local groups keep single
+query evaluation. The entire local planning and batch work is timed in the
+main loop.
+
 The radial planner is collective and is used when all queries are radial,
 there are at least as many samples as MPI ranks (and at least two samples), and
 scratch fits the 256 MiB per-rank guard. Otherwise it uses fused reduction;

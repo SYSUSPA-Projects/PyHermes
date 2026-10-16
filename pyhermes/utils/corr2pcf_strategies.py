@@ -82,6 +82,50 @@ def octant_factor_integral(power, bandwidth, phi, transverse, longitudinal, axis
     return np.sum(partials) / (cells * cells)
 
 
+@njit(parallel=True, cache=True)
+def octant_factor_integrals_batch(
+    power, bandwidth, phi, transverse, longitudinal, axis
+):
+    """Share fold/scaling work across a bounded batch; never across aliases."""
+    L = power.shape[0]
+    count = transverse.shape[0]
+    partials = np.zeros((L + 1, count), dtype=np.float64)
+    for i in prange(L + 1):
+        accumulated = np.zeros(count, dtype=np.float64)
+        terms = np.empty(count, dtype=np.float64)
+        for j in range(L + 1):
+            for k in range(L + 1):
+                weight = legacy.octant_fold_weight(power, i, j, k)
+                for query in range(count):
+                    terms[query] = 0.0
+                for ii in range(bandwidth):
+                    for jj in range(bandwidth):
+                        for kk in range(bandwidth):
+                            a, b, c = ii * L + i, jj * L + j, kk * L + k
+                            if axis == 2:
+                                u, v, w = a, b, c
+                            elif axis == 1:
+                                u, v, w = a, c, b
+                            else:
+                                u, v, w = b, c, a
+                            alias_scaling = phi[a] * phi[b] * phi[c]
+                            for query in range(count):
+                                terms[query] += alias_scaling * (
+                                    transverse[query, u, v] * longitudinal[query, w]
+                                )
+                for query in range(count):
+                    accumulated[query] += weight * terms[query]
+        for query in range(count):
+            partials[i, query] = accumulated[query]
+    result = np.zeros(count, dtype=np.float64)
+    cells = float(L * L * L)
+    for query in range(count):
+        for i in range(L + 1):
+            result[query] += partials[i, query]
+        result[query] /= cells * cells
+    return result
+
+
 class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
     """A bounded per-run planner; custom functions never inferred from names."""
 
@@ -90,6 +134,7 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
         self.factor_cache = OrderedDict()
         self.factor_cache_bytes = 0
         self.radial_results = {}
+        self.factor_results = {}
         self.metrics.update(
             auto_plan="lazy",
             window_strategy_counts={},
@@ -99,6 +144,8 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             factor_cache_peak_bytes=0,
             factor_table_build_count=0,
             factor_cache_hits=0,
+            factor_batch_count=0,
+            factor_batch_max_size=0,
         )
 
     @staticmethod
@@ -265,6 +312,73 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             )
         return value
 
+    @staticmethod
+    def _factor_axis(window):
+        if not legacy.supports_octant(window):
+            return None
+        structure = describe_window(window)
+        if structure.kind == "separable_cartesian":
+            return 2
+        return exact_grid_axis(window) if structure.kind == "separable_axial" else None
+
+    @classmethod
+    def needs_factor_plan(cls, window):
+        return window is not None and cls._factor_axis(window) is not None
+
+    def prepare_local(self, windows):
+        """Plan only local separable queries; no MPI collectives or huge grids."""
+        if len(windows) < 4:
+            return
+        axis = self._factor_axis(windows[0])
+        reference = windows[0]
+        if axis is None or any(
+            self._factor_axis(w) != axis
+            or w.L != reference.L
+            or w.bandwidth != reference.bandwidth
+            or not np.array_equal(w.phi_fourier_power, reference.phi_fourier_power)
+            for w in windows
+        ):
+            return
+        count = reference.L * reference.bandwidth + 1
+        # Original tables + stacked batch arrays fit the same scratch guard.
+        bytes_per_query = (count * count + count) * 8
+        batch_size = min(8, FACTOR_SCRATCH_LIMIT_BYTES // (2 * bytes_per_query))
+        if batch_size < 2:
+            return
+        signatures = [self.signature(w) for w in windows]
+        if any(key is None for key in signatures):
+            return
+        unique = list(dict(zip(signatures, windows)).items())
+        powers = list(self.reducer.powers.items())
+        if any(
+            p.shape != (reference.L, reference.L, reference.L // 2 + 1)
+            for _, p in powers
+        ):
+            return
+        for begin in range(0, len(unique), batch_size):
+            block = unique[begin : begin + batch_size]
+            factors = [self._factor_tables(w, describe_window(w)) for _, w in block]
+            started = time.perf_counter()
+            transverse = np.stack([f[0] for f in factors])
+            longitudinal = np.stack([f[1] for f in factors])
+            for pair, power in powers:
+                values = octant_factor_integrals_batch(
+                    power,
+                    reference.bandwidth,
+                    reference.phi_fourier_power,
+                    transverse,
+                    longitudinal,
+                    axis,
+                )
+                for (key, _), value in zip(block, values):
+                    self.factor_results[pair, key] = float(value)
+            self.metrics["factor_reduce_seconds"] += time.perf_counter() - started
+            self.metrics["factor_batch_count"] += len(powers)
+            self.metrics["factor_batch_max_size"] = max(
+                self.metrics["factor_batch_max_size"], len(block)
+            )
+            del factors, transverse, longitudinal
+
     def _longitudinal(self, window, function, length):
         return self._table(
             ("longitudinal", window.L, window.bandwidth, function, length),
@@ -311,20 +425,17 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             self._count("materialized")
             return None
         structure = describe_window(window)
-        signature = self.signature(window) if structure.kind == "radial" else None
+        signature = self.signature(window) if structure.kind != "general" else None
+        if signature is not None and (pair, signature) in self.factor_results:
+            self._count(structure.kind + "_batch")
+            return self.factor_results[pair, signature]
         if signature is not None and (pair, signature) in self.radial_results:
             self._count("radial")
             return self.radial_results[pair, signature]
         if structure.ball_bounds is not None and self.metrics["shell_edges_active"]:
             self._count("radial_shell_edges")
             return super().reduce(first, second, window)
-        axis = (
-            2
-            if structure.kind == "separable_cartesian"
-            else (
-                exact_grid_axis(window) if structure.kind == "separable_axial" else None
-            )
-        )
+        axis = self._factor_axis(window)
         count = window.bandwidth * window.L + 1
         if (
             axis is not None

@@ -1300,6 +1300,12 @@ class Corr_2PCF(TaskBase):
                         _, sample = task_to_sample(row, self.sampling_names)
                         windows.append(self._build_binning_window_for_sample(sample, reference))
                     self._window_evaluator.prepare_auto(windows, comm)
+                elif self._window_evaluator.needs_factor_plan(first_window):
+                    windows = []
+                    for row in task_sub_arr:
+                        _, sample = task_to_sample(row, self.sampling_names)
+                        windows.append(self._build_binning_window_for_sample(sample, reference))
+                    self._window_evaluator.prepare_local(windows)
             # Local process status
             local_completed = 0
             progress_tracker = TaskProgress(comm, len(task_sub_arr))
