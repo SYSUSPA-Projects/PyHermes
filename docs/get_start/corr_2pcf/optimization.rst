@@ -2,8 +2,8 @@
 =========================
 
 The optional spectral path evaluates the same field products and folded
-windows used by :doc:`corr_2pcf`. The fastest radial path applies to built-in
-finite spherical shells. Original estimator normalizations, bin edges, scaling
+windows used by :doc:`corr_2pcf`. Automatic strategies cover built-in radial and grid-axis separable windows.
+The explicit finite-shell path also remains available. Original estimator normalizations, bin edges, scaling
 weights and folding multiplicities are retained.
 
 Enable the finite-shell path
@@ -32,6 +32,48 @@ scientific window parameters of your own calculation. Explicit boundaries use
 Defaults remain ``pair_reduction: convolution``, ``reuse_input_fields: false``,
 ``spectral_window: materialized`` and ``spectral_fft: per_rank``. Enabling one
 switch does not implicitly enable the others.
+
+Automatic window strategies
+---------------------------
+
+Use the same four options above with ``spectral_window: auto`` to choose a
+strategy by mathematical structure instead of selecting a backend per window:
+
+- Built-in radial windows (``shell``, ``gaussian_shell``, ``sphere``,
+  ``gaussian``, ``cw``, ``cws``, ``gdw``, ``laplacian`` and
+  ``inverse_laplacian``) share exact squared-frequency grouping. The original
+  function is evaluated on every occupied class. Built-in ``thick_shell`` and
+  ``binned_shell`` retain adjacent ball-boundary sharing.
+- ``ring``, ``disk``, ``cylshell`` and ``cylinder`` with a line of sight exactly
+  on any grid axis share bounded transverse/longitudinal factor tables. The
+  original special functions, scaling weights and fold are retained. An almost
+  aligned line of sight is not rounded onto an axis by this strategy.
+- Other real octant windows use generic fused scalar reduction; unsupported,
+  complex, disk-cached and composite windows retain their existing paths.
+
+The radial planner is collective and is used when all queries are radial,
+there are at least as many samples as MPI ranks (and at least two samples), and
+scratch fits the 256 MiB per-rank guard. Otherwise it uses fused reduction;
+finite-shell scratch overflow retains the existing batch-edge fallback. This
+is a resource guard, not an assertion that automatic execution is always
+fastest. One field pair is grouped/evaluated at a time to bound scratch memory.
+The inverse Laplacian removes the entire folded DC coefficient, including its
+nonzero aliases, as in the materialized implementation.
+
+Separable factor tables use at most 16 MiB of persistent LRU cache per rank and
+at most 64 MiB for the table pair currently being evaluated. Oversized tables
+fall back to fused reduction. These limits exclude input fields, pair powers,
+Numba compilation/runtime memory and the rest of the task. Caches last only
+for one run. Planning, table construction and all associated collectives count
+inside the reported main loop, including work for the first sample.
+
+An explicit custom callable remains authoritative even if ``type`` names a
+built-in window. It uses generic evaluation by default. Advanced authors may
+set ``structure: radial`` in its window dictionary to promise a real radial
+function under the existing octant contract; incorrect declarations change
+the meaning of the calculation and are the author's responsibility. No
+structure is inferred from the callable name. Existing configurations need
+no declaration.
 
 Compatibility with existing calls
 ---------------------------------
@@ -138,7 +180,8 @@ Options and fallbacks
    * - ``spectral_window``
      - ``materialized``
      - Alternatives: ``fused``, ``shell_edges``, ``shell_edges_batch`` and
-       ``shell_edges_radial``. Shared-edge paths require built-in finite shells
+       ``shell_edges_radial``; ``auto`` selects a structural strategy. Shared-edge
+       paths require built-in finite shells
        to activate their shell-specific optimization.
    * - ``memory_strategy``
      - ``speed``

@@ -168,6 +168,27 @@ def window_function_cubic_numba(ki, kj, kk, Lx, Ly, Lz):
     return part_x * part_y * part_z
 
 
+# Reusable factors shared by mathematical window definitions and evaluators.
+@njit
+def ring_transverse_factor(q):
+    return jn_numba(0, q)
+
+
+@njit
+def disk_transverse_factor(q):
+    return 1.0 if q == 0.0 else 2.0 * jn_numba(1, q) / q
+
+
+@njit
+def axial_cos_factor(q):
+    return np.cos(q)
+
+
+@njit
+def axial_sinc_factor(q):
+    return 1.0 if q == 0.0 else np.sin(q) / q
+
+
 # Line-of-sight windows.
 @njit
 def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
@@ -197,7 +218,7 @@ def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     q_perp = 2.0 * np.pi * k_perp * R
     q_parallel = 2.0 * np.pi * k_parallel * H
 
-    return jn_numba(0, q_perp) * np.cos(q_parallel)
+    return ring_transverse_factor(q_perp) * axial_cos_factor(q_parallel)
 
 
 @njit
@@ -232,13 +253,7 @@ def window_function_disk_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     q_perp = 2.0 * np.pi * k_perp * R
     q_parallel = 2.0 * np.pi * k_parallel * H
 
-    part_parallel = np.cos(q_parallel)
-
-    if q_perp == 0.0:
-        part_perp = 1.0
-    else:
-        part_perp = 2.0 * jn_numba(1, q_perp) / q_perp
-    return part_perp * part_parallel
+    return disk_transverse_factor(q_perp) * axial_cos_factor(q_parallel)
 
 
 @njit
@@ -274,12 +289,7 @@ def window_function_cylshell_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     q_perp = 2.0 * np.pi * k_perp * R
     q_parallel = 2.0 * np.pi * k_parallel * H
 
-    if q_parallel == 0.0:
-        part_parallel = 1.0
-    else:
-        part_parallel = np.sin(q_parallel) / q_parallel
-
-    return jn_numba(0, q_perp) * part_parallel
+    return ring_transverse_factor(q_perp) * axial_sinc_factor(q_parallel)
 
 
 @njit
@@ -315,16 +325,7 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     q_perp = 2.0 * np.pi * k_perp * R
     q_parallel = 2.0 * np.pi * k_parallel * H
 
-    if q_parallel == 0.0:
-        part_parallel = 1.0
-    else:
-        part_parallel = np.sin(q_parallel) / q_parallel
-
-    if q_perp == 0.0:
-        part_perp = 1.0
-    else:
-        part_perp = 2.0 * jn_numba(1, q_perp) / q_perp
-    return part_perp * part_parallel
+    return disk_transverse_factor(q_perp) * axial_sinc_factor(q_parallel)
 
 
 # High-pass and wavelet-like filters.

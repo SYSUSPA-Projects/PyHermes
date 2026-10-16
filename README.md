@@ -46,25 +46,29 @@ for every configuration.
 
 ### Optional spectral 2PCF computation
 
-The current source tree includes an opt-in spectral path for finite spherical
-bins. Add these settings to an existing `Corr_2PCF` task using the built-in
-`thick_shell` or `binned_shell` window, keeping its bin edges and sampling:
+The current source tree includes an opt-in spectral path with automatic window
+strategies. Add these settings to an existing `Corr_2PCF` task, keeping its
+window definition, bin edges, and sampling:
 
 ```python
 fast_options = dict(
     memory_strategy="speed",
     pair_reduction="spectral",
     reuse_input_fields=True,
-    spectral_window="shell_edges_radial",
+    spectral_window="auto",
     spectral_fft="shared",
 )
 ```
 
 Parseval's identity evaluates the required field products directly in Fourier
 space, avoiding inverse FFTs and full convolution-result arrays. Prepared inputs,
-source spectra, and adjacent shell boundaries are reused within one run. Exact
-integer radial classes reduce repeated spherical-window evaluation while
-retaining every alias's scaling weight and folding multiplicity.
+source spectra, and adjacent finite-shell boundaries are reused within one run.
+`auto` groups exact radial frequency classes for `shell`, `gaussian_shell`,
+`thick_shell`, and other built-in isotropic windows. For a grid-axis line of
+sight, `ring`, `disk`, `cylshell`, and `cylinder` share a separable factor-table
+backend. Tilted or unsupported windows retain the applicable generic path.
+Every original alias scaling weight and folding multiplicity is retained;
+there is no interpolation or change to the window definition.
 
 The default remains the convolution path. Caches do not reuse production results
 between runs; custom or unsupported windows retain their existing fallbacks.

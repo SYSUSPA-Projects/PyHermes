@@ -17,6 +17,7 @@ from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
 from pyhermes.utils.corr2pcf_spectral import SpectralPairReducer
+from pyhermes.utils.corr2pcf_strategies import AutoWindowEvaluator
 from pyhermes.utils.corr2pcf_window_reduction import ScalarWindowEvaluator
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
@@ -411,8 +412,10 @@ class Corr_2PCF(TaskBase):
         if self.pair_reduction not in ("convolution", "spectral"):
             raise ValueError("Corr_2PCF pair_reduction must be 'convolution' or 'spectral'.")
         self.spectral_window = str(self.spectral_window).strip().lower()
-        if self.spectral_window not in ('materialized', 'fused', 'shell_edges', 'shell_edges_batch', 'shell_edges_radial'):
-            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, shell_edges, shell_edges_batch, or shell_edges_radial.")
+        if self.spectral_window not in (
+                'materialized', 'fused', 'shell_edges', 'shell_edges_batch',
+                'shell_edges_radial', 'auto'):
+            raise ValueError("Corr_2PCF spectral_window must be materialized, fused, shell_edges, shell_edges_batch, shell_edges_radial, or auto.")
         self.spectral_fft = str(self.spectral_fft).strip().lower()
         if self.spectral_fft not in ('per_rank', 'shared'):
             raise ValueError("Corr_2PCF spectral_fft must be per_rank or shared.")
@@ -1237,7 +1240,9 @@ class Corr_2PCF(TaskBase):
                     self._spectral_reducer.prepare_shared(pairs,comm)
                 else:
                     self._spectral_reducer.prepare(pairs)
-                if self.spectral_window != 'materialized':
+                if self.spectral_window == 'auto':
+                    self._window_evaluator = AutoWindowEvaluator(self._spectral_reducer)
+                elif self.spectral_window != 'materialized':
                     self._window_evaluator = ScalarWindowEvaluator(self._spectral_reducer,
                         batch_edges=self.spectral_window == 'shell_edges_batch',
                         radial_edges=self.spectral_window == 'shell_edges_radial')
@@ -1276,6 +1281,26 @@ class Corr_2PCF(TaskBase):
                         _, sample = task_to_sample(row, self.sampling_names)
                         windows.append(self._build_binning_window_for_sample(sample, reference))
                 self._window_evaluator.prepare_shell_edges(windows, comm)
+            if (self.spectral_window == 'auto' and self._window_evaluator is not None
+                    and not self.binning_window_cache):
+                # Radial plans require global queries/collectives; other structures
+                # remain lazy and avoid building every bin on every MPI rank.
+                first_row = comm.bcast(tasks[0] if rank == 0 else None, root=0)
+                reference = self._reference_pair_field(
+                    _local_sfc1, _local_sfc2, _local_random1, _local_random2,
+                    _local_delta1, _local_delta2)
+                first_window = None
+                if reference is not None:
+                    _, sample = task_to_sample(first_row, self.sampling_names)
+                    first_window = self._build_binning_window_for_sample(sample, reference)
+                eligible = self._window_evaluator.needs_radial_plan(first_window)
+                if all(comm.allgather(eligible)):
+                    all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
+                    windows = []
+                    for row in all_tasks:
+                        _, sample = task_to_sample(row, self.sampling_names)
+                        windows.append(self._build_binning_window_for_sample(sample, reference))
+                    self._window_evaluator.prepare_auto(windows, comm)
             # Local process status
             local_completed = 0
             local_report_interval = max(1, len(task_sub_arr) // 10)

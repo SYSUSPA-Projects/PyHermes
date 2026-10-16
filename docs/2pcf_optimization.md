@@ -133,3 +133,16 @@ Performance requires controlled measurement including projection, setup,
 communication and RSS; no universal speedup is inferred from kernel-only probes.
 
 Controlled 36-sample results: [exact radial grouping measurements](2pcf_radial_optimization_results_20261016.md). Both tested layouts improve total median for J7/J8/J9; the new mode remains opt-in.
+
+
+## Unified structural selection (2026-10-17)
+
+The opt-in `spectral_window="auto"` selects exact radial grouping for built-in
+isotropic windows, shared ball boundaries for finite shells, and bounded
+separable factor tables for grid-axis ring/disk/cylshell/cylinder windows.
+The other three settings remain `pair_reduction="spectral"`,
+`reuse_input_fields=True`, and `spectral_fft="shared"`; defaults are unchanged.
+It preserves each alias's scaling weight inside the original fold.
+Tilted/general/complex/cached windows retain their applicable fallback.
+See [the complete guide](get_start/corr_2pcf/optimization.rst) for eligibility,
+custom radial declarations, memory guards and timing boundaries.

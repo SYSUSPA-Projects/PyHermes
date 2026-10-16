@@ -196,3 +196,78 @@ def test_empty_edge_rank_and_batch_sweep_counts(fft_mode):
         except (AssertionError, ValueError) as exc:
             error = repr(exc)
     assert COMM.bcast(error, root=0) is None
+
+
+@pytest.mark.parametrize(
+    "kind", ["shell", "gaussian_shell", "thick_shell", "ring", "inverse_laplacian"]
+)
+@pytest.mark.parametrize("count", [1, 6])
+def test_automatic_window_strategy_real_mpi(kind, count):
+    from test_corr2pcf_strategies import fixed_window
+
+    first, second = field(865), field(866)
+    random1, random2 = field(867), field(868)
+    specifications = {
+        "shell": dict(type="shell", len_args={"R": None}, mapping="s_to_R"),
+        "gaussian_shell": dict(
+            type="gaussian_shell",
+            len_args={"R_shell": 5.0, "R_smooth": 2.0},
+            mapping=fixed_window,
+        ),
+        "thick_shell": dict(
+            type="thick_shell", len_args={"R": None, "delta_R": 4.0}, mapping="s_to_R"
+        ),
+        "ring": dict(type="ring", len_args={"R": None, "H": None}, mapping="smu_to_RH"),
+        "inverse_laplacian": dict(
+            type="inverse_laplacian", len_args={}, mapping=fixed_window
+        ),
+    }
+    saved = None
+    for mode in ["materialized", "auto"]:
+        current = Corr_2PCF(
+            {
+                "Corr_2PCF": dict(
+                    threads=1,
+                    random="uniform",
+                    sampling=(
+                        {"s": list(np.linspace(4.0, 24.0, count)), "mu": [0.5]}
+                        if kind == "ring"
+                        else {"s": list(np.linspace(4.0, 24.0, count))}
+                    ),
+                    binning_window=specifications[kind],
+                    pair_reduction="spectral",
+                    reuse_input_fields=True,
+                    spectral_window=mode,
+                    spectral_fft="shared",
+                    products=["dd", "dr", "rd", "delta_dd", "rr", "xi"],
+                )
+            }
+        )
+        current.prepare_input_fields(
+            sfc_field1=first, sfc_field2=second, random1=random1, random2=random2
+        )
+        output = current.run(save_result=False)
+        error = None
+        if COMM.Get_rank() == 0:
+            try:
+                values = {
+                    name: getattr(output, name).copy() for name in current.products
+                }
+                if saved is None:
+                    saved = values
+                else:
+                    for name in values:
+                        np.testing.assert_allclose(
+                            values[name], saved[name], rtol=1e-8, atol=1e-11
+                        )
+                    rows = current.runtime_metrics["per_rank"]
+                    assert sum(row["forward_fft_count"] for row in rows) == 6
+                    assert sum(row["legacy_inverse_fft_count"] for row in rows) == 0
+                    if (
+                        kind in ("shell", "gaussian_shell", "inverse_laplacian")
+                        and count >= COMM.Get_size()
+                    ):
+                        assert all(row["auto_plan"] == "radial" for row in rows)
+            except (AssertionError, ValueError) as exc:
+                error = repr(exc)
+        assert COMM.bcast(error, root=0) is None, error
