@@ -279,3 +279,13 @@ The :download:`detailed measurement report
 <../../2pcf_radial_optimization_results_20261016.md>` retains the complete
 validation and timing context. No absolute-accuracy or universal-speed claim
 is inferred from this comparison.
+
+Controlled window-family measurements
+-------------------------------------
+
+The :download:`2026-10-17 window-strategy report </2pcf_window_strategies_results_20261017.md>`
+compares exact radial grouping, shared axial/Cartesian factors and bounded query
+batches. It separates main-loop, FFT-inclusive compute and preprojected-field
+task totals, retains all three samples, and reports independent ring batch RSS.
+Its task totals contain no catalogue projection and should not replace the
+earlier projection-inclusive Fig. 13 timing values.

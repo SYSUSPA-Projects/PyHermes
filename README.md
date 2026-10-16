@@ -74,7 +74,7 @@ The default remains the convolution path. Caches do not reuse production results
 between runs; custom or unsupported windows retain their existing fallbacks.
 See the [2PCF spectral guide](docs/get_start/corr_2pcf/optimization.rst) for
 parameters, equations, memory limits, and total-time versus main-loop timing,
-and the [controlled measurement report](docs/2pcf_radial_optimization_results_20261016.md)
+and the [controlled window-strategy report](docs/2pcf_window_strategies_results_20261017.md)
 for numerical checks and workload-specific performance.
 
 ### Three-point multipoles in 1.2
