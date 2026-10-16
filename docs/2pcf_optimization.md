@@ -85,3 +85,5 @@ opt-in candidates; adoption depends on controlled same-allocation measurements.
 Pre-production checks: 54 local tests and seven real-MPI tests per rank on four
 ranks, including asymmetric powers, alias bandwidths 1/2, 0/1/4/8 radii, bounded
 chunks, all products/cross/nonuniform fields, cache refresh and global FFT counts.
+
+Measured phase-3 results: [batch/shared spectral measurements](2pcf_batch_optimization_results_20261016.md). J9 benefits in both layouts; J7/J8 retain the phase-2 recommendation.
