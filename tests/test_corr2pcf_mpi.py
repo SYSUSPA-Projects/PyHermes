@@ -199,7 +199,8 @@ def test_empty_edge_rank_and_batch_sweep_counts(fft_mode):
 
 
 @pytest.mark.parametrize(
-    "kind", ["shell", "gaussian_shell", "thick_shell", "ring", "inverse_laplacian"]
+    "kind",
+    ["shell", "gaussian_shell", "thick_shell", "ring", "inverse_laplacian", "cubic"],
 )
 @pytest.mark.parametrize("count", [1, 12])
 def test_automatic_window_strategy_real_mpi(kind, count):
@@ -208,6 +209,11 @@ def test_automatic_window_strategy_real_mpi(kind, count):
     first, second = field(865), field(866)
     random1, random2 = field(867), field(868)
     specifications = {
+        "cubic": dict(
+            type="cubic",
+            len_args={"Lx": 4.0, "Ly": 8.0, "Lz": 12.0},
+            mapping=fixed_window,
+        ),
         "shell": dict(type="shell", len_args={"R": None}, mapping="s_to_R"),
         "gaussian_shell": dict(
             type="gaussian_shell",

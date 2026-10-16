@@ -54,6 +54,9 @@ BUILTIN_STRUCTURES.update(
         "binned_shell": WindowStructure("radial", ball_bounds=_explicit_bounds),
         "thick_shell": WindowStructure("radial", ball_bounds=_thick_bounds),
         "inverse_laplacian": WindowStructure("radial", zero_dc=True),
+        "cubic": WindowStructure(
+            "separable_cartesian", axial_sinc_factor, axial_sinc_factor
+        ),
         "ring": WindowStructure(
             "separable_axial", ring_transverse_factor, axial_cos_factor
         ),

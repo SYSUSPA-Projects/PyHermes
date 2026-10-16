@@ -265,6 +265,42 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             )
         return value
 
+    def _longitudinal(self, window, function, length):
+        return self._table(
+            ("longitudinal", window.L, window.bandwidth, function, length),
+            lambda: longitudinal_table(window.L, window.bandwidth, length, function),
+        )
+
+    def _factor_tables(self, window, structure):
+        if structure.kind == "separable_cartesian":
+            x, y, z = (
+                float(window.rescale_len_args[key]) / 2 for key in ("Lx", "Ly", "Lz")
+            )
+            # A rectangular window is three sinc factors. Its xy outer product
+            # uses the same 2D x 1D reduction and bounded cache as axial windows.
+            first = self._longitudinal(window, structure.transverse, x)
+            second = self._longitudinal(window, structure.transverse, y)
+            transverse = self._table(
+                (
+                    "cartesian_xy",
+                    window.L,
+                    window.bandwidth,
+                    structure.transverse,
+                    x,
+                    y,
+                ),
+                lambda: np.multiply.outer(first, second),
+            )
+            return transverse, self._longitudinal(window, structure.longitudinal, z)
+        radius, height = (float(window.rescale_len_args[key]) for key in ("R", "H"))
+        transverse = self._table(
+            ("transverse", window.L, window.bandwidth, structure.transverse, radius),
+            lambda: transverse_table(
+                window.L, window.bandwidth, radius, structure.transverse
+            ),
+        )
+        return transverse, self._longitudinal(window, structure.longitudinal, height)
+
     def reduce(self, first, second, window):
         if not legacy.supports_octant(window):
             self._count("materialized")
@@ -282,37 +318,19 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
         if structure.ball_bounds is not None and self.metrics["shell_edges_active"]:
             self._count("radial_shell_edges")
             return super().reduce(first, second, window)
-        axis = exact_grid_axis(window) if structure.kind == "separable_axial" else None
+        axis = (
+            2
+            if structure.kind == "separable_cartesian"
+            else (
+                exact_grid_axis(window) if structure.kind == "separable_axial" else None
+            )
+        )
         count = window.bandwidth * window.L + 1
         if (
             axis is not None
             and (count * count + count) * 8 <= FACTOR_SCRATCH_LIMIT_BYTES
         ):
-            radius, height = (float(window.rescale_len_args[k]) for k in ("R", "H"))
-            transverse = self._table(
-                (
-                    "transverse",
-                    window.L,
-                    window.bandwidth,
-                    structure.transverse,
-                    radius,
-                ),
-                lambda: transverse_table(
-                    window.L, window.bandwidth, radius, structure.transverse
-                ),
-            )
-            longitudinal = self._table(
-                (
-                    "longitudinal",
-                    window.L,
-                    window.bandwidth,
-                    structure.longitudinal,
-                    height,
-                ),
-                lambda: longitudinal_table(
-                    window.L, window.bandwidth, height, structure.longitudinal
-                ),
-            )
+            transverse, longitudinal = self._factor_tables(window, structure)
             started = time.perf_counter()
             result = octant_factor_integral(
                 power,
@@ -323,7 +341,7 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
                 axis,
             )
             self.metrics["factor_reduce_seconds"] += time.perf_counter() - started
-            self._count("separable_axial")
+            self._count(structure.kind)
             return float(result)
         self._count("fused")
         return super().reduce(first, second, window)

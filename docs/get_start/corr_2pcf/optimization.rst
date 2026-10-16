@@ -48,6 +48,8 @@ strategy by mathematical structure instead of selecting a backend per window:
   on any grid axis share bounded transverse/longitudinal factor tables. The
   original special functions, scaling weights and fold are retained. An almost
   aligned line of sight is not rounded onto an axis by this strategy.
+  The Cartesian ``cubic`` window reuses the same backend through its three
+  one-dimensional sinc factors; no separate per-window reduction is needed.
 - Other real octant windows use generic fused scalar reduction; unsupported,
   complex, disk-cached and composite windows retain their existing paths.
 

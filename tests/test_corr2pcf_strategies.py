@@ -189,3 +189,39 @@ def test_memory_guards_and_factor_cache_lifecycle(monkeypatch):
         {"s": [4.0, 8.0], "mu": [0.0, 0.5]},
     )
     assert set(metrics["window_strategy_counts"]) == {"fused"}
+
+
+@pytest.mark.parametrize("bandwidth", [1, 2])
+def test_cartesian_tables_reuse_axial_reduction(bandwidth):
+    L = 8
+    rng = np.random.default_rng(921)
+    power = rng.normal(size=(L, L, L // 2 + 1))
+    phi = rng.uniform(0.1, 2.0, bandwidth * L + 1)
+    from pyhermes.utils.window_functions import axial_sinc_factor
+
+    x, y, z = (
+        strategies.longitudinal_table(L, bandwidth, length / 2, axial_sinc_factor)
+        for length in [1.3, 2.7, 4.2]
+    )
+    kernel = fold_octant_window_to_rfft_kernel(
+        calculate_real_window_octant_array_numba(
+            L, bandwidth, phi, WINDOW_TYPE_DICT["cubic"], 1.3, 2.7, 4.2
+        )
+    )
+    actual = strategies.octant_factor_integral(
+        power, bandwidth, phi, np.multiply.outer(x, y), z, 2
+    )
+    expected = _half_spectrum_inner_product(power, kernel, L)
+    np.testing.assert_allclose(actual, expected, rtol=3e-12, atol=2e-13)
+
+
+def test_cartesian_pipeline_all_products():
+    metrics = compare_pipeline(
+        dict(
+            type="cubic",
+            len_args={"Lx": 4.0, "Ly": 8.0, "Lz": 12.0},
+            mapping=fixed_window,
+        ),
+        nonuniform=True,
+    )
+    assert metrics["window_strategy_counts"]["separable_cartesian"] == 20
