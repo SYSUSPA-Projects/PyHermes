@@ -120,3 +120,5 @@ disk-cached windows retain existing fallbacks. Defaults are unchanged.
 
 Performance requires controlled measurement including projection, setup,
 communication and RSS; no universal speedup is inferred from kernel-only probes.
+
+Controlled 36-sample results: [exact radial grouping measurements](2pcf_radial_optimization_results_20261016.md). Both tested layouts improve total median for J7/J8/J9; the new mode remains opt-in.
