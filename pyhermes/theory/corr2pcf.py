@@ -16,6 +16,7 @@ from pyhermes.io import (
 from pyhermes.pipeline import TaskBase
 from pyhermes.utils import func_util
 from pyhermes.utils.convolution import specialized_convolution_3d
+from pyhermes.utils.corr2pcf_spectral import SpectralPairReducer
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
     default_binning_window,
@@ -391,6 +392,9 @@ class Corr_2PCF(TaskBase):
         super().__init__(param_task=param_task)
         self.format_params()
         self._fields_prepared = False
+        self._pending_input_seconds = 0.0
+        self.runtime_metrics = {}
+        self._spectral_reducer = None
 
     # Parameter formatting and validation.
     def _sync_runtime_options(self, log_runtime=True):
@@ -399,6 +403,12 @@ class Corr_2PCF(TaskBase):
         if self.memory_strategy not in ("speed", "memory"):
             raise ValueError("Corr_2PCF memory_strategy must be either 'speed' or 'memory'.")
         self.binning_window_cache = parse_bool(self.binning_window_cache)
+        self.reuse_input_fields = parse_bool(self.reuse_input_fields)
+        self.pair_reduction = str(self.pair_reduction).strip().lower()
+        if self.pair_reduction not in ("convolution", "spectral"):
+            raise ValueError("Corr_2PCF pair_reduction must be 'convolution' or 'spectral'.")
+        self.task_params['pair_reduction'] = self.pair_reduction
+        self.task_params['reuse_input_fields'] = self.reuse_input_fields
         self.task_params['threads'] = self.threads
         self.task_params['products'] = copy.deepcopy(self.products)
         self.task_params['sampling'] = copy.deepcopy(self.sampling)
@@ -448,6 +458,8 @@ class Corr_2PCF(TaskBase):
         self.memory_strategy = str(self.task_params.get("memory_strategy", "speed")).strip().lower()
         self.binning_window_cache = parse_bool(self.task_params.get("binning_window_cache", False))
         self.binning_window_cache_dir = self.task_params.get("binning_window_cache_dir", "")
+        self.pair_reduction = self.task_params.get("pair_reduction", "convolution")
+        self.reuse_input_fields = parse_bool(self.task_params.get("reuse_input_fields", False))
         self.fout_path = self.task_params['fout_path']
 
     def _resolve_sampling(self):
@@ -496,6 +508,8 @@ class Corr_2PCF(TaskBase):
         params['binning_window_cache'] = self.binning_window_cache
         params['binning_window_cache_dir'] = self.binning_window_cache_dir
         params['weight_normalization'] = self.weight_normalization
+        params['pair_reduction'] = self.pair_reduction
+        params['reuse_input_fields'] = self.reuse_input_fields
         params['fout_path'] = self.fout_path
         return params
 
@@ -603,7 +617,7 @@ class Corr_2PCF(TaskBase):
                 product_results[product] = product_results[product] * factor
         return product_results
 
-    def _field_in_task_normalization(self, field):
+    def _field_in_task_normalization(self, field, copy_input=True):
         self._remember_field_scale(field)
         input_kind = getattr(field, "field_kind", None)
         input_norm = getattr(field, "weight_normalization", None)
@@ -620,12 +634,14 @@ class Corr_2PCF(TaskBase):
                 f"field_kind={input_kind} | input={input_norm} | "
                 "effective=as-is; task weight_normalization applies only to catalog fields unless task='unit'."
             )
-            return field.copy()
+            return field.copy() if copy_input else field
         self.logger.info(
             "Field weight normalization | "
             f"field_kind={input_kind} | input={input_norm} | "
             f"task={self.weight_normalization} | effective={self.weight_normalization}"
         )
+        if not copy_input and input_norm == self.weight_normalization:
+            return field
         return field.switch_weight_normalization(self.weight_normalization)
 
     # Pair-product computation.
@@ -705,8 +721,19 @@ class Corr_2PCF(TaskBase):
             if isinstance(a, (float, int, np.floating)) or isinstance(b, (float, int, np.floating)):
                 return field_mean_density(a) * field_mean_density(b)
             if binning_window_obj is None:
+                started = time.perf_counter()
                 binning_window_obj = self._build_binning_window_for_sample(sample, reference_field)
-            return pair_product_with_window(a, b, binning_window_obj, self.threads)
+                binning_window_obj.as_array()
+                self._run_phase_times['window_seconds'] += time.perf_counter() - started
+            if self._spectral_reducer is not None:
+                value = self._spectral_reducer.reduce(a, b, binning_window_obj.as_array())
+                if value is not None:
+                    return value
+            started = time.perf_counter()
+            value = pair_product_with_window(a, b, binning_window_obj, self.threads)
+            self._run_phase_times['convolution_and_sum_seconds'] += time.perf_counter() - started
+            self._run_phase_times['convolution_count'] += 1
+            return value
 
         values = {
             "dd": None,
@@ -944,6 +971,7 @@ class Corr_2PCF(TaskBase):
         binning_window=None,
         sync_runtime=True,
     ):
+        preparation_started = time.perf_counter()
         self.corr2pcf_data = Corr2PCFData(threads=self.threads)
         if sync_runtime:
             self._sync_runtime_options()
@@ -1004,14 +1032,27 @@ class Corr_2PCF(TaskBase):
                 self.logger.info("Corr_2PCF input compatibility check passed.")
                 self.logger.info(f"Shared required parameters | {shared_required_text}")
 
+            prepared_vertices = {}
             for i, base_sfc, source_desc, win in resolved_data_vertices:
-                base_sfc = self._field_in_task_normalization(base_sfc)
-                window_obj, window_desc = self._resolve_window(i, base_sfc, win)
-                if window_obj is not None:
-                    final_sfc = base_sfc @ window_obj
+                if win is None:
+                    window_key = None
                 else:
-                    final_sfc = base_sfc.copy()
-                    final_sfc.format_sfc_params()
+                    try:
+                        window_key = json.dumps(win, sort_keys=True, allow_nan=False)
+                    except (TypeError, ValueError):
+                        window_key = ('identity', id(win))
+                key = (id(base_sfc), self.weight_normalization, window_key)
+                if self.reuse_input_fields and key in prepared_vertices:
+                    final_sfc = prepared_vertices[key]
+                else:
+                    base_sfc = self._field_in_task_normalization(base_sfc, copy_input=not self.reuse_input_fields)
+                    window_obj, window_desc = self._resolve_window(i, base_sfc, win)
+                    if window_obj is not None:
+                        final_sfc = base_sfc @ window_obj
+                    else:
+                        final_sfc = base_sfc if self.reuse_input_fields else base_sfc.copy()
+                        final_sfc.format_sfc_params()
+                    prepared_vertices[key] = final_sfc
                 setattr(self, f"sfc_field{i}", final_sfc)
                 setattr(self.corr2pcf_data, f"sfc_info{i}", final_sfc.sfc_info)
                 self.logger.info(
@@ -1047,6 +1088,7 @@ class Corr_2PCF(TaskBase):
             self.window2 = window2
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
         self._fields_prepared = True
+        self._pending_input_seconds = time.perf_counter() - preparation_started
 
     def _broadcast_field(self, value):
         comm = self.comm
@@ -1061,8 +1103,13 @@ class Corr_2PCF(TaskBase):
                 density_value = float(value)
             else:
                 serialized = pickle.dumps(value.sfc_info)
-                value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
-                local_value = value
+                if self.reuse_input_fields:
+                    local_value = value._spawn_like()
+                    local_value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
+                    local_value.format_sfc_params()
+                else:
+                    value.epsilon = np.ascontiguousarray(value.epsilon, dtype=np.float64)
+                    local_value = value
         else:
             local_value = None
 
@@ -1081,9 +1128,40 @@ class Corr_2PCF(TaskBase):
         comm.Barrier()
         return local_value
 
+    def _broadcast_prepared_fields(self, fields):
+        if not self.reuse_input_fields:
+            return [self._broadcast_field(field) if needed else None for field, needed in fields]
+        aliases = None
+        if self.rank == 0:
+            seen = {}
+            aliases = []
+            for index, (field, needed) in enumerate(fields):
+                if not needed:
+                    key = ('absent', index)
+                elif isinstance(field, (float, int, np.floating)):
+                    key = ('density', float(field).hex())
+                else:
+                    key = ('field', id(field))
+                aliases.append(seen.setdefault(key, index))
+        aliases = self.comm.bcast(aliases, root=0)
+        values = {}
+        for index, (field, needed) in enumerate(fields):
+            alias = aliases[index]
+            if alias not in values:
+                values[alias] = self._broadcast_field(field) if needed else None
+        return [values[alias] for alias in aliases]
+
+    @staticmethod
+    def _product_field_pairs(products, first, second, random1, random2, delta1, delta2):
+        pairs = {'dd': (first, second), 'dr': (first, random2), 'rd': (random1, second),
+                 'rr': (random1, random2), 'delta_dd': (delta1, delta2)}
+        return [pairs[name] for name in products if name in pairs]
+
     def run(self, save_result=True, overwrite=False):
         self._sync_runtime_options()
         if self.memory_strategy == "memory":
+            if self.pair_reduction != "convolution" or self.reuse_input_fields:
+                self.logger.warning("Experimental spectral reduction and broadcast reuse are inactive for the memory strategy.")
             if self._fields_prepared and self.rank == 0:
                 self.logger.warning(
                     "memory_strategy='memory' is most effective when run() prepares fields itself. "
@@ -1100,15 +1178,29 @@ class Corr_2PCF(TaskBase):
                 self.prepare_input_fields(sync_runtime=False)
             expanded_products = expand_products(self.products)
             needs_data, needs_random = self._required_input_flags()
-            _local_sfc1 = self._broadcast_field(self.sfc_field1) if needs_data else None
-            _local_sfc2 = self._broadcast_field(self.sfc_field2) if needs_data else None
-            _local_random1 = self._broadcast_field(self.random1) if needs_random else None
-            _local_random2 = self._broadcast_field(self.random2) if needs_random else None
+            self._run_phase_times = dict(window_seconds=0.0, convolution_and_sum_seconds=0.0, convolution_count=0)
+            self._spectral_reducer = None
+            started = time.perf_counter()
+            _local_sfc1, _local_sfc2, _local_random1, _local_random2 = self._broadcast_prepared_fields([
+                (self.sfc_field1, needs_data), (self.sfc_field2, needs_data),
+                (self.random1, needs_random), (self.random2, needs_random)])
+            self._run_phase_times['broadcast_seconds'] = time.perf_counter() - started
+            started = time.perf_counter()
             _local_delta1 = None
             _local_delta2 = None
             if "delta_dd" in expanded_products:
                 _local_delta1 = self._delta_field(_local_sfc1, _local_random1)
-                _local_delta2 = self._delta_field(_local_sfc2, _local_random2)
+                if self.reuse_input_fields and _local_sfc1 is _local_sfc2 and _local_random1 == _local_random2:
+                    _local_delta2 = _local_delta1
+                else:
+                    _local_delta2 = self._delta_field(_local_sfc2, _local_random2)
+            self._run_phase_times['delta_seconds'] = time.perf_counter() - started
+            compute_started = time.perf_counter()
+            if self.pair_reduction == 'spectral':
+                self._spectral_reducer = SpectralPairReducer(threads=self.threads)
+                self._spectral_reducer.prepare(self._product_field_pairs(
+                    expanded_products, _local_sfc1, _local_sfc2, _local_random1,
+                    _local_random2, _local_delta1, _local_delta2))
             self.corr2pcf_data.corr2pcf_info = self._current_task_params_snapshot()
             self.corr2pcf_data.task_params = self._current_task_params_snapshot()
             if rank == 0:
@@ -1215,6 +1307,13 @@ class Corr_2PCF(TaskBase):
             gathered_delta_dd = comm.gather(local_delta_dd, root=0)
             gathered_rr = comm.gather(local_rr, root=0)
             gathered_tasks = comm.gather(local_tasks, root=0)
+            local_metrics = dict(self._run_phase_times)
+            if self._spectral_reducer is not None:
+                local_metrics.update(self._spectral_reducer.metrics)
+            local_metrics['legacy_forward_fft_count'] = local_metrics['convolution_count']
+            local_metrics['legacy_inverse_fft_count'] = local_metrics['convolution_count']
+            gathered_metrics = comm.gather(local_metrics, root=0)
+            self._spectral_reducer = None
             if rank == 0:
                 gathered_by_product = {
                     "dd": gathered_dd,
@@ -1245,6 +1344,15 @@ class Corr_2PCF(TaskBase):
                     progress = 100.
                     self.logger.info(f"Progress: {progress:6.2f}%")
                 time_end = time.perf_counter()
+                self.runtime_metrics = dict(per_rank=gathered_metrics,
+                    input_preparation_seconds=self._pending_input_seconds,
+                    pre_2pcf_setup_seconds=time_start-time_run_1,
+                    main_loop_seconds=time_end-time_start,
+                    compute_including_spectral_setup_seconds=time_end-compute_started,
+                    pair_reduction=self.pair_reduction, reuse_input_fields=self.reuse_input_fields)
+                self.corr2pcf_data.corr2pcf_info['runtime_metrics'] = self.runtime_metrics
+                self._pending_input_seconds = 0.0
+                self.logger.info(f"2PCF compute including spectral setup: {time_end - compute_started:.4f} sec")
                 self.logger.info(f"2PCF main loop time: {time_end - time_start:.4f} sec")
                 self.logger.info("Main 2PCF loop finished, gathering results on rank 0 ...")
                 # Output the 2pcf

@@ -58,6 +58,8 @@
 		"threads": 1,
 		"products": "xi",
 		"memory_strategy": "speed",
+		"pair_reduction": "convolution",
+		"reuse_input_fields": false,
 		"binning_window_cache": false,
 		"binning_window_cache_dir": "",
 		"fout_path": ""
