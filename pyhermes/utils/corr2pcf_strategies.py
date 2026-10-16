@@ -28,24 +28,34 @@ def radial_function_integral(norms, weights, L, function, args):
 
 
 @njit(parallel=True)
-def transverse_table(L, bandwidth, scale, function):
+def _transverse_table(L, bandwidth, args, function):
     count = bandwidth * L + 1
     values = np.empty((count, count), dtype=np.float64)
     inv_L = 1.0 / L
     for a in prange(count):
         for b in range(count):
             frequency = np.sqrt((a * inv_L) ** 2 + (b * inv_L) ** 2)
-            values[a, b] = function(2 * np.pi * frequency * scale)
+            values[a, b] = function(frequency, *args)
     return values
 
 
 @njit
-def longitudinal_table(L, bandwidth, scale, function):
+def _longitudinal_table(L, bandwidth, args, function):
     values = np.empty(bandwidth * L + 1, dtype=np.float64)
     inv_L = 1.0 / L
     for c in range(len(values)):
-        values[c] = function(2 * np.pi * (c * inv_L) * scale)
+        values[c] = function(c * inv_L, *args)
     return values
+
+
+def transverse_table(L, bandwidth, lengths, function):
+    args = lengths if isinstance(lengths, tuple) else (lengths,)
+    return _transverse_table(L, bandwidth, args, function)
+
+
+def longitudinal_table(L, bandwidth, lengths, function):
+    args = lengths if isinstance(lengths, tuple) else (lengths,)
+    return _longitudinal_table(L, bandwidth, args, function)
 
 
 @njit(parallel=True, cache=True)
@@ -406,11 +416,14 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
                 lambda: np.multiply.outer(first, second),
             )
             return transverse, self._longitudinal(window, structure.longitudinal, z)
-        radius, height = (float(window.rescale_len_args[key]) for key in ("R", "H"))
+        lengths = tuple(
+            float(window.rescale_len_args[key]) for key in structure.transverse_args
+        )
+        height = float(window.rescale_len_args["H"])
         transverse = self._table(
-            ("transverse", window.L, window.bandwidth, structure.transverse, radius),
+            ("transverse", window.L, window.bandwidth, structure.transverse, lengths),
             lambda: transverse_table(
-                window.L, window.bandwidth, radius, structure.transverse
+                window.L, window.bandwidth, lengths, structure.transverse
             ),
         )
         return transverse, self._longitudinal(window, structure.longitudinal, height)

@@ -46,8 +46,10 @@ def window_function_sphere_numba(ki, kj, kk, R):
 def window_function_binned_shell_numba(ki, kj, kk, R_in, R_out):
     """Volume-normalized shell with explicit shared radial-bin edges."""
     inner, outer = R_in**3, R_out**3
-    return (outer * window_function_sphere_numba(ki, kj, kk, R_out)
-            - inner * window_function_sphere_numba(ki, kj, kk, R_in)) / (outer-inner)
+    return (
+        outer * window_function_sphere_numba(ki, kj, kk, R_out)
+        - inner * window_function_sphere_numba(ki, kj, kk, R_in)
+    ) / (outer - inner)
 
 
 @njit
@@ -94,12 +96,12 @@ def window_function_thick_shell_numba(ki, kj, kk, R, delta_R):
     if r_inner < 0.0:
         r_inner = 0.0
     r_outer = R + 0.5 * delta_R
-    denominator = r_outer ** 3 - r_inner ** 3
+    denominator = r_outer**3 - r_inner**3
     if denominator == 0.0:
         return 1.0
     return (
-        r_outer ** 3 * window_function_sphere_numba(ki, kj, kk, r_outer)
-        - r_inner ** 3 * window_function_sphere_numba(ki, kj, kk, r_inner)
+        r_outer**3 * window_function_sphere_numba(ki, kj, kk, r_outer)
+        - r_inner**3 * window_function_sphere_numba(ki, kj, kk, r_inner)
     ) / denominator
 
 
@@ -131,8 +133,9 @@ def window_function_gauss_shell_numba(ki, kj, kk, R_shell, R_smooth):
     else:
         shell_sinc = np.sin(q_shell) / q_shell
     result = (
-        (R_smooth * R_smooth * np.cos(q_shell) + R_shell * R_shell * shell_sinc) 
-        / denom * np.exp(-(q_smooth**2) / 2)
+        (R_smooth * R_smooth * np.cos(q_shell) + R_shell * R_shell * shell_sinc)
+        / denom
+        * np.exp(-(q_smooth**2) / 2)
     )
     return result
 
@@ -168,25 +171,47 @@ def window_function_cubic_numba(ki, kj, kk, Lx, Ly, Lz):
     return part_x * part_y * part_z
 
 
-# Reusable factors shared by mathematical window definitions and evaluators.
+# Shared factors take cycle frequency and grid-rescaled lengths, as full windows do.
 @njit
-def ring_transverse_factor(q):
-    return jn_numba(0, q)
+def ring_transverse_factor(frequency, R):
+    return jn_numba(0, 2.0 * np.pi * frequency * R)
 
 
 @njit
-def disk_transverse_factor(q):
+def disk_transverse_factor(frequency, R):
+    q = 2.0 * np.pi * frequency * R
     return 1.0 if q == 0.0 else 2.0 * jn_numba(1, q) / q
 
 
 @njit
-def axial_cos_factor(q):
-    return np.cos(q)
+def gaussian_ring_transverse_factor(frequency, R, sigma_perp):
+    q_smooth = 2.0 * np.pi * frequency * sigma_perp
+    return ring_transverse_factor(frequency, R) * np.exp(-0.5 * q_smooth * q_smooth)
 
 
 @njit
-def axial_sinc_factor(q):
+def axial_cos_factor(frequency, H):
+    return np.cos(2.0 * np.pi * frequency * H)
+
+
+@njit
+def axial_sinc_factor(frequency, H):
+    q = 2.0 * np.pi * frequency * H
     return 1.0 if q == 0.0 else np.sin(q) / q
+
+
+@njit
+def axial_frequencies(ki, kj, kk, nx, ny, nz):
+    """Geometry shared by all axisymmetric windows, including tilted LOS."""
+    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
+    if norm == 0.0:
+        return np.nan, np.nan
+    nx, ny, nz = nx / norm, ny / norm, nz / norm
+    parallel = ki * nx + kj * ny + kk * nz
+    perpendicular2 = ki * ki + kj * kj + kk * kk - parallel * parallel
+    if perpendicular2 < 0.0:
+        perpendicular2 = 0.0
+    return np.sqrt(perpendicular2), parallel
 
 
 # Line-of-sight windows.
@@ -199,26 +224,8 @@ def window_function_ring_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     should be passed via ``los_args``. ``R`` and ``H`` are lengths and should be
     passed via ``len_args``.
     """
-    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-    if norm == 0.0:
-        return np.nan
-    nx = nx / norm
-    ny = ny / norm
-    nz = nz / norm
-
-    k_parallel = ki * nx + kj * ny + kk * nz
-    k2 = ki * ki + kj * kj + kk * kk
-    k_perp2 = k2 - k_parallel * k_parallel
-
-    if k_perp2 < 0.0:
-        k_perp2 = 0.0
-
-    k_perp = np.sqrt(k_perp2)
-
-    q_perp = 2.0 * np.pi * k_perp * R
-    q_parallel = 2.0 * np.pi * k_parallel * H
-
-    return ring_transverse_factor(q_perp) * axial_cos_factor(q_parallel)
+    k_perp, k_parallel = axial_frequencies(ki, kj, kk, nx, ny, nz)
+    return ring_transverse_factor(k_perp, R) * axial_cos_factor(k_parallel, H)
 
 
 @njit
@@ -235,25 +242,8 @@ def window_function_disk_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     W(k; R, H) = (2*J1(q_perp)/q_perp) * cos(q_parallel),
     with the perpendicular factor set to 1 when q_perp = 0.
     """
-    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-    if norm == 0.0:
-        return np.nan
-    nx = nx / norm
-    ny = ny / norm
-    nz = nz / norm
-
-    k_parallel = ki * nx + kj * ny + kk * nz
-    k2 = ki * ki + kj * kj + kk * kk
-    k_perp2 = k2 - k_parallel * k_parallel
-
-    if k_perp2 < 0.0:
-        k_perp2 = 0.0
-
-    k_perp = np.sqrt(k_perp2)
-    q_perp = 2.0 * np.pi * k_perp * R
-    q_parallel = 2.0 * np.pi * k_parallel * H
-
-    return disk_transverse_factor(q_perp) * axial_cos_factor(q_parallel)
+    k_perp, k_parallel = axial_frequencies(ki, kj, kk, nx, ny, nz)
+    return disk_transverse_factor(k_perp, R) * axial_cos_factor(k_parallel, H)
 
 
 @njit
@@ -271,25 +261,8 @@ def window_function_cylshell_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     W(k; R, H) = J0(q_perp) * (sin(q_parallel)/q_parallel),
     with the parallel factor set to 1 when q_parallel = 0.
     """
-    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-    if norm == 0.0:
-        return np.nan
-    nx = nx / norm
-    ny = ny / norm
-    nz = nz / norm
-
-    k_parallel = ki * nx + kj * ny + kk * nz
-    k2 = ki * ki + kj * kj + kk * kk
-    k_perp2 = k2 - k_parallel * k_parallel
-
-    if k_perp2 < 0.0:
-        k_perp2 = 0.0
-
-    k_perp = np.sqrt(k_perp2)
-    q_perp = 2.0 * np.pi * k_perp * R
-    q_parallel = 2.0 * np.pi * k_parallel * H
-
-    return ring_transverse_factor(q_perp) * axial_sinc_factor(q_parallel)
+    k_perp, k_parallel = axial_frequencies(ki, kj, kk, nx, ny, nz)
+    return ring_transverse_factor(k_perp, R) * axial_sinc_factor(k_parallel, H)
 
 
 @njit
@@ -307,25 +280,24 @@ def window_function_cylinder_numba(ki, kj, kk, R, H, nx=0.0, ny=0.0, nz=1.0):
     W(k; R, H) = (2*J1(q_perp)/q_perp) * (sin(q_parallel)/q_parallel),
     with the corresponding factors set to 1 when q_perp = 0 or q_parallel = 0.
     """
-    norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-    if norm == 0.0:
-        return np.nan
-    nx = nx / norm
-    ny = ny / norm
-    nz = nz / norm
+    k_perp, k_parallel = axial_frequencies(ki, kj, kk, nx, ny, nz)
+    return disk_transverse_factor(k_perp, R) * axial_sinc_factor(k_parallel, H)
 
-    k_parallel = ki * nx + kj * ny + kk * nz
-    k2 = ki * ki + kj * kj + kk * kk
-    k_perp2 = k2 - k_parallel * k_parallel
 
-    if k_perp2 < 0.0:
-        k_perp2 = 0.0
+@njit
+def window_function_gaussian_ring_numba(
+    ki, kj, kk, R, H, sigma_perp, nx=0.0, ny=0.0, nz=1.0
+):
+    """Ring with transverse Gaussian damping of width sigma_perp.
 
-    k_perp = np.sqrt(k_perp2)
-    q_perp = 2.0 * np.pi * k_perp * R
-    q_parallel = 2.0 * np.pi * k_parallel * H
-
-    return disk_transverse_factor(q_perp) * axial_sinc_factor(q_parallel)
+    This is the existing Gaussian-ring example's definition, generalized to
+    the same LOS geometry as the other axial windows. It does not average
+    over a finite radial shell or change the longitudinal cosine factor.
+    """
+    k_perp, k_parallel = axial_frequencies(ki, kj, kk, nx, ny, nz)
+    return gaussian_ring_transverse_factor(k_perp, R, sigma_perp) * axial_cos_factor(
+        k_parallel, H
+    )
 
 
 # High-pass and wavelet-like filters.
@@ -338,7 +310,9 @@ def _cosine_wavelet_g_numba(q):
         return q_abs**4 / 3.0
     if q_abs > 50.0:
         return 0.0
-    return q_abs * (q_abs * np.cosh(q_abs) - np.sinh(q_abs)) * np.exp(-0.5 * q_abs * q_abs)
+    return (
+        q_abs * (q_abs * np.cosh(q_abs) - np.sinh(q_abs)) * np.exp(-0.5 * q_abs * q_abs)
+    )
 
 
 @njit
@@ -355,8 +329,8 @@ def window_function_cw_numba(ki, kj, kk, R):
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     q = 2 * np.pi * k * R
-    c_cw = 2 * np.sqrt(2.0) / (np.sqrt(1.0 + 5.0 * np.e) * np.pi ** 0.25)
-    norm = np.sqrt(2.0 * np.pi) * c_cw * R ** 0.5
+    c_cw = 2 * np.sqrt(2.0) / (np.sqrt(1.0 + 5.0 * np.e) * np.pi**0.25)
+    norm = np.sqrt(2.0 * np.pi) * c_cw * R**0.5
     return norm * _cosine_wavelet_g_numba(q)
 
 
@@ -372,8 +346,8 @@ def window_function_cws_numba(ki, kj, kk, R):
     """
     k = np.sqrt(ki**2 + kj**2 + kk**2)
     q = 2 * np.pi * k * R
-    c_cws = 2 * np.sqrt(2.0) / (np.sqrt(9.0 + 55.0 * np.e) * np.pi ** 0.75)
-    norm = (2.0 * np.pi) ** 1.5 * c_cws * R ** 1.5
+    c_cws = 2 * np.sqrt(2.0) / (np.sqrt(9.0 + 55.0 * np.e) * np.pi**0.75)
+    norm = (2.0 * np.pi) ** 1.5 * c_cws * R**1.5
     return norm * _cosine_wavelet_g_numba(q)
 
 
@@ -456,6 +430,7 @@ WINDOW_TYPE_DICT = {
     "gaussian_shell": window_function_gauss_shell_numba,
     "cubic": window_function_cubic_numba,
     "ring": window_function_ring_numba,
+    "gaussian_ring": window_function_gaussian_ring_numba,
     "disk": window_function_disk_numba,
     "cylshell": window_function_cylshell_numba,
     "cylinder": window_function_cylinder_numba,

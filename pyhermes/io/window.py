@@ -129,6 +129,13 @@ class WindowFunc(SFCField):
         return copy.deepcopy(other_args)
 
     def _validate_builtin_arguments(self):
+        if not self.has_custom_func and self.type == "gaussian_ring":
+            try:
+                sigma = float(self.rescale_len_args["sigma_perp"])
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("gaussian_ring requires a finite non-negative sigma_perp.") from exc
+            if not np.isfinite(sigma) or sigma < 0:
+                raise ValueError("gaussian_ring requires a finite non-negative sigma_perp.")
         if not self.has_custom_func and self.type == "binned_shell":
             inner, outer = (float(self.rescale_len_args[k]) for k in ("R_in", "R_out"))
             if not (np.isfinite(inner) and np.isfinite(outer) and 0 <= inner < outer):

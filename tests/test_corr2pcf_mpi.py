@@ -200,7 +200,15 @@ def test_empty_edge_rank_and_batch_sweep_counts(fft_mode):
 
 @pytest.mark.parametrize(
     "kind",
-    ["shell", "gaussian_shell", "thick_shell", "ring", "inverse_laplacian", "cubic"],
+    [
+        "shell",
+        "gaussian_shell",
+        "thick_shell",
+        "ring",
+        "inverse_laplacian",
+        "cubic",
+        "gaussian_ring",
+    ],
 )
 @pytest.mark.parametrize("count", [1, 40])
 def test_automatic_window_strategy_real_mpi(kind, count):
@@ -209,6 +217,11 @@ def test_automatic_window_strategy_real_mpi(kind, count):
     first, second = field(865), field(866)
     random1, random2 = field(867), field(868)
     specifications = {
+        "gaussian_ring": dict(
+            type="gaussian_ring",
+            len_args={"R": None, "H": None, "sigma_perp": 2.0},
+            mapping="smu_to_RH",
+        ),
         "cubic": dict(
             type="cubic",
             len_args={"Lx": 4.0, "Ly": 8.0, "Lz": 12.0},
@@ -237,7 +250,7 @@ def test_automatic_window_strategy_real_mpi(kind, count):
                     random="uniform",
                     sampling=(
                         {"s": list(np.linspace(4.0, 24.0, count)), "mu": [0.5]}
-                        if kind == "ring"
+                        if kind in ("ring", "gaussian_ring")
                         else {"s": list(np.linspace(4.0, 24.0, count))}
                     ),
                     binning_window=specifications[kind],
@@ -267,7 +280,10 @@ def test_automatic_window_strategy_real_mpi(kind, count):
                             values[name], saved[name], rtol=1e-8, atol=1e-11
                         )
                     rows = current.runtime_metrics["per_rank"]
-                    if kind in ("ring", "cubic") and count >= 4 * COMM.Get_size():
+                    if (
+                        kind in ("ring", "cubic", "gaussian_ring")
+                        and count >= 4 * COMM.Get_size()
+                    ):
                         assert any(row["factor_batch_count"] > 0 for row in rows)
                     assert sum(row["forward_fft_count"] for row in rows) == 6
                     assert sum(row["legacy_inverse_fft_count"] for row in rows) == 0

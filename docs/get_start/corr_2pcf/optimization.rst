@@ -44,7 +44,7 @@ strategy by mathematical structure instead of selecting a backend per window:
   ``inverse_laplacian``) share exact squared-frequency grouping. The original
   function is evaluated on every occupied class. Built-in ``thick_shell`` and
   ``binned_shell`` retain adjacent ball-boundary sharing.
-- ``ring``, ``disk``, ``cylshell`` and ``cylinder`` with a line of sight exactly
+- ``ring``, ``gaussian_ring``, ``disk``, ``cylshell`` and ``cylinder`` with a line of sight exactly
   on any grid axis share bounded transverse/longitudinal factor tables. The
   original special functions, scaling weights and fold are retained. An almost
   aligned line of sight is not rounded onto an axis by this strategy.
@@ -56,7 +56,9 @@ strategy by mathematical structure instead of selecting a backend per window:
 When a rank owns at least four compatible separable samples, automatic planning
 reduces small batches of at most eight queries in one traversal. Only the
 fold/power reads and each alias's scaling product are shared across queries;
-each window still receives its original alias terms. There is no scaling
+each window still receives its original alias terms. Factor metadata supports
+multiple length arguments, so Gaussian-ring damping uses the same backend
+without a separate reduction kernel. There is no scaling
 factorization across aliases. Original factor tables plus stacked batch arrays
 must fit the same scratch guard. Small/mixed/oversized local groups keep single
 query evaluation. The entire local planning and batch work is timed in the

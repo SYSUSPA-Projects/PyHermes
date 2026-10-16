@@ -89,6 +89,10 @@ Unit-integral smoothing and binning windows satisfy
      - Thin anisotropic pair bin
      - ``R``, ``H``
      - :math:`J_0(k_\perp R)\cos(k_\parallel H)`
+   * - ``gaussian_ring``
+     - Transversely smoothed ring
+     - ``R``, ``H``, ``sigma_perp``
+     - :math:`J_0(k_\perp R)\exp[-(k_\perp\sigma_\perp)^2/2]\cos(k_\parallel H)`
    * - ``disk``
      - Filled transverse disk at :math:`\pm H`
      - ``R``, ``H``
@@ -105,6 +109,24 @@ Unit-integral smoothing and binning windows satisfy
 For ``ring`` and ``disk``, ``H`` is the line-of-sight offset. For
 ``cylshell`` and ``cylinder``, ``H`` is the half-height, so the real-space
 support is :math:`|z|\leq H`.
+
+``gaussian_ring`` applies Gaussian damping in the transverse plane; it is
+not an isotropic Gaussian shell. Its finite non-negative ``sigma_perp`` is
+specified in the same physical units as ``R`` and ``H``. For a sampled 2PCF:
+
+.. code-block:: python
+
+   binning_window = {
+       "type": "gaussian_ring",
+       "len_args": {"R": None, "H": None, "sigma_perp": 5.0},
+       "mapping": "smu_to_RH",
+       "los_args": {"nx": 0, "ny": 0, "nz": 1},
+   }
+
+With ``spectral_window="auto"``, an exactly grid-aligned line of sight uses
+its transverse and longitudinal factors through the common separable backend.
+A custom ``func`` remains authoritative, including for a dictionary named
+``gaussian_ring``; it is not silently replaced by the built-in definition.
 
 ``thick_shell`` clips its inner radius at zero and requires
 ``delta_R > 0``:

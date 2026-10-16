@@ -13,6 +13,7 @@ from pyhermes.utils.convolution import (
 )
 from pyhermes.utils.corr2pcf_spectral import _half_spectrum_inner_product
 from pyhermes.utils.corr2pcf_window_reduction import octant_radial_power
+from pyhermes.utils.special_functions import jn_numba as ring_bessel
 from pyhermes.utils.window_functions import WINDOW_TYPE_DICT
 from pyhermes.utils.window_structure import BUILTIN_STRUCTURES
 
@@ -273,9 +274,8 @@ def test_uniform_only_analytic_product_needs_no_window_plan():
     a = field()
     values = []
     for mode in ["materialized", "auto"]:
-        current = task(
-            "spectral", True, spectral_window=mode, products=["rr"], sfc_field=a
-        )
+        current = task("spectral", True, spectral_window=mode, products=["rr"])
+        current.sfc_field1 = current.sfc_field2 = a
         current.prepare_input_fields(sfc_field1=a, sfc_field2=a)
         values.append(current.run(save_result=False).rr)
     np.testing.assert_array_equal(*values)
@@ -304,3 +304,113 @@ def test_factor_batches_bound_scratch_and_rebuild_between_runs():
         )
         assert current._window_evaluator is None
     assert not np.allclose(values[0], values[1], rtol=1e-10, atol=1e-12)
+
+
+@njit
+def original_gaussian_ring(ki, kj, kk, R, H, sigma_perp):
+    k_perp = np.sqrt(ki * ki + kj * kj)
+    return (
+        ring_bessel(0, 2 * np.pi * k_perp * R)
+        * np.exp(-0.5 * (2 * np.pi * k_perp * sigma_perp) ** 2)
+        * np.cos(2 * np.pi * kk * H)
+    )
+
+
+@pytest.mark.parametrize("bandwidth", [1, 2])
+def test_gaussian_ring_matches_original_custom_definition(bandwidth):
+    L = 8
+    rng = np.random.default_rng(878)
+    power = rng.normal(size=(L, L, L // 2 + 1))
+    phi = rng.uniform(0.1, 2.0, bandwidth * L + 1)
+    expected_kernel = fold_octant_window_to_rfft_kernel(
+        calculate_real_window_octant_array_numba(
+            L, bandwidth, phi, original_gaussian_ring, 1.7, 0.9, 0.4
+        )
+    )
+    structure = BUILTIN_STRUCTURES["gaussian_ring"]
+    transverse = strategies.transverse_table(
+        L, bandwidth, (1.7, 0.4), structure.transverse
+    )
+    longitudinal = strategies.longitudinal_table(
+        L, bandwidth, 0.9, structure.longitudinal
+    )
+    actual = strategies.octant_factor_integral(
+        power, bandwidth, phi, transverse, longitudinal, 2
+    )
+    expected = _half_spectrum_inner_product(power, expected_kernel, L)
+    np.testing.assert_allclose(actual, expected, rtol=3e-12, atol=2e-13)
+
+
+@pytest.mark.parametrize("nonuniform", [False, True])
+def test_builtin_gaussian_ring_and_custom_fallback(nonuniform):
+    window = dict(
+        type="gaussian_ring",
+        len_args={"R": None, "H": None, "sigma_perp": 5.0},
+        mapping="smu_to_RH",
+        kernel_mode="octant",
+    )
+    metrics = compare_pipeline(
+        window, {"s": [0.0, 4.0, 8.0, 12.0], "mu": [0.0, 0.5, 1.0]}, nonuniform
+    )
+    assert metrics["factor_batch_count"] > 0
+    window = dict(window, func=original_gaussian_ring)
+    metrics = compare_pipeline(
+        window, {"s": [0.0, 4.0, 8.0, 12.0], "mu": [0.0, 0.5, 1.0]}, nonuniform
+    )
+    assert set(metrics["window_strategy_counts"]) == {"fused"}
+
+
+@pytest.mark.parametrize("kind", ["ring", "disk", "cylshell", "cylinder"])
+def test_axial_mathematics_matches_original_expression(kind):
+    for coordinates in [(0.0, 0.0, 0.0), (0.1, 0.23, 0.37), (-0.17, 0.31, -0.71)]:
+        for los in [(0.0, 0.0, 1.0), (1.0, 0.0, 0.0), (1.0, 2.0, 3.0)]:
+            k = np.asarray(coordinates)
+            n = np.asarray(los)
+            n = n / np.sqrt(np.sum(n * n))
+            parallel = float(np.sum(k * n))
+            perpendicular = np.sqrt(max(0.0, np.sum(k * k) - parallel * parallel))
+            qp = 2 * np.pi * perpendicular * 1.7
+            qz = 2 * np.pi * parallel * 0.9
+            transverse = (
+                ring_bessel(0, qp)
+                if kind in ("ring", "cylshell")
+                else (1.0 if qp == 0 else 2 * ring_bessel(1, qp) / qp)
+            )
+            longitudinal = (
+                np.cos(qz)
+                if kind in ("ring", "disk")
+                else (1.0 if qz == 0 else np.sin(qz) / qz)
+            )
+            actual = WINDOW_TYPE_DICT[kind](*coordinates, 1.7, 0.9, *los)
+            np.testing.assert_allclose(
+                actual, transverse * longitudinal, rtol=1e-13, atol=1e-13
+            )
+
+
+@pytest.mark.parametrize("sigma", [-1.0, np.nan, np.inf])
+def test_gaussian_ring_rejects_invalid_width(sigma):
+    from pyhermes.io import WindowFunc
+
+    a = field()
+    with pytest.raises(ValueError, match="finite non-negative sigma_perp"):
+        WindowFunc(
+            dict(type="gaussian_ring", len_args=dict(R=4.0, H=2.0, sigma_perp=sigma)),
+            a.sfc_info,
+            phi_array=np.ones(64),
+            phi_fourier_power=np.ones(9),
+        )
+
+
+def test_zero_width_gaussian_ring_is_ring_and_tilt_uses_generic_path():
+    coords = (0.1, -0.23, 0.37)
+    los = (1.0, 2.0, 3.0)
+    np.testing.assert_allclose(
+        WINDOW_TYPE_DICT["gaussian_ring"](*coords, 1.7, 0.9, 0.0, *los),
+        WINDOW_TYPE_DICT["ring"](*coords, 1.7, 0.9, *los),
+        rtol=1e-14,
+    )
+    metrics = compare_pipeline(dict(
+        type="gaussian_ring", len_args=dict(R=None, H=None, sigma_perp=5.0),
+        mapping="smu_to_RH", los_args=dict(nx=1.0, ny=2.0, nz=3.0),
+    ), {"s": [0.0, 4.0], "mu": [0.0, 0.5, 1.0]})
+    assert set(metrics["window_strategy_counts"]) == {"materialized"}

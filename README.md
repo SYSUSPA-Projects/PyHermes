@@ -65,7 +65,7 @@ space, avoiding inverse FFTs and full convolution-result arrays. Prepared inputs
 source spectra, and adjacent finite-shell boundaries are reused within one run.
 `auto` groups exact radial frequency classes for `shell`, `gaussian_shell`,
 `thick_shell`, and other built-in isotropic windows. For a grid-axis line of
-sight, `ring`, `disk`, `cylshell`, and `cylinder` share a separable factor-table
+sight, `ring`, `gaussian_ring`, `disk`, `cylshell`, and `cylinder` share a separable factor-table
 backend; `cubic` reuses this backend through its three sinc factors. Tilted or unsupported windows retain the applicable generic path.
 Every original alias scaling weight and folding multiplicity is retained;
 there is no interpolation or change to the window definition.

@@ -12,6 +12,7 @@ from pyhermes.utils.window_functions import (
     axial_cos_factor,
     axial_sinc_factor,
     disk_transverse_factor,
+    gaussian_ring_transverse_factor,
     ring_transverse_factor,
 )
 
@@ -23,6 +24,7 @@ class WindowStructure:
     longitudinal: object = None
     ball_bounds: object = None
     zero_dc: bool = False
+    transverse_args: tuple = ("R",)
 
 
 def _explicit_bounds(window):
@@ -59,6 +61,12 @@ BUILTIN_STRUCTURES.update(
         ),
         "ring": WindowStructure(
             "separable_axial", ring_transverse_factor, axial_cos_factor
+        ),
+        "gaussian_ring": WindowStructure(
+            "separable_axial",
+            gaussian_ring_transverse_factor,
+            axial_cos_factor,
+            transverse_args=("R", "sigma_perp"),
         ),
         "disk": WindowStructure(
             "separable_axial", disk_transverse_factor, axial_cos_factor
