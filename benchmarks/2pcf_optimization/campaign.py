@@ -74,10 +74,10 @@ def launch(case, manifest_sha):
     case = dict(case, source_manifest_sha256=manifest_sha)
     save(folder / 'case.json', case)
     env = dict(os.environ, PYTHONPATH=str(ROOT / case['source']) + ':' + str(ROOT),
-        OMP_NUM_THREADS='4', NUMBA_NUM_THREADS='4', OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
+        OMP_NUM_THREADS=str(case.get('threads', 4)), NUMBA_NUM_THREADS=str(case.get('threads', 4)), OPENBLAS_NUM_THREADS='1', MKL_NUM_THREADS='1',
         NUMEXPR_NUM_THREADS='1', OMP_DYNAMIC='FALSE', OMP_MAX_ACTIVE_LEVELS='1', OMP_PROC_BIND='false',
         NUMBA_CACHE_DIR=str(OUT / 'numba_cache'), PYHERMES_MPI_LOG_MODE='root')
-    command = [str(Path(sys.executable).parent / 'mpirun'), '-np', '8', '--map-by', 'slot',
+    command = [str(Path(sys.executable).parent / 'mpirun'), '-np', str(case.get('ranks', 8)), '--map-by', 'slot',
                '--bind-to', 'none', sys.executable, str(ROOT / 'measure.py'), '--case', str(folder / 'case.json')]
     started, peak, samples, overhead = time.time(), 0, 0, 0.
     with (folder / 'worker.log').open('w') as stream:
