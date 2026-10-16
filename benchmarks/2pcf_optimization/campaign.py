@@ -2,7 +2,6 @@
 import hashlib
 import json
 import os
-import re
 import signal
 import subprocess
 import sys
@@ -35,13 +34,12 @@ def topology():
     raw = subprocess.check_output(['lscpu', '-p=CPU,CORE,SOCKET,NODE'], text=True)
     allocation = subprocess.check_output(['scontrol', 'show', 'job', '-d', os.environ['SLURM_JOB_ID'], '--oneliner'], text=True)
     (OUT / 'allocation.txt').write_text(allocation)
-    found = re.search(r'CPU_IDs=([0-9,\-]+)', allocation)
-    assert found, 'Need explicit allocated CPU_IDs'
-    allocated = set()
-    for part in found.group(1).split(','):
-        bounds = list(map(int, part.split('-')))
-        allocated.update(range(bounds[0], bounds[-1]+1))
-    allowed = set(os.sched_getaffinity(0)) & allocated
+    # Slurm CPU_IDs use topology numbering; they are not Linux CPU IDs.
+    # The batch affinity is Slurm's actual Linux mask after --hint=nomultithread.
+    allowed = set(os.sched_getaffinity(0))
+    save(OUT / 'batch_affinity.json', dict(allowed=sorted(allowed)))
+    (OUT / 'topology.txt').write_text(raw)
+    assert len(allowed) == 32, ('Expected an allocation-bound32CPU batch mask', sorted(allowed))
     nodes, seen = {}, set()
     for line in raw.splitlines():
         if line.startswith('#'):
@@ -53,6 +51,8 @@ def topology():
     # Build only four-core groups wholly within one NUMA node, balanced if possible.
     chunks = {node: [sorted(values)[i:i+4] for i in range(0, len(values)-3, 4)]
               for node, values in nodes.items()}
+    assert len(seen) == 32, ('Allocation must contain32 distinct physical cores', nodes)
+    leftovers = [cpu for values in nodes.values() for cpu in sorted(values)[len(values)//4*4:]]
     groups = []
     while len(groups) < 8:
         progress = False
@@ -60,7 +60,10 @@ def topology():
             if chunks[node] and len(groups) < 8:
                 groups.append(chunks[node].pop(0))
                 progress = True
-        assert progress, ('Need32 different physical cores in groups of4', nodes)
+        if not progress:
+            assert len(leftovers) >= 4, ('Cannot form32-core rank groups', nodes)
+            groups.append(leftovers[:4])
+            leftovers = leftovers[4:]
     return groups, raw, sorted(allowed)
 
 
