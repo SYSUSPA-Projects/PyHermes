@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=fig13-2pcf-opt
 #SBATCH --partition=normal
-#SBATCH --qos=qosnormal
+#SBATCH --qos=normal
 #SBATCH --nodes=1
 #SBATCH --ntasks=8
 #SBATCH --cpus-per-task=4
