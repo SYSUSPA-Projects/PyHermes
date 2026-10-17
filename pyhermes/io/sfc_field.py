@@ -149,6 +149,19 @@ class SFCField(HermesData):
 
         return new
 
+    def pair_with(self, other=None, *, threads=None):
+        """Prepare an experimental local windowed pair product.
+
+        ``pair @ window`` equals ``mean((self @ window) * other)``;
+        ``pair.evaluate(windows)`` shares window plans across a whole curve.
+        Omitting other gives an autocorrelation. This returns a pair mean,
+        not an automatically RR-normalized xi. Keep source arrays unchanged
+        until the pair is closed, preferably through a ``with`` block.
+        """
+        from .pair_product import PairProduct
+
+        return PairProduct(self, other, threads=threads)
+
     def __matmul__(self, other):
         if isinstance(other, SFCField):
             return self._conv(other)
