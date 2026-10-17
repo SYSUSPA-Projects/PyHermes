@@ -85,6 +85,21 @@ for numerical checks and workload-specific performance, including the
 [matched 46×51 axial-window measurements](docs/2pcf_window_strategies_results_20261017.md#matched-axial-sampling-follow-up)
 and amortized task time per sample.
 
+### Experimental low-level pair expressions
+
+On `codex/2pcf-pair-expression`, a real `SFCField` can prepare a reusable local
+pair with `field.pair_with(other)`. `pair @ window` returns the coefficient-array
+pair mean; `pair.evaluate(windows)` also shares automatic window plans. Apply
+RR normalization explicitly when constructing xi. Complex-response windows
+retain the phase-preserving convolution fallback. Keep inputs unchanged until
+the pair is closed; a `with` block releases its retained powers.
+
+The standalone [temporary comparison notebook](examples/notebooks/tmp_corr2pcf_pair_expression_comparison.ipynb)
+extracts the original direct reconstruction and compares old/scalar/batched
+expressions, including preparation in the measured totals. It also demonstrates
+why complex cross-power phases matter for directional windows. This experiment
+has not been integrated into the main 2PCF tutorial.
+
 ### Standard angular three-point statistics
 
 `Corr_3PCF` prepares box-random contrast fields once per product and shares the
