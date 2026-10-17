@@ -291,6 +291,43 @@ task totals, retains all three samples, and reports independent ring batch RSS.
 Its task totals contain no catalogue projection and should not replace the
 earlier projection-inclusive Fig. 13 timing values.
 
+The following summary uses ``J=8``, 32 distinct physical cores and 8 MPI ranks
+with 4 threads each. Each timing is the minimum of three fresh-process runs;
+main-loop and task-total minima are selected independently. The two per-sample
+columns are calculated from unrounded minima, then displayed to three decimals.
+
+.. csv-table:: Optimized window-family timings
+   :file: ../../_static/results/twopcf_window_strategies_20261017.csv
+   :header-rows: 1
+   :widths: 22 10 17 17 17 17
+
+Here task total starts before reading the saved, already projected field and
+includes input IO, preparation, initial FFT and the full sampling loop. Main
+loop includes window planning, tables, batches and communication, but excludes
+initial spectral setup. Neither includes catalogue projection, imports,
+small-grid JIT warmup, output IO or diagnostic hashing. The task/sample value
+therefore includes amortized fixed preparation costs.
+
+``ring``, ``gaussian_ring``, ``disk``, ``cylshell`` and ``cylinder`` each use
+46 values of :math:`s` from 0 to 180 in steps of 4, and 51 values of
+:math:`\mu` from 0 to 1 in steps of 0.02: 2346 samples in total. ``shell``,
+``gaussian_shell`` and ``cubic`` share 31 values of :math:`s` from 5 to 150;
+``thick_shell`` instead uses the centres of 31 adjacent bins over that range.
+The ``cubic`` benchmark is a one-dimensional size scan at fixed rectangular
+aspect ratio ``Lx:Ly:Lz=1:1.3:0.7``. Identical sampling counts or coordinates
+do not make different window definitions identical observables.
+
+The rows combine verified jobs 127023, 127025, 127033 and 127085 from separate
+allocations. They describe these workloads and are not a controlled cross-job
+speedup comparison. The last job refreshes only disk/cylshell/cylinder with the
+full grid; earlier valid measurements are reused. All nine new formal runs and
+six gates passed, and their shared old 64-point subsets agree exactly.
+
+Download the :download:`displayed table as CSV
+</_static/results/twopcf_window_strategies_20261017.csv>` or the
+:download:`unrounded repetitions and source jobs as JSON
+</_static/results/twopcf_window_strategies_20261017.json>`.
+
 Verified example refresh
 ------------------------
 

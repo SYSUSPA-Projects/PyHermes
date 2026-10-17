@@ -1,6 +1,6 @@
 # Exact shared window strategies for 2PCF (2026-10-17)
 
-These controlled CPU measurements extend the earlier finite-shell optimization. They use the same original preprojected J=8 RSD field (406,728 unit-weight haloes, periodic box 1000 Mpc/h, db2, bandwidth 1) on cn5, an AMD EPYC 9754 node. Every case uses 32 distinct physical cores. Main/default interfaces and the per-alias scaling/folding relation are unchanged. The new strategies are enabled with spectral reduction, input reuse, automatic windows and shared FFTs; the defaults remain unchanged.
+These controlled CPU measurements extend the earlier finite-shell optimization. They use the same original preprojected J=8 RSD field (406,728 unit-weight haloes, periodic box 1000 Mpc/h, db2, bandwidth 1) on AMD EPYC 9754 CPU nodes: the initial cohorts ran on cn5 and the full axial sampling follow-up ran on cn1. Every case uses 32 distinct physical cores. Main/default interfaces and the per-alias scaling/folding relation are unchanged. The new strategies are enabled with spectral reduction, input reuse, automatic windows and shared FFTs; the defaults remain unchanged.
 
 **Timing boundary:** input is a saved, already projected SFC field. Task total includes reading that field, preparation, initial FFT/power/broadcast, planning, tables and the complete sampling loop. It contains no catalogue projection. Main loop includes all radial grouping/factor planning/batch work and communication, but excludes initial FFT setup. Imports, small-J compilation warmup and output IO/audits are outside both numbers. Every formal run is a new process with fresh production fields/windows/powers; OS and eligible Numba disk caches may be warm. Startup and warmup are retained in raw records. These are not cold application timings or the projection-inclusive Fig.13 timings.
 
@@ -14,17 +14,23 @@ task-time minima and includes amortized input/setup/FFT cost; it is not the
 incremental cost of adding one sample. Original64-point measurements are retained
 in the controlled stage tables below.
 
-|Window|Samples|Main / s|Task / s|Task/sample / ms|
-|---|---:|---:|---:|---:|
-|shell|31|0.085|0.453|14.606|
-|thick_shell|31|0.082|0.470|15.159|
-|gaussian_shell|31|0.083|0.471|15.185|
-|ring|2346|6.869|7.285|3.105|
-|gaussian_ring|2346|6.690|7.100|3.026|
-|disk|2346|6.839|7.395|3.152|
-|cylshell|2346|6.136|6.599|2.813|
-|cylinder|2346|6.186|6.849|2.920|
-|cubic|31|0.264|0.669|21.589|
+|Window|Samples|Main / s|Task / s|Main/sample / ms|Task/sample / ms|
+|---|---:|---:|---:|---:|---:|
+|shell|31|0.085|0.453|2.752|14.606|
+|thick_shell|31|0.082|0.470|2.632|15.159|
+|gaussian_shell|31|0.083|0.471|2.661|15.185|
+|ring|2346|6.869|7.285|2.928|3.105|
+|gaussian_ring|2346|6.690|7.100|2.852|3.026|
+|disk|2346|6.839|7.395|2.915|3.152|
+|cylshell|2346|6.136|6.599|2.615|2.813|
+|cylinder|2346|6.186|6.849|2.637|2.920|
+|cubic|31|0.264|0.669|8.528|21.589|
+
+The main/sample and task/sample columns divide the respective unrounded minima
+by the sampling count. Initial input/setup/FFT cost is included only in the task
+column. Raw repetitions, minima, medians, ranges and source jobs are bundled in
+[the numeric JSON](_static/results/twopcf_window_strategies_20261017.json);
+[the CSV](_static/results/twopcf_window_strategies_20261017.csv) contains the displayed table.
 
 ## Matched axial sampling follow-up
 
