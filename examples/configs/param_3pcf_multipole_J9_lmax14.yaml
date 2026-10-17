@@ -1,7 +1,10 @@
+# CPU Gamma example; saved historical pre-correction outputs are kept separately.
 Corr_3PCF_Multipole:
+   summation_backend: "cpu"
+   summation_method: "gamma"
    sfc_field: "./output/quijote8000_snap004_sfc_J9.pkl"
    random: "uniform"
-   fout_path: "./output/quijote8000_snap004_3pcf_multipole_J9_lmax14.pkl"
+   fout_path: "./output/quijote8000_snap004_3pcf_multipole_J9_lmax14_gamma_corrected_20261017.pkl"
    window2:
       type: "sphere"
       len_args:
@@ -29,4 +32,4 @@ Corr_3PCF_Multipole:
    gpu_device_id: 0
    products: "zeta_l"
    execution_mode: "pair_mpi"
-   threads: 8
+   threads: 16

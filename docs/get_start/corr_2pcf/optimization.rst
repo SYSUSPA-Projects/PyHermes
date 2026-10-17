@@ -2,15 +2,16 @@
 =========================
 
 The optional spectral path evaluates the same field products and folded
-windows used by :doc:`corr_2pcf`. The fastest radial path applies to built-in
-finite spherical shells. Original estimator normalizations, bin edges, scaling
+windows used by :doc:`corr_2pcf`. Automatic strategies cover built-in radial and grid-axis separable windows.
+The explicit finite-shell path also remains available. Original estimator normalizations, bin edges, scaling
 weights and folding multiplicities are retained.
 
-Enable the finite-shell path
-----------------------------
+Recommended configuration
+-------------------------
 
-Add these settings to an existing ``Corr_2PCF`` configuration with its chosen
-input fields, products and sampling:
+Use one configuration across supported window families. Add these settings
+to an existing ``Corr_2PCF`` task with its chosen input fields, products and
+sampling; the finite shell below is just an example:
 
 .. code-block:: yaml
 
@@ -18,7 +19,7 @@ input fields, products and sampling:
       memory_strategy: speed
       pair_reduction: spectral
       reuse_input_fields: true
-      spectral_window: shell_edges_radial
+      spectral_window: auto
       spectral_fft: shared
       binning_window:
          type: thick_shell
@@ -32,6 +33,64 @@ scientific window parameters of your own calculation. Explicit boundaries use
 Defaults remain ``pair_reduction: convolution``, ``reuse_input_fields: false``,
 ``spectral_window: materialized`` and ``spectral_fft: per_rank``. Enabling one
 switch does not implicitly enable the others.
+
+Automatic window strategies
+---------------------------
+
+The recommended ``spectral_window: auto`` chooses a strategy by mathematical
+structure. You do not need to select a different backend for each window:
+
+- Built-in radial windows (``shell``, ``gaussian_shell``, ``sphere``,
+  ``gaussian``, ``cw``, ``cws``, ``gdw``, ``laplacian`` and
+  ``inverse_laplacian``) share exact squared-frequency grouping. The original
+  function is evaluated on every occupied class. Built-in ``thick_shell`` and
+  ``binned_shell`` retain adjacent ball-boundary sharing.
+- ``ring``, ``gaussian_ring``, ``disk``, ``cylshell`` and ``cylinder`` with a line of sight exactly
+  on any grid axis share bounded transverse/longitudinal factor tables. The
+  original special functions, scaling weights and fold are retained. An almost
+  aligned line of sight is not rounded onto an axis by this strategy.
+  The Cartesian ``cubic`` window reuses the same backend through its three
+  one-dimensional sinc factors; no separate per-window reduction is needed.
+- Other real octant windows use generic fused scalar reduction; unsupported,
+  complex, disk-cached and composite windows retain their existing paths.
+
+When a rank owns at least four compatible separable samples, automatic planning
+reduces small batches of at most eight queries in one traversal. Only the
+fold/power reads and each alias's scaling product are shared across queries;
+each window still receives its original alias terms. Factor metadata supports
+multiple length arguments, so Gaussian-ring damping uses the same backend
+without a separate reduction kernel. There is no scaling
+factorization across aliases. Original factor tables plus stacked batch arrays
+must fit the same scratch guard. Small/mixed/oversized local groups keep single
+query evaluation. The entire local planning and batch work is timed in the
+main loop.
+
+The radial planner is collective and is used when all queries are radial,
+there are at least as many samples as MPI ranks (and at least two samples), and
+scratch fits the 256 MiB per-rank guard. Otherwise it uses fused reduction;
+finite-shell scratch overflow retains the existing batch-edge fallback. This
+is a resource guard, not an assertion that automatic execution is always
+fastest. One field pair is grouped/evaluated at a time to bound scratch memory.
+The inverse Laplacian removes the entire folded DC coefficient, including its
+nonzero aliases, as in the materialized implementation.
+
+Separable factor tables use at most 16 MiB of persistent LRU cache per rank and
+at most 64 MiB for the table pair currently being evaluated. Oversized tables
+fall back to fused reduction. These limits exclude input fields, pair powers,
+Numba compilation/runtime memory and the rest of the task. Caches last only
+for one run. Kernels taking dynamic window-function arguments compile once per
+process instead of persisting dispatcher weak references in disk-cache indices;
+other eligible kernels retain disk caches. Record startup/prewarm time separately.
+Planning, table construction and all associated collectives count
+inside the reported main loop, including work for the first sample.
+
+An explicit custom callable remains authoritative even if ``type`` names a
+built-in window. It uses generic evaluation by default. Advanced authors may
+set ``structure: radial`` in its window dictionary to promise a real radial
+function under the existing octant contract; incorrect declarations change
+the meaning of the calculation and are the author's responsibility. No
+structure is inferred from the callable name. Existing configurations need
+no declaration.
 
 Compatibility with existing calls
 ---------------------------------
@@ -138,7 +197,8 @@ Options and fallbacks
    * - ``spectral_window``
      - ``materialized``
      - Alternatives: ``fused``, ``shell_edges``, ``shell_edges_batch`` and
-       ``shell_edges_radial``. Shared-edge paths require built-in finite shells
+       ``shell_edges_radial``; ``auto`` selects a structural strategy. Shared-edge
+       paths require built-in finite shells
        to activate their shell-specific optimization.
    * - ``memory_strategy``
      - ``speed``
@@ -220,3 +280,76 @@ The :download:`detailed measurement report
 <../../2pcf_radial_optimization_results_20261016.md>` retains the complete
 validation and timing context. No absolute-accuracy or universal-speed claim
 is inferred from this comparison.
+
+Controlled window-family measurements
+-------------------------------------
+
+The :download:`2026-10-17 window-strategy report </2pcf_window_strategies_results_20261017.md>`
+compares exact radial grouping, shared axial/Cartesian factors and bounded query
+batches. It separates main-loop, FFT-inclusive compute and preprojected-field
+task totals, retains all three samples, and reports independent ring batch RSS.
+Its task totals contain no catalogue projection and should not replace the
+earlier projection-inclusive Fig. 13 timing values.
+
+The following summary uses ``J=8``, 32 distinct physical cores and 8 MPI ranks
+with 4 threads each. Each timing is the minimum of three fresh-process runs;
+main-loop and task-total minima are selected independently. The two per-sample
+columns are calculated from unrounded minima, then displayed to three decimals.
+
+.. csv-table:: Optimized window-family timings
+   :file: ../../_static/results/twopcf_window_strategies_20261017.csv
+   :header-rows: 1
+   :widths: 22 10 17 17 17 17
+
+Here task total starts before reading the saved, already projected field and
+includes input IO, preparation, initial FFT and the full sampling loop. Main
+loop includes window planning, tables, batches and communication, but excludes
+initial spectral setup. Neither includes catalogue projection, imports,
+small-grid JIT warmup, output IO or diagnostic hashing. The task/sample value
+therefore includes amortized fixed preparation costs.
+
+``ring``, ``gaussian_ring``, ``disk``, ``cylshell`` and ``cylinder`` each use
+46 values of :math:`s` from 0 to 180 in steps of 4, and 51 values of
+:math:`\mu` from 0 to 1 in steps of 0.02: 2346 samples in total. ``shell``,
+``gaussian_shell`` and ``cubic`` share 31 values of :math:`s` from 5 to 150;
+``thick_shell`` instead uses the centres of 31 adjacent bins over that range.
+The ``cubic`` benchmark is a one-dimensional size scan at fixed rectangular
+aspect ratio ``Lx:Ly:Lz=1:1.3:0.7``. Identical sampling counts or coordinates
+do not make different window definitions identical observables.
+
+The rows combine verified jobs 127023, 127025, 127033 and 127085 from separate
+allocations. They describe these workloads and are not a controlled cross-job
+speedup comparison. The last job refreshes only disk/cylshell/cylinder with the
+full grid; earlier valid measurements are reused. All nine new formal runs and
+six gates passed, and their shared old 64-point subsets agree exactly.
+
+Download the :download:`displayed table as CSV
+</_static/results/twopcf_window_strategies_20261017.csv>` or the
+:download:`unrounded repetitions and source jobs as JSON
+</_static/results/twopcf_window_strategies_20261017.json>`.
+
+Verified example refresh
+------------------------
+
+The affected 2PCF and CPU Gamma multipole examples have new versioned outputs
+and executed notebook plots. The report separates preprojected-field task
+time from main-loop time, records input provenance and RSS observer overhead,
+and explains the historical angular-comparison boundary:
+
+:download:`Example measurements and verification (2026-10-17) <../../examples_refresh_results_20261017.md>`
+
+Implementation organization
+---------------------------
+
+Window formulas and mathematical-structure declarations are separate from
+execution planning. Finite shells and general radial queries reuse the same
+basis checks, MPI consistency checks and exact histogram reduction. Separable
+windows share one bounded factor-table cache and the existing single/batch
+kernels. The task delegates planning inside its main-loop timer; collective
+radial planning and rank-local factor batches remain explicit. These internal
+helpers add no public configuration option and do not change alias weights.
+
+Historical explicit window strategies remain available for comparison and
+specialized use. Start with ``auto`` for ordinary supported workloads; use
+``shell_edges_radial`` when you specifically want the earlier finite-shell
+strategy. Automatic mode retains the resource guards and fallbacks above.

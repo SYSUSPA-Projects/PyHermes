@@ -2,14 +2,14 @@ import copy
 
 import numpy as np
 
-ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell"}
+ANISOTROPIC_AUTO_WINDOW_TYPES = {"ring", "disk", "cylinder", "cylshell", "gaussian_ring"}
 COMPLEX_RFFT_WINDOW_TYPES = {"directional_derivative"}
 COMPLEX_FULL_FFT_WINDOW_TYPES = {"legendre_multipole", "radial_multipole"}
 VALID_KERNEL_MODES = {"auto", "octant", "full_rfft", "complex_rfft", "complex_full_fft"}
 LOS_ARG_KEYS = ("nx", "ny", "nz")
 DEFAULT_LOS_ARGS = {"nx": 0.0, "ny": 0.0, "nz": 1.0}
 LOS_AWARE_WINDOW_TYPES = ANISOTROPIC_AUTO_WINDOW_TYPES | COMPLEX_RFFT_WINDOW_TYPES
-BUILTIN_BINNING_WINDOW_TYPES = {"shell", "thick_shell"} | ANISOTROPIC_AUTO_WINDOW_TYPES
+BUILTIN_BINNING_WINDOW_TYPES = {"shell", "thick_shell"} | (ANISOTROPIC_AUTO_WINDOW_TYPES - {"gaussian_ring"})
 
 
 def default_binning_window():
@@ -141,6 +141,8 @@ def apply_builtin_binning_window_defaults(binning_window):
         params.setdefault("other_args", {})
         params.setdefault("mapping", "s_to_R")
     elif window_type in LOS_AWARE_WINDOW_TYPES:
+        if window_type == "gaussian_ring":
+            params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("sigma_perp",))
         params["len_args"] = merge_len_arg_defaults(params.get("len_args", {}), ("R", "H"))
         params.setdefault("los_args", copy.deepcopy(DEFAULT_LOS_ARGS))
         params.setdefault("other_args", {})

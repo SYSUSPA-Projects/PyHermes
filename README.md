@@ -46,32 +46,38 @@ for every configuration.
 
 ### Optional spectral 2PCF computation
 
-The current source tree includes an opt-in spectral path for finite spherical
-bins. Add these settings to an existing `Corr_2PCF` task using the built-in
-`thick_shell` or `binned_shell` window, keeping its bin edges and sampling:
+The current source tree includes an opt-in spectral path with automatic window
+strategies. Add these settings to an existing `Corr_2PCF` task, keeping its
+window definition, bin edges, and sampling:
 
 ```python
 fast_options = dict(
     memory_strategy="speed",
     pair_reduction="spectral",
     reuse_input_fields=True,
-    spectral_window="shell_edges_radial",
+    spectral_window="auto",
     spectral_fft="shared",
 )
 ```
 
 Parseval's identity evaluates the required field products directly in Fourier
 space, avoiding inverse FFTs and full convolution-result arrays. Prepared inputs,
-source spectra, and adjacent shell boundaries are reused within one run. Exact
-integer radial classes reduce repeated spherical-window evaluation while
-retaining every alias's scaling weight and folding multiplicity.
+source spectra, and adjacent finite-shell boundaries are reused within one run.
+`auto` groups exact radial frequency classes for `shell`, `gaussian_shell`,
+`thick_shell`, and other built-in isotropic windows. For a grid-axis line of
+sight, `ring`, `gaussian_ring`, `disk`, `cylshell`, and `cylinder` share a separable factor-table
+backend; `cubic` reuses this backend through its three sinc factors. Tilted or unsupported windows retain the applicable generic path.
+Every original alias scaling weight and folding multiplicity is retained;
+there is no interpolation or change to the window definition.
 
 The default remains the convolution path. Caches do not reuse production results
 between runs; custom or unsupported windows retain their existing fallbacks.
 See the [2PCF spectral guide](docs/get_start/corr_2pcf/optimization.rst) for
 parameters, equations, memory limits, and total-time versus main-loop timing,
-and the [controlled measurement report](docs/2pcf_radial_optimization_results_20261016.md)
-for numerical checks and workload-specific performance.
+and the [controlled window-strategy report](docs/2pcf_window_strategies_results_20261017.md)
+for numerical checks and workload-specific performance, including the
+[matched 46×51 axial-window measurements](docs/2pcf_window_strategies_results_20261017.md#matched-axial-sampling-follow-up)
+and amortized task time per sample.
 
 ### Three-point multipoles in 1.2
 
@@ -108,6 +114,9 @@ FFTs. **Recompute affected Gamma multipole measurements made with 1.1;
 existing catalogue projections can be reused.** Source FFT reuse trades
 memory for computation; speedups depend on workload and CPU placement.
 See [CHANGELOG.md](CHANGELOG.md) for the correction and migration notes.
+The [verified example refresh](docs/examples_refresh_results_20261017.md)
+records the new 2PCF and corrected CPU multipole outputs, observed timings,
+input provenance and executed notebook plots. Historical results are retained.
 
 ## Installation
 

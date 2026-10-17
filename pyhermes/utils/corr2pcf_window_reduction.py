@@ -12,35 +12,45 @@ from numba import get_num_threads, njit, prange
 from pyhermes.utils.convolution import _ordered_window_args
 from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.window_functions import window_function_sphere_numba
+from pyhermes.utils.window_structure import linear_ball_bounds
 
 
-@njit(parallel=True, cache=True)
+@njit(inline="always")
+def octant_fold_weight(power, i, j, k):
+    """Transpose the original eight-term fold, including boundary multiplicities."""
+    L = power.shape[0]
+    x, y, z = i % L, j % L, min(k, L - k)
+    rx, ry = (L - i) % L, (L - j) % L
+    weight = power[x, y, z]
+    if 0 < i < L:
+        weight += power[rx, y, z]
+    if 0 < j < L:
+        weight += power[x, ry, z]
+        if 0 < i < L:
+            weight += power[rx, ry, z]
+    if 0 < k < L:
+        weight *= 2.0
+    return weight
+
+
+# A dynamic function argument must not persist mortal dispatcher weakrefs in
+# Numba disk-cache indices. Compilation is reused within each process.
+@njit(parallel=True)
 def octant_pair_integral(power, bandwidth, phi, function, zero_dc, *args):
     L = power.shape[0]
     partials = np.zeros(L + 1, dtype=np.float64)
     inv_L = 1.0 / L
     for i in prange(L + 1):
         x = i % L
-        reflected_x = (L - i) % L
         for j in range(L + 1):
             y = j % L
-            reflected_y = (L - j) % L
             value = 0.0
             for k in range(L + 1):
                 # Each octant entry appears once or twice along x/y, and
                 # at Nyquist twice along z. Retain those boundary multiplicities.
                 if zero_dc and x == 0 and y == 0 and k % L == 0:
                     continue
-                z = min(k, L - k)
-                weight = power[x, y, z]
-                if 0 < i < L:
-                    weight += power[reflected_x, y, z]
-                if 0 < j < L:
-                    weight += power[x, reflected_y, z]
-                    if 0 < i < L:
-                        weight += power[reflected_x, reflected_y, z]
-                if 0 < k < L:
-                    weight *= 2.0
+                weight = octant_fold_weight(power, i, j, k)
                 temp = 0.0
                 for ii in range(bandwidth):
                     for jj in range(bandwidth):
@@ -71,22 +81,11 @@ def octant_ball_integrals_batch(power, bandwidth, phi, radii):
     partials = np.zeros((L + 1, count), dtype=np.float64)
     inv_L = 1.0 / L
     for i in prange(L + 1):
-        x, reflected_x = i % L, (L-i) % L
         accumulated = np.zeros(count, dtype=np.float64)
         terms = np.empty(count, dtype=np.float64)
         for j in range(L + 1):
-            y, reflected_y = j % L, (L-j) % L
             for k in range(L + 1):
-                z = min(k, L-k)
-                weight = power[x, y, z]
-                if 0 < i < L:
-                    weight += power[reflected_x, y, z]
-                if 0 < j < L:
-                    weight += power[x, reflected_y, z]
-                    if 0 < i < L:
-                        weight += power[reflected_x, reflected_y, z]
-                if 0 < k < L:
-                    weight *= 2.0
+                weight = octant_fold_weight(power, i, j, k)
                 for edge in range(count):
                     terms[edge] = 0.0
                 for ii in range(bandwidth):
@@ -125,7 +124,7 @@ def radial_scratch_bytes(L, bandwidth, threads):
 
 
 @njit(parallel=True, cache=True)
-def _octant_radial_power(power, bandwidth, phi, rank, size, threads):
+def _octant_radial_power(power, bandwidth, phi, rank, size, threads, zero_dc=False):
     """Group the original weighted alias terms by exact integer squared norm.
 
     Each term retains phi[a]*phi[b]*phi[c] BEFORE grouping. The MPI ranks
@@ -138,20 +137,13 @@ def _octant_radial_power(power, bandwidth, phi, rank, size, threads):
     for thread in prange(threads):
         for plane in range(thread, (L + size - rank) // size, threads):
             i = rank + plane * size
-            x, reflected_x = i % L, (L-i) % L
+            x = i % L
             for j in range(L + 1):
-                y, reflected_y = j % L, (L-j) % L
+                y = j % L
                 for k in range(L + 1):
-                    z = min(k, L-k)
-                    weight = power[x, y, z]
-                    if 0 < i < L:
-                        weight += power[reflected_x, y, z]
-                    if 0 < j < L:
-                        weight += power[x, reflected_y, z]
-                        if 0 < i < L:
-                            weight += power[reflected_x, reflected_y, z]
-                    if 0 < k < L:
-                        weight *= 2.0
+                    if zero_dc and x == 0 and y == 0 and k % L == 0:
+                        continue
+                    weight = octant_fold_weight(power, i, j, k)
                     for ii in range(bandwidth):
                         for jj in range(bandwidth):
                             for kk in range(bandwidth):
@@ -167,10 +159,10 @@ def _octant_radial_power(power, bandwidth, phi, rank, size, threads):
     return result
 
 
-def octant_radial_power(power, bandwidth, phi, rank=0, size=1):
+def octant_radial_power(power, bandwidth, phi, rank=0, size=1, zero_dc=False):
     # Explicit thread count keeps the compiled kernel disk-cacheable. Each
     # parallel work item owns its histogram even if the runtime reschedules it.
-    return _octant_radial_power(power, bandwidth, phi, rank, size, get_num_threads())
+    return _octant_radial_power(power, bandwidth, phi, rank, size, get_num_threads(), zero_dc)
 
 
 @njit(parallel=True, cache=True)
@@ -198,19 +190,30 @@ def supports_octant(window):
 
 
 def shell_bounds(window):
-    # A custom callable is authoritative, including one named binned_shell.
-    if not supports_octant(window) or window.has_custom_func:
+    if not supports_octant(window):
         return None
-    if window.type == 'binned_shell':
-        inner, outer = (window.rescale_len_args[k] for k in ('R_in', 'R_out'))
-    elif window.type == 'thick_shell':
-        radius, width = (window.rescale_len_args[k] for k in ('R', 'delta_R'))
-        inner, outer = max(0., radius-width/2), radius+width/2
-    else:
-        return None
-    if not (np.isfinite(inner) and np.isfinite(outer) and 0 <= inner < outer):
-        return None
-    return float(inner), float(outer)
+    return linear_ball_bounds(window)
+
+
+def same_window_basis(windows):
+    """Whether all queries use identical grid, bandwidth and scaling weights."""
+    if not windows:
+        return False
+    reference = windows[0]
+    return all(
+        window.L == reference.L
+        and window.bandwidth == reference.bandwidth
+        and np.array_equal(window.phi_fourier_power, reference.phi_fourier_power)
+        for window in windows
+    )
+
+
+def matching_rank_descriptors(comm, descriptor, eligible):
+    """Keep every rank on the same collective planning or fallback path."""
+    descriptors = comm.allgather(descriptor)
+    return all(comm.allgather(eligible)) and all(
+        item == descriptors[0] for item in descriptors
+    )
 
 
 class ScalarWindowEvaluator:
@@ -229,6 +232,21 @@ class ScalarWindowEvaluator:
                             radial_group_seconds=0., radial_evaluate_seconds=0.,
                             radial_group_count=0, radial_occupied_bins=0, radial_scratch_bound_bytes=0)
 
+    def _group_radial_power(self, power, reference, comm, zero_dc=False):
+        """Shared exact grouping and MPI reduction; retain one pair at a time."""
+        started = time.perf_counter()
+        histogram = octant_radial_power(
+            power, reference.bandwidth, reference.phi_fourier_power,
+            comm.Get_rank(), comm.Get_size(), zero_dc=zero_dc,
+        )
+        self.metrics['radial_group_seconds'] += time.perf_counter() - started
+        self.metrics['radial_group_count'] += 1
+        started = time.perf_counter()
+        combined = np.empty_like(histogram)
+        comm.Allreduce(histogram, combined, op=MPI.SUM)
+        self.metrics['shell_edge_collective_seconds'] += time.perf_counter() - started
+        return combined
+
     def prepare_shell_edges(self, windows, comm):
         started = time.perf_counter()
         bounds = [shell_bounds(window) for window in windows]
@@ -237,14 +255,11 @@ class ScalarWindowEvaluator:
             self.metrics['shell_edges_fallback'] = 'unsupported window; use ordinary fused/materialized path'
             return
         reference = windows[0]
-        eligible = all(window.L == reference.L and window.bandwidth == reference.bandwidth
-                       and np.array_equal(window.phi_fourier_power, reference.phi_fourier_power)
-                       for window in windows)
+        eligible = same_window_basis(windows)
         radii = sorted({radius for pair in bounds for radius in pair})
         powers = list(self.reducer.powers.items())
         descriptor = (reference.L, reference.bandwidth, radii, len(powers))
-        descriptors = comm.allgather(descriptor)
-        if not all(comm.allgather(eligible)) or any(item != descriptor for item in descriptors):
+        if not matching_rank_descriptors(comm, descriptor, eligible):
             self.metrics['shell_edges_fallback'] = 'different basis/edge/pair descriptors between ranks'
             return
         self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-started
@@ -260,16 +275,8 @@ class ScalarWindowEvaluator:
                 self.metrics['radial_edges_fallback'] = 'scratch bound exceeded; use batch edges'
         if radial:
             for key, power in powers:
-                stamp = time.perf_counter()
-                histogram = octant_radial_power(power, reference.bandwidth,
-                    reference.phi_fourier_power, comm.Get_rank(), comm.Get_size())
-                self.metrics['radial_group_seconds'] += time.perf_counter()-stamp
-                self.metrics['radial_group_count'] += 1
+                global_histogram = self._group_radial_power(power, reference, comm)
                 self.metrics['shell_edge_sweeps'] += 1
-                stamp = time.perf_counter()
-                global_histogram = np.empty_like(histogram)
-                comm.Allreduce(histogram, global_histogram, op=MPI.SUM)
-                self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-stamp
                 stamp = time.perf_counter()
                 squared_norms = np.flatnonzero(global_histogram).astype(np.int64)
                 weights = global_histogram[squared_norms]
@@ -278,7 +285,7 @@ class ScalarWindowEvaluator:
                 self.metrics['radial_evaluate_seconds'] += time.perf_counter()-stamp
                 for radius, value in zip(local_radii, values):
                     self.shell_values[key, float(radius)] = float(value)
-                del histogram, global_histogram, squared_norms, weights
+                del global_histogram, squared_norms, weights
             local = [(float(radius), [self.shell_values[key, float(radius)] for key, _ in powers])
                      for radius in local_radii]
             self.metrics['shell_edge_max_batch'] = len(local_radii)
