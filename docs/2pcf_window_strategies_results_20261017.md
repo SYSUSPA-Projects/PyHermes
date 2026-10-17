@@ -4,6 +4,27 @@ These controlled CPU measurements extend the earlier finite-shell optimization. 
 
 **Timing boundary:** input is a saved, already projected SFC field. Task total includes reading that field, preparation, initial FFT/power/broadcast, planning, tables and the complete sampling loop. It contains no catalogue projection. Main loop includes all radial grouping/factor planning/batch work and communication, but excludes initial FFT setup. Imports, small-J compilation warmup and output IO/audits are outside both numbers. Every formal run is a new process with fresh production fields/windows/powers; OS and eligible Numba disk caches may be warm. Startup and warmup are retained in raw records. These are not cold application timings or the projection-inclusive Fig.13 timings.
 
+## Optimized workloads and amortized cost
+
+The following summary retains the earlier three-process minima at J=8,
+32 physical cores, 8x4. Task/sample is calculated from the unrounded task-time
+minimum; it includes amortized input/setup/FFT cost and is not the incremental
+cost of adding one sample. Workloads have different sample counts and window
+definitions. The internal strategy cleanup does not replace these server
+measurements with new timings.
+
+|Window|Samples|Main / s|Task / s|Task/sample / ms|
+|---|---:|---:|---:|---:|
+|shell|31|0.085|0.453|14.606|
+|thick_shell|31|0.082|0.470|15.159|
+|gaussian_shell|31|0.083|0.471|15.185|
+|ring|2346|6.869|7.285|3.105|
+|gaussian_ring|2346|6.690|7.100|3.026|
+|disk|64|0.280|0.677|10.581|
+|cylshell|64|0.336|0.778|12.158|
+|cylinder|64|0.288|0.759|11.854|
+|cubic|31|0.264|0.669|21.589|
+
 ## First stage: structure-aware evaluation
 
 Job 127023 compares the public-main baseline with c5b2220 in one fixed allocation, alternating order, three independent processes per arm. Baseline uses fused reduction except the already optimized finite-shell path. Minimum of three is shown; all slow samples, medians and ranges are retained. Radial windows have 31 samples, ring has 46×51=2346, and the other axial windows have 64.

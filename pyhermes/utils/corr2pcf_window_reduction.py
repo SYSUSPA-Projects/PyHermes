@@ -195,6 +195,27 @@ def shell_bounds(window):
     return linear_ball_bounds(window)
 
 
+def same_window_basis(windows):
+    """Whether all queries use identical grid, bandwidth and scaling weights."""
+    if not windows:
+        return False
+    reference = windows[0]
+    return all(
+        window.L == reference.L
+        and window.bandwidth == reference.bandwidth
+        and np.array_equal(window.phi_fourier_power, reference.phi_fourier_power)
+        for window in windows
+    )
+
+
+def matching_rank_descriptors(comm, descriptor, eligible):
+    """Keep every rank on the same collective planning or fallback path."""
+    descriptors = comm.allgather(descriptor)
+    return all(comm.allgather(eligible)) and all(
+        item == descriptors[0] for item in descriptors
+    )
+
+
 class ScalarWindowEvaluator:
     """Single-run cache of scalar ball integrals, never full window/results across runs."""
 
@@ -211,6 +232,21 @@ class ScalarWindowEvaluator:
                             radial_group_seconds=0., radial_evaluate_seconds=0.,
                             radial_group_count=0, radial_occupied_bins=0, radial_scratch_bound_bytes=0)
 
+    def _group_radial_power(self, power, reference, comm, zero_dc=False):
+        """Shared exact grouping and MPI reduction; retain one pair at a time."""
+        started = time.perf_counter()
+        histogram = octant_radial_power(
+            power, reference.bandwidth, reference.phi_fourier_power,
+            comm.Get_rank(), comm.Get_size(), zero_dc=zero_dc,
+        )
+        self.metrics['radial_group_seconds'] += time.perf_counter() - started
+        self.metrics['radial_group_count'] += 1
+        started = time.perf_counter()
+        combined = np.empty_like(histogram)
+        comm.Allreduce(histogram, combined, op=MPI.SUM)
+        self.metrics['shell_edge_collective_seconds'] += time.perf_counter() - started
+        return combined
+
     def prepare_shell_edges(self, windows, comm):
         started = time.perf_counter()
         bounds = [shell_bounds(window) for window in windows]
@@ -219,14 +255,11 @@ class ScalarWindowEvaluator:
             self.metrics['shell_edges_fallback'] = 'unsupported window; use ordinary fused/materialized path'
             return
         reference = windows[0]
-        eligible = all(window.L == reference.L and window.bandwidth == reference.bandwidth
-                       and np.array_equal(window.phi_fourier_power, reference.phi_fourier_power)
-                       for window in windows)
+        eligible = same_window_basis(windows)
         radii = sorted({radius for pair in bounds for radius in pair})
         powers = list(self.reducer.powers.items())
         descriptor = (reference.L, reference.bandwidth, radii, len(powers))
-        descriptors = comm.allgather(descriptor)
-        if not all(comm.allgather(eligible)) or any(item != descriptor for item in descriptors):
+        if not matching_rank_descriptors(comm, descriptor, eligible):
             self.metrics['shell_edges_fallback'] = 'different basis/edge/pair descriptors between ranks'
             return
         self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-started
@@ -242,16 +275,8 @@ class ScalarWindowEvaluator:
                 self.metrics['radial_edges_fallback'] = 'scratch bound exceeded; use batch edges'
         if radial:
             for key, power in powers:
-                stamp = time.perf_counter()
-                histogram = octant_radial_power(power, reference.bandwidth,
-                    reference.phi_fourier_power, comm.Get_rank(), comm.Get_size())
-                self.metrics['radial_group_seconds'] += time.perf_counter()-stamp
-                self.metrics['radial_group_count'] += 1
+                global_histogram = self._group_radial_power(power, reference, comm)
                 self.metrics['shell_edge_sweeps'] += 1
-                stamp = time.perf_counter()
-                global_histogram = np.empty_like(histogram)
-                comm.Allreduce(histogram, global_histogram, op=MPI.SUM)
-                self.metrics['shell_edge_collective_seconds'] += time.perf_counter()-stamp
                 stamp = time.perf_counter()
                 squared_norms = np.flatnonzero(global_histogram).astype(np.int64)
                 weights = global_histogram[squared_norms]
@@ -260,7 +285,7 @@ class ScalarWindowEvaluator:
                 self.metrics['radial_evaluate_seconds'] += time.perf_counter()-stamp
                 for radius, value in zip(local_radii, values):
                     self.shell_values[key, float(radius)] = float(value)
-                del histogram, global_histogram, squared_norms, weights
+                del global_histogram, squared_norms, weights
             local = [(float(radius), [self.shell_values[key, float(radius)] for key, _ in powers])
                      for radius in local_radii]
             self.metrics['shell_edge_max_batch'] = len(local_radii)

@@ -1192,6 +1192,40 @@ class Corr_2PCF(TaskBase):
                  'rr': (random1, random2), 'delta_dd': (delta1, delta2)}
         return [pairs[name] for name in products if name in pairs]
 
+    def _windows_for_tasks(self, tasks, reference):
+        if reference is None:
+            return []
+        windows = []
+        for row in tasks:
+            _, sample = task_to_sample(row, self.sampling_names)
+            windows.append(self._build_binning_window_for_sample(sample, reference))
+        return windows
+
+    def _prepare_window_evaluation(self, tasks, local_tasks, fields):
+        """Plan inside the main timer; keep collective and local paths distinct."""
+        if self.binning_window_cache:
+            return
+        mode = self.spectral_window
+        edge_modes = ('shell_edges', 'shell_edges_batch', 'shell_edges_radial')
+        if mode not in (*edge_modes, 'auto'):
+            return
+        comm = self.comm
+        rank = self.rank
+        reference = self._reference_pair_field(*fields)
+        evaluator = self._window_evaluator
+        if mode in edge_modes:
+            all_tasks = comm.bcast(tasks, root=0)
+            evaluator.prepare_shell_edges(self._windows_for_tasks(all_tasks, reference), comm)
+            return
+        first_row = comm.bcast(tasks[0] if rank == 0 else None, root=0)
+        first_windows = self._windows_for_tasks([first_row], reference)
+        first_window = first_windows[0] if first_windows else None
+        if all(comm.allgather(evaluator.needs_radial_plan(first_window))):
+            all_tasks = comm.bcast(tasks, root=0)
+            evaluator.prepare_auto(self._windows_for_tasks(all_tasks, reference), comm)
+        elif evaluator.needs_factor_plan(first_window):
+            evaluator.prepare_local(self._windows_for_tasks(local_tasks, reference))
+
     def run(self, save_result=True, overwrite=False):
         self._sync_runtime_options()
         if self.memory_strategy == "memory":
@@ -1269,43 +1303,12 @@ class Corr_2PCF(TaskBase):
                 result_shape = None
             # Scatter to all ranks
             task_sub_arr = comm.scatter(task_sub_arrs, root=0)
-            if self._window_evaluator is not None and self.spectral_window in ('shell_edges','shell_edges_batch','shell_edges_radial') and not self.binning_window_cache:
-                # These collectives and all edge work remain INSIDE the main-loop timer.
-                all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
-                reference = self._reference_pair_field(_local_sfc1, _local_sfc2, _local_random1,
-                                                       _local_random2, _local_delta1, _local_delta2)
-                windows = []
-                if reference is not None:
-                    for row in all_tasks:
-                        _, sample = task_to_sample(row, self.sampling_names)
-                        windows.append(self._build_binning_window_for_sample(sample, reference))
-                self._window_evaluator.prepare_shell_edges(windows, comm)
-            if (self.spectral_window == 'auto' and self._window_evaluator is not None
-                    and not self.binning_window_cache):
-                # Radial plans require global queries/collectives; other structures
-                # remain lazy and avoid building every bin on every MPI rank.
-                first_row = comm.bcast(tasks[0] if rank == 0 else None, root=0)
-                reference = self._reference_pair_field(
-                    _local_sfc1, _local_sfc2, _local_random1, _local_random2,
-                    _local_delta1, _local_delta2)
-                first_window = None
-                if reference is not None:
-                    _, sample = task_to_sample(first_row, self.sampling_names)
-                    first_window = self._build_binning_window_for_sample(sample, reference)
-                eligible = self._window_evaluator.needs_radial_plan(first_window)
-                if all(comm.allgather(eligible)):
-                    all_tasks = comm.bcast(tasks if rank == 0 else None, root=0)
-                    windows = []
-                    for row in all_tasks:
-                        _, sample = task_to_sample(row, self.sampling_names)
-                        windows.append(self._build_binning_window_for_sample(sample, reference))
-                    self._window_evaluator.prepare_auto(windows, comm)
-                elif self._window_evaluator.needs_factor_plan(first_window):
-                    windows = []
-                    for row in task_sub_arr:
-                        _, sample = task_to_sample(row, self.sampling_names)
-                        windows.append(self._build_binning_window_for_sample(sample, reference))
-                    self._window_evaluator.prepare_local(windows)
+            if self._window_evaluator is not None:
+                self._prepare_window_evaluation(
+                    tasks if rank == 0 else None, task_sub_arr,
+                    (_local_sfc1, _local_sfc2, _local_random1, _local_random2,
+                     _local_delta1, _local_delta2),
+                )
             # Local process status
             local_completed = 0
             progress_tracker = TaskProgress(comm, len(task_sub_arr))

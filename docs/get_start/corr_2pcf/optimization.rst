@@ -6,11 +6,12 @@ windows used by :doc:`corr_2pcf`. Automatic strategies cover built-in radial and
 The explicit finite-shell path also remains available. Original estimator normalizations, bin edges, scaling
 weights and folding multiplicities are retained.
 
-Enable the finite-shell path
-----------------------------
+Recommended configuration
+-------------------------
 
-Add these settings to an existing ``Corr_2PCF`` configuration with its chosen
-input fields, products and sampling:
+Use one configuration across supported window families. Add these settings
+to an existing ``Corr_2PCF`` task with its chosen input fields, products and
+sampling; the finite shell below is just an example:
 
 .. code-block:: yaml
 
@@ -18,7 +19,7 @@ input fields, products and sampling:
       memory_strategy: speed
       pair_reduction: spectral
       reuse_input_fields: true
-      spectral_window: shell_edges_radial
+      spectral_window: auto
       spectral_fft: shared
       binning_window:
          type: thick_shell
@@ -36,8 +37,8 @@ switch does not implicitly enable the others.
 Automatic window strategies
 ---------------------------
 
-Use the same four options above with ``spectral_window: auto`` to choose a
-strategy by mathematical structure instead of selecting a backend per window:
+The recommended ``spectral_window: auto`` chooses a strategy by mathematical
+structure. You do not need to select a different backend for each window:
 
 - Built-in radial windows (``shell``, ``gaussian_shell``, ``sphere``,
   ``gaussian``, ``cw``, ``cws``, ``gdw``, ``laplacian`` and
@@ -299,3 +300,19 @@ time from main-loop time, records input provenance and RSS observer overhead,
 and explains the historical angular-comparison boundary:
 
 :download:`Example measurements and verification (2026-10-17) <../../examples_refresh_results_20261017.md>`
+
+Implementation organization
+---------------------------
+
+Window formulas and mathematical-structure declarations are separate from
+execution planning. Finite shells and general radial queries reuse the same
+basis checks, MPI consistency checks and exact histogram reduction. Separable
+windows share one bounded factor-table cache and the existing single/batch
+kernels. The task delegates planning inside its main-loop timer; collective
+radial planning and rank-local factor batches remain explicit. These internal
+helpers add no public configuration option and do not change alias weights.
+
+Historical explicit window strategies remain available for comparison and
+specialized use. Start with ``auto`` for ordinary supported workloads; use
+``shell_edges_radial`` when you specifically want the earlier finite-shell
+strategy. Automatic mode retains the resource guards and fallbacks above.

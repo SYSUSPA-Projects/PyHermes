@@ -8,7 +8,6 @@ from numba import get_num_threads, njit, prange
 
 from pyhermes.utils import corr2pcf_window_reduction as legacy
 from pyhermes.utils.convolution import _ordered_window_args
-from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.window_structure import describe_window, exact_grid_axis
 
 FACTOR_CACHE_BYTES = 16 * 1024**2
@@ -136,13 +135,41 @@ def octant_factor_integrals_batch(
     return result
 
 
+class _FactorTableCache:
+    """Per-run bounded factor ownership, with the existing diagnostic metrics."""
+
+    def __init__(self, metrics):
+        self._values = OrderedDict()
+        self._bytes = 0
+        self.metrics = metrics
+
+    def get(self, key, builder):
+        if key in self._values:
+            value = self._values.pop(key)
+            self._values[key] = value
+            self.metrics["factor_cache_hits"] += 1
+            return value
+        started = time.perf_counter()
+        value = builder()
+        self.metrics["factor_table_seconds"] += time.perf_counter() - started
+        self.metrics["factor_table_build_count"] += 1
+        if value.nbytes <= FACTOR_CACHE_BYTES:
+            while self._values and self._bytes + value.nbytes > FACTOR_CACHE_BYTES:
+                _, old = self._values.popitem(last=False)
+                self._bytes -= old.nbytes
+            self._values[key] = value
+            self._bytes += value.nbytes
+            self.metrics["factor_cache_peak_bytes"] = max(
+                self.metrics["factor_cache_peak_bytes"], self._bytes
+            )
+        return value
+
+
 class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
     """A bounded per-run planner; custom functions never inferred from names."""
 
     def __init__(self, reducer):
         super().__init__(reducer, radial_edges=True)
-        self.factor_cache = OrderedDict()
-        self.factor_cache_bytes = 0
         self.radial_results = {}
         self.factor_results = {}
         self.metrics.update(
@@ -157,6 +184,7 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             factor_batch_count=0,
             factor_batch_max_size=0,
         )
+        self._factor_cache = _FactorTableCache(self.metrics)
 
     @staticmethod
     def needs_radial_plan(window):
@@ -202,49 +230,49 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
                 else "shell_edges_batch"
             )
             return
+        queries = self._radial_queries(windows, comm)
+        if queries is not None:
+            self._prepare_radial_results(windows[0], queries, comm)
+
+    @staticmethod
+    def _query_descriptor(window, signature):
+        args = None
+        if signature is not None:
+            args = (
+                signature[1], signature[2],
+                tuple(t.__module__ + "." + t.__qualname__ for t in signature[3]),
+            )
+        return (
+            window.type, getattr(window.func, "__module__", ""),
+            getattr(window.func, "__name__", ""), args,
+        )
+
+    def _radial_queries(self, windows, comm):
+        """Validate shared queries and resources before any grouping collective."""
         reference = windows[0]
         signatures = [self.signature(w) for w in windows]
         eligible = (
             len(windows) >= max(2, comm.Get_size())
             and all(s is not None for s in signatures)
-            and all(
-                w.L == reference.L
-                and w.bandwidth == reference.bandwidth
-                and np.array_equal(w.phi_fourier_power, reference.phi_fourier_power)
-                for w in windows
-            )
+            and legacy.same_window_basis(windows)
         )
         scratch = legacy.radial_scratch_bytes(
             reference.L, reference.bandwidth, get_num_threads()
         )
         self.metrics["radial_scratch_bound_bytes"] = scratch
         eligible = eligible and scratch <= legacy.RADIAL_SCRATCH_LIMIT_BYTES
-        descriptor = [
-            (
-                w.type,
-                getattr(w.func, "__module__", ""),
-                getattr(w.func, "__name__", ""),
-                (
-                    (
-                        s[1],
-                        s[2],
-                        tuple(t.__module__ + "." + t.__qualname__ for t in s[3]),
-                    )
-                    if s
-                    else None
-                ),
-            )
-            for w, s in zip(windows, signatures)
-        ]
-        descriptors = comm.allgather(
-            (reference.L, reference.bandwidth, descriptor, len(self.reducer.powers))
+        descriptor = (
+            reference.L, reference.bandwidth,
+            [self._query_descriptor(w, s) for w, s in zip(windows, signatures)],
+            len(self.reducer.powers),
         )
-        if not all(comm.allgather(eligible)) or any(
-            d != descriptors[0] for d in descriptors
-        ):
+        if not legacy.matching_rank_descriptors(comm, descriptor, eligible):
             self.metrics["auto_plan"] = "fused_radial_guard"
-            return
-        queries = list(dict.fromkeys(signatures))
+            return None
+        return list(dict.fromkeys(signatures))
+
+    def _prepare_radial_results(self, reference, queries, comm):
+        """Evaluate compatible radial queries with bounded per-pair scratch."""
         powers = list(self.reducer.powers.items())
         zero_modes = sorted({s[2] for s in queries})
         # Process one field pair/zero-mode convention at a time. Keeping all
@@ -252,26 +280,12 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
         local = []
         for pair_index, (_, power) in enumerate(powers):
             for zero_dc in zero_modes:
-                started = time.perf_counter()
-                histogram = legacy.octant_radial_power(
-                    power,
-                    reference.bandwidth,
-                    reference.phi_fourier_power,
-                    comm.Get_rank(),
-                    comm.Get_size(),
-                    zero_dc=zero_dc,
-                )
-                self.metrics["radial_group_seconds"] += time.perf_counter() - started
-                self.metrics["radial_group_count"] += 1
-                started = time.perf_counter()
-                combined = np.empty_like(histogram)
-                comm.Allreduce(histogram, combined, op=MPI.SUM)
-                self.metrics["shell_edge_collective_seconds"] += (
-                    time.perf_counter() - started
+                combined = self._group_radial_power(
+                    power, reference, comm, zero_dc=zero_dc
                 )
                 norms = np.flatnonzero(combined).astype(np.int64)
                 weights = combined[norms]
-                del histogram, combined
+                del combined
                 self.metrics["radial_occupied_bins"] = max(
                     self.metrics["radial_occupied_bins"], len(norms)
                 )
@@ -298,30 +312,6 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
                 self.radial_results[pair, queries[index]] = value
         self.metrics["auto_plan"] = "radial"
 
-    def _table(self, key, builder):
-        if key in self.factor_cache:
-            value = self.factor_cache.pop(key)
-            self.factor_cache[key] = value
-            self.metrics["factor_cache_hits"] += 1
-            return value
-        started = time.perf_counter()
-        value = builder()
-        self.metrics["factor_table_seconds"] += time.perf_counter() - started
-        self.metrics["factor_table_build_count"] += 1
-        if value.nbytes <= FACTOR_CACHE_BYTES:
-            while (
-                self.factor_cache
-                and self.factor_cache_bytes + value.nbytes > FACTOR_CACHE_BYTES
-            ):
-                _, old = self.factor_cache.popitem(last=False)
-                self.factor_cache_bytes -= old.nbytes
-            self.factor_cache[key] = value
-            self.factor_cache_bytes += value.nbytes
-            self.metrics["factor_cache_peak_bytes"] = max(
-                self.metrics["factor_cache_peak_bytes"], self.factor_cache_bytes
-            )
-        return value
-
     @staticmethod
     def _factor_axis(window):
         if not legacy.supports_octant(window):
@@ -336,18 +326,25 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
         return window is not None and cls._factor_axis(window) is not None
 
     def prepare_local(self, windows):
-        """Plan only local separable queries; no MPI collectives or huge grids."""
+        """Plan local separable batches without MPI collectives or full grids."""
+        plan = self._factor_plan(windows)
+        if plan is None:
+            return
+        axis, unique, batch_size = plan
+        powers = list(self.reducer.powers.items())
+        for begin in range(0, len(unique), batch_size):
+            self._prepare_factor_batch(
+                unique[begin:begin + batch_size], powers, windows[0], axis
+            )
+
+    def _factor_plan(self, windows):
+        """Select compatible queries while preserving the existing scratch guard."""
         if len(windows) < 4:
             return
         axis = self._factor_axis(windows[0])
         reference = windows[0]
-        if axis is None or any(
-            self._factor_axis(w) != axis
-            or w.L != reference.L
-            or w.bandwidth != reference.bandwidth
-            or not np.array_equal(w.phi_fourier_power, reference.phi_fourier_power)
-            for w in windows
-        ):
+        if (axis is None or not legacy.same_window_basis(windows)
+                or any(self._factor_axis(w) != axis for w in windows)):
             return
         count = reference.L * reference.bandwidth + 1
         # Original tables + stacked batch arrays fit the same scratch guard.
@@ -365,32 +362,28 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             for _, p in powers
         ):
             return
-        for begin in range(0, len(unique), batch_size):
-            block = unique[begin : begin + batch_size]
-            factors = [self._factor_tables(w, describe_window(w)) for _, w in block]
-            started = time.perf_counter()
-            transverse = np.stack([f[0] for f in factors])
-            longitudinal = np.stack([f[1] for f in factors])
-            for pair, power in powers:
-                values = octant_factor_integrals_batch(
-                    power,
-                    reference.bandwidth,
-                    reference.phi_fourier_power,
-                    transverse,
-                    longitudinal,
-                    axis,
-                )
-                for (key, _), value in zip(block, values):
-                    self.factor_results[pair, key] = float(value)
-            self.metrics["factor_reduce_seconds"] += time.perf_counter() - started
-            self.metrics["factor_batch_count"] += len(powers)
-            self.metrics["factor_batch_max_size"] = max(
-                self.metrics["factor_batch_max_size"], len(block)
+        return axis, unique, batch_size
+
+    def _prepare_factor_batch(self, block, powers, reference, axis):
+        factors = [self._factor_tables(w, describe_window(w)) for _, w in block]
+        started = time.perf_counter()
+        transverse = np.stack([f[0] for f in factors])
+        longitudinal = np.stack([f[1] for f in factors])
+        for pair, power in powers:
+            values = octant_factor_integrals_batch(
+                power, reference.bandwidth, reference.phi_fourier_power,
+                transverse, longitudinal, axis,
             )
-            del factors, transverse, longitudinal
+            for (key, _), value in zip(block, values):
+                self.factor_results[pair, key] = float(value)
+        self.metrics["factor_reduce_seconds"] += time.perf_counter() - started
+        self.metrics["factor_batch_count"] += len(powers)
+        self.metrics["factor_batch_max_size"] = max(
+            self.metrics["factor_batch_max_size"], len(block)
+        )
 
     def _longitudinal(self, window, function, length):
-        return self._table(
+        return self._factor_cache.get(
             ("longitudinal", window.L, window.bandwidth, function, length),
             lambda: longitudinal_table(window.L, window.bandwidth, length, function),
         )
@@ -404,7 +397,7 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             # uses the same 2D x 1D reduction and bounded cache as axial windows.
             first = self._longitudinal(window, structure.transverse, x)
             second = self._longitudinal(window, structure.transverse, y)
-            transverse = self._table(
+            transverse = self._factor_cache.get(
                 (
                     "cartesian_xy",
                     window.L,
@@ -420,7 +413,7 @@ class AutoWindowEvaluator(legacy.ScalarWindowEvaluator):
             float(window.rescale_len_args[key]) for key in structure.transverse_args
         )
         height = float(window.rescale_len_args["H"])
-        transverse = self._table(
+        transverse = self._factor_cache.get(
             ("transverse", window.L, window.bandwidth, structure.transverse, lengths),
             lambda: transverse_table(
                 window.L, window.bandwidth, lengths, structure.transverse
