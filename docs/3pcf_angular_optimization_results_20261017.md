@@ -1,6 +1,6 @@
 # Experimental standard angular 3PCF optimization, 2026-10-17
 
-Branch: `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. These are local synthetic experiments, not a production/server performance table.
+Branch: `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. The initial profiles below are local synthetic experiments. A subsequent J8 catalogue measurement on the same branch is reported separately, with its own timing and memory boundaries.
 
 ## Implemented changes
 
@@ -30,7 +30,32 @@ Minima are selected independently for each phase and total; phase minima cannot 
 -18 fresh-process measurements, 9 same-input baseline/candidate comparisons passed rtol=3e-10, atol=1e-25. DDD,RRR,delta_DDD and zeta match exactly in these profiles; maximum absolute xi difference is 1.491e-18. Maximum relative Q difference is 3.221e-12. Independent synthetic cross fields can have tiny zeta_H and very large Q (up to 8.246e9 here); the maximum absolute Q difference 0.026554 is consistent with that relative bound. This is not an absolute-accuracy or cosmological validation.
 -Full MPI-free suite:234 passed, 30 skipped (27 real-MPI cases separately covered;3 CUDA cases skipped without a device). Four actual MPI ranks each passed 27 tests, including the 4 new angular cases and 23 existing 2PCF cases. Weighted particle centres, explicit/nonuniform random fields, heterogeneous smoothing, empty centre ranks, duplicate/zero radii, tilted-window fallback, caller input ownership, repeated runs and exception cleanup are covered.
 -MPI comparisons use identical rank counts and seeds on each arm. Box-center seeds depend on rank; changing the rank count changes the finite sample and is not an optimization-equivalence test.
--No production matrix, server job, GPU operation, article change or main merge is part of this experiment. The implementation remains on its isolated branch. Actual catalogue/Slurm performance and memory behavior still need a same-allocation experiment before publication.
+-The initial local profiles did not use Slurm or GPU resources. The later CPU catalogue measurements below remain on the isolated branch; no article change or main merge is included. They do not include a full-size baseline on the same allocation, so they are not a controlled production speedup measurement.
+
+## J8 catalogue DDD and Q measurement
+
+CPU job127098 ran four sequential array elements on cn2, using128 distinct physical cores,16MPI ranks x8threads,64GiB requested memory and no GPU. Each centre/product combination has three fresh-process measurements. The original remote preprojected real-space field (epsilon SHA f27eff57...) and unit-weight halo catalogue (SHA de53fe0d...) were copied byte-for-byte and verified; no projection or full-result reuse was performed. This input is not the subsequently refreshed local example field (epsilon836f...).
+
+Both centre modes use J8, a periodic1000Mpc/h box, r12=20/r13=40Mpc/h,20 equally spaced theta values from0 to pi, seed42, no centre smoothing and sphereR5 windows only at vertices2 and3. Particle centres use406728 haloes and1000rotations (8,134,560,000 centre-rotation-angle combinations); box-random centres use8,000,000 positions and200rotations (32,000,000,000 combinations).
+
+|Centre / product|Main loop / s|Compute + post / s|Task total / s|Main ns / comb.|Batch MaxRSS / GiB|
+|---|---:|---:|---:|---:|---:|
+|particle / ddd|78.077|78.077|79.540|9.598|7.747|
+|particle / Q|78.664|80.461|82.154|9.670|11.616|
+|box_random / ddd|294.019|294.019|295.491|9.188|9.906|
+|box_random / Q|297.656|299.476|301.081|9.302|15.913|
+
+Time columns take independent minima of three measurements; phase minima must not be added together. Main-loop ranges across the three runs are78.077–78.530s (particle DDD),78.664–79.442s (particle Q),294.019–305.358s (box DDD) and297.656–305.598s (box Q). All repetitions are retained in the numeric data.
+
+The native main-loop timer includes product preparation/broadcasts, sampled triplets and the final collective; it excludes initial field/centre setup and pair postprocessing. Compute+post adds the root postprocessing. Task total begins before reading the preprojected field and includes field IO, endpoint convolution, centre preparation and computation; projection, imports, small-J compilation warmup, input audits and output IO are excluded. Q requests the connected sampled product (d_delta_dd for particle centres, delta_ddd for box centres) and its lower-order pairs; it is not the same product as raw DDD. Pair postprocessing takes about1.8s in these Q runs, and Monte Carlo interpolation dominates both Q and DDD.
+
+Memory is the Slurm **batch-step MaxRSS for one centre/product array element**, including its gates and all three fresh processes. It is neither a minimum of three memory measurements nor per-rank/process-tree RSS. Rank masks are set before scientific imports; each rank binds its memory to the NUMA nodes represented by its actual core group, and transparent huge pages are disabled for those processes only. No host-wide policy is changed. These runtime/allocation conditions differ from historical runs.
+
+All12 measurements passed independent SHA, saved-result array, native timer, physical-core/thread-mask and same-layout repetition checks. Each element first passed small-J baseline/candidate DDD/Q comparisons on16ranks; no full-size baseline was rerun. The original kernels, seeds, rotation counts and alias folding remain unchanged. Therefore this table establishes current candidate performance, not an algorithm-only speedup relative to the paper.
+
+The historical particle example requested Q:75.8514s main loop plus postprocessing gives83.4886s, near the paper's84s. The available box example instead reports474.6013s main/482.1340s compute, and does not substantiate the paper's281s. The historical input SHA and batch-memory provenance for those paper numbers cannot be fully reconstructed from these logs. No paper value or old result has been replaced automatically.
+
+[Catalogue table CSV](_static/results/angular_3pcf_catalogue_20261017.csv) and [all12 timings, ranges and provenance](_static/results/angular_3pcf_catalogue_20261017.json).
 
 ## Next decisions
 

@@ -224,6 +224,32 @@ in the light-MC rows should not be extrapolated to production sampling. All
 samples, phase timings, counters and source commits are available as
 :download:`numeric JSON </_static/results/angular_3pcf_optimization_20261017.json>`.
 
+Catalogue CPU measurements
+--------------------------
+
+A separate J=8 catalogue measurement uses 128 physical CPU cores (16 MPI ranks
+with 8 threads each), 20 theta samples, r12=20/r13=40 Mpc/h and sphere-R5
+smoothing at the two endpoints only. Particle centres use 406728 haloes and
+1000 rotations; box-random centres use 8000000 positions and 200 rotations.
+Time columns take the minimum of three fresh processes. Task total starts at
+reading a preprojected field and excludes projection, import/warmup and output
+IO. Main loop excludes initial preparation and lower-order pair postprocessing.
+
+.. csv-table:: J8 angular catalogue candidate measurements
+   :file: ../../_static/results/angular_3pcf_catalogue_20261017.csv
+   :header-rows: 1
+   :widths: 27 15 15 15 14 14
+
+Memory is Slurm batch-step MaxRSS for one centre/product element, including its
+gates and three repetitions. Q uses connected triplets and pair postprocessing;
+its main loop is not raw DDD. The unchanged Monte Carlo loop dominates these
+workloads; Q pair postprocessing takes about 1.8 seconds. Different historical
+nodes/runtime policies and incomplete historical timing provenance prevent an
+algorithm-only speedup claim. See the
+:download:`catalogue repetitions and provenance
+</_static/results/angular_3pcf_catalogue_20261017.json>` and experimental report
+for ranges, the pure-DDD/Q distinction and historical Table3 timing boundaries.
+
 Connection to multipoles
 ------------------------
 

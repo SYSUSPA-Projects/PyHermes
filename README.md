@@ -86,7 +86,7 @@ exact 2PCF backend for its lower-order pair series and `Q` postprocessing. This
 adds no user setting and retains the sampled centres, rotations, seeds, weights,
 interpolation and alias folding. Root-only pair planning uses local communication.
 See the [angular 3PCF guide](docs/get_start/corr_3pcf/corr_3pcf.rst) and
-[experimental measurements](docs/3pcf_angular_optimization_results_20261017.md).
+[experimental measurements](docs/3pcf_angular_optimization_results_20261017.md). The report separates local synthetic profiles from verified J8 catalogue DDD/Q timings on 128 CPU cores; the catalogue timings are not a controlled full-size baseline speedup.
 
 ### Three-point multipoles in 1.2
 
