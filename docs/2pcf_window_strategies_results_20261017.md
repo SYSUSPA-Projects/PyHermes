@@ -6,12 +6,13 @@ These controlled CPU measurements extend the earlier finite-shell optimization. 
 
 ## Optimized workloads and amortized cost
 
-The following summary retains the earlier three-process minima at J=8,
-32 physical cores, 8x4. Task/sample is calculated from the unrounded task-time
-minimum; it includes amortized input/setup/FFT cost and is not the incremental
-cost of adding one sample. Workloads have different sample counts and window
-definitions. The internal strategy cleanup does not replace these server
-measurements with new timings.
+The latest summary combines the earlier radial/ring measurements with the
+user-requested full axial sampling in job 127085. Every row is a three-process
+minimum at J=8,32 physical cores,8x4. Allocations differ between jobs, so this is
+not a same-allocation cross-window speed comparison. Task/sample uses unrounded
+task-time minima and includes amortized input/setup/FFT cost; it is not the
+incremental cost of adding one sample. Original64-point measurements are retained
+in the controlled stage tables below.
 
 |Window|Samples|Main / s|Task / s|Task/sample / ms|
 |---|---:|---:|---:|---:|
@@ -20,10 +21,43 @@ measurements with new timings.
 |gaussian_shell|31|0.083|0.471|15.185|
 |ring|2346|6.869|7.285|3.105|
 |gaussian_ring|2346|6.690|7.100|3.026|
-|disk|64|0.280|0.677|10.581|
-|cylshell|64|0.336|0.778|12.158|
-|cylinder|64|0.288|0.759|11.854|
+|disk|2346|6.839|7.395|3.152|
+|cylshell|2346|6.136|6.599|2.813|
+|cylinder|2346|6.186|6.849|2.920|
 |cubic|31|0.264|0.669|21.589|
+
+## Matched axial sampling follow-up
+
+Job 127085 measures disk, cylshell and cylinder on cn1, each with the exact ring
+sampling arrays: 46 s values from 0 to 180 in steps of 4 Mpc/h, and 51 mu values
+from 0 to 1 in steps of 0.02, for 2346 samples. The built-in smu mapping retains
+R=s sqrt(1-mu^2), H=s mu and each window's original definition. The same s/mu
+coordinates do not imply identical averaging geometry between different windows.
+
+Scientific source d733177 is frozen independently; no mathematical, default or
+interface change is introduced. Nine fresh-process formal runs and six small-J
+fused-versus-auto gates passed. Each complete axial curve agrees exactly at the
+64 coordinates shared with the earlier verified 127025 curve (maximum absolute
+xi difference 0.0). The 32 physical cores, all recorded worker masks, input/output
+SHA, one shared forward FFT, no inverse FFT, batches of at most 8, and the
+16 MiB/rank factor-cache bounds were independently checked. The nominal 0.1 s
+parent RSS observation policy is retained; its concurrent wall cost is recorded
+and cannot be subtracted from task time.
+
+Cubic reuses its valid 127025 measurements: the same 31 s values as shell, from
+5 to 150 Mpc/h. This workload scales a rectangular window with fixed
+Lx:Ly:Lz=1:1.3:0.7; it is a one-dimensional size scan, not an independent
+three-length grid or an equal-sided cube. No new cubic or ring run is needed.
+The superseded configuration 127082 was cancelled during its first gate with
+zero formal measurements after the user changed the proposed 46-point cubic scan
+back to shell's 31 points. Both frozen configurations and the cancelled scene
+remain preserved.
+
+Full unrounded statistics, all repetitions, source jobs and resource records are
+in tests/logs/2pcf_matched_sampling_20261017_v2/analysis/report.md and
+combined_table.csv. Main-loop and task-total minima are selected independently;
+do not add phase minima to reconstruct a task total. Independent server archive:
+deliveries/2pcf_matched_sampling_20261017_v2.
 
 ## First stage: structure-aware evaluation
 
