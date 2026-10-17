@@ -79,6 +79,15 @@ for numerical checks and workload-specific performance, including the
 [matched 46×51 axial-window measurements](docs/2pcf_window_strategies_results_20261017.md#matched-axial-sampling-follow-up)
 and amortized task time per sample.
 
+### Standard angular three-point statistics
+
+`Corr_3PCF` prepares box-random contrast fields once per product and shares the
+exact 2PCF backend for its lower-order pair series and `Q` postprocessing. This
+adds no user setting and retains the sampled centres, rotations, seeds, weights,
+interpolation and alias folding. Root-only pair planning uses local communication.
+See the [angular 3PCF guide](docs/get_start/corr_3pcf/corr_3pcf.rst) and
+[experimental measurements](docs/3pcf_angular_optimization_results_20261017.md). The report separates local synthetic profiles from verified J8 catalogue DDD/Q timings on 128 CPU cores; the catalogue timings are not a controlled full-size baseline speedup.
+
 ### Three-point multipoles in 1.2
 
 `Corr_3PCF_Multipole` offers two summation methods through the same task and

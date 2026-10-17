@@ -21,7 +21,7 @@ from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.sampling import random_box_positions
 from pyhermes.utils.window_params import serialize_window_params
 
-from .corr2pcf import compute_pair_product_at_sample
+from .corr2pcf import compute_pair_product_at_sample, compute_pair_products_at_samples
 
 ### Product dependency metadata ###
 
@@ -1009,28 +1009,20 @@ class Corr_3PCF(TaskBase):
     ### 2PCF-derived caches and vertex finalization ###
 
     def _compute_pair_stats(self, field_a, field_b, random_a, random_b, radius):
-        """Compute RR, delta_DD, and xi for one pair radius."""
-        rr = self.calc_pair_product(radius, random_a, random_b)
-        delta_a = self._compute_delta_field(field_a, random_a)
-        delta_b = self._compute_delta_field(field_b, random_b)
-        delta_dd = self.calc_pair_product(radius, delta_a, delta_b)
-        xi = delta_dd / rr
-        return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
+        """Compute RR, delta_DD and xi with the same local series backend."""
+        return self._compute_pair_stats_series(field_a, field_b, random_a, random_b, radius)
 
     def _compute_pair_stats_series(self, field_a, field_b, random_a, random_b, radii):
-        """Vectorized convenience wrapper over _compute_pair_stats for radius arrays."""
+        """Share each pair power across radii without world collectives."""
         radii_arr = np.atleast_1d(np.asarray(radii, dtype=np.float64))
-        rr = np.empty_like(radii_arr)
-        delta_dd = np.empty_like(radii_arr)
-        xi = np.empty_like(radii_arr)
+        samples = [{"s": float(radius)} for radius in radii_arr]
+        rr = compute_pair_products_at_samples(samples, random_a, random_b)
         delta_a = self._compute_delta_field(field_a, random_a)
         delta_b = self._compute_delta_field(field_b, random_b)
-        for idx, radius in enumerate(radii_arr):
-            rr_val = self.calc_pair_product(float(radius), random_a, random_b)
-            delta_val = self.calc_pair_product(float(radius), delta_a, delta_b)
-            rr[idx] = rr_val
-            delta_dd[idx] = delta_val
-            xi[idx] = delta_val / rr_val
+        delta_dd = compute_pair_products_at_samples(samples, delta_a, delta_b)
+        if np.any(rr == 0.0):
+            raise ZeroDivisionError("float division by zero")
+        xi = delta_dd / rr
         if np.ndim(radii) == 0:
             return {"rr": float(rr[0]), "delta_dd": float(delta_dd[0]), "xi": float(xi[0])}
         return {"rr": rr, "delta_dd": delta_dd, "xi": xi}
@@ -1116,9 +1108,7 @@ class Corr_3PCF(TaskBase):
                 eps1=_local_sfc1.epsilon,
             )
         if "delta_ddd" in local_results:
-            field1 = _local_sfc1 - self._field_mean_density(_local_random1) if isinstance(_local_random1, (float, int, np.floating)) else _local_sfc1 - _local_random1
-            field2 = _local_sfc2 - self._field_mean_density(_local_random2) if isinstance(_local_random2, (float, int, np.floating)) else _local_sfc2 - _local_random2
-            field3 = _local_sfc3 - self._field_mean_density(_local_random3) if isinstance(_local_random3, (float, int, np.floating)) else _local_sfc3 - _local_random3
+            field1, field2, field3 = self._box_delta_fields
             local_results["delta_ddd"][mu_index] = estimate_triplet_product_with_sampled_centers(
                 self.r12_scaled, self.r13_scaled, mu, pos_local, self.n_rot,
                 _local_sfc1, field2, field3,
@@ -1279,6 +1269,7 @@ class Corr_3PCF(TaskBase):
         """Drop product-local cached fields held on the task instance."""
         self.meta_sfc = None
         self._particle_delta_fields = None
+        self._box_delta_fields = None
 
     def _product_center_summary(
         self,
@@ -1502,7 +1493,11 @@ class Corr_3PCF(TaskBase):
                     self._particle_delta_fields = (delta_field2, delta_field3)
                     self.meta_sfc = self._find_geometry_reference(delta_field2, delta_field3, self.meta_sfc)
                 elif self.center == "box_random" and product == "delta_ddd":
-                    self.meta_sfc = self._find_geometry_reference(local_data.get(1), local_data.get(2), local_data.get(3))
+                    self._box_delta_fields = tuple(
+                        self._compute_delta_field(local_data[idx], local_random[idx])
+                        for idx in (1, 2, 3)
+                    )
+                    self.meta_sfc = self._find_geometry_reference(*self._box_delta_fields)
                 elif self.meta_sfc is None:
                     self.meta_sfc = self._find_geometry_reference(
                         local_data.get(1), local_data.get(2), local_data.get(3),
@@ -1635,8 +1630,10 @@ class Corr_3PCF(TaskBase):
 
             comm.Barrier()
         except Exception as e:
-            self.logger.error(f"Error in process {self.rank}: {str(e)}")
+            self.logger.exception(f"Error in process {self.rank}: {str(e)}")
             func_util.safe_exit(1)
+        finally:
+            self._release_product_runtime()
 
         if self.rank == 0:
             t1 = time.perf_counter()

@@ -1,0 +1,5 @@
+Centre / product,Main loop / s,Compute + post / s,Task total / s,Main ns / comb.,Batch MaxRSS / GiB
+particle / ddd,78.077,78.077,79.540,9.598,7.747
+particle / Q,78.664,80.461,82.154,9.670,11.616
+box_random / ddd,294.019,294.019,295.491,9.188,9.906
+box_random / Q,297.656,299.476,301.081,9.302,15.913

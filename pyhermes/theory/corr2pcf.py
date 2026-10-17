@@ -20,6 +20,7 @@ from pyhermes.utils.corr2pcf_spectral import SpectralPairReducer
 from pyhermes.utils.corr2pcf_strategies import AutoWindowEvaluator
 from pyhermes.utils.corr2pcf_window_reduction import ScalarWindowEvaluator
 from pyhermes.utils.mpi_progress import TaskProgress
+from pyhermes.utils.mpi_util import MPI
 from pyhermes.utils.window_params import (
     LOS_ARG_KEYS,
     default_binning_window,
@@ -384,6 +385,50 @@ def compute_pair_product_at_sample(sample, sfc_field1, sfc_field2=None, binning_
     binning_window_params = build_binning_window_params_for_sample(sample, binning_window)
     binning_window_obj = WindowFunc(binning_window_params, sfc_field1.sfc_info, threads=sfc_field1.threads)
     return pair_product_with_window(sfc_field1, sfc_field2, binning_window_obj, sfc_field1.threads)
+
+
+
+def compute_pair_products_at_samples(samples, sfc_field1, sfc_field2=None, binning_window=None):
+    """Evaluate a local sample series with shared exact powers and window plans.
+
+    This helper never constructs a collective task. COMM_SELF confines any
+    radial planning collectives to the caller, including rank-zero 3PCF
+    postprocessing while the other ranks wait at a world barrier.
+    """
+    samples = list(samples)
+    if not samples:
+        return np.empty(0, dtype=np.float64)
+    if sfc_field2 is None:
+        sfc_field2 = sfc_field1
+    if isinstance(sfc_field1, (float, int, np.floating)) or isinstance(sfc_field2, (float, int, np.floating)):
+        value = field_mean_density(sfc_field1) * field_mean_density(sfc_field2)
+        return np.full(len(samples), value, dtype=np.float64)
+    threads = sfc_field1.threads or 1
+    windows = [WindowFunc(build_binning_window_params_for_sample(sample, binning_window),
+                          sfc_field1.sfc_info, threads=threads) for sample in samples]
+    reducer = SpectralPairReducer(threads=threads)
+    try:
+        reducer.prepare([(sfc_field1, sfc_field2)])
+        evaluator = AutoWindowEvaluator(reducer)
+        # The MPI-free shim has only its single-process COMM_WORLD.
+        local_comm = getattr(MPI, "COMM_SELF", MPI.COMM_WORLD)
+        evaluator.prepare_auto(windows, local_comm)
+        evaluator.prepare_local(windows)
+        values = []
+        for window in windows:
+            value = evaluator.reduce(sfc_field1, sfc_field2, window)
+            if value is None:
+                try:
+                    value = pair_product_with_window(sfc_field1, sfc_field2, window, threads)
+                finally:
+                    # These windows are owned by this series. Do not retain a
+                    # full fallback kernel for every radius in the planning list.
+                    window.w_kernel = None
+            values.append(value)
+        return np.asarray(values, dtype=np.float64)
+    finally:
+        reducer.powers.clear()
+        reducer.fields.clear()
 
 
 class Corr_2PCF(TaskBase):
