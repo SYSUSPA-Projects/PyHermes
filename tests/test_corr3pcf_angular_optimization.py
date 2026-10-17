@@ -173,3 +173,24 @@ def test_zero_pair_normalizer_keeps_previous_error():
     task = angular_task(products=["delta_ddd"])
     with pytest.raises(ZeroDivisionError):
         task._compute_pair_stats_series(task.sfc_field1, task.sfc_field2, 0., 1., [4.])
+
+
+def test_fallback_series_keeps_only_one_materialized_kernel(monkeypatch):
+    import weakref
+
+    from pyhermes.io import WindowFunc
+
+    original = WindowFunc.as_array
+    seen = []
+
+    def tracked(window):
+        result = original(window)
+        seen.append(weakref.ref(result))
+        assert sum(ref() is not None for ref in seen) <= 1
+        return result
+
+    monkeypatch.setattr(WindowFunc, "as_array", tracked)
+    samples = [{"s": r, "mu": .3} for r in [0., 4., 8., 12.]]
+    window = dict(type="ring", mapping="smu_to_RH", los_args={"nx": 1., "ny": 2., "nz": 3.})
+    compute_pair_products_at_samples(samples, angular_field(), angular_field(2), window)
+    assert len(seen) == len(samples) and not any(ref() is not None for ref in seen)

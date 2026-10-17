@@ -418,7 +418,12 @@ def compute_pair_products_at_samples(samples, sfc_field1, sfc_field2=None, binni
         for window in windows:
             value = evaluator.reduce(sfc_field1, sfc_field2, window)
             if value is None:
-                value = pair_product_with_window(sfc_field1, sfc_field2, window, threads)
+                try:
+                    value = pair_product_with_window(sfc_field1, sfc_field2, window, threads)
+                finally:
+                    # These windows are owned by this series. Do not retain a
+                    # full fallback kernel for every radius in the planning list.
+                    window.w_kernel = None
             values.append(value)
         return np.asarray(values, dtype=np.float64)
     finally:
