@@ -1,6 +1,6 @@
 # Experimental standard angular 3PCF optimization, 2026-10-17
 
-Branch: `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. The initial profiles below are local synthetic experiments. A subsequent J8 catalogue measurement on the same branch is reported separately, with its own timing and memory boundaries.
+Developed on `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. The validated changes are being integrated into main on 2026-10-17; the source commits below identify the exact measured versions. The initial profiles below are local synthetic experiments. A subsequent J8 catalogue measurement on the same branch is reported separately, with its own timing and memory boundaries.
 
 ## Implemented changes
 
@@ -30,7 +30,7 @@ Minima are selected independently for each phase and total; phase minima cannot 
 -18 fresh-process measurements, 9 same-input baseline/candidate comparisons passed rtol=3e-10, atol=1e-25. DDD,RRR,delta_DDD and zeta match exactly in these profiles; maximum absolute xi difference is 1.491e-18. Maximum relative Q difference is 3.221e-12. Independent synthetic cross fields can have tiny zeta_H and very large Q (up to 8.246e9 here); the maximum absolute Q difference 0.026554 is consistent with that relative bound. This is not an absolute-accuracy or cosmological validation.
 -Full MPI-free suite:234 passed, 30 skipped (27 real-MPI cases separately covered;3 CUDA cases skipped without a device). Four actual MPI ranks each passed 27 tests, including the 4 new angular cases and 23 existing 2PCF cases. Weighted particle centres, explicit/nonuniform random fields, heterogeneous smoothing, empty centre ranks, duplicate/zero radii, tilted-window fallback, caller input ownership, repeated runs and exception cleanup are covered.
 -MPI comparisons use identical rank counts and seeds on each arm. Box-center seeds depend on rank; changing the rank count changes the finite sample and is not an optimization-equivalence test.
--The initial local profiles did not use Slurm or GPU resources. The later CPU catalogue measurements below remain on the isolated branch; no article change or main merge is included. They do not include a full-size baseline on the same allocation, so they are not a controlled production speedup measurement.
+-The initial local profiles did not use Slurm or GPU resources. The later CPU catalogue measurements below were completed on the isolated branch before integration into main; no article value was changed. They do not include a full-size baseline on the same allocation, so they are not a controlled production speedup measurement.
 
 ## J8 catalogue DDD and Q measurement
 
