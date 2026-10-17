@@ -178,6 +178,52 @@ The arrays requested through ``products`` are available as attributes such as
 are retained in ``data.corr3pcf_info`` and ``data.sfc_info1`` through
 ``data.sfc_info3``.
 
+Runtime reuse and pair postprocessing
+-------------------------------------
+
+The angular estimator prepares the three box-random contrast fields once per
+``delta_ddd`` product and MPI rank, rather than allocating them again at every
+angle. The cache lasts only for that product and is released on completion or
+failure. Particle-centre products retain their existing two-arm contrast reuse.
+
+The lower-order pair terms used by ``xi12``, ``xi13``, ``xi23`` and ``Q`` reuse
+the exact local 2PCF backend. Each pair series shares its input FFTs and powers
+across radii; compatible windows use the existing exact radial or factor plans.
+Unsupported windows retain convolution and release temporary full kernels after
+each radius. Pair postprocessing runs on rank zero,
+so planning uses only ``COMM_SELF`` and never constructs a collective 2PCF task
+inside that root-only stage. FFT/power buffers are released after each series.
+
+There is no new user option. Centre positions, per-rank seeds, rotation counts,
+weights, interpolation stencils and alias-specific scaling/folding terms are
+unchanged. Baseline-versus-candidate checks must use the same MPI rank count:
+box-random centres use rank-specific seeds, so changing the rank count can change
+the finite Monte Carlo sample independently of these implementation changes.
+
+The benefit depends on workload. ``Q`` includes lower-order pair postprocessing;
+a triplet-only task does not. Long Monte Carlo loops may dominate total time even
+when pair postprocessing becomes much faster. See the
+:download:`experimental measurements and validation
+</3pcf_angular_optimization_results_20261017.md>` for the timing boundaries and
+local-profile limitations.
+
+Local synthetic measurements use one process and two threads, take the minimum
+of three fresh-process measurements per arm, and exclude imports/small-grid
+warmup. The first two rows use J=7, 512 centres and 4 rotations; the last uses
+J=5, 8192 centres and 32 rotations. Every row has 20 angles. Totals include
+in-memory preparation, sampled triplets and pair postprocessing; they contain no
+projection or file IO and are not server/catalogue performance measurements.
+
+.. csv-table:: Local angular 3PCF prototype timings
+   :file: ../../_static/results/angular_3pcf_optimization_20261017.csv
+   :header-rows: 1
+   :widths: 46 20 20 14
+
+The MC-dominated row has only about a 5 percent lower minimum total. Large gains
+in the light-MC rows should not be extrapolated to production sampling. All
+samples, phase timings, counters and source commits are available as
+:download:`numeric JSON </_static/results/angular_3pcf_optimization_20261017.json>`.
+
 Connection to multipoles
 ------------------------
 

@@ -12,6 +12,8 @@ The next 2PCF priorities are usability and broader workload evidence rather than
 
 ## Standard angular 3PCF
 
+The opportunities below describe the initial main-branch review. The later experimental branch implements the first two while retaining the Monte Carlo estimator; see [the implementation and controlled local profiles](3pcf_angular_optimization_results_20261017.md). Vertex/broadcast sharing remains a separate future step.
+
 Three concrete opportunities appear in `Corr_3PCF`:
 
 1. **Prepare box-random contrast fields once per product.** `_compute_random_center_mu` currently constructs all three D-R fields for every angle of `delta_ddd`. These fields do not depend on angle. The particle-center branch already prepares its two contrast arms outside the angle loop. A product-local cache, cleared at `_release_product_runtime` and rebuilt on every run, would remove repeated full-grid allocation/subtraction without changing centers, rotations, seeds, interpolation or normalization. This is a small, readable future change, rather than a claim of a large estimator speedup.

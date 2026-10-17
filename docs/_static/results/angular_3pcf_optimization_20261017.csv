@@ -1,0 +1,4 @@
+Local synthetic workload,Baseline total / s,Optimized total / s,Speedup
+"J7, uniform random, light MC",0.916287,0.162027,5.655
+"J7, explicit random fields, light MC",1.629245,0.278083,5.859
+"J5, uniform random, MC dominated",0.489728,0.466139,1.051

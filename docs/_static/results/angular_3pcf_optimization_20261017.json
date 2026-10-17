@@ -1,0 +1,793 @@
+{
+  "baseline_commit": "849de94f9f0bef15b8a647c27b54b6d087cd3f9b",
+  "candidate_implementation_commit": "73df42f858dfc7cc4bb91f0dfd687f06db9889e6",
+  "platform": "Local macOS, single process,2threads",
+  "protocol": "3freshprocesses/arm/workload, alternating order; minimum3 and all samples retained; smallJwarmup excluded, production inputs/powers/windows rebuilt. Total includes in-memory preparation/MC/rootpairpostprocessing, no projection or file IO. No RSS polling.",
+  "scientific_scope": "Synthetic positive independent cross fields, periodic box64,db2,20angles,baseSeed42. Actual catalogue/server performance not measured. Poorly conditioned synthetic Q is checked by relative tolerance, not interpreted as a physical signal.",
+  "scenarios": [
+    {
+      "workload": "J7, uniform random, light MC",
+      "J": 7,
+      "centres": 512,
+      "rotations": 4,
+      "angles": 20,
+      "baseline": {
+        "arm": "baseline",
+        "nonuniform": false,
+        "total_seconds": {
+          "min": 0.916286916937679,
+          "median": 0.9197043331805617,
+          "max": 0.9204975408501923,
+          "all": [
+            0.9197043331805617,
+            0.916286916937679,
+            0.9204975408501923
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 0.7183071249164641,
+          "median": 0.7227900419384241,
+          "max": 0.7239860000554472,
+          "all": [
+            0.7239860000554472,
+            0.7183071249164641,
+            0.7227900419384241
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.1415548303630203,
+          "median": 0.14248337573371828,
+          "max": 0.1445297454483807,
+          "all": [
+            0.1415548303630203,
+            0.1445297454483807,
+            0.14248337573371828
+          ]
+        },
+        "pair_spectral_forward_ffts": [
+          0,
+          0,
+          0
+        ],
+        "convolution_inverse_ffts": [
+          22,
+          22,
+          22
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "nonuniform": false,
+        "total_seconds": {
+          "min": 0.16202708310447633,
+          "median": 0.16653808415867388,
+          "max": 0.17049124999903142,
+          "all": [
+            0.16653808415867388,
+            0.16202708310447633,
+            0.17049124999903142
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 0.1030005409847945,
+          "median": 0.10659250011667609,
+          "max": 0.10982462507672608,
+          "all": [
+            0.10659250011667609,
+            0.1030005409847945,
+            0.10982462507672608
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.0187082898337394,
+          "median": 0.019040206680074334,
+          "max": 0.019567415351048112,
+          "all": [
+            0.019040206680074334,
+            0.0187082898337394,
+            0.019567415351048112
+          ]
+        },
+        "pair_spectral_forward_ffts": [
+          6,
+          6,
+          6
+        ],
+        "convolution_inverse_ffts": [
+          0,
+          0,
+          0
+        ]
+      },
+      "speedup": 5.655146654382774
+    },
+    {
+      "workload": "J7, explicit random fields, light MC",
+      "J": 7,
+      "centres": 512,
+      "rotations": 4,
+      "angles": 20,
+      "baseline": {
+        "arm": "baseline",
+        "nonuniform": true,
+        "total_seconds": {
+          "min": 1.6292445831932127,
+          "median": 1.6515992500353605,
+          "max": 1.653942707926035,
+          "all": [
+            1.6292445831932127,
+            1.653942707926035,
+            1.6515992500353605
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 1.4027002500370145,
+          "median": 1.4162923330441117,
+          "max": 1.4234779591206461,
+          "all": [
+            1.4027002500370145,
+            1.4162923330441117,
+            1.4234779591206461
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.15689008147455752,
+          "median": 0.1570173315703869,
+          "max": 0.1600894182920456,
+          "all": [
+            0.15689008147455752,
+            0.1600894182920456,
+            0.1570173315703869
+          ]
+        },
+        "pair_spectral_forward_ffts": [
+          0,
+          0,
+          0
+        ],
+        "convolution_inverse_ffts": [
+          44,
+          44,
+          44
+        ]
+      },
+      "candidate": {
+        "arm": "candidate",
+        "nonuniform": true,
+        "total_seconds": {
+          "min": 0.2780828750692308,
+          "median": 0.2797707091085613,
+          "max": 0.2828962500207126,
+          "all": [
+            0.2780828750692308,
+            0.2797707091085613,
+            0.2828962500207126
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 0.1971049578860402,
+          "median": 0.19943729089573026,
+          "max": 0.19984295894391835,
+          "all": [
+            0.19984295894391835,
+            0.19943729089573026,
+            0.1971049578860402
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.022258873796090484,
+          "median": 0.0223113764077425,
+          "max": 0.02519029309041798,
+          "all": [
+            0.022258873796090484,
+            0.0223113764077425,
+            0.02519029309041798
+          ]
+        },
+        "pair_spectral_forward_ffts": [
+          12,
+          12,
+          12
+        ],
+        "convolution_inverse_ffts": [
+          0,
+          0,
+          0
+        ]
+      },
+      "speedup": 5.858845435151662
+    },
+    {
+      "workload": "J5, uniform random, MC dominated",
+      "J": 5,
+      "centres": 8192,
+      "rotations": 32,
+      "angles": 20,
+      "baseline": {
+        "arm": "baseline",
+        "total_seconds": {
+          "min": 0.48972762492485344,
+          "median": 0.5024155830033123,
+          "max": 0.8574307910166681,
+          "all": [
+            0.8574307910166681,
+            0.5024155830033123,
+            0.48972762492485344
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 0.020297791808843613,
+          "median": 0.0208382080309093,
+          "max": 0.022022292017936707,
+          "all": [
+            0.022022292017936707,
+            0.0208382080309093,
+            0.020297791808843613
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.003370165592059493,
+          "median": 0.0034166218247264624,
+          "max": 0.009263538522645831,
+          "all": [
+            0.009263538522645831,
+            0.0034166218247264624,
+            0.003370165592059493
+          ]
+        }
+      },
+      "candidate": {
+        "arm": "candidate",
+        "total_seconds": {
+          "min": 0.4661385000217706,
+          "median": 0.4675910829100758,
+          "max": 0.468770207837224,
+          "all": [
+            0.4661385000217706,
+            0.468770207837224,
+            0.4675910829100758
+          ]
+        },
+        "pair_post_seconds": {
+          "min": 0.00744887487962842,
+          "median": 0.00761016714386642,
+          "max": 0.007782875094562769,
+          "all": [
+            0.00761016714386642,
+            0.00744887487962842,
+            0.007782875094562769
+          ]
+        },
+        "contrast_seconds": {
+          "min": 0.0005339568015187979,
+          "median": 0.000580707797780633,
+          "max": 0.00066145951859653,
+          "all": [
+            0.000580707797780633,
+            0.0005339568015187979,
+            0.00066145951859653
+          ]
+        }
+      },
+      "speedup": 1.0506053992579054
+    }
+  ],
+  "verification": {
+    "status": "passed",
+    "fresh_process_measurements": 18,
+    "compared_pairs": 9,
+    "rtol": 3e-10,
+    "atol": 1e-25,
+    "max_abs_difference_by_product": {
+      "ddd": 0.0,
+      "rrr": 0.0,
+      "delta_ddd": 0.0,
+      "xi12": 8.46185914307046e-19,
+      "xi13": 1.2620790914089075e-19,
+      "xi23": 1.4907779871675686e-18,
+      "zeta": 0.0,
+      "zeta_H": 3.9042924912502906e-22,
+      "Q": 0.026554107666015625
+    },
+    "original_all_samples_retained": true,
+    "baseline_contrast_allocations_per_run": 66,
+    "candidate_contrast_allocations_per_run": 9,
+    "no_server_jobs": true,
+    "max_relative_difference_by_product": {
+      "ddd": 0.0,
+      "rrr": 0.0,
+      "delta_ddd": 0.0,
+      "xi12": 1.2925978610573802e-12,
+      "xi13": 2.7105038867497007e-14,
+      "xi23": 1.3792235073874829e-12,
+      "zeta": 0.0,
+      "zeta_H": 3.220202153303192e-12,
+      "Q": 3.2201905078069526e-12
+    },
+    "max_reference_magnitude_by_product": {
+      "ddd": 5.74369548563635e-17,
+      "rrr": 5.633347687486844e-17,
+      "delta_ddd": 8.30109134904879e-19,
+      "xi12": 0.00021345895967418178,
+      "xi13": 6.960203960973062e-05,
+      "xi23": 0.00020648213069892515,
+      "zeta": 0.015299222797494948,
+      "zeta_H": 4.358985928361487e-08,
+      "Q": 8246129414.2810755
+    },
+    "min_abs_Q_denominator": 6.339617981481845e-13,
+    "synthetic_Q_conditioning_note": "Independent synthetic cross fields can have nearly zero zeta_H and huge Q. Relative equivalence is checked; this is not an absolute-accuracy or cosmological validation."
+  },
+  "individual_samples": [
+    {
+      "sample": "baseline_nonuniform_r1",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 1.6292445831932127,
+      "pair_post_seconds": 1.4027002500370145,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.15689008147455752,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.013982165371999145,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 44,
+      "warmup_seconds": 1.8216503341682255,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "610c255839b86202ba19184db5cd3bcaf5bdc7235651163aff0f1e3bbe845c43",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_nonuniform_r2",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 1.653942707926035,
+      "pair_post_seconds": 1.4162923330441117,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.1600894182920456,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.015278582228347659,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 44,
+      "warmup_seconds": 1.825419875094667,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "610c255839b86202ba19184db5cd3bcaf5bdc7235651163aff0f1e3bbe845c43",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_nonuniform_r3",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 1.6515992500353605,
+      "pair_post_seconds": 1.4234779591206461,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.1570173315703869,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.014497291529551148,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 44,
+      "warmup_seconds": 1.822356791002676,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "610c255839b86202ba19184db5cd3bcaf5bdc7235651163aff0f1e3bbe845c43",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_uniform_r1",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.9197043331805617,
+      "pair_post_seconds": 0.7239860000554472,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.1415548303630203,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.01299095805734396,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 2.0503572090528905,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "b345b318686ea4eda9faa839cdfb8174c86dd8c6008d65595439f5969f70590e",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_uniform_r2",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.916286916937679,
+      "pair_post_seconds": 0.7183071249164641,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.1445297454483807,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.01498441700823605,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 1.8082432919181883,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "b345b318686ea4eda9faa839cdfb8174c86dd8c6008d65595439f5969f70590e",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_uniform_r3",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.9204975408501923,
+      "pair_post_seconds": 0.7227900419384241,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.14248337573371828,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.013680209638550878,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 1.7945227501913905,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "b345b318686ea4eda9faa839cdfb8174c86dd8c6008d65595439f5969f70590e",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_nonuniform_r1",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.2780828750692308,
+      "pair_post_seconds": 0.19984295894391835,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.022258873796090484,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.022283541737124324,
+      "pair_spectral_forward_ffts": 12,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.1383357911836356,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "09cb656a2b33219fb9ec0faeed5193b7f8abb2a000308b73533660a8cafa6cd2",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_nonuniform_r2",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.2797707091085613,
+      "pair_post_seconds": 0.19943729089573026,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.0223113764077425,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.02233695681206882,
+      "pair_spectral_forward_ffts": 12,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.1922224999871105,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "94867873f10ed4a11a18c16dd52976c1efe20c6df2f3d158a6e576fc4f8ef71b",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_nonuniform_r3",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": true,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.2828962500207126,
+      "pair_post_seconds": 0.1971049578860402,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.02519029309041798,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.02521662344224751,
+      "pair_spectral_forward_ffts": 12,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.1395774998236448,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "07c51977512f871f8e3b112cbccb79fe9c0f98a6bf645387ee4f642bcbe9a62c",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_uniform_r1",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.16653808415867388,
+      "pair_post_seconds": 0.10659250011667609,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.019040206680074334,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.019071332411840558,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 3.173372874967754,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "0096c4dca8c31a17d4d6dac9ea8deb7e833eb4820d64388d45d46f031998b40f",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_uniform_r2",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.16202708310447633,
+      "pair_post_seconds": 0.1030005409847945,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.0187082898337394,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.01873287744820118,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.136853124946356,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "2caa6a2057f968fc9129798277c7febcace4b222200d91d0892f584995de74a0",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_uniform_r3",
+      "status": "complete",
+      "J": 7,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 512,
+      "nrot": 4,
+      "angles": 20,
+      "total_seconds": 0.17049124999903142,
+      "pair_post_seconds": 0.10982462507672608,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.019567415351048112,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.019592707511037588,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.1298374999314547,
+      "input_epsilon_SHA": [
+        "e7d0df2ab132c083ef8643ceb36511d66ea1d775c89a914f5259c30f3caee0da",
+        "ab55b8129cc086f28621f426e5f1235b7a3a8e1abf038de93cda47c9296793de",
+        "491d0655fc29257f0b6ea8c31a044e7da038b2208fe582c6f8e97e067dbed8e2"
+      ],
+      "output_SHA": "e4b6add8a00df0d7bf06cb26d4bf76b75f69c9ed5d25d5273a2bc2c7833f8a84",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_r1",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.8574307910166681,
+      "pair_post_seconds": 0.022022292017936707,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.009263538522645831,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.00034900056198239326,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 3.177586709149182,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "a734f585ed3ef29a23681bef4341330f2c7570873f5117a3247ac912614bb934",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_r2",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.5024155830033123,
+      "pair_post_seconds": 0.0208382080309093,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.0034166218247264624,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.00030045886524021626,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 1.8920744161587209,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "a734f585ed3ef29a23681bef4341330f2c7570873f5117a3247ac912614bb934",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "baseline_r3",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.48972762492485344,
+      "pair_post_seconds": 0.020297791808843613,
+      "contrast_calls": 66,
+      "contrast_seconds": 0.003370165592059493,
+      "delta_builder_calls": 6,
+      "delta_builder_seconds": 0.00028870883397758007,
+      "pair_spectral_forward_ffts": 0,
+      "convolution_inverse_ffts": 22,
+      "warmup_seconds": 1.9540562089532614,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "a734f585ed3ef29a23681bef4341330f2c7570873f5117a3247ac912614bb934",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_r1",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.4661385000217706,
+      "pair_post_seconds": 0.00761016714386642,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.000580707797780633,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.00059291603974998,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.4422844578512013,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "4b375269f99c7fc300ac8a0f6e526b47590e93473fc38b011676ea26762c880d",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_r2",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.468770207837224,
+      "pair_post_seconds": 0.00744887487962842,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.0005339568015187979,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.0005451666656881571,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.1844499157741666,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "a59a3d2a9e71146fe1f9f42b9d5e52a100a1736d843dee37a7259313879f3bc9",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    },
+    {
+      "sample": "candidate_r3",
+      "status": "complete",
+      "J": 5,
+      "threads": 2,
+      "nonuniform": false,
+      "ncenters": 8192,
+      "nrot": 32,
+      "angles": 20,
+      "total_seconds": 0.4675910829100758,
+      "pair_post_seconds": 0.007782875094562769,
+      "contrast_calls": 9,
+      "contrast_seconds": 0.00066145951859653,
+      "delta_builder_calls": 9,
+      "delta_builder_seconds": 0.0006738756783306599,
+      "pair_spectral_forward_ffts": 6,
+      "convolution_inverse_ffts": 0,
+      "warmup_seconds": 2.227987000020221,
+      "input_epsilon_SHA": [
+        "e910a4b77bbe5d406aea5ef99ab3be65103bb048ded467e966c6117368922f0e",
+        "b47012f3dd5a74fa56d9f8ba6611a8d383edf95f5244bdeff21d3326e8c1bd0b",
+        "24ab6e8c5a3587018e3be489ef3fd792cd07d8ccebd201c3147f7e3848432509"
+      ],
+      "output_SHA": "ecc35dbc8166a7928bea6fac802d27c934d85c813e6854a74c245131ad67ead7",
+      "note": "Local synthetic micro-workload, not server/catalogue performance. Fresh process/fields per repetition; small-J JIT warmup excluded. Total includes in-memory input preparation, main loop and root postprocessing, no IO/projection. Pair phase includes its contrasts, FFTs, windows and reduction. No RSS observer or finite-MC changes."
+    }
+  ],
+  "followup_memory_guard_commit": "8f3106f5b32db8ada4198b4bb9a52293d957e75a",
+  "followup_scope": "Release temporary unsupported-window fallback kernels after each radius; supported thin-shell paths in the18recorded profiles are unchanged."
+}
