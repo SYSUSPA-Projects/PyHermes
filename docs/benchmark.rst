@@ -8,10 +8,11 @@ This page separates two questions that are easy to mix together:
 * **Performance:** once the estimator is fixed, which part of the workflow sets
   the runtime and memory footprint?
 
-The current three-point multipole performance section uses corrected
-three-repeat measurements bundled as numeric JSON. The two-point and
-direct-angular reference sections retain their earlier measurements. Older
-unrecomputed multipole and Kun figures below are explicitly historical.
+The performance overview below uses the verified optimized 2PCF and pure
+angular DDD measurements, with main-loop and preprojected-field task totals
+kept separate. Detailed 2PCF window-family and angular DDD/Q results are in
+their task guides. The multipole section uses corrected three-repeat results;
+older unrecomputed multipole and Kun figures remain explicitly historical.
 
 Reference Data
 --------------
@@ -147,7 +148,7 @@ The catalogue is projected once onto
 depends on resolution and window evaluations. Particle summation additionally
 scales with the number of centre particles and the readout stencil size.
 
-For ``N_w`` window applications on a matching FFT grid,
+For the convolution path with ``N_w`` window applications on a matching FFT grid,
 
 .. math::
 
@@ -155,63 +156,88 @@ For ``N_w`` window applications on a matching FFT grid,
    = \mathcal{O}\!\left(N_w N_{\mathrm{MRA}}
      \log N_{\mathrm{MRA}}\right).
 
-The task-specific multiplicities are:
+For convolution-based ``Corr2PCF``, the sampled separation windows number
+``N_s * N_mu`` or ``N_rp * N_pi``. Multipole calculations build harmonic arm
+fields for :math:`N_m=(\ell_{\max}+1)(\ell_{\max}+2)/2` non-negative-m modes,
+with additional factors for products, radii and endpoint arms.
 
-* ``Corr2PCF``: ``N_s * N_mu`` or ``N_rp * N_pi`` sampled binning windows;
-* ``Corr3PCF``: translation samples times random rotations;
-* ``Corr3PCFMultipole``:
-  :math:`N_m=(\ell_{\max}+1)(\ell_{\max}+2)/2` explicitly evaluated
-  non-negative-:math:`m` fields.
+Standard angular ``Corr3PCF`` instead prepares its filtered endpoint fields
+before Monte Carlo sampling. Its sampled-triplet work scales with
+``N_centres * N_rotations * N_angles`` and the interpolation stencil cost;
+those combinations are not separate FFT/window applications. Pair
+postprocessing for Q is an additional interval, absent from a pure DDD request.
+
+The optional spectral 2PCF path instead prepares each distinct source FFT
+once, then applies exact radial or separable reductions; it does not perform
+an inverse FFT for every supported sample. Its cost depends on window
+structure, occupied frequency classes and batching. The convolution expression
+above is therefore not a per-bin FFT cost model for the optimized path. See
+:doc:`get_start/corr_2pcf/optimization` for the reduction and timing definitions.
 
 Increasing ``J`` by one multiplies the number of three-dimensional field
 coefficients by eight.  Since some work buffers are rank-local, a high-``J``
 job often benefits from fewer MPI ranks and more threads per rank.
 
-Current Grouped Benchmark
--------------------------
+Current 2PCF and angular DDD measurements
+-----------------------------------------
 
-The representative end-to-end jobs below use the same Quijote field and
-geometric setup as the validation examples.  ``Average time`` is normalized by
-the natural sampling unit of each estimator: one :math:`(s,\mu)` binning window
-for the 2PCF and one centre--rotation--angle combination for the standard 3PCF.
-Memory is the Slurm batch-step ``MaxRSS`` and therefore excludes GPU device
-memory.
+All three rows use J=8 and unit-weight Quijote haloes in a periodic
+1000 Mpc/h box. Times are independent minima of three fresh-process
+measurements. The last timing column divides the unrounded main-loop minimum
+by the number of samples or centre--rotation--angle combinations. Phase minima
+must not be added to reconstruct total wall time.
 
-.. list-table:: Representative 2PCF and standard-3PCF jobs
+.. csv-table:: Current loop and task times, with batch memory
+   :file: _static/results/current_dd_ddd_20261017.csv
    :header-rows: 1
-   :widths: 13 33 6 10 12 15 11
+   :widths: 27 12 14 14 18 15
 
-   * - Product
-     - Representative setup
-     - ``J``
-     - Parallel
-     - Task total
-     - Average time
-     - MaxRSS
-   * - :math:`DD(s,\mu)`
-     - Ring binning windows, ``46 x 51`` samples
-     - 8
-     - ``8 x 8``
-     - 119.7 s
-     - 51.0 ms/sample
-     - 8.7 GiB
-   * - :math:`DDD(\theta;r_{12},r_{13})`
-     - Particle centres, ``Ncen=406728``, ``n_rot=1000``, ``n_theta=20``
-     - 8
-     - ``16 x 8``
-     - 84.0 s
-     - 10.3 ns/comb.
-     - 11.3 GiB
-   * - :math:`DDD(\theta;r_{12},r_{13})`
-     - Box-random centres, ``Ncen=8e6``, ``n_rot=200``, ``n_theta=20``
-     - 8
-     - ``16 x 8``
-     - 280.6 s
-     - 8.77 ns/comb.
-     - 21.2 GiB
+* **DD ring:** 46 separations and 51 mu values, or 2346 samples, on 32 distinct
+  physical cores (8 ranks x 4 threads). This row retains the historical DD
+  label for the anisotropic 2PCF workflow: the actual request is ``xi`` with
+  analytic uniform-random normalization. It uses the original RSD benchmark
+  field and the verified three-run cohort, job 127025.
+* **Particle-centre DDD:** 406728 centres x 1000 rotations x 20 angles,
+  or 8,134,560,000 combinations, on 128 distinct physical cores (16 x 8).
+* **Box-random DDD:** 8000000 centres x 200 rotations x 20 angles,
+  or 32,000,000,000 combinations, on the same 128-core layout. Both DDD rows
+  are pure triplet requests from job 127098, using the original real-space
+  field, r12=20/r13=40 Mpc/h, endpoint sphere-R5 windows and no centre smoothing.
 
-The CPU measurements used two AMD EPYC 9754 processors (256 physical cores in
-total).  GPU measurements used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
+Task total starts before reading an already projected field and includes input
+IO, preparation and computation. It excludes catalogue projection, imports,
+small-J compilation warmup and output IO/audits. The 2PCF main loop includes
+window planning, tables, reductions and communication, but excludes initial
+FFT/power setup. The angular DDD main loop includes per-product preparation,
+broadcasts, sampled triplets and the final collective; initial field/centre
+setup and pair postprocessing are outside it. Q additionally needs connected
+products and lower-order pair postprocessing, and is not raw DDD.
+
+Memory is Slurm **batch-step MaxRSS**, excluding GPU device memory. DD uses
+the separate same-configuration resource job 127035: 4579592 KiB = 4.367 GiB.
+Its one-run time is not pooled with the three-run timing cohort. Each DDD
+memory value belongs to one centre/product array element, including its gates
+and three fresh processes. These are not minima of three memory measurements,
+per-rank RSS or process-tree sums.
+
+The current DD and DDD measurements use different inputs, core counts and
+allocations; they are not a controlled speedup comparison with each other or
+with the historical paper table. That older table reported approximately
+120/84/281 seconds. The archived particle example requested Q, and the
+available box log does not substantiate the old 281-second value. Those numbers
+must not be relabelled as current pure-DDD loop times or used to infer an
+algorithm-only speedup.
+
+The detailed task guides retain all repetitions, numerical checks and input
+provenance: :doc:`2PCF windows <get_start/corr_2pcf/optimization>` and
+:doc:`angular DDD/Q <get_start/corr_3pcf/corr_3pcf>`. Download the
+:download:`overview CSV <_static/results/current_dd_ddd_20261017.csv>`,
+:download:`2PCF source statistics <_static/results/twopcf_window_strategies_20261017.json>`
+or :download:`DDD/Q source statistics <_static/results/angular_3pcf_catalogue_20261017.json>`.
+
+The CPU nodes have two AMD EPYC 9754 processors (256 physical cores in
+total); each measurement uses only its stated allocation. The corrected GPU
+measurements below used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
 ``ranks x threads`` below describes the CPU layout; GPU jobs use the same
 CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the final
 contraction.
@@ -267,7 +293,7 @@ wall time.
 Total time is the sum of fresh preparation and measurement process wall times,
 including initialization and output, and excludes queue time. Host RSS is a
 0.5-second sampled process-tree sum; shared pages may be counted more than
-once. It is not the Slurm MaxRSS used for the older 2PCF/direct-3PCF table.
+once. It is not the Slurm MaxRSS used for the 2PCF/angular-DDD overview above.
 GPU device samples reach 4.00--4.25 GiB and are reported separately.
 
 One RTX4090 is an additional resource. Some CPU methods ran within batches

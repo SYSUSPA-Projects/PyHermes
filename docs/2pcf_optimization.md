@@ -1,17 +1,22 @@
-# 2PCF spectral optimization
+# 2PCF optimization development history
 
-The validated implementation is integrated into local main and remains opt-in.
-The [current user guide](get_start/corr_2pcf/optimization.rst) explains Parseval
-reduction, exact radial classes, options, fallbacks, and measured timing.
-For built-in finite spherical shells, the final tested configuration is
-`pair_reduction="spectral"`, `reuse_input_fields=True`,
-`spectral_window="shell_edges_radial"`, `spectral_fft="shared"`,
-with `memory_strategy="speed"`.
+The validated implementation is integrated into `main` and remains opt-in.
+Start with the [current user guide](get_start/corr_2pcf/optimization.rst), which
+recommends `pair_reduction="spectral"`, `reuse_input_fields=True`,
+`spectral_window="auto"`, `spectral_fft="shared"` and `memory_strategy="speed"`
+across supported window families. Explicit `shell_edges_radial` remains useful
+for selecting the earlier built-in finite-shell strategy.
 
-The sections below retain the successive experimental stages and their
-measurement conditions; intermediate J-dependent recommendations are historical.
+This page retains the successive development stages and measurement conditions.
+The partial configurations, experimental labels and J-dependent recommendations
+below describe those stages, not a second current user guide. The
+[window-family report](2pcf_window_strategies_results_20261017.md) contains the
+final matched-sampling measurements.
 
-The defaults retain the convolution implementation. To opt into the two independent experiments:
+## Initial preparation reuse and Parseval reduction (phase 1)
+
+The first stage tested these two independent switches against the unchanged
+convolution defaults:
 
 ```python
 options = {'Corr_2PCF': {
@@ -139,7 +144,8 @@ Controlled 36-sample results: [exact radial grouping measurements](2pcf_radial_o
 
 The opt-in `spectral_window="auto"` selects exact radial grouping for built-in
 isotropic windows, shared ball boundaries for finite shells, and bounded
-separable factor tables for grid-axis ring/disk/cylshell/cylinder windows.
+separable factor tables for grid-axis ring/Gaussian-ring/disk/cylshell/cylinder
+windows and Cartesian cubic windows.
 The other three settings remain `pair_reduction="spectral"`,
 `reuse_input_fields=True`, and `spectral_fft="shared"`; defaults are unchanged.
 It preserves each alias's scaling weight inside the original fold.

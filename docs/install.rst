@@ -83,10 +83,23 @@ Use one consistent MPI stack. Mixing a system ``mpirun`` with an ``mpi4py``
 wheel linked against a different implementation is a common source of startup
 failures.
 
-Development installation
-------------------------
+Source checkout and development installation
+--------------------------------------------
 
-From a repository clone:
+Use the checkout whose examples you intend to run. Source ``main`` includes
+the optimizations listed as Unreleased in :doc:`release_notes`; installing
+a published package does not select that development commit. From the
+repository root, a source installation with plotting support is:
+
+.. code-block:: bash
+
+   python -m pip install -e ".[plot]"
+   git rev-parse HEAD
+
+Record the commit along with measurement options. The package version
+string can be shared by several development commits. Keep the installed
+code and example files from the same checkout. For tests and documentation
+development, use a dedicated environment:
 
 .. code-block:: bash
 

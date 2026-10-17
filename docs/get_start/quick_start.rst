@@ -71,17 +71,12 @@ Measure the 2PCF
 
 The second configuration consumes exactly that field:
 
-.. code-block:: yaml
+.. literalinclude:: ../../examples/configs/param_2pcf.yaml
+   :language: yaml
 
-   Corr_2PCF:
-      sfc_field: ./output/quijote8000_snap004_sfc.pkl
-      random: uniform
-      binning_window: shell
-      sampling:
-         s: {min: 0.0, max: 150.0, n: 31}
-      products: [dd, dr, rd, xi]
-      threads: 2
-      fout_path: ./output/quijote8000_snap004_2pcf.pkl
+This tracked configuration explicitly opts into the automatic spectral path;
+the library default remains convolution. See
+:doc:`corr_2pcf/optimization` for the four options and supported windows.
 
 .. code-block:: bash
 
@@ -101,10 +96,10 @@ Task outputs are read through their public data classes:
 
    import matplotlib.pyplot as plt
    from pyhermes.io import Corr2PCFData
+   from pyhermes.param.parambase import read_param
 
-   corr = Corr2PCFData(
-       data_path="./output/quijote8000_snap004_2pcf.pkl"
-   )
+   params = read_param(config_path="./configs/param_2pcf.yaml")
+   corr = Corr2PCFData(data_path=params["Corr_2PCF"]["fout_path"])
 
    fig, ax = plt.subplots(figsize=(7.0, 4.6))
    ax.plot(corr.s, corr.s**2 * corr.xi, color="#1f77b4", lw=2.0)
@@ -123,9 +118,11 @@ Task outputs are read through their public data classes:
 
    The isotropic 2PCF produced by the Quick Start YAML and notebook.
 
-The notebook executes these same three stages through the Python task API.
-There is deliberately no second set of separations, smoothing parameters, or
-output names to reconcile.
+The notebook provides these same three stages through the Python task API.
+Its saved plot uses the verified versioned 2PCF result; projection and
+measurement cells are left unexecuted in the saved copy and can be run to
+reproduce it. Loading uses the output path from the same YAML, so there is
+no second set of separations, smoothing parameters or filenames to reconcile.
 
 Where next?
 -----------

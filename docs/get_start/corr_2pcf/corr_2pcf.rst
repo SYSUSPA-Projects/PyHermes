@@ -14,17 +14,12 @@ Isotropic 2PCF
 
 The smallest configuration uses thin spherical shells:
 
-.. code-block:: yaml
+.. literalinclude:: ../../../examples/configs/param_2pcf.yaml
+   :language: yaml
 
-   Corr_2PCF:
-      sfc_field: ./output/quijote8000_snap004_sfc.pkl
-      random: uniform
-      binning_window: shell
-      sampling:
-         s: {min: 0.0, max: 150.0, n: 31}
-      products: [dd, dr, rd, xi]
-      threads: 2
-      fout_path: ./output/quijote8000_snap004_2pcf.pkl
+The tracked configuration opts into the automatic spectral path. Omit the four
+spectral/reuse settings to retain the convolution defaults. Install the same
+source checkout before using its configurations; see :doc:`/install`.
 
 ``random: uniform`` uses the analytic constant reference density. Supply an
 ``SFCField`` or path instead when the random catalogue is spatially varying.
@@ -39,54 +34,37 @@ Run and load:
 .. code-block:: python
 
    from pyhermes.io import Corr2PCFData
+   from pyhermes.param.parambase import read_param
 
-   corr = Corr2PCFData(
-       data_path="./output/quijote8000_snap004_2pcf.pkl"
-   )
+   params = read_param(config_path="./configs/param_2pcf.yaml")
+   corr = Corr2PCFData(data_path=params["Corr_2PCF"]["fout_path"])
    print(corr.sampling_names)  # ('s',)
    print(corr.s, corr.xi)
 
-Optional spectral path for finite spherical shells
---------------------------------------------------
+Choosing optional spectral execution
+-------------------------------------
 
-For built-in ``thick_shell`` or ``binned_shell`` windows, enable the validated
-spectral path explicitly. For example, these options can be added to the task
-configuration:
+Use ``pair_reduction: spectral``, ``reuse_input_fields: true``,
+``spectral_window: auto`` and ``spectral_fft: shared`` with the default
+``memory_strategy: speed``. This is one configuration for supported built-in
+isotropic, grid-axis axial and Cartesian windows, rather than a separate
+public switch for every window. Explicit ``shell_edges_radial`` remains
+available for built-in finite shells; ordinary workloads can start with
+``auto``. Unsupported windows retain their applicable fallback.
 
-.. code-block:: yaml
+Parseval reduction avoids inverse FFTs on the supported path. Every original
+alias keeps its own scaling weight and folding multiplicity; reordered
+floating-point sums need not be bitwise identical. Shared FFT preparation
+computes spectra on root and broadcasts real pair powers. Caches last for one
+run, and caller-owned fields must not be mutated concurrently. The ``memory``
+strategy retains its original execution path and does not activate the spectral
+or input-reuse settings.
 
-   Corr_2PCF:
-      memory_strategy: speed
-      pair_reduction: spectral
-      reuse_input_fields: true
-      spectral_window: shell_edges_radial
-      spectral_fft: shared
-      binning_window:
-         type: thick_shell
-         len_args: {R: null, delta_R: 5.0}
-         mapping: s_to_R
-
-The task prepares the real input spectra once, groups the original weighted
-frequency terms by their exact integer squared norm, and evaluates shared ball
-boundaries for the finite shells. Every alias keeps its own scaling weight and
-folding multiplicity; there is no interpolation or frequency cutoff. Summation
-order changes can produce floating-point differences.
-
-``shared`` computes spectra on MPI rank zero and broadcasts real pair powers.
-The input fields are replicated by the task before this step. All caches last
-for one ``run()`` only, and caller-owned fields must not be mutated concurrently.
-The radial path has a conservative 256 MiB per-rank temporary-memory guard;
-larger requests use the batch-edge fallback. Custom callbacks and unsupported
-windows retain their existing calculation paths, and the ``memory`` strategy
-retains its original execution path.
-
-The defaults continue to use convolution and independent input preparation.
-The main-loop timer includes radial grouping, MPI reductions and all shell
-boundary work. Initial spectra and power broadcasts are in setup, so compare
-complete projection-to-result time when assessing application performance.
-
-See :doc:`optimization` for the Parseval derivation, complete option table,
-shared-edge and radial algorithms, numerical checks and controlled timings.
+The main loop includes window planning, tables, reductions and communication.
+Initial FFT/power setup is outside that interval but inside task total. Compare
+matching total-time boundaries when assessing application performance. See
+:doc:`optimization` for defaults, formulas, resource guards, fallback eligibility
+and the controlled measurements.
 
 Redshift-space anisotropy
 -------------------------
@@ -94,18 +72,15 @@ Redshift-space anisotropy
 A ``ring`` bin maps each :math:`(s,\mu)` sample to transverse radius
 :math:`R=s\sqrt{1-\mu^2}` and line-of-sight offset :math:`H=s\mu`:
 
-.. code-block:: yaml
+.. literalinclude:: ../../../examples/configs/param_2pcf_smu.yaml
+   :language: yaml
 
-   Corr_2PCF:
-      sfc_field: ./output/quijote8000_snap004_rsd_sfc.pkl
-      random: uniform
-      binning_window: ring
-      sampling:
-         s: {min: 0.0, max: 180.0, n: 46}
-         mu: {min: 0.0, max: 1.0, n: 51}
-      products: xi
-      threads: 8
-      fout_path: ./output/quijote8000_snap004_rsd_2pcf_smu.pkl
+After preparing the RSD field as described in the projection tutorial, run
+from ``examples/``:
+
+.. code-block:: bash
+
+   python scripts/run_2pcf.py configs/param_2pcf_smu.yaml
 
 The result has ``xi.shape == (len(s), len(mu))``. The plotting helper converts
 it to the :math:`(s_\perp,s_\parallel)` plane:
@@ -114,10 +89,10 @@ it to the :math:`(s_\perp,s_\parallel)` plane:
 
    from pyhermes.io import Corr2PCFData
    from pyhermes.utils.plot import plot_corr2pcf_2d
+   from pyhermes.param.parambase import read_param
 
-   corr_smu = Corr2PCFData(
-       data_path="./output/quijote8000_snap004_rsd_2pcf_smu.pkl"
-   )
+   params_smu = read_param(config_path="./configs/param_2pcf_smu.yaml")
+   corr_smu = Corr2PCFData(data_path=params_smu["Corr_2PCF"]["fout_path"])
    plot_corr2pcf_2d(corr_smu)
 
 .. figure:: ../../_static/paper/corr2pcf_ring_gaussian_ring_smu.png

@@ -50,4 +50,12 @@ RSS polling sleeps nominally 0.1 seconds between observations; actual cadence in
 
 The scientific source is f19380ad86ee2409b6f974cdb26492de7970e5b9; example configurations are frozen at 8604e6d71d839b0d437767b2b98a82ec0c922a96 with identical scientific files. Gamma manifest: 4d514735f95e4eea846cade200b767efa1cb67e518ae7b71a8dc4fb6ec301f1c. Earlier wrapper failures and all valid measurements remain preserved. There were no duplicate successful measurements.
 
-The 2PCF core report separately retains 85 formal runs and 31 gates, three-repeat layout statistics, exact alias scaling/folding and independent resource measurements. The nonmultipole 3PCF/software review identifies product-local contrast reuse, common local pair reduction and preparation sharing as future candidates; no unrequested production matrix or nonmultipole scientific change was introduced. Main, protected branch tips, old article figures and Table 3 remain unchanged.
+The 2PCF core campaign retains 85 formal runs and 31 gates, three-repeat
+layout statistics, exact alias scaling/folding and independent resources;
+the matched axial-sampling follow-up is recorded separately. This example
+refresh did not change the angular scientific implementation or article.
+Subsequently, product-local contrast reuse and common local pair reduction
+were implemented and integrated into main by 1e224ab; see the
+[angular implementation report](3pcf_angular_optimization_results_20261017.md).
+Prepared-vertex sharing remains a future opportunity. These later changes
+do not alter the frozen source provenance or measurements reported here.

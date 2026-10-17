@@ -1,0 +1,4 @@
+Workload,MPI x threads,Main loop / s,Task total / s,Main / sample,Batch MaxRSS / GiB
+DD ring (xi workflow),8 x 4,6.869,7.285,2.928 ms/bin,4.367
+DDD particle centres,16 x 8,78.077,79.540,9.598 ns/comb.,7.747
+DDD box-random centres,16 x 8,294.019,295.491,9.188 ns/comb.,9.906

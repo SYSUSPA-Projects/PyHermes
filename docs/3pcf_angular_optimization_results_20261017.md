@@ -1,6 +1,6 @@
-# Experimental standard angular 3PCF optimization, 2026-10-17
+# Standard angular 3PCF optimization and measurements, 2026-10-17
 
-Developed on `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. The validated changes are being integrated into main on 2026-10-17; the source commits below identify the exact measured versions. The initial profiles below are local synthetic experiments. A subsequent J8 catalogue measurement on the same branch is reported separately, with its own timing and memory boundaries.
+Developed on `codex/3pcf-angular-optimization`; baseline main 849de94; implementation 73df42f. The validated changes were integrated into main by merge 1e224ab on 2026-10-17; the source commits below identify the exact measured versions. The initial profiles below are local synthetic experiments. A subsequent J8 catalogue measurement on the same branch is reported separately, with its own timing and memory boundaries.
 
 ## Implemented changes
 
@@ -57,6 +57,14 @@ The historical particle example requested Q:75.8514s main loop plus postprocessi
 
 [Catalogue table CSV](_static/results/angular_3pcf_catalogue_20261017.csv) and [all12 timings, ranges and provenance](_static/results/angular_3pcf_catalogue_20261017.json).
 
-## Next decisions
+## Remaining opportunities
 
-If a representative task is dominated by pair postprocessing, this prototype is ready for a bounded same-input server comparison. If sampled interpolation dominates, profile that kernel first; central-vertex interpolation is independent of angle and may be reusable, but any change needs fixed-seed, weighted and nonuniform checks. Identical normalized vertex/broadcast sharing remains a separate ownership/lifetime optimization. No approximation, seed change, reduced rotation count or scaling factorization across aliases is proposed.
+Contrast reuse and local pair-series reduction are implemented and integrated;
+they are not outstanding tasks. The catalogue measurements show that sampled
+interpolation dominates these long production workloads, while Q pair
+postprocessing takes about 1.8 seconds. Profile a representative workload before
+proposing more changes. Central-vertex interpolation may be reusable across
+angles, but would need fixed-seed, weighted and nonuniform checks. Identical
+normalized vertex/broadcast sharing remains a separate ownership/lifetime
+opportunity. Neither is implemented by this work. No approximation, seed change,
+reduced rotation count or scaling factorization across aliases is proposed.

@@ -59,6 +59,35 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 | MPI helpers | `utils/mpi_util.py` |
 | Task parameters and YAML loading | `param/parambase.py`, `base/default_params.json`, `theory/default_params.json` |
 
+## Shared 2PCF execution and angular-3PCF reuse
+
+The public configuration is documented in
+[`docs/get_start/corr_2pcf/optimization.rst`](../docs/get_start/corr_2pcf/optimization.rst).
+The opt-in `spectral_window="auto"` delegates to common structural planners;
+do not add a reduction loop or public flag for every window family.
+
+| Responsibility | Implementation |
+| --- | --- |
+| Task preparation, broadcasts, sample distribution and timing | `theory/corr2pcf.py` |
+| Mathematical structure and built-in/custom eligibility | `utils/window_structure.py` |
+| Real input FFTs, pair powers and half-spectrum normalization | `utils/corr2pcf_spectral.py` (`SpectralPairReducer`) |
+| Generic exact alias reduction, common shell boundaries and radial planning | `utils/corr2pcf_window_reduction.py` (`ScalarWindowEvaluator`) |
+| Automatic radial/separable planning, bounded factor cache and batches | `utils/corr2pcf_strategies.py` (`AutoWindowEvaluator`) |
+| Angle-independent box-random contrast lifetime and Q assembly | `theory/corr3pcf.py` |
+
+`compute_pair_products_at_samples` in `theory/corr2pcf.py` is the local-series
+bridge used by angular 3PCF pair postprocessing. It shares the same reducer and
+window plans, uses `COMM_SELF` for root-only work and releases full fallback
+kernels per radius. It must not construct a world-collective task on root alone.
+These helpers are internal implementation points, not additional user task APIs.
+
+Power, basis and factor caches belong to one run or local pair series. Angular
+contrasts belong to one product and are cleared on completion or failure.
+Caller-owned fields must not be mutated concurrently. Keep cache ownership,
+resource guards and every alias-specific scaling weight explicit when extending
+these helpers. The `memory` execution strategy and unsupported-window fallback
+remain available; historical explicit window strategies are retained for checks.
+
 ## Multipole contraction and CUDA layout
 
 The three-point contraction uses the full signed triple-overlap table. Basis
@@ -164,9 +193,9 @@ Task drivers and estimator logic. These classes usually combine parameters,
 
 - `counting.py`: `Counting` task; samples a field at random positions.
 - `corr2pcf.py`: `Corr_2PCF` task; sampling grids, binning-window mappings,
-  pair-product calculations, and product assembly.
+  prepared-input reuse, shared exact pair-series helper, and product assembly.
 - `corr3pcf.py`: `Corr_3PCF` task; standard 3PCF products for particle-center
-  and box-random-center modes.
+  and box-random-center modes, product-local contrasts and local pair reuse.
 - `corr3pcf_multipole.py`: `Corr_3PCF_Multipole` task driver.
 - `default_params.json`: defaults for theory-level tasks.
 

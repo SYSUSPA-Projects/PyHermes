@@ -12,6 +12,35 @@
 - Keep existing convolution defaults and unsupported-window fallbacks. Document
   configuration, memory guards, numerical validation and total/main-loop timing.
 - Add independent numerical checks and real 2PCF MPI checks to CI.
+- Add `spectral_window="auto"` to select exact radial grouping for built-in
+  isotropic windows, shared finite-shell boundaries, and bounded separable
+  factors for grid-axis ring/Gaussian-ring, disk, cylindrical and Cartesian
+  cubic windows. Unsupported or tilted windows keep their applicable paths.
+- Share factor tables and batches of up to eight queries across compatible
+  windows, with per-run cache/scratch limits. Preserve custom callables and
+  every alias-specific scaling term inside the fold.
+
+### Standard angular 3PCF
+
+- Prepare box-random D-R fields once per product/rank and release them on
+  completion or failure. Reuse the exact local 2PCF backend for lower-order
+  pair series and `Q` postprocessing; root-only planning uses `COMM_SELF`.
+- Keep Monte Carlo kernels, centres, seeds, rotations, weights and
+  interpolation unchanged. Add no user setting or result-format change.
+- Cover weighted/nonuniform inputs, MPI, repeated runs, fallback memory and
+  cleanup. Separate local controlled profiles from catalogue measurements
+  without a full-size baseline speedup claim.
+
+### Examples and documentation
+
+- Refresh four 2PCF and three corrected CPU Gamma examples under versioned
+  output names and execute affected notebook plots. Retain historical files
+  and document the input-provenance boundary of angular overlays.
+- Publish matched 46-by-51 axial-window timings and shell-matched cubic
+  sampling, including main-loop/task totals and per-sample costs.
+- Align Quick Start and task guides with the tracked YAML files. The
+  benchmark overview distinguishes current pure-DDD measurements from
+  historical Q timings and keeps Slurm MaxRSS separate from process-tree RSS.
 
 ## 1.2.0
 

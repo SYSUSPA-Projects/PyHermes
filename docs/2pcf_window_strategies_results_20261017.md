@@ -124,4 +124,7 @@ Ring layout comparison in job 127025 (three processes/layout, same 32 cores):
 - Per-rank guards bound radial scratch to 256 MiB, factor scratch to 64 MiB and the factor LRU to 16 MiB. These exclude field/FFT/runtime memory. Small or oversized groups fall back; automatic mode is not a universal speed guarantee.
 - Dynamic window-function kernels compile per process rather than storing unsafe weak dispatcher references in disk indices. Eligible numeric kernels retain disk caching. Cold startup may dominate a short task; retain/report warmup separately.
 - The first zero-formal job 127021 failed a gate and remains preserved. The subsequent wrapper/cache/progress repairs are documented separately; no valid scientific samples were discarded or rerun.
-- Example results use different input-file hashes and are refreshed separately. The old paper figures, Table 3 and article have not been modified.
+- Example results use different input-file hashes and were refreshed separately.
+  This measurement campaign did not edit the article. The current public
+  benchmark overview draws its timings from these archived repetitions;
+  subsequent article edits are separate from this frozen experiment.

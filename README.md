@@ -46,7 +46,13 @@ for every configuration.
 
 ### Optional spectral 2PCF computation
 
-The current source tree includes an opt-in spectral path with automatic window
+The updates in this section and the standard angular 3PCF section below are
+available on source `main` and recorded under **Unreleased** in
+[CHANGELOG.md](CHANGELOG.md). Install that checkout when following its
+examples; a PyPI installation follows its published release. See the
+[release and migration guide](docs/release_notes.rst) for compatibility.
+
+The source tree includes an opt-in spectral path with automatic window
 strategies. Add these settings to an existing `Corr_2PCF` task, keeping its
 window definition, bin edges, and sampling:
 
@@ -86,7 +92,7 @@ exact 2PCF backend for its lower-order pair series and `Q` postprocessing. This
 adds no user setting and retains the sampled centres, rotations, seeds, weights,
 interpolation and alias folding. Root-only pair planning uses local communication.
 See the [angular 3PCF guide](docs/get_start/corr_3pcf/corr_3pcf.rst) and
-[experimental measurements](docs/3pcf_angular_optimization_results_20261017.md). The report separates local synthetic profiles from verified J8 catalogue DDD/Q timings on 128 CPU cores; the catalogue timings are not a controlled full-size baseline speedup.
+[verified measurements](docs/3pcf_angular_optimization_results_20261017.md). The report separates local synthetic profiles from verified J8 catalogue DDD/Q timings on 128 CPU cores; the catalogue timings are not a controlled full-size baseline speedup.
 
 ### Three-point multipoles in 1.2
 
@@ -129,8 +135,7 @@ input provenance and executed notebook plots. Historical results are retained.
 
 ## Installation
 
-For notebooks, development, and other single-process work, install PyHermes
-from PyPI:
+For a published release, install PyHermes from PyPI:
 
 ```bash
 python -m pip install pyhermes-cosmo
@@ -138,6 +143,16 @@ python -m pip install pyhermes-cosmo
 
 This installs PyHermes and its regular Python dependencies automatically. MPI
 and CUDA are optional, so neither is required for the default installation.
+
+To use the current repository examples and Unreleased optimizations, install
+the same checkout from its repository root before entering `examples/`:
+
+```bash
+python -m pip install -e ".[plot]"
+```
+
+Keep the code and example configurations on the same commit. See the
+[installation guide](docs/install.rst) for development, MPI and CUDA setup.
 
 The Python import name remains unchanged:
 

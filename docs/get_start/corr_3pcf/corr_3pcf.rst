@@ -203,7 +203,7 @@ the finite Monte Carlo sample independently of these implementation changes.
 The benefit depends on workload. ``Q`` includes lower-order pair postprocessing;
 a triplet-only task does not. Long Monte Carlo loops may dominate total time even
 when pair postprocessing becomes much faster. See the
-:download:`experimental measurements and validation
+:download:`implementation measurements and validation
 </3pcf_angular_optimization_results_20261017.md>` for the timing boundaries and
 local-profile limitations.
 
@@ -214,7 +214,7 @@ J=5, 8192 centres and 32 rotations. Every row has 20 angles. Totals include
 in-memory preparation, sampled triplets and pair postprocessing; they contain no
 projection or file IO and are not server/catalogue performance measurements.
 
-.. csv-table:: Local angular 3PCF prototype timings
+.. csv-table:: Local angular 3PCF implementation timings
    :file: ../../_static/results/angular_3pcf_optimization_20261017.csv
    :header-rows: 1
    :widths: 46 20 20 14
@@ -235,7 +235,7 @@ Time columns take the minimum of three fresh processes. Task total starts at
 reading a preprojected field and excludes projection, import/warmup and output
 IO. Main loop excludes initial preparation and lower-order pair postprocessing.
 
-.. csv-table:: J8 angular catalogue candidate measurements
+.. csv-table:: J8 angular catalogue measurements
    :file: ../../_static/results/angular_3pcf_catalogue_20261017.csv
    :header-rows: 1
    :widths: 27 15 15 15 14 14
@@ -247,7 +247,7 @@ workloads; Q pair postprocessing takes about 1.8 seconds. Different historical
 nodes/runtime policies and incomplete historical timing provenance prevent an
 algorithm-only speedup claim. See the
 :download:`catalogue repetitions and provenance
-</_static/results/angular_3pcf_catalogue_20261017.json>` and experimental report
+</_static/results/angular_3pcf_catalogue_20261017.json>` and implementation report
 for ranges, the pure-DDD/Q distinction and historical Table3 timing boundaries.
 
 Connection to multipoles
