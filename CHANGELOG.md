@@ -4,6 +4,10 @@
 
 ### Optional 2PCF spectral computation
 
+- Add `SFCField.pair_with(other)` and `PairProduct.evaluate(windows)` for
+  direct local field-pair averages with shared spectral/window preparation,
+  explicit estimator normalization and context-managed cleanup. Retain complex
+  cross-field phase through the convolution fallback when required.
 - Add Parseval-based real-power reduction, compatible input preparation reuse,
   fused folded-window evaluation and shared finite-shell boundaries.
 - Add batched boundary evaluation, root-computed MPI spectra and exact integer
@@ -33,6 +37,9 @@
 
 ### Examples and documentation
 
+- Explain convolution and Parseval reconstruction in the 2PCF notebook,
+  including normalization, correspondence to task options and fresh-window
+  timing. Document local pair evaluation alongside the full task workflow.
 - Refresh four 2PCF and three corrected CPU Gamma examples under versioned
   output names and execute affected notebook plots. Retain historical files
   and document the input-provenance boundary of angular overlays.

@@ -4,6 +4,7 @@ from .corr3pcf import Corr3PCFData
 from .corr3pcf_multipole import Corr3PCFMultipoleData
 from .counting import CountingData
 from .funcs import *
+from .pair_product import PairProduct
 from .readers import *
 from .resources import file_sha256, is_remote_url, remote_cache_path, resolve_data_path
 from .sfc_field import (

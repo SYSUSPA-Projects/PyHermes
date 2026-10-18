@@ -137,6 +137,69 @@ task has replicated the inputs. It is not zero-copy shared memory: each rank
 still holds its real power arrays. Multiple inputs or requested products can
 require more than one distinct FFT.
 
+.. _corr2pcf-local-pair-evaluation:
+
+Local field-pair evaluation
+---------------------------
+
+``SFCField.pair_with(other)`` exposes the same exact reduction backend for
+already prepared real fields. The fields must share their grid geometry and
+SFC basis. For example, from ``examples/`` with the Quick Start output:
+
+.. code-block:: python
+
+   import numpy as np
+   from pyhermes.io import SFCField, WindowFunc
+
+   data = SFCField(data_path="./output/quijote8000_snap004_sfc.pkl", threads=8)
+   rho = data.field_mean_density(value_unit="grid")
+   delta = data - rho
+   radii = np.linspace(0.0, 150.0, 26)
+   windows = [
+       WindowFunc(
+           {"type": "shell", "len_args": {"R": float(s)}},
+           delta.sfc_info,
+           threads=8,
+       )
+       for s in radii
+   ]
+   with delta.pair_with(threads=8) as pair:
+       xi = pair.evaluate(windows) / rho**2
+
+``pair.evaluate(windows)`` returns a NumPy array in input order. Windows may
+be an iterable, and duplicates are retained. For one window, use
+``pair.evaluate([window])[0]``. Passing a complete compatible list enables
+cross-window radial grouping or bounded separable batches. The mathematical
+value for each window is ``mean((first @ window) * second)``; no estimator or
+physical normalization is applied automatically. The example divides by the
+uniform-reference ``RR = rho**2``. For nonuniform references or task-managed
+normalization and products, use ``Corr_2PCF``.
+
+Omitting ``other`` gives an autocorrelation; pass another compatible real
+field for a cross-correlation. Complex-response windows use the original full
+convolution, retaining cross-field phase and operand order. Source arrays and
+metadata must remain unchanged until the pair is closed. Replacing an array
+or changing geometry is rejected; in-place changes cannot be detected cheaply.
+The ``with`` block releases retained powers on success or exception. A closed
+pair cannot be evaluated again.
+
+This local interface chooses the spectral reducer and automatic window
+planner directly. It does not accept the four task optimization switches:
+``pair_reduction="spectral"`` and ``spectral_window="auto"`` select those same
+backends in ``Corr_2PCF``. ``reuse_input_fields`` controls task-level preparation
+and broadcast reuse, whereas these inputs are already prepared.
+``spectral_fft="shared"`` is an MPI task option; the local pair performs no
+MPI world collectives and can be used on rank zero alone. The distributed
+task keeps its existing input, sampling and result orchestration.
+
+Construct fresh ``WindowFunc`` objects for each timing method. A full kernel
+already materialized by a prior convolution is used as supplied rather than
+replaced by an automatic structural plan. Include pair creation, initial
+FFT/power preparation, evaluation and cleanup in the spectral compute total;
+report common loading, projection and smoothing separately. The first call
+may compile kernels. The :doc:`2PCF notebook </notebooks/corr2pcf>` compares
+both formulations using the same smoothed input and explicit normalization.
+
 Window work and exact radial classes
 ------------------------------------
 

@@ -32,6 +32,24 @@ setup, while preprojected-field task total includes input IO and preparation.
 See :doc:`get_start/corr_2pcf/optimization` for options, memory limits and
 verified measurements.
 
+2PCF: direct field-pair evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``SFCField.pair_with(other)`` prepares a reusable local pair, and
+``pair.evaluate(windows)`` evaluates its windowed coefficient-array means in
+input order. It shares the existing spectral reducer and automatic window
+strategies. The caller supplies estimator normalization; the uniform-reference
+correlation divides a contrast-field pair mean by ``rho**2``. Use a ``with``
+block to release the retained powers, and keep input arrays unchanged until
+the context closes. Complex-response windows preserve phase through the
+existing convolution fallback.
+
+This local interface adds no task setting and changes no ``Corr_2PCF`` default,
+estimator or result format. It performs no MPI world collectives; distributed
+sampling and shared MPI FFT preparation remain responsibilities of the task.
+See :ref:`corr2pcf-local-pair-evaluation` and Section 2 of the
+:doc:`2PCF notebook <notebooks/corr2pcf>` for usage and timing boundaries.
+
 Standard angular 3PCF: internal reuse
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
