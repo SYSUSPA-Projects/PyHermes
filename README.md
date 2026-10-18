@@ -85,20 +85,29 @@ for numerical checks and workload-specific performance, including the
 [matched 46×51 axial-window measurements](docs/2pcf_window_strategies_results_20261017.md#matched-axial-sampling-follow-up)
 and amortized task time per sample.
 
-### Experimental low-level pair expressions
+### Direct field-pair evaluation
 
-On `codex/2pcf-pair-expression`, a real `SFCField` can prepare a reusable local
-pair with `field.pair_with(other)`. `pair @ window` returns the coefficient-array
-pair mean; `pair.evaluate(windows)` also shares automatic window plans. Apply
-RR normalization explicitly when constructing xi. Complex-response windows
-retain the phase-preserving convolution fallback. Keep inputs unchanged until
-the pair is closed; a `with` block releases its retained powers.
+A real `SFCField` can prepare a reusable local pair for an existing list of
+compatible `WindowFunc` objects:
 
-The standalone [temporary comparison notebook](examples/notebooks/tmp_corr2pcf_pair_expression_comparison.ipynb)
-extracts the original direct reconstruction and compares old/scalar/batched
-expressions, including preparation in the measured totals. It also demonstrates
-why complex cross-power phases matter for directional windows. This experiment
-has not been integrated into the main 2PCF tutorial.
+```python
+with delta.pair_with(delta, threads=8) as pair:
+    xi = pair.evaluate(windows) / RR
+```
+
+`pair.evaluate(windows)` returns the coefficient-array pair mean in input order
+and shares automatic window plans. Apply your estimator's normalization
+explicitly; `RR = rho**2` is the uniform-reference case. For one window, use
+`pair.evaluate([window])[0]`. Different real fields can be passed to
+`first.pair_with(second)`. Complex-response windows retain the phase-preserving
+convolution fallback. Keep inputs unchanged until the pair is closed; the
+`with` block releases its retained powers. Distributed sampling and task-level
+normalization remain available through `Corr_2PCF` and its existing options.
+
+The direct-reconstruction section in the [2PCF tutorial](examples/notebooks/corr2pcf.ipynb)
+explains the convolution and Parseval formulations and their task options.
+See the [local pair evaluation guide](docs/get_start/corr_2pcf/optimization.rst#local-field-pair-evaluation)
+for a complete example, normalization, lifetime and timing boundaries.
 
 ### Standard angular three-point statistics
 

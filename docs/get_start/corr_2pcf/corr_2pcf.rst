@@ -66,6 +66,17 @@ matching total-time boundaries when assessing application performance. See
 :doc:`optimization` for defaults, formulas, resource guards, fallback eligibility
 and the controlled measurements.
 
+Direct evaluation of prepared fields
+------------------------------------
+
+For a local calculation on existing real ``SFCField`` objects, use
+``first.pair_with(second)`` and ``pair.evaluate(windows)``. Omitting the second
+field gives an autocorrelation. The returned array contains windowed pair
+means in input order; apply the estimator normalization explicitly. This shares
+the same spectral and automatic-window backends as the optimized task, while
+``Corr_2PCF`` continues to handle input preparation, MPI sampling and saved
+result products. See :ref:`corr2pcf-local-pair-evaluation` for a full example.
+
 Redshift-space anisotropy
 -------------------------
 
@@ -226,8 +237,10 @@ the separation approaches the field resolution.
 Performance controls
 --------------------
 
-Sampling points are distributed across MPI ranks. The dominant cost is one
-window construction and convolution per sampled bin and required product.
+Sampling points are distributed across MPI ranks. The convolution path builds
+and applies a window for each bin and required product. Optional spectral
+execution reuses input spectra and eligible window plans across samples;
+its cost depends on the window structure and complete setup/compute workload.
 
 ``memory_strategy: speed`` keeps reusable fields in memory. ``memory`` reloads
 or rebuilds more aggressively to reduce peak storage. ``binning_window_cache``

@@ -47,7 +47,7 @@ def test_same_and_cross_fields_match_existing_expression(kind, lengths):
         original = first.epsilon.copy(), second.epsilon.copy()
         expected = direct(first, second, window(first, kind, **lengths))
         with first.pair_with(second) as pair:
-            actual = pair @ window(first, kind, **lengths)
+            actual = pair.evaluate([window(first, kind, **lengths)])[0]
             assert pair.metrics['forward_fft_count'] == (1 if second is first else 2)
         np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=1e-12)
         np.testing.assert_array_equal(first.epsilon, original[0])
@@ -76,7 +76,7 @@ def test_materialized_real_window_keeps_caller_kernel():
     kernel = win.as_array()
     expected = direct(first, second, win)
     with PairProduct(first, second) as pair:
-        np.testing.assert_allclose(pair @ win, expected, rtol=1e-11, atol=1e-12)
+        np.testing.assert_allclose(pair.evaluate([win])[0], expected, rtol=1e-11, atol=1e-12)
     assert win.w_kernel is kernel
 
 
@@ -92,11 +92,11 @@ def test_complex_response_retains_cross_phase_and_orientation():
     win.is_composite_window = True
     expected = np.mean(np.roll(first.epsilon, 1, axis=0)*second.epsilon)
     with first.pair_with(second) as pair:
-        np.testing.assert_allclose(pair @ win, expected, rtol=1e-13, atol=1e-13)
+        np.testing.assert_allclose(pair.evaluate([win])[0], expected, rtol=1e-13, atol=1e-13)
         assert abs(expected) > .3
         assert pair.metrics['fallback_convolution_count'] == 1
     with second.pair_with(first) as pair:
-        np.testing.assert_allclose(pair @ win, -expected, rtol=1e-13, atol=1e-13)
+        np.testing.assert_allclose(pair.evaluate([win])[0], -expected, rtol=1e-13, atol=1e-13)
     assert win.w_kernel is kernel
 
 
@@ -106,7 +106,7 @@ def test_builtin_directional_derivative_uses_phase_preserving_fallback():
     expected = direct(first, second, WindowFunc(params, first.sfc_info, threads=2))
     win = WindowFunc(params, first.sfc_info, threads=2)
     with first.pair_with(second) as pair:
-        np.testing.assert_allclose(pair @ win, expected, rtol=1e-11, atol=1e-12)
+        np.testing.assert_allclose(pair.evaluate([win])[0], expected, rtol=1e-11, atol=1e-12)
         assert pair.metrics['fallback_convolution_count'] == 1
     assert win.w_kernel is None
 
@@ -116,7 +116,7 @@ def test_context_lifetime_and_replaced_arrays():
     pair = first.pair_with()
     first.epsilon = first.epsilon.copy()
     with pytest.raises(RuntimeError, match='replaced'):
-        pair @ window(first, R=2.)
+        pair.evaluate([window(first, R=2.)])
     pair.close()
     pair.close()
     assert pair._reducer is None and pair._first is None
@@ -141,14 +141,15 @@ def test_validation_and_mixed_window_list():
     with pytest.raises(TypeError, match='SFCField'):
         first.pair_with(1.)
     with first.pair_with() as pair:
-        with pytest.raises(TypeError):
-            pair @ 1.
+        # Window evaluation is explicit; pairing has no matrix-multiply API.
+        with pytest.raises(TypeError, match='unsupported operand'):
+            pair @ window(first, R=3.)
         with pytest.raises(TypeError, match='WindowFunc'):
             pair.evaluate([1.])
         mismatched = window(first, R=3.)
         mismatched.box_size = 12.
         with pytest.raises(ValueError, match='geometry'):
-            pair @ mismatched
+            pair.evaluate([mismatched])
         windows = [window(first, R=3.), window(first, 'ring', R=2., H=1.)]
         expected = [direct(first, first, w) for w in windows]
         # Fresh windows to exercise fused fallback rather than cached kernels.

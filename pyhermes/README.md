@@ -52,6 +52,7 @@ from pyhermes.theory import Counting, Corr_2PCF, Corr_3PCF, Corr_3PCF_Multipole
 | Scaling-function projection/interpolation | `utils/wavelet_grid.py` |
 | Counting task logic | `theory/counting.py`, `io/counting.py` |
 | 2PCF task logic and binning-window mappings | `theory/corr2pcf.py`, `io/corr2pcf.py` |
+| Direct field-pair evaluation and owned spectral lifetime | `io/sfc_field.py` (`pair_with`), `io/pair_product.py` (`PairProduct.evaluate`) |
 | 3PCF task logic | `theory/corr3pcf.py`, `utils/corr3pcf_kernels.py`, `io/corr3pcf.py` |
 | 3PCF multipoles | `theory/corr3pcf_multipole.py`, `utils/corr3pcf_multipoles.py` |
 | Legendre/spherical-harmonic window kernels | `utils/legendre_windows.py`, `utils/legendre_fast.py`, `utils/special_functions.py` |
@@ -69,6 +70,7 @@ do not add a reduction loop or public flag for every window family.
 | Responsibility | Implementation |
 | --- | --- |
 | Task preparation, broadcasts, sample distribution and timing | `theory/corr2pcf.py` |
+| Local public pair evaluation, validation and cleanup | `io/pair_product.py` (`PairProduct`) |
 | Mathematical structure and built-in/custom eligibility | `utils/window_structure.py` |
 | Real input FFTs, pair powers and half-spectrum normalization | `utils/corr2pcf_spectral.py` (`SpectralPairReducer`) |
 | Generic exact alias reduction, common shell boundaries and radial planning | `utils/corr2pcf_window_reduction.py` (`ScalarWindowEvaluator`) |
@@ -80,6 +82,12 @@ bridge used by angular 3PCF pair postprocessing. It shares the same reducer and
 window plans, uses `COMM_SELF` for root-only work and releases full fallback
 kernels per radius. It must not construct a world-collective task on root alone.
 These helpers are internal implementation points, not additional user task APIs.
+
+For user-controlled local series, `SFCField.pair_with(other)` returns a
+`PairProduct` whose `evaluate(windows)` shares those same reducers and window
+plans. Its context owns the pair power and performs no world collectives.
+It returns coefficient-array means; estimator normalization stays with the
+caller. Keep the distributed task orchestration in `Corr_2PCF`.
 
 Power, basis and factor caches belong to one run or local pair series. Angular
 contrasts belong to one product and are cleared on completion or failure.

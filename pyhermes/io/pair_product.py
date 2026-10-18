@@ -1,4 +1,4 @@
-"""Experimental local windowed pair products, reusing exact 2PCF strategies."""
+"""Local windowed pair products, reusing exact 2PCF strategies."""
 
 import copy
 
@@ -119,11 +119,6 @@ class PairProduct:
         finally:
             self._metrics['last_window_plan'] = copy.deepcopy(evaluator.metrics)
         return np.asarray(values)
-
-    def __matmul__(self, window):
-        if not isinstance(window, WindowFunc):
-            return NotImplemented
-        return self.evaluate([window])[0].item()
 
     def close(self):
         """Release powers and source references; safe to call more than once."""
