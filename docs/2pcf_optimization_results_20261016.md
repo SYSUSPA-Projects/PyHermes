@@ -1,6 +1,6 @@
 # 2PCF优化测试交付
 
-新分支 `codex/2pcf-optimization` 从公开main `4280a2c` 创建；工作树 `/Users/xutengpeng/.codex/worktrees/2pcf-optimization/PyHermes`。本轮完成输入准备去重和保留原核的谱空间标量归约，均为opt-in，默认旧路径。main、原图、文章和其他保护分支未改，未推送/合并。
+新分支 `codex/2pcf-optimization` 从公开main `4280a2c` 创建，使用独立工作树。本轮完成输入准备去重和保留原核的谱空间标量归约，均为opt-in，默认旧路径。main、原图、文章和其他保护分支未改，未推送/合并。
 
 共27个正式样本、9个J5门槛；33本地回归、真实2rank MPI的2个测试与memory策略回退验证通过。27条31bin曲线对旧结果allclose(1e-8,1e-11)，最大绝对差5.440092820663267e-15。源/输入/投影/输出SHA、32不同物理核、真实线程掩码、FFT次数与独立CSV统计均核验。
 
