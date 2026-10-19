@@ -114,9 +114,9 @@ The separable GPU context reuses two complex128 work grids in addition to the
 existing device arrays. Their combined size is `32 * (2**J)**3` bytes, or 512 MiB
 at J=8. Convolution and MPI field exchange still run on the CPU; selecting the
 GPU backend accelerates the final contraction and does not move the whole
-pipeline to the device. CPU/GPU numerical agreement and independent physical
-integrals are covered by `tests/test_corr3pcf_gamma.py`; CUDA tests require a real
-device or an explicitly enabled simulator.
+pipeline to the device. Numerical validation includes CPU/GPU agreement and
+independent physical integrals; CUDA checks require a real device or an
+explicitly enabled simulator.
 
 ### Exact Gamma and convolution optimization
 
@@ -167,9 +167,8 @@ automatic regression. FFT/window costs remain; documented production timings
 are workload-specific. See the user multipole guide,
 `examples/notebooks/corr3pcf.ipynb`, and
 `examples/configs/param_3pcf_multipole_particle.yaml` for runnable examples.
-Independent periodized-basis readout,
-complex phases, random subtraction, normalization and task integration are
-covered by `tests/test_corr3pcf_particle.py`.
+Numerical validation covers independent periodized-basis readout, complex
+phases, random subtraction, normalization and task integration.
 
 ## Directory Details
 

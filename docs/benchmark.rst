@@ -318,9 +318,8 @@ Reproducing the Checks
 
 Run the particle task from the :doc:`3PCF notebook </notebooks/corr3pcf>`
 or its YAML configuration to exercise catalogue readout and the task interface.
-The test suite adds
-independent Gamma/particle integrals and source-FFT reuse checks; the MPI CI
-worker compares serial, pair MPI, and sample MPI on a small synthetic field.
+Numerical validation includes independent Gamma/particle integrals,
+source-FFT reuse checks, and serial, pair-MPI and sample-MPI comparisons.
 CUDA checks require a real device or an explicitly labelled simulator.
 
 The benchmark JSON above is sufficient to replot the published timing/RSS

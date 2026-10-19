@@ -98,15 +98,15 @@ repository root, a source installation with plotting support is:
 
 Record the commit along with measurement options. The package version
 string can be shared by several development commits. Keep the installed
-code and example files from the same checkout. For tests and documentation
-development, use a dedicated environment:
+code and example files from the same checkout. For documentation development,
+use a dedicated environment:
 
 .. code-block:: bash
 
    python -m venv .venv
    source .venv/bin/activate
    python -m pip install --upgrade pip
-   python -m pip install -e ".[test,docs]"
+   python -m pip install -e ".[docs]"
 
 CUDA support
 ------------

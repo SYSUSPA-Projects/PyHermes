@@ -35,7 +35,7 @@ The two switches can be tested separately. Their caches are scoped to one `run()
 
 Rank-zero `runtime_metrics` reports preparation, broadcast/delta, FFT/power, window, reduction/convolution and overall intervals. Per-rank durations overlap and cannot be added as a wall-clock total. The existing main-loop timer excludes initial spectral preparation; use **`compute_including_spectral_setup_seconds`** for a comparison that includes the first FFT and cross power. For application performance also time the complete RAM-catalog-to-curve call, including projection and preparation.
 
-Tests: `tests/test_corr2pcf_optimization.py`; real MPI checks: `mpiexec -n 2 python -m pytest tests/test_corr2pcf_mpi.py`. The latter skips outside MPI. The isolated Slurm pilot in `benchmarks/2pcf_optimization/` compares main, candidate defaults, preparation only, spectral only and both, at J8/8 ranks x 4 threads, three independent processes per arm, with five small-J gates first. Every arm uses the same physical cores and original 31 finite shell bins. All sample times are retained; no speedup is assumed in advance.
+Numerical validation includes serial and real MPI comparisons. The isolated Slurm pilot compared main, candidate defaults, preparation only, spectral only and both, at J8/8 ranks x 4 threads, three independent processes per arm, with five small-J gates first. Every arm used the same physical cores and original 31 finite shell bins. All sample times are retained; no speedup was assumed in advance.
 
 Measured results and limits: [2026-10-16 controlled CPU tests](2pcf_optimization_results_20261016.md). The source is still opt-in; scaling and folding changes remain deferred.
 

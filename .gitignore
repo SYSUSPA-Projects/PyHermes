@@ -22,8 +22,6 @@ docs/_build/
 .vscode/
 tmp/
 
-# Keep private integration assets under tests/ untracked while allowing the
-# public unit-test suite to grow normally.
-tests/*
-!tests/test_*.py
-!tests/conftest.py
+# Keep local tests, experiment scripts and measurement records private.
+/tests/
+/benchmarks/

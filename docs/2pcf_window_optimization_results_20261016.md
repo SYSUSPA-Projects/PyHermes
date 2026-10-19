@@ -24,6 +24,6 @@ J8总时间中位：previous2.402590、fused1.876251、edges1.265914秒。J9总�
 
 启用需要pair_reduction='spectral'、reuse_input_fields=True、spectral_window='shell_edges'，并提供内置球壳窗口；显式边界用type='binned_shell'和R_in/R_out参数及正常mapping。原图benchmark的WINDOW去掉自定义func即可使用等价内置核。通用实octant可选fused；复杂/不支持或磁盘缓存窗口保留materialized回退。所有缓存仅限单run，不跨生产样本复用全场结果。
 
-全量原始测量、所有启动/预热/慢样本、来源与独立统计/服务器SHA核验：主工作目录tests/logs/fig13_2pcf_window_optimization_20261016。服务器独立归档deliveries/fig13_2pcf_window_optimization_20261016，未嵌入冻结输出。没有新自动跟进、无本轮活动作业；未触碰其他作业、main、文章或原图。J7及4×8本轮没有新测量，不用本轮8×4结果声称两布局全局最优。
+全量原始测量、所有启动/预热/慢样本、来源与独立统计/服务器SHA核验：本地测量归档fig13_2pcf_window_optimization_20261016。服务器独立归档deliveries/fig13_2pcf_window_optimization_20261016，未嵌入冻结输出。没有新自动跟进、无本轮活动作业；未触碰其他作业、main、文章或原图。J7及4×8本轮没有新测量，不用本轮8×4结果声称两布局全局最优。
 
 后续可单独测试全任务共享源FFT/功率谱和边界任务负载分配；本轮未应用这些变更，也未做scaling吸收。

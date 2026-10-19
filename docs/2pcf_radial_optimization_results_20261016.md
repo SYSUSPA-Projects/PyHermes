@@ -44,4 +44,4 @@ Corr_2PCF({"Corr_2PCF": dict(
 )})
 ```
 
-完整报告和两表位于主工作目录tests/logs/fig13_2pcf_radial_optimization_20261016/analysis；服务器独立归档deliveries/fig13_2pcf_radial_optimization_20261016，不嵌入冻结output。原图/文章、其他任务和用户GPU均不在本轮范围；无新自动跟进。
+完整报告和两表位于本地测量归档fig13_2pcf_radial_optimization_20261016/analysis；服务器独立归档deliveries/fig13_2pcf_radial_optimization_20261016，不嵌入冻结output。原图/文章、其他任务和用户GPU均不在本轮范围；无新自动跟进。

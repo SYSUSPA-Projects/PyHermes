@@ -60,8 +60,7 @@ back to shell's 31 points. Both frozen configurations and the cancelled scene
 remain preserved.
 
 Full unrounded statistics, all repetitions, source jobs and resource records are
-in tests/logs/2pcf_matched_sampling_20261017_v2/analysis/report.md and
-combined_table.csv. Main-loop and task-total minima are selected independently;
+in the local measurement archive, in analysis/report.md and combined_table.csv. Main-loop and task-total minima are selected independently;
 do not add phase minima to reconstruct a task total. Independent server archive:
 deliveries/2pcf_matched_sampling_20261017_v2.
 

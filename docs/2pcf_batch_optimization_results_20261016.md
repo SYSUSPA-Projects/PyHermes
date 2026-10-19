@@ -38,4 +38,4 @@ options.update(pair_reduction='spectral', reuse_input_fields=True,
 
 自定义callback不按名字推断为球壳；复杂/非octant/磁盘窗口缓存等保留既有回退。缓存仅限单run，每项新进程、新全分辨率场/谱。J8批量方案可继续作为实验选项，但尚无稳定总时间收益证据。局部4标量展开探针只在本机测过，未写入服务器科学源或用于正式表。
 
-原始36项及8门槛、完整启动/预热/慢样本、源/输入/输出SHA与独立统计见主工作目录tests/logs/fig13_2pcf_batch_optimization_20261016；补项在fig13_2pcf_j9_shared_layout_20261016。最新两表为analysis/recommended_total_time.md与recommended_main_loop_time.md，初始统一策略表及selection.json保留。服务器deliveries/fig13_2pcf_batch_optimization_20261016独立归档。无遗留作业、未新建自动跟进、未合并/推送main。
+原始36项及8门槛、完整启动/预热/慢样本、源/输入/输出SHA与独立统计见本地测量归档fig13_2pcf_batch_optimization_20261016；补项在fig13_2pcf_j9_shared_layout_20261016。最新两表为analysis/recommended_total_time.md与recommended_main_loop_time.md，初始统一策略表及selection.json保留。服务器deliveries/fig13_2pcf_batch_optimization_20261016独立归档。无遗留作业、未新建自动跟进、未合并/推送main。
