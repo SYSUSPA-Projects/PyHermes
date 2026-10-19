@@ -1,15 +1,15 @@
 Release notes and migration
 ===========================
 
-Unreleased source updates
--------------------------
+Version 1.2.0 (unreleased)
+--------------------------
 
-The changes below are integrated into source ``main`` after the 1.2.0 changes
-described later on this page. They are tracked under ``Unreleased`` in the
-repository changelog; this documentation does not announce a new PyPI release.
-Use an installation of the same checkout as its examples; see
-:doc:`install`. The existing package-version string alone does not identify a
-development commit, so retain the source commit for reproducible measurements.
+This page collects the changes since 1.1.0 for the upcoming 1.2.0 release,
+including the 2PCF optimizations, angular-3PCF reuse, Gamma correction and
+particle multipoles. All belong to the same planned release. The source
+version is already ``1.2.0``; this does not announce a published release or
+assign a release date. Install this checkout when running its examples; see
+:doc:`install`. Retain the commit for reproducible source measurements.
 
 2PCF: one optional execution strategy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -35,7 +35,8 @@ verified measurements.
 2PCF: direct field-pair evaluation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``SFCField.pair_with(other)`` prepares a reusable local pair, and
+``SFCField.pair_with(other)`` prepares a reusable local pair of real fields on
+the same MRA grid and basis, and
 ``pair.evaluate(windows)`` evaluates its windowed coefficient-array means in
 input order. It shares the existing spectral reducer and automatic window
 strategies. The caller supplies estimator normalization; the uniform-reference
@@ -68,28 +69,26 @@ faster preparation/pair work. See :doc:`get_start/corr_3pcf/corr_3pcf` and
 Examples and retained results
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The tracked 2PCF YAML files opt into automatic spectral strategies and use
-``_optimized_20261017`` output names. The three refreshed CPU Gamma examples use
-``_gamma_corrected_20261017`` names. The 2PCF and 3PCF notebook cells that load
-these results have been executed and their figures checked; old output files
-are retained. The Quick Start and task guides read output paths from those
-same configurations.
+The 2PCF notebook computes isotropic, full 46-by-51 ring and Gaussian-ring
+curves locally with one process and eight CPU threads, using the projected
+example fields. It demonstrates both direct convolution and local Parseval
+evaluation. The tracked 2PCF YAML files opt into automatic spectral strategies.
 
-The retained direct-angular curves do not record the exact coefficient-array
-input SHA used by the refreshed multipoles. Their overlay is therefore a
-diagnostic, not strict identical-input validation. Other unrecomputed multipole
-and ensemble figures remain explicitly historical. Details and observed
-timings are in :download:`the verified example refresh
-</examples_refresh_results_20261017.md>`.
+The 3PCF notebook runs particle multipoles directly on the example catalogue,
+compares saved Gamma multipoles, and includes CPU/GPU performance plotting.
+Examples use the shared task drivers and YAML configurations; redundant
+standalone demos and plotting scripts have been removed. Saved ``zeta_l``
+reconstructs the angular curve without an additional ``2*ell+1`` multiplier.
+See :doc:`benchmark` for measurements and timing/memory definitions.
 
-Version 1.2.0 migration
------------------------
+Migration from 1.1.0
+--------------------
 
 Gamma correction
 ~~~~~~~~~~~~~~~~
 
-Recompute affected Gamma three-point multipole measurements from 1.1 using
-1.2. The corrected implementation zero-extends compact basis samples and
+Recompute affected Gamma three-point multipole measurements from 1.1.0 using
+1.2.0. The corrected implementation zero-extends compact basis samples and
 retains the complete positive/negative displacement overlap table. Existing
 SFC catalogue projections can be reused; this numerical correction does not
 change 2PCFs or the direct-angular Monte Carlo 3PCF estimator.

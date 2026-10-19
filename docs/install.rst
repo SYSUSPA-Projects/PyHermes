@@ -86,10 +86,10 @@ failures.
 Source checkout and development installation
 --------------------------------------------
 
-Use the checkout whose examples you intend to run. Source ``main`` includes
-the optimizations listed as Unreleased in :doc:`release_notes`; installing
-a published package does not select that development commit. From the
-repository root, a source installation with plotting support is:
+Use the checkout whose examples you intend to run. Source ``main`` currently
+prepares version 1.2.0 (unreleased), including all changes described in
+:doc:`release_notes`. Installing a published package does not select this
+development checkout. From the repository root, install plotting support with:
 
 .. code-block:: bash
 

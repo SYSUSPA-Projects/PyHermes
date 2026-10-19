@@ -11,7 +11,9 @@ the repository's ``CITATION.cff`` file directly.
 Software citation
 -----------------
 
-Please include the version of PyHermes used in the analysis:
+Please include the version of PyHermes used in the analysis. This checkout
+prepares 1.2.0 (unreleased); for source measurements, also record the commit.
+The release date will be added to ``CITATION.cff`` when 1.2.0 is published.
 
 .. code-block:: bibtex
 
@@ -19,7 +21,7 @@ Please include the version of PyHermes used in the analysis:
      author  = {Long-Long Feng and Tengpeng Xu and Tian-Cheng Luan and collaborators},
      title   = {PyHermes: High-performance multiresolution cosmic statistics in Python},
      year    = {2026},
-     version = {1.1.0},
+     version = {1.2.0},
      url     = {https://github.com/SYSUSPA-Projects/PyHermes}
    }
 

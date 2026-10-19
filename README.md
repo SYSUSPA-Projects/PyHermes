@@ -46,9 +46,9 @@ for every configuration.
 
 ### Optional spectral 2PCF computation
 
-The updates in this section and the standard angular 3PCF section below are
-available on source `main` and recorded under **Unreleased** in
-[CHANGELOG.md](CHANGELOG.md). Install that checkout when following its
+This checkout prepares **1.2.0 (unreleased)**. The changes below, including
+the 2PCF and 3PCF updates, are collected together as changes since 1.1.0 in
+[CHANGELOG.md](CHANGELOG.md). Install this checkout when following its
 examples; a PyPI installation follows its published release. See the
 [release and migration guide](docs/release_notes.rst) for compatibility.
 
@@ -118,7 +118,7 @@ interpolation and alias folding. Root-only pair planning uses local communicatio
 See the [angular 3PCF guide](docs/get_start/corr_3pcf/corr_3pcf.rst) and
 [verified measurements](docs/3pcf_angular_optimization_results_20261017.md). The report separates local synthetic profiles from verified J8 catalogue DDD/Q timings on 128 CPU cores; the catalogue timings are not a controlled full-size baseline speedup.
 
-### Three-point multipoles in 1.2
+### Three-point multipoles in 1.2.0
 
 `Corr_3PCF_Multipole` offers two summation methods through the same task and
 result interface:
@@ -144,8 +144,8 @@ with the normal multipole driver. The
 [multipole guide](https://pyhermes.astroslacker.com/get_start/corr_3pcf_multipole/corr_3pcf_multipole.html)
 explains serial/MPI execution, weights, windows, and saved results.
 
-Version 1.2 fixes Gamma triple overlaps and reuses CPU workspaces and source
-FFTs. **Recompute affected Gamma multipole measurements made with 1.1;
+The 1.2.0 update fixes Gamma triple overlaps and reuses CPU workspaces and source
+FFTs. **Recompute affected Gamma multipole measurements made with 1.1.0;
 existing catalogue projections can be reused.** Source FFT reuse trades
 memory for computation; speedups depend on workload and CPU placement.
 See [CHANGELOG.md](CHANGELOG.md) for the correction and migration notes.
@@ -164,7 +164,7 @@ python -m pip install pyhermes-cosmo
 This installs PyHermes and its regular Python dependencies automatically. MPI
 and CUDA are optional, so neither is required for the default installation.
 
-To use the current repository examples and Unreleased optimizations, install
+To use the examples and optimizations prepared for 1.2.0, install
 the same checkout from its repository root before entering `examples/`:
 
 ```bash

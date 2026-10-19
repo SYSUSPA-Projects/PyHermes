@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: >-
-  If you use PyHermes, please cite this software release, the accompanying
+  If you use PyHermes, please cite the software version used, the accompanying
   Hermes paper, and the three method papers listed under references.
 title: PyHermes
 type: software
@@ -12,8 +12,8 @@ authors:
   - given-names: Tian-Cheng
     family-names: Luan
   - name: collaborators
-version: 1.1.0
-date-released: 2026-07-26
+# Target version for this source checkout; add date-released upon publication.
+version: 1.2.0
 repository-code: https://github.com/SYSUSPA-Projects/PyHermes
 url: https://pyhermes.astroslacker.com
 license: MIT
