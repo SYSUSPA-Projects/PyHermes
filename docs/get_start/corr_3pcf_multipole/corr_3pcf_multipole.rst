@@ -9,9 +9,9 @@ sampling by multipole-filtered fields, then contracts those fields into
 angular window roles change.
 
 The multipole sections of the
-:doc:`complete 3PCF notebook </notebooks/corr3pcf>` load saved runs, compare
-resolutions and :math:`\ell_{\max}`, and visualise split triangle
-configurations.
+:doc:`complete 3PCF notebook </notebooks/corr3pcf>` run particle summation
+directly, compare saved grid results at different resolutions and
+:math:`\ell_{\max}`, and visualise split triangle configurations.
 
 Summation method and backend
 -----------------------------
@@ -42,8 +42,7 @@ harmonic arms in all combinations; only Gamma contraction can use CUDA.
 
    Version 1.2 corrects the Gamma triple-overlap table. Recompute affected
    Gamma measurements from 1.1; the original SFC catalogue projections can be
-   reused. CPU/GPU agreement in the old implementation did not establish that
-   the common overlap table was correct. See :doc:`../../release_notes`.
+   reused. See :doc:`../../release_notes` for migration details.
 
 Particle input and a runnable example
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -62,17 +61,12 @@ The first vertex must be unfiltered: omit ``window`` and ``window1``.
 smoothing request therefore requires the Gamma method. Particle CUDA is not
 implemented. Unsupported combinations raise an error.
 
-The CPU-only synthetic example needs no external data:
+The :doc:`3PCF notebook </notebooks/corr3pcf>` executes the particle method
+on the saved Quijote example field and plots the returned multipoles directly.
+It uses one local process with eight CPU threads; the central catalogue remains
+unfiltered and the two endpoints use sphere smoothing.
 
-.. code-block:: bash
-
-   python examples/scripts/demo_3pcf_particle.py --output-dir ./examples/output/particle_demo
-
-It projects 512 synthetic points at low resolution, saves the particle
-companion and SFC field, computes three multipoles, and writes both the native
-PKL and a numeric NPZ. It demonstrates the interface, not cosmological accuracy.
-
-For the public Quijote field prepared by the Quick Start, run:
+For command-line execution on the public Quijote field, run:
 
 .. code-block:: bash
 
@@ -289,7 +283,7 @@ input fields. At high :math:`\ell_{\max}` the GPU path is usually most useful;
 for a short monopole scan, sample-level CPU parallelism may be simpler and
 competitive.
 
-Corrected CPU/GPU agreement and the three-repeat runtime/host-memory
+CPU/GPU agreement and the three-repeat runtime/host-memory
 comparison are documented on :doc:`../../benchmark`. The production CUDA
 contraction uses a flattened one-dimensional block: ``[8,8,8]`` sets its
 product to 512 threads, not a three-dimensional launch.

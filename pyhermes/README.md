@@ -164,8 +164,10 @@ fixed J: particle readout evaluates `A_j(x_i) B_j(x_i)`, whereas the Gamma
 centre contraction corresponds to `P_j(A_j B_j)(x_i)`. Validate convergence and
 independent reference errors; do not treat disagreement at fixed J as an
 automatic regression. FFT/window costs remain; documented production timings
-are workload-specific. See the user multipole guide and the synthetic example
-`examples/scripts/demo_3pcf_particle.py` for runnable configurations. Independent periodized-basis readout,
+are workload-specific. See the user multipole guide,
+`examples/notebooks/corr3pcf.ipynb`, and
+`examples/configs/param_3pcf_multipole_particle.yaml` for runnable examples.
+Independent periodized-basis readout,
 complex phases, random subtraction, normalization and task integration are
 covered by `tests/test_corr3pcf_particle.py`.
 

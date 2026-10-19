@@ -11,8 +11,8 @@ This page separates two questions that are easy to mix together:
 The performance overview below uses the verified optimized 2PCF and pure
 angular DDD measurements, with main-loop and preprojected-field task totals
 kept separate. Detailed 2PCF window-family and angular DDD/Q results are in
-their task guides. The multipole section uses corrected three-repeat results;
-older unrecomputed multipole and Kun figures remain explicitly historical.
+their task guides. The multipole section compares grid CPU, grid CPU + GPU
+and particle CPU with three measurements per configuration.
 
 Reference Data
 --------------
@@ -236,16 +236,16 @@ provenance: :doc:`2PCF windows <get_start/corr_2pcf/optimization>` and
 or :download:`DDD/Q source statistics <_static/results/angular_3pcf_catalogue_20261017.json>`.
 
 The CPU nodes have two AMD EPYC 9754 processors (256 physical cores in
-total); each measurement uses only its stated allocation. The corrected GPU
-measurements below used one NVIDIA GeForce RTX 4090 with CUDA 12.4.
+total); each measurement uses only its stated allocation. GPU measurements
+use one NVIDIA GeForce RTX 4090 with CUDA 12.4.
 ``ranks x threads`` below describes the CPU layout; GPU jobs use the same
 CPU-side convolution layout and an ``(8, 8, 8)`` CUDA block for the final
 contraction.
 
-Corrected multipole measurements (1.2)
---------------------------------------
+Multipole performance comparison
+--------------------------------
 
-These archived measurements use J=8, lmax=7, thin shells at (20,40),
+These measurements use J=8, lmax=7, thin shells at (20,40),
 endpoint sphere R5, and an unfiltered first vertex. Each method/layout has
 three samples; no slow sample is removed. Values below are medians with
 minimum/maximum ranges. Kernel-level speedups are not substituted for total
@@ -284,7 +284,7 @@ wall time.
      - 9.262 (9.167--9.317)
 
 .. figure:: _static/results/threepcf_v1_2_runtime_memory.png
-   :alt: Three-repeat corrected grid and particle CPU runtime and process-tree RSS
+   :alt: Grid CPU, grid CPU + GPU and particle CPU runtime and process-tree RSS
    :width: 100%
 
    Bars: median; black dots: all three runs; whiskers: min/max.
@@ -305,20 +305,20 @@ compilation are included. These are hardware-specific observations, not a
 global optimum or an equal-cost/equal-accuracy comparison.
 
 CPU and GPU Gamma results pass allclose at rtol=1e-8, atol=1e-11. Independent
-periodized-basis integrals test the corrected overlap separately. Particle
+periodized-basis integrals test the overlap separately. Particle
 summation is a different finite-J discretization, so its coefficient agreement
 is not an absolute-accuracy measure.
 
 All 18 numeric samples and result/source hashes are available in
-:download:`the archived benchmark JSON <_static/results/threepcf_v1_2_benchmark.json>`.
-Replot it without scientific measurements using
-``python examples/scripts/plot_3pcf_benchmark.py --data PATH_TO_JSON --output figure.png``.
+:download:`the benchmark JSON <_static/results/threepcf_v1_2_benchmark.json>`.
+The :doc:`3PCF notebook </notebooks/corr3pcf>` includes the plotting code.
 
 Reproducing the Checks
 ----------------------
 
-Run the public CPU-only synthetic particle example to exercise projection,
-particle companions, the task interface, and saved output. The test suite adds
+Run the particle task from the :doc:`3PCF notebook </notebooks/corr3pcf>`
+or its YAML configuration to exercise catalogue readout and the task interface.
+The test suite adds
 independent Gamma/particle integrals and source-FFT reuse checks; the MPI CI
 worker compares serial, pair MPI, and sample MPI on a small synthetic field.
 CUDA checks require a real device or an explicitly labelled simulator.

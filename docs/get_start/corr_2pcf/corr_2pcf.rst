@@ -251,6 +251,8 @@ Public tutorial
 ---------------
 
 The :doc:`rendered 2PCF notebook </notebooks/corr2pcf>` contains high- and
-low-level isotropic reconstruction, anisotropic window composition, saved RSD
-results, and custom ring tests. ``examples/scripts/run_2pcf.py`` is the
-production entry point.
+low-level isotropic reconstruction and anisotropic window composition. It
+computes the full :math:`46\times51` ring and Gaussian-ring curves directly
+in one local process with eight threads, using the projected SFC fields as
+inputs and plotting the returned results without precomputed correlation
+files. ``examples/scripts/run_2pcf.py`` remains the production entry point.

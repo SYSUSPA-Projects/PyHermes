@@ -75,13 +75,19 @@ The YAML path values are relative to ``examples/``, so command-line examples
 run from that directory. Each notebook changes to the same working directory
 near the top.
 
-A small particle-multipole example
-----------------------------------
+Particle-summed 3PCF multipoles
+-------------------------------
 
-``python examples/scripts/demo_3pcf_particle.py --output-dir ./output/particle_demo``
-uses a synthetic catalogue, CPU summation, and no downloads. The
-:doc:`multipole guide <corr_3pcf_multipole/corr_3pcf_multipole>` explains how
-to apply the same interface to saved catalogue fields and run under MPI.
+The :doc:`3PCF notebook </notebooks/corr3pcf>` runs particle summation directly
+on the example catalogue field using the CPU. The same configuration can be
+run from ``examples/`` through the shared task driver:
+
+.. code-block:: bash
+
+   python scripts/run_3pcf_multipole.py configs/param_3pcf_multipole_particle.yaml
+
+The :doc:`multipole guide <corr_3pcf_multipole/corr_3pcf_multipole>` explains
+the particle companion, endpoint windows, and MPI execution.
 
 Generated directories
 ---------------------

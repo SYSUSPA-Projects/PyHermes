@@ -136,13 +136,9 @@ supports an **unfiltered first vertex** only. Use `window2`/`window3` for
 endpoint smoothing and omit `window`/`window1`. Particle and Gamma summation
 have different finite-resolution discretizations.
 
-Start with the CPU-only synthetic example, which needs no download:
-
-```bash
-python examples/scripts/demo_3pcf_particle.py --output-dir ./examples/output/particle_demo
-```
-
-For a saved field and its particle companion, use
+Run particle summation directly in the
+[3PCF tutorial](examples/notebooks/corr3pcf.ipynb). It uses the saved example
+field and its particle companion. For command-line execution, use
 [`param_3pcf_multipole_particle.yaml`](examples/configs/param_3pcf_multipole_particle.yaml)
 with the normal multipole driver. The
 [multipole guide](https://pyhermes.astroslacker.com/get_start/corr_3pcf_multipole/corr_3pcf_multipole.html)
