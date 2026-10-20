@@ -1,9 +1,8 @@
 # Changelog
 
-## 1.2.0 (unreleased)
+## 1.2.0 - 2026-10-20
 
-Changes since 1.1.0, collected for the upcoming 1.2.0 release. The release
-date will be added when this version is published.
+Released on 2026-10-20. Changes since 1.1.0 are listed below.
 
 ### Gamma multipole correction and migration
 

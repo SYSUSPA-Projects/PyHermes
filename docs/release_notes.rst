@@ -1,15 +1,14 @@
 Release notes and migration
 ===========================
 
-Version 1.2.0 (unreleased)
+Version 1.2.0 (2026-10-20)
 --------------------------
 
-This page collects the changes since 1.1.0 for the upcoming 1.2.0 release,
+Version 1.2.0 was released on 2026-10-20. This page collects the changes since 1.1.0,
 including the 2PCF optimizations, angular-3PCF reuse, Gamma correction and
-particle multipoles. All belong to the same planned release. The source
-version is already ``1.2.0``; this does not announce a published release or
-assign a release date. Install this checkout when running its examples; see
-:doc:`install`. Retain the commit for reproducible source measurements.
+particle multipoles. See :doc:`install` for installation options. Keep the
+installed code and examples on the same version or commit, and retain the
+commit for reproducible source measurements.
 
 2PCF: one optional execution strategy
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

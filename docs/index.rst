@@ -20,7 +20,7 @@ Newtonian potential, and acceleration.
 `Tutorial notebooks
 <https://github.com/SYSUSPA-Projects/PyHermes/tree/main/examples/notebooks>`_
 
-This source documentation covers **1.2.0 (unreleased)**. See
+This documentation covers **1.2.0**, released on **2026-10-20**. See
 :doc:`release_notes` for changes and migration from 1.1.0.
 
 .. figure:: _static/paper/PyHermes-Workflow.png

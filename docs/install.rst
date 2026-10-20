@@ -86,10 +86,9 @@ failures.
 Source checkout and development installation
 --------------------------------------------
 
-Use the checkout whose examples you intend to run. Source ``main`` currently
-prepares version 1.2.0 (unreleased), including all changes described in
-:doc:`release_notes`. Installing a published package does not select this
-development checkout. From the repository root, install plotting support with:
+For an editable installation, use the checkout whose examples you intend to
+run. Version 1.2.0 was released on 2026-10-20 and includes the changes described
+in :doc:`release_notes`. From the repository root, install plotting support with:
 
 .. code-block:: bash
 

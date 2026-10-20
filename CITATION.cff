@@ -12,8 +12,8 @@ authors:
   - given-names: Tian-Cheng
     family-names: Luan
   - name: collaborators
-# Target version for this source checkout; add date-released upon publication.
 version: 1.2.0
+date-released: '2026-10-20'
 repository-code: https://github.com/SYSUSPA-Projects/PyHermes
 url: https://pyhermes.astroslacker.com
 license: MIT

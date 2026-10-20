@@ -46,13 +46,12 @@ for every configuration.
 
 ### Optional spectral 2PCF computation
 
-This checkout prepares **1.2.0 (unreleased)**. The changes below, including
-the 2PCF and 3PCF updates, are collected together as changes since 1.1.0 in
-[CHANGELOG.md](CHANGELOG.md). Install this checkout when following its
-examples; a PyPI installation follows its published release. See the
+**Version 1.2.0 was released on 2026-10-20.** The changes below, including
+the 2PCF and 3PCF updates, are collected as changes since 1.1.0 in
+[CHANGELOG.md](CHANGELOG.md). See the
 [release and migration guide](docs/release_notes.rst) for compatibility.
 
-The source tree includes an opt-in spectral path with automatic window
+Version 1.2.0 includes an opt-in spectral path with automatic window
 strategies. Add these settings to an existing `Corr_2PCF` task, keeping its
 window definition, bin edges, and sampling:
 
@@ -155,7 +154,7 @@ input provenance and executed notebook plots. Historical results are retained.
 
 ## Installation
 
-For a published release, install PyHermes from PyPI:
+Install PyHermes from PyPI:
 
 ```bash
 python -m pip install pyhermes-cosmo
@@ -164,14 +163,13 @@ python -m pip install pyhermes-cosmo
 This installs PyHermes and its regular Python dependencies automatically. MPI
 and CUDA are optional, so neither is required for the default installation.
 
-To use the examples and optimizations prepared for 1.2.0, install
-the same checkout from its repository root before entering `examples/`:
+For the notebooks and plotting examples, install the plotting extra:
 
 ```bash
-python -m pip install -e ".[plot]"
+python -m pip install "pyhermes-cosmo[plot]"
 ```
 
-Keep the code and example configurations on the same commit. See the
+Keep the code and example configurations on the same version or commit. See the
 [installation guide](docs/install.rst) for development, MPI and CUDA setup.
 
 The Python import name remains unchanged:
